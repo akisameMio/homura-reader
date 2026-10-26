@@ -1,0 +1,98 @@
+name: Build Desktop App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS Universal
+            platform: macos-latest
+            args: --target universal-apple-darwin
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - name: Linux
+            platform: ubuntu-22.04
+            args: ''
+            rust_targets: ''
+          - name: Windows
+            platform: windows-latest
+            args: ''
+            rust_targets: ''
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      # 有 tag 推送时自动创建草稿 Release；手动触发时只上传构建产物。
+      # 如需 Apple 签名/公证，在仓库 Secrets 配置 APPLE_CERTIFICATE、APPLE_CERTIFICATE_PASSWORD、
+      # APPLE_SIGNING_IDENTITY、APPLE_ID、APPLE_PASSWORD、APPLE_TEAM_ID，并在此处传入 env。
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: ${{ matrix.args }}
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          releaseName: 'HOMURA v__VERSION__'
+          releaseBody: |
+            HOMURA 跨平台桌面版 v__VERSION__
+
+            - macOS：Universal（Apple Silicon + Intel）`.dmg`
+            - Windows：`.msi` / NSIS `.exe`
+            - Linux：`.AppImage` / `.deb` / `.rpm`
+
+            macOS 若提示“无法验证开发者”，请右键打开或在终端执行：
+            `xattr -cr /Applications/HOMURA.app`
+          releaseDraft: true
+          prerelease: false
+
+      - name: Upload build artifacts
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: homura-${{ matrix.platform }}
+          path: |
+            src-tauri/target/release/bundle/**
+            src-tauri/target/universal-apple-darwin/release/bundle/**
+          if-no-files-found: error
+          retention-days: 14
