@@ -276,12 +276,14 @@
       if (ev) ev.stopPropagation();
       library = library.filter(b => b.id !== id);
       renderBookshelf();
+      HomuraStore.deleteBook(id).catch(() => {});
       showToast('已从书架移除该作品');
     }
 
     function clearShelf() {
       library = [];
       renderBookshelf();
+      HomuraStore.clear().catch(() => {});
       showToast('已清空书架');
     }
 
@@ -380,65 +382,294 @@
       if (files.length === 0) return;
 
       let importedCount = 0;
+      const persistTasks = [];
+      const addBook = (book, source) => {
+        library.unshift(book);
+        importedCount++;
+        persistTasks.push(persistBook(book, source));
+      };
 
       const epubFiles = files.filter(f => /\.epub$/i.test(f.name));
       for (const epubFile of epubFiles) {
-        const ok = await parseEpubFileLazy(epubFile);
-        if (ok) importedCount++;
+        const book = await parseEpubFileLazy(epubFile);
+        if (book) addBook(book, makeFileSource(epubFile));
       }
 
       const archiveFiles = files.filter(f => /\.(cbz|zip)$/i.test(f.name));
       for (const archiveFile of archiveFiles) {
-        const ok = await parseCbzFileLazy(archiveFile);
-        if (ok) importedCount++;
+        const book = await parseCbzFileLazy(archiveFile);
+        if (book) addBook(book, makeFileSource(archiveFile));
       }
 
       const txtFiles = files.filter(f => /\.(txt|md)$/i.test(f.name));
       for (const txtFile of txtFiles) {
-        const ok = await parseTxtFile(txtFile);
-        if (ok) importedCount++;
+        const book = await parseTxtFile(txtFile);
+        if (book) addBook(book, makeFileSource(txtFile));
       }
 
       const imgFiles = files.filter(f => f.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|avif|bmp)$/i.test(f.name));
-      if (imgFiles.length > 0) {
-        const folderGroups = {};
-        imgFiles.forEach(f => {
-          const rel = f.customRelativePath || f.webkitRelativePath || '';
-          const parts = rel.split('/').filter(Boolean);
-          let groupName = '本地漫画图集';
-          if (parts.length >= 2) {
-            groupName = parts[parts.length - 2];
-          } else if (imgFiles.length === 1) {
-            groupName = f.name.replace(/\.[^.]+$/, '');
-          }
-          if (!folderGroups[groupName]) folderGroups[groupName] = [];
-          folderGroups[groupName].push(f);
-        });
-
-        for (const [folderName, groupImgs] of Object.entries(folderGroups)) {
-          groupImgs.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
-          const firstCoverUrl = URL.createObjectURL(groupImgs[0]);
-          const pageItems = groupImgs.map((fileObj, idx) => ({
-            file: fileObj,
-            url: idx === 0 ? firstCoverUrl : null
-          }));
-          library.unshift({
-            id: 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-            type: 'manga',
-            title: folderName,
-            cover: firstCoverUrl,
-            pageItems: pageItems,
-            pageCount: pageItems.length
-          });
-          importedCount++;
-        }
+      for (const group of buildImageFolderBooks(imgFiles)) {
+        addBook(group.book, makeFolderSource(group.folderName, group.files));
       }
+
+      // 先确保写盘完成，避免导入后立刻关闭页面导致存档丢失
+      await Promise.allSettled(persistTasks);
 
       if (importedCount > 0) {
         renderBookshelf();
         showToast(`✅ 已秒速添加 ${importedCount} 部作品到书架`);
       } else {
         showToast('未找到支持的漫画或小说格式 (.epub / .cbz / .zip / .txt / 图片)');
+      }
+    }
+
+    // 把散装图片按所在文件夹分组，每组生成一本书
+    function buildImageFolderBooks(imgFiles) {
+      if (!imgFiles || imgFiles.length === 0) return [];
+      const folderGroups = {};
+      imgFiles.forEach(f => {
+        const rel = f.customRelativePath || f.webkitRelativePath || '';
+        const parts = rel.split('/').filter(Boolean);
+        let groupName = '本地漫画图集';
+        if (parts.length >= 2) {
+          groupName = parts[parts.length - 2];
+        } else if (imgFiles.length === 1) {
+          groupName = f.name.replace(/\.[^.]+$/, '');
+        }
+        if (!folderGroups[groupName]) folderGroups[groupName] = [];
+        folderGroups[groupName].push(f);
+      });
+
+      return Object.entries(folderGroups).map(([folderName, groupImgs]) => {
+        groupImgs.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+        const firstCoverUrl = URL.createObjectURL(groupImgs[0]);
+        const pageItems = groupImgs.map((fileObj, idx) => ({
+          file: fileObj,
+          url: idx === 0 ? firstCoverUrl : null
+        }));
+        return {
+          folderName,
+          files: groupImgs,
+          book: {
+            id: 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            type: 'manga',
+            title: folderName,
+            cover: firstCoverUrl,
+            coverBlob: groupImgs[0],
+            pageItems: pageItems,
+            pageCount: pageItems.length
+          }
+        };
+      });
+    }
+
+    // ==========================================================================
+    // 4b. 书架本地存档：IndexedDB 元数据 + 原始文件（优先 File System Access 句柄）
+    // ==========================================================================
+    let storageNoticeShown = false;
+
+    function makeFileSource(file) {
+      const source = { kind: 'file', name: file.name, lastModified: file.lastModified || Date.now() };
+      if (file.customHandle) source.handle = file.customHandle;
+      else source.blob = file;
+      return source;
+    }
+
+    function makeFolderSource(folderName, files) {
+      return {
+        kind: 'folder',
+        name: folderName,
+        entries: files.map(f => ({
+          path: f.customRelativePath || f.webkitRelativePath || (folderName + '/' + f.name),
+          lastModified: f.lastModified || Date.now(),
+          blob: f
+        }))
+      };
+    }
+
+    async function persistBook(book, source) {
+      const meta = {
+        id: book.id,
+        type: book.type,
+        title: book.title,
+        pageCount: book.pageCount,
+        addedAt: Date.now(),
+        coverBlob: book.coverBlob || null
+      };
+      try {
+        await HomuraStore.saveBook(meta, Object.assign({ id: book.id }, source));
+        HomuraStore.requestPersistence();
+      } catch (err) {
+        if (!storageNoticeShown) {
+          storageNoticeShown = true;
+          showToast('⚠️ 本地存档不可用，请通过 http://localhost 打开页面');
+        }
+      }
+    }
+
+    async function restoreLibrary() {
+      let metas = [];
+      try {
+        metas = await HomuraStore.listBooks();
+      } catch (err) {
+        return false;
+      }
+      metas.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+      library = metas.map(meta => ({
+        id: meta.id,
+        type: meta.type,
+        title: meta.title,
+        pageCount: meta.pageCount,
+        cover: meta.coverBlob ? URL.createObjectURL(meta.coverBlob) : null,
+        restored: true
+      }));
+      return metas.length > 0;
+    }
+
+    async function ensureReadPermission(handle) {
+      try {
+        const opts = { mode: 'read' };
+        if (await handle.queryPermission(opts) === 'granted') return true;
+        if (await handle.requestPermission(opts) === 'granted') return true;
+      } catch (err) {}
+      return false;
+    }
+
+    async function resolveSourceFile(source) {
+      if (source.handle) {
+        if (!(await ensureReadPermission(source.handle))) return null;
+        try {
+          return await source.handle.getFile();
+        } catch (err) {
+          return null;
+        }
+      }
+      if (source.blob) {
+        return new File([source.blob], source.name || 'book', { lastModified: source.lastModified || Date.now() });
+      }
+      return null;
+    }
+
+    function parseStoredFile(file) {
+      if (/\.epub$/i.test(file.name)) return parseEpubFileLazy(file);
+      if (/\.(cbz|zip)$/i.test(file.name)) return parseCbzFileLazy(file);
+      if (/\.(txt|md)$/i.test(file.name)) return parseTxtFile(file);
+      return null;
+    }
+
+    async function resolveFolderFiles(source) {
+      const files = [];
+      for (const entry of source.entries || []) {
+        let file = null;
+        if (entry.handle) {
+          if (!(await ensureReadPermission(entry.handle))) continue;
+          try {
+            file = await entry.handle.getFile();
+          } catch (err) {
+            continue;
+          }
+        } else if (entry.blob) {
+          file = new File([entry.blob], entry.path.split('/').pop(), { lastModified: entry.lastModified || Date.now() });
+        }
+        if (!file) continue;
+        try {
+          Object.defineProperty(file, 'customRelativePath', { value: entry.path, writable: false });
+        } catch (err) {}
+        files.push(file);
+      }
+      return files;
+    }
+
+    // 书架里只有元数据；第一次点开时才回到存档里取原始文件重新解析
+    async function hydrateBook(book) {
+      let source = null;
+      try {
+        source = await HomuraStore.getSource(book.id);
+      } catch (err) {}
+      if (!source) {
+        showToast('本地存档已丢失，请重新导入该作品');
+        return false;
+      }
+
+      showToast(`正在从本地存档恢复《${book.title}》...`);
+      let parsed = null;
+      if (source.kind === 'folder') {
+        const files = await resolveFolderFiles(source);
+        if (files.length === 0) {
+          showToast('原文件夹已移动或被删除，请重新导入');
+          return false;
+        }
+        const groups = buildImageFolderBooks(files);
+        parsed = groups.length > 0 ? groups[0].book : null;
+      } else {
+        const file = await resolveSourceFile(source);
+        if (!file) {
+          showToast('原文件已移动或被删除，请重新导入');
+          return false;
+        }
+        parsed = await parseStoredFile(file);
+      }
+
+      if (!parsed) return false;
+      book.type = parsed.type;
+      book.pageCount = parsed.pageCount;
+      book.pageItems = parsed.pageItems;
+      book.zipContent = parsed.zipContent;
+      book.chapters = parsed.chapters;
+      book.cover = parsed.cover || book.cover;
+      book.coverBlob = parsed.coverBlob;
+      book.restored = false;
+      return true;
+    }
+
+    // File System Access API：优先直接引用原文件（不占浏览器配额），不支持时走普通 input
+    document.getElementById('pickFileLabel')?.addEventListener('click', async e => {
+      if (!window.showOpenFilePicker) return;
+      e.preventDefault();
+      let handles = [];
+      try {
+        handles = await window.showOpenFilePicker({ multiple: true });
+      } catch (err) {
+        return;
+      }
+      const files = [];
+      for (const handle of handles) {
+        try {
+          const file = await handle.getFile();
+          Object.defineProperty(file, 'customHandle', { value: handle, writable: false });
+          files.push(file);
+        } catch (err) {}
+      }
+      if (files.length > 0) await handleFiles(files);
+    });
+
+    document.getElementById('pickFolderLabel')?.addEventListener('click', async e => {
+      if (!window.showDirectoryPicker) return;
+      e.preventDefault();
+      let dirHandle = null;
+      try {
+        dirHandle = await window.showDirectoryPicker({ mode: 'read' });
+      } catch (err) {
+        return;
+      }
+      const files = [];
+      await collectFilesFromDirHandle(dirHandle, dirHandle.name + '/', files);
+      if (files.length > 0) await handleFiles(files);
+      else showToast('该文件夹内没有可导入的文件');
+    });
+
+    async function collectFilesFromDirHandle(dirHandle, path, out) {
+      for await (const [name, entry] of dirHandle.entries()) {
+        if (name.startsWith('.')) continue;
+        if (entry.kind === 'file') {
+          try {
+            const file = await entry.getFile();
+            Object.defineProperty(file, 'customRelativePath', { value: path + name, writable: false });
+            out.push(file);
+          } catch (err) {}
+        } else if (entry.kind === 'directory') {
+          await collectFilesFromDirHandle(entry, path + name + '/', out);
+        }
       }
     }
 
@@ -553,39 +784,40 @@
           const coverUrl = URL.createObjectURL(firstBlob);
           lazyMangaEntries[0].url = coverUrl;
 
-          library.unshift({
+          return {
             id: 'epub_manga_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
             type: 'manga',
             title: bookTitle,
             cover: coverUrl,
+            coverBlob: firstBlob,
             pageItems: lazyMangaEntries,
             pageCount: lazyMangaEntries.length
-          });
-          return true;
+          };
         }
 
         if (chapters.length === 0) throw new Error('未能提取出有效章节内容');
 
         let coverUrl = null;
+        let coverBlob = null;
         if (lazyMangaEntries.length > 0) {
-          const b = await lazyMangaEntries[0].zipEntry.async('blob');
-          coverUrl = URL.createObjectURL(b);
+          coverBlob = await lazyMangaEntries[0].zipEntry.async('blob');
+          coverUrl = URL.createObjectURL(coverBlob);
         }
 
-        library.unshift({
+        return {
           id: 'epub_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
           type: 'epub',
           title: bookTitle,
           cover: coverUrl,
+          coverBlob: coverBlob,
           zipContent: zipContent,
           chapters: chapters,
           pageCount: chapters.length
-        });
-        return true;
+        };
       } catch (err) {
         console.error(err);
         showToast('EPUB 解析失败：' + err.message);
-        return false;
+        return null;
       }
     }
 
@@ -614,19 +846,19 @@
         }));
 
         const title = file.name.replace(/\.(cbz|zip)$/i, '');
-        library.unshift({
+        return {
           id: 'cbz_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
           type: 'manga',
           title: title,
           cover: firstUrl,
+          coverBlob: firstBlob,
           pageItems: pageItems,
           pageCount: pageItems.length
-        });
-        return true;
+        };
       } catch (err) {
         console.error(err);
         showToast('压缩包解析失败：' + err.message);
-        return false;
+        return null;
       }
     }
 
@@ -674,17 +906,17 @@
             chapters.push({ title, htmlContent: '<p>（空文件）</p>' });
           }
 
-          library.unshift({
+          resolve({
             id: 'txt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
             type: 'novel',
             title: title,
             cover: null,
+            coverBlob: null,
             chapters: chapters,
             pageCount: chapters.length
           });
-          resolve(true);
         };
-        reader.onerror = () => resolve(false);
+        reader.onerror = () => resolve(null);
         reader.readAsText(txtFile, 'utf-8');
       });
     }
@@ -915,6 +1147,14 @@
     async function openBook(id) {
       const book = library.find(b => b.id === id);
       if (!book) return;
+
+      // 从本地存档恢复的书只有元数据，第一次点开时才去取源文件
+      if (book.restored) {
+        const ok = await hydrateBook(book);
+        if (!ok) return;
+        renderBookshelf();
+      }
+
       currentBook = book;
       currentIndex = 0;
       currentStageModeKey = '';
@@ -1654,8 +1894,8 @@
       showToast('已导出单文件离线阅读器！');
     }
 
-    // Initialize saved theme/mode & default shelf on startup
-    window.addEventListener('DOMContentLoaded', () => {
+    // Initialize saved theme/mode & restore the persisted bookshelf on startup
+    window.addEventListener('DOMContentLoaded', async () => {
       let savedTheme = 'blue';
       let savedMode = 'light';
       try {
@@ -1666,7 +1906,15 @@
       setThemeColor(savedTheme, true);
       setSurfaceMode(savedMode, true);
 
-      loadDemoNovel(false);
-      loadDemoManga(false);
+      // 书架上一次导入的作品会从 IndexedDB 里恢复；第一次使用才放示例书
+      const hasStoredBooks = await restoreLibrary();
+      if (!hasStoredBooks) {
+        loadDemoNovel(false);
+        loadDemoManga(false);
+      }
       renderBookshelf();
+
+      if (HomuraStore.disabled) {
+        showToast('提示：当前环境无法保存书架，请通过本地服务器打开页面');
+      }
     });

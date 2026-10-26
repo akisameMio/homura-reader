@@ -64,14 +64,14 @@
       </div>
 
       <!-- File Open Button -->
-      <label class="uiverse-btn-primary">
+      <label id="pickFileLabel" class="uiverse-btn-primary">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
         <span>导入文件</span>
         <input id="globalFileInput" type="file" multiple accept=".epub,.cbz,.zip,.txt,.md,image/*" class="hidden" />
       </label>
 
       <!-- Folder Open Button -->
-      <label class="uiverse-btn" title="导入整个文件夹（支持内含多本EPUB/ZIP或漫画图片子文件夹）">
+      <label id="pickFolderLabel" class="uiverse-btn" title="导入整个文件夹（支持内含多本EPUB/ZIP或漫画图片子文件夹）">
         <svg class="w-3.5 h-3.5 text-[var(--brand-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
         <span class="hidden sm:inline">导入文件夹</span>
         <input id="folderFileInput" type="file" webkitdirectory directory multiple class="hidden" />
@@ -269,6 +269,7 @@
   <!-- Offscreen Measurer for Smart Novel Screen-Fit Pagination -->
   <div id="novelPaginationMeasurer" class="fixed -left-[9999px] top-0 pointer-events-none invisible z-[-1] epub-content font-serif leading-relaxed"></div>
 
+  <script src="js/storage.js"></script>
   <script src="js/homura.js"></script>
 </body>
 </html>
