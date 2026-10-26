@@ -75,14 +75,48 @@ jobs:
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: 'HOMURA v__VERSION__'
           releaseBody: |
-            HOMURA 跨平台桌面版 v__VERSION__
+            # HOMURA v__VERSION__
 
-            - macOS：Universal（Apple Silicon + Intel）`.dmg`
-            - Windows：`.msi` / NSIS `.exe`
-            - Linux：`.AppImage` / `.deb` / `.rpm`
+            本地优先的 ACGN 漫画与轻小说阅读器，现已支持 macOS、Windows 与 Linux。
+            解析与渲染全部在本地完成，不上传任何文件。
 
-            macOS 若提示“无法验证开发者”，请右键打开或在终端执行：
-            `xattr -cr /Applications/HOMURA.app`
+            ## ✨ 功能亮点
+
+            - **格式通吃**：EPUB / KEPUB / CBZ / ZIP / TXT / Markdown，以及整文件夹漫画导入
+            - **四种阅读姿势**：单页、双页、日漫右→左、上下条漫
+            - **护眼三件套**：白昼 / 暖色护眼 / 夜间模式，搭配蓝、红、绿、紫四色主题
+            - **翻页手感**：丝滑平移、柔和淡入、极速无动画，可自由切换
+            - **顺手操作**：滚轮翻页、键盘快捷键、全屏沉浸模式
+            - **离线可用**：Tailwind 与 JSZip 已内置于应用，断网也能正常阅读
+
+            ## 📦 下载安装
+
+            | 平台 | 安装包 |
+            | --- | --- |
+            | macOS | `.dmg`（Universal，Apple Silicon + Intel） |
+            | Windows | `.msi` 或 NSIS `-setup.exe` |
+            | Linux | `.AppImage` / `.deb` / `.rpm` |
+
+            ## 🍎 macOS 首次打开
+
+            当前安装包尚未做 Apple 开发者签名。若系统提示「无法验证开发者」：
+
+            1. 在 Finder 中右键 `HOMURA.app` → **打开**；或
+            2. 终端执行：`xattr -cr /Applications/HOMURA.app`
+
+            ## 🛠 从源码构建
+
+            ```bash
+            npm install
+            npm run build
+            ```
+
+            构建产物位于 `src-tauri/target/release/bundle/`。
+
+            ## 📌 说明
+
+            - 书架目前为会话内临时书库，重启应用后需要重新导入文件。
+            - 这是 HOMURA 的首个桌面版本，欢迎反馈问题与建议。
           releaseDraft: true
           prerelease: false
 
