@@ -1,0 +1,14 @@
+{
+  "name": "homura-reader",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HOMURA — ACGN GO 本地漫画与轻小说阅读器",
+  "scripts": {
+    "prepare:web": "node scripts/prepare-web.mjs",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.0"
+  }
+}

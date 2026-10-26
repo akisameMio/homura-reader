@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "HOMURA",
+  "version": "0.1.0",
+  "identifier": "com.homura.reader",
+  "build": {
+    "beforeDevCommand": "node scripts/prepare-web.mjs",
+    "beforeBuildCommand": "node scripts/prepare-web.mjs",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "HOMURA — ACGN GO 本地漫画与轻小说阅读器",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 900,
+        "minHeight": 600,
+        "center": true,
+        "resizable": true,
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Entertainment",
+    "shortDescription": "本地漫画与轻小说阅读器",
+    "longDescription": "HOMURA 是一款支持 EPUB/KEPUB/漫画压缩包/图片文件夹的本地 ACGN 阅读器，支持单双页、日漫右起、条漫滚动与离线书库。",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    }
+  }
+}
