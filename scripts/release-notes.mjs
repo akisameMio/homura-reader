@@ -56,6 +56,8 @@ if (previousTag) {
     const tab = line.indexOf('\t');
     const hash = line.slice(0, tab);
     const subject = line.slice(tab + 1);
+    // 发版提交本身不算更新内容
+    if (/^chore\(release\)/i.test(subject)) continue;
     const match = subject.match(/^(\w+)(?:\(([^)]+)\))?!?:\s*(.+)$/);
     const section = SECTION_OF[match ? match[1].toLowerCase() : ''] || 'misc';
     const desc = match ? match[3] : subject;
@@ -86,6 +88,7 @@ ${changelog}
 - **护眼三件套**：白昼 / 暖色护眼 / 夜间模式，搭配蓝、红、绿、紫四色主题
 - **翻页手感**：丝滑平移、柔和淡入、极速无动画，可自由切换
 - **顺手操作**：滚轮翻页、键盘快捷键、全屏沉浸模式
+- **书架持久化**：导入的作品、封面与源文件存入本地 IndexedDB，重启后自动恢复
 - **离线可用**：Tailwind 与 JSZip 已内置于应用，断网也能正常阅读
 
 ## 📦 下载安装
@@ -114,7 +117,7 @@ npm run build
 
 ## 📌 说明
 
-- 书架目前为会话内临时书库，重启应用后需要重新导入文件。
+- 书架数据保存在本机 IndexedDB 中，卸载应用或清理站点数据会一并清除。
 - 欢迎反馈问题与建议。
 `;
 
