@@ -40,11 +40,13 @@ test('桌面文件选择器请求多选并对文件夹开启递归授权', async
   assert.equal(calls[0].args.options.multiple, false);
 
   calls.length = 0;
-  dialogResult = ['/Users/demo/a.epub', '/Users/demo/b.cbz'];
+  dialogResult = ['/Users/demo/a.epub', '/Users/demo/b.pdf'];
   const files = await pickNativeImportPaths({ directory: false, multiple: true });
   assert.deepEqual(files, dialogResult);
   assert.equal(calls[0].args.options.directory, false);
   assert.equal(calls[0].args.options.filters[0].extensions.includes('epub'), true);
+  assert.equal(calls[0].args.options.filters[0].extensions.includes('cbz'), false);
+  assert.equal(calls[0].args.options.filters[0].extensions.includes('zip'), false);
 });
 
 test('扫描结果转换成带相对路径的轻量文件对象', () => {
@@ -60,7 +62,8 @@ test('扫描结果转换成带相对路径的轻量文件对象', () => {
   assert.equal(file.type, 'image/jpeg');
   assert.equal(isNativeImportFile(file), true);
   assert.equal(nativeImportMime('book.kepub.epub'), 'application/epub+zip');
-  assert.equal(nativeImportMime('BOOK.CBZ'), 'application/vnd.comicbook+zip');
+  assert.equal(nativeImportMime('BOOK.PDF'), 'application/pdf');
+  assert.equal(nativeImportMime('BOOK.CBZ'), '');
 });
 
 test('扫描扫描命令只接收路径并返回原生命名结果', async () => {

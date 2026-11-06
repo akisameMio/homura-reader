@@ -879,26 +879,15 @@ fn open_archive(
     state: &DesktopArchiveState,
     archive_id: &str,
     path: &str,
-    document: bool,
 ) -> Result<OpenResponse, String> {
     if archive_id.trim().is_empty() {
         return Err(invalid_data("缺少压缩包会话 ID"));
     }
     let archive_file = resolve_archive_file(app, path)?;
     let archive = read_zip_archive(&archive_file)?;
-    let images: Vec<ZipEntry> = archive
-        .entries
-        .iter()
-        .filter(|entry| is_image(&entry.name))
-        .cloned()
-        .collect();
-    let entries = if document {
-        archive.entries
-    } else {
-        images.clone()
-    };
+    let entries = archive.entries;
     if entries.is_empty() {
-        return Err(invalid_data("压缩包内未找到图片"));
+        return Err(invalid_data("压缩包内没有可读取的条目"));
     }
 
     let entry_index_by_name = entries
@@ -906,17 +895,14 @@ fn open_archive(
         .enumerate()
         .map(|(index, entry)| (entry.name.clone(), index))
         .collect::<HashMap<_, _>>();
-    let images = if document {
-        images
-            .iter()
-            .map(|entry| {
-                let index = entry_index_by_name.get(&entry.name).copied().unwrap_or(0);
-                entry_info(entry, index)
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
+    let images = entries
+        .iter()
+        .filter(|entry| is_image(&entry.name))
+        .map(|entry| {
+            let index = entry_index_by_name.get(&entry.name).copied().unwrap_or(0);
+            entry_info(entry, index)
+        })
+        .collect();
     let session = Arc::new(ArchiveSession {
         path: archive_file,
         entries: entries.clone(),
@@ -944,16 +930,6 @@ fn open_archive(
     })
 }
 
-#[tauri::command(async)]
-pub fn open(
-    app: AppHandle,
-    state: State<'_, DesktopArchiveState>,
-    archive_id: String,
-    path: String,
-) -> Result<OpenResponse, String> {
-    open_archive(&app, state.inner(), &archive_id, &path, false)
-}
-
 #[tauri::command(async, rename = "openDocument")]
 pub fn open_document(
     app: AppHandle,
@@ -961,7 +937,7 @@ pub fn open_document(
     archive_id: String,
     path: String,
 ) -> Result<OpenResponse, String> {
-    open_archive(&app, state.inner(), &archive_id, &path, true)
+    open_archive(&app, state.inner(), &archive_id, &path)
 }
 
 #[tauri::command(async)]
@@ -1461,17 +1437,17 @@ mod tests {
         let data_root = temp_dir();
         let source_dir = data_root.join(SOURCE_ROOT).join("book-1").join("source");
         fs::create_dir_all(&source_dir).unwrap();
-        let inside = source_dir.join("book.cbz");
-        let outside = data_root.join("outside.cbz");
+        let inside = source_dir.join("book.epub");
+        let outside = data_root.join("outside.epub");
         let external = data_root.parent().unwrap().join(format!(
-            "{}-outside.cbz",
+            "{}-outside.epub",
             data_root.file_name().unwrap().to_string_lossy()
         ));
         fs::write(&inside, b"inside").unwrap();
         fs::write(&outside, b"outside").unwrap();
         fs::write(&external, b"external").unwrap();
 
-        let relative = format!("{SOURCE_ROOT}/book-1/source/book.cbz");
+        let relative = format!("{SOURCE_ROOT}/book-1/source/book.epub");
         assert_eq!(
             resolve_archive_path(&data_root, &relative).unwrap(),
             inside.canonicalize().unwrap()

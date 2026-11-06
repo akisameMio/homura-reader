@@ -273,7 +273,6 @@ test('原生文档条目映射为可恢复的漫画页索引', async () => {
     assert.deepEqual(archive.makePageItem('OEBPS/Images/001.jpg', null), {
       nativeArchiveId: archiveId,
       nativeArchivePath: nativePath,
-      nativeArchiveMode: 'document',
       nativeIndex: 1,
       url: null
     });
@@ -329,7 +328,6 @@ test('Android 原生 EPUB 可用时优先使用原生解析', async () => {
   });
   try {
     assert.equal(book.nativeArchiveId, id);
-    assert.equal(book.nativeArchiveMode, 'document');
     assert.equal(book.chapters[0].title, '原生章节');
     assert.equal(book.zipContent, undefined);
   } finally {
@@ -531,7 +529,6 @@ test('原生 EPUB 解析与 JSZip 保持相同的章节结果', async () => {
     });
     assert.deepEqual(shape(nativeBook), shape(jsZipBook));
     assert.equal(nativeBook.nativeArchiveId, nativeId);
-    assert.equal(nativeBook.nativeArchiveMode, 'document');
     assert.equal(nativeBook.nativeArchivePath, 'homura-native-sources/epub-native-parity/source/book.epub');
     assert.equal(nativeBook.nativeEntryIndexByPath instanceof Map, true);
     assert.equal(nativeBook.nativeEntryIndexByPath.get('OEBPS/Text/chapter1.xhtml'), 3);

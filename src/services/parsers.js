@@ -1,7 +1,7 @@
 /* ============================================================================
    HOMURA · 格式解析
    ----------------------------------------------------------------------------
-   EPUB / CBZ / ZIP / TXT / Markdown / PDF 的懒加载解析，统一输出书架可用的
+   EPUB / TXT / Markdown / PDF 的懒加载解析，统一输出书架可用的
    书籍对象；以及把散装图片按文件夹分组生成漫画书的 buildImageFolderBooks。
    ========================================================================== */
 
@@ -16,8 +16,6 @@ import {
   closeNativeArchive
 } from './nativeArchive.js';
 import { removeNativeBookDir } from './nativeStorage.js';
-
-export { parseCbzFileLazy, parseCbzNativeArchive } from './cbzParser.js';
 
 // 同名书被跳过时还未入架，及时释放解析阶段创建的位图 URL 与 PDF worker。
 export async function discardParsedBook(book) {
@@ -40,7 +38,6 @@ export async function discardParsedBook(book) {
 }
 
 // ---- EPUB 解析：章节正文 + 图片型 EPUB 自动转漫画 ----
-// ---- CBZ / ZIP 解析：压缩包内图片按自然序排列 ----
 // ---- TXT / Markdown 解析：按章节标题切分 ----
 
 export async function parseEpubFileLazy(file, options = {}) {

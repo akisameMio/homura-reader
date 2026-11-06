@@ -727,7 +727,7 @@ mod tests {
         BookRecord {
             id: id.to_string(),
             book_type: "manga".to_string(),
-            format: Some("cbz".to_string()),
+            format: Some("pdf".to_string()),
             title: format!("测试书 {id}"),
             favorite: true,
             page_count: 42,

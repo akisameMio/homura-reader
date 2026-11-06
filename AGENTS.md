@@ -10,7 +10,7 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 - 当前版本 `2.2.1`
 - 技术栈：Vue 3 + Pinia + Vite 6 + Tauri 2（Rust）
 - 纯 JavaScript，没有 TypeScript、没有 ESLint、没有自动测试
-- 数据存本机 IndexedDB；Tauri 环境额外把书目 / 封面缩略图 / 书库 / 进度镜像到 AppData 下的 SQLite；原文件在 Android 及桌面 EPUB/CBZ 原生解析链路写 AppData，其余平台按能力写 OPFS 或 IndexedDB Blob；主题偏好写 localStorage
+- 数据存本机 IndexedDB；Tauri 环境额外把书目 / 封面缩略图 / 书库 / 进度镜像到 AppData 下的 SQLite；原文件在 Android 及桌面 EPUB 原生解析链路写 AppData，其余平台按能力写 OPFS 或 IndexedDB Blob；主题偏好写 localStorage
 
 支持的格式：
 
@@ -19,7 +19,6 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 | EPUB / KEPUB | `.epub`、`.kepub.epub` | `src/services/parsers.js` |
 | PDF | `.pdf` | `src/services/pdf.js`（pdf.js，按页懒渲染） |
 | MOBI | `.mobi`、`.prc`、`.azw` | `src/services/mobi.js`（不支持 DRM / AZW3） |
-| 漫画压缩包 | `.cbz`、`.zip` | `src/services/parsers.js` |
 | 纯文本 / Markdown | `.txt`、`.md` | `parsers.js` + `markdown.js` |
 | 图片文件夹 | jpg/jpeg/png/webp/gif/avif/bmp | `parsers.js` 的 `buildImageFolderBooks` |
 
@@ -60,8 +59,7 @@ src/
     coverThumb.js          Rust 封面缩略图与 Canvas 兜底
     opfs.js                OPFS 原始文件存储
     platform.js            平台能力探测、formatBytes
-    parsers.js             EPUB/CBZ/ZIP/TXT/MD/PDF/MOBI 解析总入口
-    cbzParser.js           CBZ/ZIP 原生按需解页与 JSZip 兜底
+    parsers.js             EPUB/TXT/MD/PDF/MOBI 解析总入口
     pdf.js                 pdf.js 懒加载、页面位图、LRU 缓存
     mobi.js                PalmDOC 解析
     markdown.js            marked + 安全渲染器
@@ -164,14 +162,14 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 4. **工具栏自动隐藏 2.2 秒**：`ui.js` 的 `AUTO_HIDE_DELAY = 2200`；点击阅读画布 / 轻点可唤出。抽屉打开时不自动隐藏。
 5. **移动端手势**：横向滑动跟手翻页，带阻尼与回弹；轻点左 30% 上一页、右 30% 下一页、中间切换工具栏。手势层 z-index 必须高于阅读舞台，否则会被图片层拦截。
 6. **窄屏强制单页**：`DOUBLE_SPREAD_MIN_WIDTH = 768`，`<768` 即使设置里选了双页也只按单页渲染。
-7. **存储降级**：Android Tauri 包优先把原文件写入应用私有 AppData，失败再保留 IndexedDB Blob；桌面普通文件走 FileSystemFileHandle → OPFS → IndexedDB Blob，EPUB/CBZ 解析前会先 staging 到 AppData。读取时逐层回退，不能因为前一层失效就判定整本书丢失。导入后检查配额，已用 ≥85% 或剩余 <200MB 时提示。不要删掉这套备份方案。
+7. **存储降级**：Android Tauri 包优先把原文件写入应用私有 AppData，失败再保留 IndexedDB Blob；桌面普通文件走 FileSystemFileHandle → OPFS → IndexedDB Blob，EPUB 解析前会先 staging 到 AppData。读取时逐层回退，不能因为前一层失效就判定整本书丢失。导入后检查配额，已用 ≥85% 或剩余 <200MB 时提示。不要删掉这套备份方案。
 8. **全屏走 Tauri 原生窗口 API**：Windows WebView2 不接管 F11，`ui.js` 的 `toggleFullscreen` 已处理；浏览器调试环境才回退 Fullscreen API。
 9. **PDF 资源必须随包分发**：`vite.config.js` 的 `pdfjsAssets` 插件会把 `cmaps / standard_fonts / wasm / iccs` 同步到 `public/pdfjs`。删掉插件会导致 PDF 白屏。`public/pdfjs` 已 gitignore，不要提交。
 10. **PDF 渲染约束**：按页懒加载，LRU 缓存 24 页；首次打开默认单页；不支持字号调整与重排。
 11. **Markdown 安全**：输出会进 `v-html`，原始 HTML 必须转义，链接/图片只放行 `http/https/mailto/tel` 与相对路径。章节按一级/二级标题切分，并排除代码块内的标题标记。
 12. **进度与排版记忆**：翻页、滚轮、条漫滚动、拖进度条都要按书保存，包含方向 / 单双页 / 首页单排 / 字号 / 条漫尺寸。目录与书签目前**没有**持久化，这是已知限制，不要假装已支持。
 13. **重对象不进响应式深度代理**：见第 4 节。`PaginatedView` 的双缓冲动画对象尤其不能变成 `ref` 深层代理。
-14. **桌面原生压缩包会话**：EPUB/CBZ 只从 `homura-native-sources` 读取，Rust 按 ZIP 中央目录随机解页到 AppCache；路径越界、条目过多、解压超限必须直接失败。JSZip 只对不可用、暂不支持或普通解析失败回退，不能吞掉 `NATIVE_SECURITY_LIMIT` / `NATIVE_LIMIT_EXCEEDED`。
+14. **桌面原生压缩包会话**：EPUB 只从 `homura-native-sources` 读取，Rust 按 ZIP 中央目录随机读取条目到 AppCache；路径越界、条目过多、解压超限必须直接失败。JSZip 只对不可用、暂不支持或普通解析失败回退，不能吞掉 `NATIVE_SECURITY_LIMIT` / `NATIVE_LIMIT_EXCEEDED`。
 15. **封面与元数据原生兜底**：封面缩略图优先走 Rust `create_cover_thumbnail`，格式不支持、命令不可用或没有 Tauri 时才回退 Canvas；原生像素 / 输入大小上限不得继续交给 JS 重试。SQLite 元数据失败时回退 IndexedDB，但 `dirty` 标记与删除顺序不能删，否则旧镜像可能复活已删除书本。
 
 ## 7. 常见坑
@@ -180,7 +178,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 - `dist/index.html` 用 `file://` 打开会因相对路径 / IndexedDB 限制而异常，必须走 `http://localhost`。
 - PDF 白屏优先查 `public/pdfjs/` 是否生成、控制台是否有 cmaps / standard_fonts 404。
 - 原生漫画页白屏先确认 `protocol-asset` feature 与 assetProtocol scope 是否还在；`ensurePageUrlLoaded` 在 asset 失败时会自动回退 Blob，回退仍白屏才是解码/缓存问题。
-- 桌面 EPUB/CBZ 原生通道异常时先确认导入文件已写进 `$APPDATA/homura-native-sources`，并检查 `open` / `openDocument` 是否注册；安全限制错误本来就不会回退 JSZip。
+- 桌面 EPUB 原生通道异常时先确认导入文件已写进 `$APPDATA/homura-native-sources`，并检查 `openDocument` 是否注册；安全限制错误本来就不会回退 JSZip。
 - SQLite 书目异常时先查 `$APPDATA/homura-metadata/homura.sqlite3` 与控制台是否出现 `原生元数据不可用`；保留 `homura-native-metadata-dirty` 让下次启动重建，不要手工只清 SQLite 行。封面格式不支持时 Rust 返回 `NATIVE_UNSUPPORTED`，Canvas 会接管；`NATIVE_LIMIT_EXCEEDED` 不会回退。
 - Tailwind 对 CSS 变量加透明度修饰会失效，改用 `color-mix`。
 - 夜间出现白色泛光时，优先检查 `--md-on-surface` / `--md-on-surface-variant` 是否被当作阴影或遮罩色；投影统一改用 `--md-shadow-color`，并运行 `npm run check:dark-glow`。

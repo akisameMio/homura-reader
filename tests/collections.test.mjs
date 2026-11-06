@@ -24,7 +24,8 @@ test('目录逐层展平为独立书库，不合并同名子目录', () => {
   const files = [
     { name: '1.txt', customRelativePath: '书籍/甲/同名/1.txt' },
     { name: '2.epub', customRelativePath: '书籍/乙/同名/2.epub' },
-    { name: '3.cbz', customRelativePath: '书籍/3.cbz' },
+    { name: '3.pdf', customRelativePath: '书籍/3.pdf' },
+    { name: '4.cbz', customRelativePath: '书籍/4.cbz' },
     { name: '.hidden.txt', customRelativePath: '书籍/.hidden.txt' },
     { name: 'notes.exe', customRelativePath: '书籍/notes.exe' }
   ];

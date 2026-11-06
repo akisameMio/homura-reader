@@ -50,7 +50,7 @@ export function availableCollectionName(title, collections) {
   return name;
 }
 
-const BOOK_FILE = /\.(epub|pdf|cbz|zip|mobi|prc|azw|md|txt)$/i;
+const BOOK_FILE = /\.(epub|pdf|mobi|prc|azw|md|txt)$/i;
 const IMAGE_FILE = /\.(jpg|jpeg|png|webp|gif|avif|bmp)$/i;
 
 export function planFolderCollections(files) {

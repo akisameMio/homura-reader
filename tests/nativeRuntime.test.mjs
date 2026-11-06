@@ -60,8 +60,8 @@ test('原生命令成功时使用插件命令并跳过兜底', async () => {
   const result = await runNativeWithFallback({
     feature: 'archive',
     plugin: 'android-archive',
-    command: 'open',
-    args: { archiveId: 'book-1', path: 'book.cbz' },
+    command: 'openDocument',
+    args: { archiveId: 'book-1', path: 'book.epub' },
     fallback: () => {
       fallbackCalled = true;
       return null;
@@ -71,8 +71,8 @@ test('原生命令成功时使用插件命令并跳过兜底', async () => {
 
   assert.deepEqual(result, { entries: [{ index: 0, path: 'page.jpg' }] });
   assert.deepEqual(calls, [{
-    command: 'plugin:android-archive|open',
-    args: { archiveId: 'book-1', path: 'book.cbz' }
+    command: 'plugin:android-archive|openDocument',
+    args: { archiveId: 'book-1', path: 'book.epub' }
   }]);
   assert.equal(fallbackCalled, false);
 });

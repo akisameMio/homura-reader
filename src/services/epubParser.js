@@ -152,7 +152,6 @@ export async function createNativeEpubArchive(nativePath, options = {}) {
       const item = {
         nativeArchiveId: archiveId,
         nativeArchivePath: nativePath,
-        nativeArchiveMode: 'document',
         nativeIndex: index,
         url
       };
@@ -166,7 +165,6 @@ export async function createNativeEpubArchive(nativePath, options = {}) {
       return {
         nativeArchiveId: archiveId,
         nativeArchivePath: nativePath,
-        nativeArchiveMode: 'document',
         nativeEntryIndexByPath: entryIndexByPath
       };
     }

@@ -1,5 +1,4 @@
 const COMMANDS: &[&str] = &[
-  "open",
   "openDocument",
   "readTextBatch",
   "extract",

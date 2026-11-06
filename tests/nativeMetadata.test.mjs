@@ -132,7 +132,7 @@ test('完整迁移会把 Blob 封面序列化进 SQLite 快照', async () => {
     books: [{
       id: 'book-1',
       type: 'manga',
-      format: 'cbz',
+      format: 'pdf',
       title: '漫画',
       favorite: false,
       pageCount: 10,
@@ -173,7 +173,7 @@ test('批量书目只调用一次原生命令并保留封面数据', async () =>
     {
       id: 'book-2',
       type: 'manga',
-      format: 'cbz',
+      format: 'pdf',
       title: '第二本',
       favorite: true,
       pageCount: 34,

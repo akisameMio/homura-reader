@@ -1,7 +1,7 @@
 /* ============================================================================
    HOMURA · 原生压缩包通道
    ----------------------------------------------------------------------------
-   处理 Android WebView 上最费内存的 CBZ/ZIP 与 EPUB 文档：Kotlin 通过
+   处理 Android WebView 上最费内存的 EPUB 压缩包：Kotlin 通过
    ZipFile 随机读取条目；桌面端由 Rust 从 AppData 读取 ZIP 中央目录。
    图片写入有上限的页面缓存，文本批量返回给 JS。原生通道不可用或允许恢复
    的普通失败可以回退 JSZip，安全限制与超限错误必须原样抛出。
@@ -72,20 +72,6 @@ function nativeArchivePathFor(book) {
     || '';
 }
 
-function nativeArchiveModeFor(book) {
-  return book?.nativeArchiveMode
-    || (book?.pageItems || []).find(item => item?.nativeArchiveMode)?.nativeArchiveMode
-    || 'pages';
-}
-
-export function openNativeArchive(archiveId, path) {
-  return enqueueLifecycle(archiveId, async () => {
-    const result = await invokeNative('open', { archiveId, path });
-    openArchives.add(archiveId);
-    return result;
-  });
-}
-
 export function openNativeDocument(archiveId, path) {
   return enqueueLifecycle(archiveId, async () => {
     const result = await invokeNative('openDocument', { archiveId, path });
@@ -153,9 +139,7 @@ export function ensureNativeArchiveSession(book) {
   const path = nativeArchivePathFor(book);
   if (!path) return Promise.reject(new Error('原生压缩包路径缺失'));
 
-  const openTask = nativeArchiveModeFor(book) === 'document'
-    ? openNativeDocument(archiveId, path)
-    : openNativeArchive(archiveId, path);
+  const openTask = openNativeDocument(archiveId, path);
   const task = openTask
     .then(() => true)
     .finally(() => {

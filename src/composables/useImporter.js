@@ -12,7 +12,7 @@ import { planFolderCollections, availableCollectionName, collectionNameError } f
 import { findSameTitleBook, normalizeBookTitle } from '../services/bookTitles.js';
 import { HomuraStore } from '../services/storage.js';
 import { formatBytes, isAndroid } from '../services/platform.js';
-import { parseCbzFileLazy, parseTxtFile, parseMobiFileLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks, discardParsedBook } from '../services/parsers.js';
+import { parseTxtFile, parseMobiFileLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks, discardParsedBook } from '../services/parsers.js';
 import { makeEpubId, parseEpubFile } from '../services/epubParser.js';
 import {
   makeFileSource,
@@ -131,7 +131,6 @@ function buildImportTasks(files) {
   // EPUB / MOBI 的书名来自容器元数据，不能拿文件名直接断定同名。
   addFileTasks(files.filter(f => /\.epub$/i.test(f.name)), 'epub', false);
   addFileTasks(files.filter(f => /\.pdf$/i.test(f.name)), 'pdf');
-  addFileTasks(files.filter(f => /\.(cbz|zip)$/i.test(f.name)), 'archive');
   addFileTasks(files.filter(f => /\.(mobi|prc|azw)$/i.test(f.name)), 'mobi', false);
   addFileTasks(files.filter(f => /\.md$/i.test(f.name)), 'markdown');
   addFileTasks(files.filter(f => /\.txt$/i.test(f.name)), 'txt');
@@ -382,73 +381,6 @@ export function useImporter() {
     return { book, source };
   }
 
-  async function prepareArchiveTask(task, metrics) {
-    let file = task.file;
-    const bookId = `cbz_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    let source = makeFileSource(file);
-    let nativePath = '';
-
-    // 先把原文件流式落到 AppData，再让原生后端从路径随机读取；
-    // 这样不会先用 JSZip 把整本压缩包读进 WebView。
-    if (canUseNativeArchive()) {
-      const started = now();
-      const viaNativePath = isNativeImportFile(file);
-      try {
-        const staged = viaNativePath
-          ? await stageNativePathSource(bookId, file)
-          : await stageNativeFileSource(bookId, file);
-        source = staged;
-        nativePath = staged.nativePath;
-        if (viaNativePath) metrics.nativeStageMs += now() - started;
-      } catch (err) {
-        if (!shouldFallbackNativeImport(err)) {
-          console.warn('[HOMURA] 原生压缩包预存被拒绝', err);
-          return null;
-        }
-        console.warn('[HOMURA] 原生压缩包预存失败，沿用 JSZip', err);
-        await removeNativeBookDir(bookId).catch(() => {});
-        if (isNativeImportFile(file)) {
-          const readStarted = now();
-          try {
-            file = await materializeNativeImportFile(file);
-          } catch (readError) {
-            console.warn('[HOMURA] 读取原生压缩包失败', readError);
-            return null;
-          } finally {
-            metrics.readMs += now() - readStarted;
-          }
-          source = makeFileSource(file);
-        }
-      } finally {
-        metrics.stageMs += now() - started;
-      }
-    }
-
-    const parseStarted = now();
-    let book = null;
-    try {
-      book = await parseCbzFileLazy(file, {
-        id: bookId,
-        name: file.name,
-        nativePath,
-        staged: !!nativePath,
-        loadFallbackFile: nativePath
-          ? () => materializeStagedNativeImportFile(file, nativePath)
-          : undefined
-      });
-    } catch (err) {
-      console.warn('[HOMURA] 压缩包解析失败', err);
-    } finally {
-      metrics.parseMs += now() - parseStarted;
-    }
-    if (!book) {
-      if (nativePath) await removeNativeBookDir(bookId).catch(() => {});
-      return null;
-    }
-    book.nativeArchiveStaged = !!nativePath;
-    return { book, source };
-  }
-
   async function prepareParsedTask(task, parser, metrics, label) {
     const started = now();
     let file = task.file;
@@ -475,7 +407,6 @@ export function useImporter() {
   async function prepareImportTask(task, metrics) {
     let prepared = null;
     if (task.kind === 'epub') prepared = await prepareEpubTask(task, metrics);
-    else if (task.kind === 'archive') prepared = await prepareArchiveTask(task, metrics);
     else if (task.kind === 'pdf') prepared = await prepareParsedTask(task, parsePdfFileLazy, metrics, 'PDF');
     else if (task.kind === 'mobi') prepared = await prepareParsedTask(task, parseMobiFileLazy, metrics, 'MOBI');
     else if (task.kind === 'markdown') prepared = await prepareParsedTask(task, parseMarkdownFile, metrics, 'Markdown');
@@ -534,7 +465,7 @@ export function useImporter() {
     try {
       await releaseNativeArchiveSession(book);
     } catch (err) {
-      console.warn('[HOMURA] 释放导入后的原生压缩包会话失败', book.title, err);
+      console.warn('[HOMURA] 释放导入后的原生 EPUB 会话失败', book.title, err);
     }
 
     if (coverThumb && coverThumb !== book.coverBlob) {
@@ -554,7 +485,6 @@ export function useImporter() {
     book.pdfDoc = null;
     book.nativeArchiveId = null;
     book.nativeArchivePath = null;
-    book.nativeArchiveMode = null;
     book.nativeEntryIndexByPath = null;
     book.nativeArchiveStaged = false;
     book.coverNative = null;
