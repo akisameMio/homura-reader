@@ -110,7 +110,11 @@ import { useSettingsStore } from './stores/settings.js';
 import { useUiStore } from './stores/ui.js';
 import { useUpdateStore } from './stores/updates.js';
 import { fileAccept, canPickFolder, hasFileSystemAccess } from './services/platform.js';
-import { canUseNativeImport, shouldFallbackNativeImport } from './services/nativeImport.js';
+import {
+  canUseNativeImport,
+  isNativeImportCancelled,
+  shouldFallbackNativeImport
+} from './services/nativeImport.js';
 import { resolveBookFormat, scrollAppToTop } from './services/utils.js';
 import { sortShelfBooks } from './services/bookTitles.js';
 import { bookShelfCategory } from './services/shelfSections.js';
@@ -273,12 +277,15 @@ async function openFilePicker() {
       await importer.pickNativeFiles({ offerCollection: isCompact.value });
       return;
     } catch (err) {
-      if (!shouldFallbackNativeImport(err)) {
-        console.warn('[HOMURA] 桌面原生文件选择失败', err);
-        shelf.error = '读取所选文件失败，请重新选择';
+      if (isNativeImportCancelled(err)) return;
+      if (!shouldFallbackNativeImport(err) || err?.nativeSavedCount > 0) {
+        console.warn('[HOMURA] 原生文件选择失败', err);
+        shelf.error = err?.nativeSavedCount > 0
+          ? '部分文件已导入，其余文件读取失败，请选择剩余文件'
+          : '读取所选文件失败，请重新选择';
         return;
       }
-      console.warn('[HOMURA] 桌面原生文件选择不可用，回退浏览器选择器', err);
+      console.warn('[HOMURA] 原生文件选择不可用，回退浏览器选择器', err);
     }
   }
   if (hasFileSystemAccess) {

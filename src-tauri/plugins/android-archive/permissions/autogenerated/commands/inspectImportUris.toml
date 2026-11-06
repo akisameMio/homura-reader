@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-inspectImportUris"
+description = "Enables the inspectImportUris command without any pre-configured scope."
+commands.allow = ["inspectImportUris"]
+
+[[permission]]
+identifier = "deny-inspectImportUris"
+description = "Denies the inspectImportUris command without any pre-configured scope."
+commands.deny = ["inspectImportUris"]

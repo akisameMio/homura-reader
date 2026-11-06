@@ -1,8 +1,9 @@
 /* ============================================================================
-   HOMURA · 桌面原生导入
+   HOMURA · 原生导入
    ----------------------------------------------------------------------------
-   桌面 Tauri 用系统选择器拿真实路径，再交给 Rust 直接复制到 AppData。
-   EPUB 全程不经过 WebView Blob；其它格式只在解析时按需读成 File。
+   桌面 Tauri 用系统选择器拿真实路径，Android 用系统文件选择器拿 content:// URI，
+   再交给原生侧直接复制到 AppData。原文件全程不经过 WebView Blob，
+   其它格式只在解析时按需读成 File。
    ========================================================================== */
 
 import { readFile } from '@tauri-apps/plugin-fs';
@@ -58,7 +59,7 @@ const NATIVE_IMPORT_FALLBACK_CODES = new Set([
 ]);
 
 export function canUseNativeImport() {
-  return canUseNativeBridge() && !isAndroid;
+  return canUseNativeBridge();
 }
 
 export function nativeImportMime(name) {
@@ -94,9 +95,18 @@ export function isNativeImportFile(file) {
   return !!file?.nativePath && !(typeof Blob !== 'undefined' && file instanceof Blob);
 }
 
+export function isAndroidContentUri(path) {
+  return isAndroid && typeof path === 'string' && path.startsWith('content://');
+}
+
 export function shouldFallbackNativeImport(error) {
   const normalized = normalizeNativeError(error, { feature: 'native-import' });
   return NATIVE_IMPORT_FALLBACK_CODES.has(normalized.code);
+}
+
+export function isNativeImportCancelled(error) {
+  return normalizeNativeError(error, { feature: 'native-import' }).code
+    === NativeErrorCode.CANCELLED;
 }
 
 function fileFromBytes(bytes, file) {
@@ -144,10 +154,57 @@ export async function pickNativeImportPaths({ directory = false, multiple = fals
     feature: 'native-import-dialog'
   });
   if (result === null || result === undefined) return null;
-  const paths = Array.isArray(result) ? result : [result];
+  const paths = Array.isArray(result)
+    ? result
+    : Array.isArray(result.files)
+      ? result.files
+      : [result];
   return paths
     .map(entry => typeof entry === 'string' ? entry : entry?.path)
     .filter(path => typeof path === 'string' && path.length > 0);
+}
+
+export async function inspectNativeImportUris(uris) {
+  if (!Array.isArray(uris) || uris.length === 0) return [];
+  const result = await invokeNativeCommand('android-archive', 'inspectImportUris', { uris }, {
+    feature: 'native-import'
+  });
+  const entries = Array.isArray(result)
+    ? result
+    : Array.isArray(result?.files)
+      ? result.files
+      : [];
+  return entries
+    .map(entry => {
+      const path = entry?.uri || entry?.path;
+      const name = entry?.name || String(path || '').split('/').pop() || 'source';
+      return {
+        name,
+        path,
+        size: Number(entry?.size) || 0,
+        modifiedMs: Number(entry?.modifiedMs) || 0,
+        mime: entry?.mime || nativeImportMime(name)
+      };
+    })
+    .filter(entry => typeof entry.path === 'string' && entry.path.length > 0);
+}
+
+export async function pickNativeUriImportFiles({ multiple = true } = {}) {
+  let paths = null;
+  try {
+    const result = await invokeNativeCommand('android-archive', 'pickImportUris', {
+      multiple
+    }, {
+      feature: 'native-import-dialog'
+    });
+    paths = Array.isArray(result?.files) ? result.files : [];
+  } catch (error) {
+    if (isNativeImportCancelled(error)) return null;
+    throw error;
+  }
+  if (!paths || paths.length === 0) return null;
+  const entries = await inspectNativeImportUris(paths);
+  return entries.map(makeNativeImportFile);
 }
 
 export async function scanNativeImportPaths(paths) {
@@ -163,6 +220,14 @@ export async function stageNativeImportPath(bookId, sourcePath) {
     bookId,
     sourcePath
   }, {
+    feature: 'native-import'
+  });
+}
+
+export async function stageNativeImportUri(bookId, uri, name = '') {
+  const args = { bookId, uri };
+  if (name) args.name = name;
+  return invokeNativeCommand('android-archive', 'stageImportUri', args, {
     feature: 'native-import'
   });
 }

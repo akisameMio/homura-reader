@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-stageImportUri"
+description = "Enables the stageImportUri command without any pre-configured scope."
+commands.allow = ["stageImportUri"]
+
+[[permission]]
+identifier = "deny-stageImportUri"
+description = "Denies the stageImportUri command without any pre-configured scope."
+commands.deny = ["stageImportUri"]

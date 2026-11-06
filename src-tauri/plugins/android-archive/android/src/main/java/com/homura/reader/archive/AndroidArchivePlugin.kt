@@ -1,10 +1,16 @@
 package com.homura.reader.archive
 
 import android.app.Activity
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Build
+import android.provider.DocumentsContract
+import android.provider.OpenableColumns
 import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.result.ActivityResult
+import app.tauri.annotation.ActivityCallback
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
@@ -16,6 +22,7 @@ import org.json.JSONArray
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.zip.ZipEntry
@@ -40,6 +47,9 @@ private const val TRIM_EVERY_EXTRACTS = 5
 private const val MAX_TEXT_PATHS = 5_000
 private const val MAX_TEXT_ENTRY_BYTES = 8L * 1024 * 1024
 private const val MAX_TEXT_TOTAL_BYTES = 32L * 1024 * 1024
+private const val MAX_IMPORT_FILE_BYTES = 4L * 1024 * 1024 * 1024
+private const val MAX_IMPORT_NAME_CHARS = 180
+private const val IMPORT_PART_PREFIX = ".homura-import-"
 
 private val IMAGE_NAME = Regex(""".*\.(jpg|jpeg|png|webp|gif|avif|bmp)$""", RegexOption.IGNORE_CASE)
 
@@ -71,6 +81,23 @@ class TextBatchOptions {
   lateinit var pathsJson: String
 }
 
+@InvokeArg
+class InspectImportOptions {
+  lateinit var uris: Array<String>
+}
+
+@InvokeArg
+class StageImportUriOptions {
+  lateinit var bookId: String
+  lateinit var uri: String
+  var name: String? = null
+}
+
+@InvokeArg
+class ImportPickerOptions {
+  var multiple: Boolean? = null
+}
+
 private class ArchiveSession(
   val id: String,
   val bookId: String,
@@ -83,12 +110,29 @@ private class ArchiveSession(
 
 private class TextEntryTooLargeException : Exception()
 
+private class NativeImportException(
+  val code: String,
+  message: String
+) : Exception(message)
+
+private data class ImportUriMetadata(
+  val name: String,
+  val size: Long,
+  val mime: String,
+  val modifiedMs: Long
+)
+
 @TauriPlugin
 class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
   private val sessions = HashMap<String, ArchiveSession>()
   private val extractCounters = ConcurrentHashMap<String, Int>()
   private val executor: ExecutorService = Executors.newFixedThreadPool(2) { runnable ->
     Thread(runnable, "homura-archive").apply { isDaemon = true }
+  }
+
+  init {
+    // 导入进程被杀时 .part 来不及清理，下一次启动先回收残留临时文件。
+    executor.execute(::cleanupImportPartFiles)
   }
 
   @Command
@@ -220,6 +264,79 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
     }
   }
 
+  @Command
+  fun inspectImportUris(invoke: Invoke) {
+    val options = invoke.parseArgs(InspectImportOptions::class.java)
+    runAsync(invoke) {
+      JSObject().apply {
+        put("files", JSArray().apply {
+          options.uris.forEach { rawUri ->
+            if (rawUri.isBlank()) return@forEach
+            val metadata = inspectImportUri(rawUri)
+            put(JSObject().apply {
+              put("uri", rawUri)
+              put("name", metadata.name)
+              put("size", metadata.size)
+              put("mime", metadata.mime)
+              put("modifiedMs", metadata.modifiedMs)
+            })
+          }
+        })
+      }
+    }
+  }
+
+  @Command
+  fun pickImportUris(invoke: Invoke) {
+    try {
+      val options = invoke.parseArgs(ImportPickerOptions::class.java)
+      val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+        addCategory(Intent.CATEGORY_OPENABLE)
+        // DocumentsUI 会严格按 EXTRA_MIME_TYPES 过滤，而 Downloads provider
+        // 常把 .mobi 报成 application/octet-stream 甚至不报 MIME。
+        // 因此放开所有类型，由 JS 侧按扩展名筛选。
+        type = "*/*"
+        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, options.multiple ?: true)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      }
+      startActivityForResult(invoke, intent, "importPickerResult")
+    } catch (error: Throwable) {
+      invoke.reject("NATIVE_UNAVAILABLE: 无法打开系统文件选择器")
+    }
+  }
+
+  @ActivityCallback
+  fun importPickerResult(invoke: Invoke, result: ActivityResult) {
+    when (result.resultCode) {
+      Activity.RESULT_OK -> {
+        val data = result.data
+        val uris = mutableListOf<String>()
+        data?.clipData?.let { clip ->
+          for (index in 0 until clip.itemCount) {
+            uris.add(clip.getItemAt(index).uri.toString())
+          }
+        } ?: data?.data?.let { uris.add(it.toString()) }
+        invoke.resolve(JSObject().apply {
+          put("files", JSArray.from(uris.toTypedArray()))
+        })
+      }
+      Activity.RESULT_CANCELED -> invoke.reject("NATIVE_CANCELLED: 用户取消选择")
+      else -> invoke.reject("NATIVE_COMMAND_FAILED: 系统文件选择器返回异常")
+    }
+  }
+
+  @Command
+  fun stageImportUri(invoke: Invoke) {
+    val options = invoke.parseArgs(StageImportUriOptions::class.java)
+    runAsync(invoke) {
+      try {
+        stageImportUriBlocking(options)
+      } catch (error: Throwable) {
+        throw nativeImportError(error)
+      }
+    }
+  }
+
   override fun onDestroy(activity: AppCompatActivity) {
     closeAllSessions()
     executor.shutdownNow()
@@ -237,6 +354,234 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
         val message = error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName
         activity.runOnUiThread { invoke.reject(message) }
       }
+    }
+  }
+
+  private fun inspectImportUri(rawUri: String): ImportUriMetadata {
+    val uri = try {
+      Uri.parse(rawUri)
+    } catch (_: Throwable) {
+      Uri.EMPTY
+    }
+    var name = ""
+    var size = 0L
+    var modifiedMs = 0L
+
+    try {
+      activity.contentResolver.query(
+        uri,
+        arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+        null,
+        null,
+        null
+      )?.use { cursor ->
+        if (cursor.moveToFirst()) {
+          val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+          if (nameIndex >= 0 && !cursor.isNull(nameIndex)) name = cursor.getString(nameIndex) ?: ""
+          val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+          if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) size = cursor.getLong(sizeIndex)
+        }
+      }
+    } catch (_: Throwable) {
+      // 部分 provider 不实现 OpenableColumns，保底仍可用 URI 末段与扩展名。
+    }
+
+    try {
+      activity.contentResolver.query(
+        uri,
+        arrayOf(DocumentsContract.Document.COLUMN_LAST_MODIFIED),
+        null,
+        null,
+        null
+      )?.use { cursor ->
+        val modifiedIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+        if (cursor.moveToFirst() && modifiedIndex >= 0 && !cursor.isNull(modifiedIndex)) {
+          modifiedMs = cursor.getLong(modifiedIndex)
+        }
+      }
+    } catch (_: Throwable) {
+      // 修改时间只用于展示与排序，读不到不影响导入。
+    }
+
+    val fallbackName = try {
+      Uri.decode(uri.lastPathSegment ?: "")
+    } catch (_: Throwable) {
+      ""
+    }.substringAfterLast('/').ifBlank { "source" }
+    val finalName = name.takeIf { it.isNotBlank() } ?: fallbackName
+    val mime = try {
+      activity.contentResolver.getType(uri)
+    } catch (_: Throwable) {
+      null
+    } ?: mimeFor(finalName)
+
+    return ImportUriMetadata(
+      name = finalName,
+      size = size.coerceAtLeast(0L),
+      mime = mime,
+      modifiedMs = modifiedMs.coerceAtLeast(0L)
+    )
+  }
+
+  private fun stageImportUriBlocking(options: StageImportUriOptions): JSObject {
+    val uri = try {
+      Uri.parse(options.uri)
+    } catch (_: Throwable) {
+      throw NativeImportException("NATIVE_INVALID_DATA", "导入 URI 无效")
+    }
+    if (!"content".equals(uri.scheme, ignoreCase = true)) {
+      throw NativeImportException("NATIVE_UNSUPPORTED", "Android 原生导入只接受 content:// URI")
+    }
+
+    val metadata = inspectImportUri(options.uri)
+    val safeName = safeImportFileName(options.name?.takeIf { it.isNotBlank() } ?: metadata.name)
+    if (!isSupportedImportName(safeName)) {
+      throw NativeImportException("NATIVE_INVALID_DATA", "不支持的导入文件格式")
+    }
+    if (metadata.size > MAX_IMPORT_FILE_BYTES) {
+      throw NativeImportException("NATIVE_LIMIT_EXCEEDED", "单个导入文件超过 4GB")
+    }
+
+    val sourceRoot = File(activity.dataDir, SOURCE_ROOT)
+    sourceRoot.mkdirs()
+    val canonicalRoot = sourceRoot.canonicalFile
+    val targetDir = File(canonicalRoot, safeBookSegment(options.bookId)).resolve("source")
+    targetDir.mkdirs()
+    val canonicalTargetDir = targetDir.canonicalFile
+    if (
+      canonicalTargetDir != canonicalRoot &&
+      !canonicalTargetDir.path.startsWith(canonicalRoot.path + File.separator)
+    ) {
+      throw NativeImportException("NATIVE_SECURITY_LIMIT", "导入目标不在 HOMURA 存档目录内")
+    }
+
+    val target = File(canonicalTargetDir, safeName)
+    val temporary = File(
+      canonicalTargetDir,
+      "$IMPORT_PART_PREFIX${UUID.randomUUID()}.part"
+    )
+    var copied = 0L
+
+    try {
+      val input = try {
+        activity.contentResolver.openInputStream(uri)
+      } catch (error: SecurityException) {
+        throw NativeImportException("NATIVE_SECURITY_LIMIT", "没有读取所选文件的权限")
+      } ?: throw NativeImportException("NATIVE_COMMAND_FAILED", "无法打开所选文件")
+
+      input.use { stream ->
+        FileOutputStream(temporary).use { output ->
+          val buffer = ByteArray(64 * 1024)
+          while (true) {
+            val read = stream.read(buffer)
+            if (read < 0) break
+            copied += read
+            if (copied > MAX_IMPORT_FILE_BYTES) {
+              throw NativeImportException("NATIVE_LIMIT_EXCEEDED", "单个导入文件超过 4GB")
+            }
+            output.write(buffer, 0, read)
+          }
+          output.flush()
+          output.fd.sync()
+        }
+      }
+
+      if (metadata.size > 0 && copied != metadata.size) {
+        throw NativeImportException("NATIVE_COMMAND_FAILED", "复制后的文件大小不一致")
+      }
+      if (target.exists() && !target.delete()) {
+        throw NativeImportException("NATIVE_COMMAND_FAILED", "无法替换旧导入文件")
+      }
+      if (!temporary.renameTo(target)) {
+        throw NativeImportException("NATIVE_COMMAND_FAILED", "提交导入文件失败")
+      }
+      if (target.length() != copied) {
+        target.delete()
+        throw NativeImportException("NATIVE_COMMAND_FAILED", "原生存档回读大小不一致")
+      }
+    } catch (error: NativeImportException) {
+      throw error
+    } catch (error: SecurityException) {
+      throw NativeImportException("NATIVE_SECURITY_LIMIT", error.message ?: "读取文件被拒绝")
+    } catch (error: Throwable) {
+      throw NativeImportException(
+        "NATIVE_COMMAND_FAILED",
+        error.message?.takeIf { it.isNotBlank() } ?: "复制导入文件失败"
+      )
+    } finally {
+      temporary.delete()
+    }
+
+    return JSObject().apply {
+      put(
+        "nativePath",
+        "$SOURCE_ROOT/${safeBookSegment(options.bookId)}/source/$safeName"
+      )
+      put("name", safeName)
+      put("size", copied)
+      put("modifiedMs", if (metadata.modifiedMs > 0) metadata.modifiedMs else target.lastModified())
+    }
+  }
+
+  private fun nativeImportError(error: Throwable): Throwable {
+    if (error is NativeImportException) {
+      return IllegalStateException("${error.code}: ${error.message}")
+    }
+    if (error is SecurityException) {
+      return IllegalStateException("NATIVE_SECURITY_LIMIT: ${error.message ?: "读取文件被拒绝"}")
+    }
+    return IllegalStateException(
+      "NATIVE_COMMAND_FAILED: ${error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName}"
+    )
+  }
+
+  private fun safeBookSegment(value: String): String {
+    val segment = value
+      .map { character ->
+        if (character.isLetterOrDigit() && character.code < 128 || character in "._-") {
+          character
+        } else {
+          '_'
+        }
+      }
+      .take(160)
+      .joinToString("")
+    return if (segment.isBlank() || segment == "." || segment == "..") "book" else segment
+  }
+
+  private fun safeImportFileName(value: String): String {
+    val base = value.replace('\\', '/').substringAfterLast('/')
+    var segment = buildString {
+      for (character in base) {
+        append(
+          if (character.isISOControl() || character in "/\\:*?\"<>|") '_' else character
+        )
+      }
+    }.take(MAX_IMPORT_NAME_CHARS)
+    if (segment.startsWith(".")) segment = "_" + segment.drop(1)
+    return if (segment.isBlank() || segment == "." || segment == "..") "source" else segment
+  }
+
+  private fun isSupportedImportName(name: String): Boolean {
+    return name.substringAfterLast('.', "").lowercase() in setOf(
+      "epub", "pdf", "mobi", "prc", "azw", "txt", "md",
+      "jpg", "jpeg", "png", "webp", "gif", "avif", "bmp"
+    )
+  }
+
+  private fun cleanupImportPartFiles() {
+    try {
+      val root = File(activity.dataDir, SOURCE_ROOT)
+      if (!root.isDirectory) return
+      root.walkTopDown()
+        .filter {
+          it.isFile &&
+            it.name.startsWith(IMPORT_PART_PREFIX) &&
+            it.name.endsWith(".part")
+        }
+        .forEach { it.delete() }
+    } catch (_: Throwable) {
+      // 清理失败不能影响插件初始化，下一次导入仍会覆盖同名 .part。
     }
   }
 

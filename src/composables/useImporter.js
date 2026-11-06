@@ -23,11 +23,13 @@ import {
 import { canUseNativeArchive, releaseNativeArchiveSession } from '../services/nativeArchive.js';
 import { removeNativeBookDir } from '../services/nativeStorage.js';
 import {
+  isAndroidContentUri,
   isNativeImportFile,
   makeNativeImportFile,
   materializeNativeImportFile,
   materializeStagedNativeImportFile,
   pickNativeImportPaths,
+  pickNativeUriImportFiles,
   scanNativeImportPaths,
   shouldFallbackNativeImport
 } from '../services/nativeImport.js';
@@ -181,15 +183,21 @@ function chooseCommitBatchSize(tasks) {
 }
 
 // 有界滚动并发池：同一批任务按原始 index 回填结果，提交顺序不随完成先后变化。
+// 原生导入失败需要整批交给用户重选，必须等已在跑的任务收尾，避免后台继续写盘。
 async function runPool(items, concurrency, worker, onError) {
   const results = new Array(items.length);
   let next = 0;
+  let fatalError = null;
   async function lane() {
-    while (next < items.length) {
+    while (!fatalError && next < items.length) {
       const index = next++;
       try {
         results[index] = await worker(items[index], index);
       } catch (err) {
+        if (err?.nativeImportFallback) {
+          fatalError = fatalError || err;
+          return;
+        }
         console.warn('[HOMURA] 导入预处理任务失败', err);
         results[index] = null;
         onError?.(err, items[index], index);
@@ -197,7 +205,17 @@ async function runPool(items, concurrency, worker, onError) {
     }
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, lane));
+  if (fatalError) {
+    fatalError.partialResults = results.filter(Boolean);
+    throw fatalError;
+  }
   return results;
+}
+
+async function discardPreparedResults(preparedList) {
+  for (const prepared of preparedList || []) {
+    if (prepared?.book) await discardParsedBook(prepared.book).catch(() => {});
+  }
 }
 
 // 移动端原文件会整份落盘，配额比桌面更容易吃满，导入后检查一次
@@ -338,6 +356,13 @@ export function useImporter() {
           console.warn('[HOMURA] 原生 EPUB 预存被拒绝', err);
           return null;
         }
+        // Android 的 content:// 授权只存在于当前选择会话。普通复制失败时
+        // 交给系统文件输入重选；安全与超限错误仍由上面的分支终止。
+        if (isAndroidContentUri(file.nativePath)) {
+          await removeNativeBookDir(bookId).catch(() => {});
+          err.nativeImportFallback = true;
+          throw err;
+        }
         console.warn('[HOMURA] 原生 EPUB 预存失败，沿用 JSZip', err);
         await removeNativeBookDir(bookId).catch(() => {});
         if (isNativeImportFile(file)) {
@@ -385,22 +410,55 @@ export function useImporter() {
     const started = now();
     let file = task.file;
     let book = null;
+    let stagedBookId = '';
+    let stagedSource = null;
     try {
       if (isNativeImportFile(file)) {
-        const readStarted = now();
-        try {
-          file = await materializeNativeImportFile(file);
-        } finally {
-          metrics.readMs += now() - readStarted;
+        if (isAndroidContentUri(file.nativePath)) {
+          stagedBookId = makeEpubId();
+          const stageStarted = now();
+          try {
+            stagedSource = await stageNativePathSource(stagedBookId, file);
+          } catch (err) {
+            if (shouldFallbackNativeImport(err)) err.nativeImportFallback = true;
+            throw err;
+          } finally {
+            metrics.stageMs += now() - stageStarted;
+          }
+          const readStarted = now();
+          try {
+            file = await materializeStagedNativeImportFile(file, stagedSource.nativePath);
+          } finally {
+            metrics.readMs += now() - readStarted;
+          }
+        } else {
+          const readStarted = now();
+          try {
+            file = await materializeNativeImportFile(file);
+          } finally {
+            metrics.readMs += now() - readStarted;
+          }
         }
       }
       book = await parser(file);
     } catch (err) {
+      if (err?.nativeImportFallback) {
+        if (stagedBookId) await removeNativeBookDir(stagedBookId).catch(() => {});
+        throw err;
+      }
       console.warn(`[HOMURA] ${label} 解析失败`, err);
     } finally {
       metrics.parseMs += now() - started;
     }
-    if (!book) return null;
+    if (!book) {
+      if (stagedBookId) await removeNativeBookDir(stagedBookId).catch(() => {});
+      return null;
+    }
+    if (stagedSource) {
+      book.id = stagedBookId;
+      book.nativeArchiveStaged = true;
+      return { book, source: stagedSource };
+    }
     return { book, source: makeFileSource(file) };
   }
 
@@ -416,24 +474,66 @@ export function useImporter() {
       if (group?.files?.some(file => isNativeImportFile(file))) {
         const readStarted = now();
         try {
-          const files = [];
-          for (const file of group.files) {
-            files.push(await materializeNativeImportFile(file));
+          const files = new Array(group.files.length);
+          const nativeEntries = new Array(group.files.length);
+          for (let index = 0; index < group.files.length; index++) {
+            const file = group.files[index];
+            if (isAndroidContentUri(file.nativePath)) {
+              let staged;
+              try {
+                staged = await stageNativePathSource(group.book.id, file);
+              } catch (err) {
+                if (shouldFallbackNativeImport(err)) err.nativeImportFallback = true;
+                throw err;
+              }
+              files[index] = await materializeStagedNativeImportFile(file, staged.nativePath);
+              nativeEntries[index] = {
+                path: file.customRelativePath || file.name,
+                size: staged.size,
+                lastModified: staged.lastModified,
+                nativePath: staged.nativePath
+              };
+            } else {
+              files[index] = await materializeNativeImportFile(file);
+            }
           }
           const rebuilt = buildImageFolderBooks(files)[0];
           if (!rebuilt) throw new Error('图片目录为空');
+          rebuilt.book.id = group.book.id;
+          rebuilt.book.nativeArchiveStaged = nativeEntries.some(Boolean);
           group = rebuilt;
+          if (nativeEntries.some(Boolean)) {
+            prepared = {
+              book: group.book,
+              source: {
+                kind: 'folder',
+                name: group.folderName,
+                entries: nativeEntries.map((entry, index) => entry || {
+                  path: files[index].customRelativePath || files[index].name,
+                  size: files[index].size,
+                  lastModified: files[index].lastModified,
+                  blob: files[index]
+                })
+              }
+            };
+          }
         } catch (err) {
           console.warn('[HOMURA] 读取原生图片目录失败', err);
+          if (group?.files?.some(file => isAndroidContentUri(file.nativePath))) {
+            await removeNativeBookDir(group.book.id).catch(() => {});
+          }
+          if (err?.nativeImportFallback) throw err;
           return null;
         } finally {
           metrics.readMs += now() - readStarted;
         }
       }
-      prepared = {
-        book: group.book,
-        source: makeFolderSource(group.folderName, group.files)
-      };
+      if (!prepared) {
+        prepared = {
+          book: group.book,
+          source: makeFolderSource(group.folderName, group.files)
+        };
+      }
     }
     if (!prepared) {
       metrics.parseFailed++;
@@ -606,15 +706,26 @@ export function useImporter() {
     metrics.concurrency = chooseImportConcurrency(importTasks);
     const commitBatchSize = chooseCommitBatchSize(importTasks);
     metrics.commitBatchSize = commitBatchSize;
-    for (let start = 0; start < importTasks.length; start += commitBatchSize) {
-      const batchTasks = importTasks.slice(start, start + commitBatchSize);
-      const prepared = await runPool(
-        batchTasks,
-        metrics.concurrency,
-        task => prepareImportTask(task, metrics),
-        () => { metrics.parseFailed++; }
-      );
-      await commitPreparedBatch(prepared, batchTasks, savedBooks, metrics);
+    try {
+      for (let start = 0; start < importTasks.length; start += commitBatchSize) {
+        const batchTasks = importTasks.slice(start, start + commitBatchSize);
+        const prepared = await runPool(
+          batchTasks,
+          metrics.concurrency,
+          task => prepareImportTask(task, metrics),
+          () => { metrics.parseFailed++; }
+        );
+        await commitPreparedBatch(prepared, batchTasks, savedBooks, metrics);
+      }
+    } catch (err) {
+      if (err?.nativeImportFallback) {
+        await discardPreparedResults(err.partialResults);
+        delete err.partialResults;
+        // 已提交的书不能因为剩余文件失败而让用户重选整批，否则会重复询问同名书。
+        err.nativeSavedCount = savedBooks.length;
+        logImportMetrics(metrics, savedBooks.length);
+      }
+      throw err;
     }
 
     if (metrics.failed > 0) {
@@ -714,8 +825,15 @@ export function useImporter() {
     if (files.length > 0) await handleFiles(files, options);
   }
 
-  // 桌面 Tauri 优先用系统选择器拿真实路径；真正的大文件由 Rust 直接复制。
+  // Tauri 优先用系统选择器：桌面拿真实路径，Android 拿 content:// URI，
+  // 大文件都由原生侧直接复制，WebView 只接收轻量元数据。
   async function pickNativeFiles(options) {
+    if (isAndroid) {
+      const files = await pickNativeUriImportFiles({ multiple: true });
+      if (!files || files.length === 0) return false;
+      await handleFiles(files, options);
+      return true;
+    }
     const paths = await pickNativeImportPaths({ directory: false, multiple: true });
     if (!paths || paths.length === 0) return false;
     const entries = await scanNativeImportPaths(paths);

@@ -5,6 +5,9 @@ const COMMANDS: &[&str] = &[
   "close",
   "clearBook",
   "clearAll",
+  "inspectImportUris",
+  "pickImportUris",
+  "stageImportUri",
 ];
 
 fn main() {

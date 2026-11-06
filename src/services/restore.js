@@ -19,7 +19,11 @@ import { parseEpubFileLazy, parseTxtFile, parseMobiFileLazy, parseMarkdownFile, 
 import { parseEpubNativeArchive } from './epubParser.js';
 import { createCoverThumbnail } from './coverThumb.js';
 import { canUseNativeArchive, shouldFallbackNativeArchive } from './nativeArchive.js';
-import { stageNativeImportPath } from './nativeImport.js';
+import {
+  isAndroidContentUri,
+  stageNativeImportPath,
+  stageNativeImportUri
+} from './nativeImport.js';
 
 const nowMs = typeof performance !== 'undefined' && typeof performance.now === 'function'
   ? () => performance.now()
@@ -59,11 +63,13 @@ export async function stageNativeFileSource(bookId, file) {
   return source;
 }
 
-// 系统选择器已经给出真实路径时，由 Rust 在进程内直接复制，
+// 系统选择器给出真实路径或 Android content:// URI 时，由原生侧直接复制，
 // 不再把整本书先读成 WebView Blob。
 export async function stageNativePathSource(bookId, file) {
   if (!canUseNativeStorage()) throw new Error('原生存档不可用');
-  const staged = await stageNativeImportPath(bookId, file.nativePath);
+  const staged = isAndroidContentUri(file.nativePath)
+    ? await stageNativeImportUri(bookId, file.nativePath, file.name)
+    : await stageNativeImportPath(bookId, file.nativePath);
   const source = {
     kind: 'file',
     name: file.name,

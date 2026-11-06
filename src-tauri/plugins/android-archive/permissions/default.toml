@@ -6,5 +6,8 @@ permissions = [
   "allow-extract",
   "allow-close",
   "allow-clearBook",
-  "allow-clearAll"
+  "allow-clearAll",
+  "allow-inspectImportUris",
+  "allow-pickImportUris",
+  "allow-stageImportUri"
 ]

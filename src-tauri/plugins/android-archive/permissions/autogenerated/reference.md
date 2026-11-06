@@ -10,6 +10,9 @@ Allows HOMURA to read EPUB document entries through the Android archive cache.
 - `allow-close`
 - `allow-clearBook`
 - `allow-clearAll`
+- `allow-inspectImportUris`
+- `allow-pickImportUris`
+- `allow-stageImportUri`
 
 ## Permission Table
 
@@ -127,6 +130,32 @@ Denies the extract command without any pre-configured scope.
 <tr>
 <td>
 
+`android-archive:allow-inspectImportUris`
+
+</td>
+<td>
+
+Enables the inspectImportUris command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-archive:deny-inspectImportUris`
+
+</td>
+<td>
+
+Denies the inspectImportUris command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `android-archive:allow-openDocument`
 
 </td>
@@ -153,6 +182,32 @@ Denies the openDocument command without any pre-configured scope.
 <tr>
 <td>
 
+`android-archive:allow-pickImportUris`
+
+</td>
+<td>
+
+Enables the pickImportUris command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-archive:deny-pickImportUris`
+
+</td>
+<td>
+
+Denies the pickImportUris command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `android-archive:allow-readTextBatch`
 
 </td>
@@ -172,6 +227,32 @@ Enables the readTextBatch command without any pre-configured scope.
 <td>
 
 Denies the readTextBatch command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-archive:allow-stageImportUri`
+
+</td>
+<td>
+
+Enables the stageImportUri command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-archive:deny-stageImportUri`
+
+</td>
+<td>
+
+Denies the stageImportUri command without any pre-configured scope.
 
 </td>
 </tr>

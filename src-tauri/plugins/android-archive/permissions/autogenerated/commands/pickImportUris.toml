@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-pickImportUris"
+description = "Enables the pickImportUris command without any pre-configured scope."
+commands.allow = ["pickImportUris"]
+
+[[permission]]
+identifier = "deny-pickImportUris"
+description = "Denies the pickImportUris command without any pre-configured scope."
+commands.deny = ["pickImportUris"]
