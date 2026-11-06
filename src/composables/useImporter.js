@@ -5,6 +5,7 @@
    ========================================================================== */
 
 import { useShelfStore } from '../stores/shelf.js';
+import { useSettingsStore } from '../stores/settings.js';
 import { useDuplicateImport } from './useDuplicateImport.js';
 import { useShelfDialogs } from './useShelfDialogs.js';
 import { planFolderCollections, availableCollectionName, collectionNameError } from '../services/collections.js';
@@ -214,6 +215,7 @@ async function warnIfStorageTight() {
 
 export function useImporter() {
   const shelf = useShelfStore();
+  const settings = useSettingsStore();
   const { confirmDuplicate, confirmDuplicates } = useDuplicateImport();
   const { askShelfDialog } = useShelfDialogs();
 
@@ -235,6 +237,7 @@ export function useImporter() {
       const ids = await importFiles(files);
       if (ids.length && targetId && shelf.collections.some(item => item.id === targetId)) await shelf.moveBooks(ids, targetId);
     };
+    if (!settings.importCollectionPrompt) return importIntoCurrent();
     const plan = planFolderCollections(files);
     if (plan.bookCount < 2 || (!plan.hasDirectories && (!offerCollection || targetId))) return importIntoCurrent();
     const grouping = plan.hasDirectories ? `按目录分别创建 ${plan.groups.length} 个一级书库` : '将这批作品放进一个新书库';

@@ -2,7 +2,7 @@
    HOMURA · 应用设置 Store
    ----------------------------------------------------------------------------
    保存全局外观之外的用户偏好。阅读默认值只影响尚未留下排版记录的作品，
-   已读作品继续使用各自的排版记忆；调试开关用于覆盖平台相关的界面能力。
+   已读作品继续使用各自的排版记忆；调试开关用于覆盖平台界面能力与启动行为。
    ========================================================================== */
 
 import { defineStore } from 'pinia';
@@ -11,6 +11,8 @@ import { isWindows } from '../services/platform.js';
 
 const READER_DEFAULTS_KEY = 'homura_reader_defaults';
 const DEBUG_FORCE_FULLSCREEN_KEY = 'homura_debug_force_fullscreen';
+const DEBUG_AUTO_UPDATE_CHECK_KEY = 'homura_debug_auto_update_check';
+const IMPORT_COLLECTION_PROMPT_KEY = 'homura_import_collection_prompt';
 const DIRECTIONS = ['ltr', 'rtl', 'vertical'];
 const WEBTOON_FITS = ['screen', 'medium', 'wide'];
 
@@ -69,9 +71,27 @@ function readDebugForceFullscreen() {
   }
 }
 
+function readDebugAutoUpdateCheck() {
+  try {
+    return localStorage.getItem(DEBUG_AUTO_UPDATE_CHECK_KEY) === '1';
+  } catch (err) {
+    return false;
+  }
+}
+
+function readImportCollectionPrompt() {
+  try {
+    return localStorage.getItem(IMPORT_COLLECTION_PROMPT_KEY) === '1';
+  } catch (err) {
+    return false;
+  }
+}
+
 export const useSettingsStore = defineStore('settings', () => {
   const readerDefaults = reactive(readReaderDefaults());
   const debugForceFullscreen = ref(readDebugForceFullscreen());
+  const debugAutoUpdateCheck = ref(readDebugAutoUpdateCheck());
+  const importCollectionPrompt = ref(readImportCollectionPrompt());
   const showFullscreenButton = computed(() => isWindows || debugForceFullscreen.value);
 
   function persistReaderDefaults() {
@@ -99,12 +119,36 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  function setDebugAutoUpdateCheck(value) {
+    const next = !!value;
+    debugAutoUpdateCheck.value = next;
+    try {
+      localStorage.setItem(DEBUG_AUTO_UPDATE_CHECK_KEY, next ? '1' : '0');
+    } catch (err) {
+      console.warn('[HOMURA] 更新检测开关保存失败', err);
+    }
+  }
+
+  function setImportCollectionPrompt(value) {
+    const next = !!value;
+    importCollectionPrompt.value = next;
+    try {
+      localStorage.setItem(IMPORT_COLLECTION_PROMPT_KEY, next ? '1' : '0');
+    } catch (err) {
+      console.warn('[HOMURA] 导入书库提示开关保存失败', err);
+    }
+  }
+
   return {
     readerDefaults,
     debugForceFullscreen,
+    debugAutoUpdateCheck,
+    importCollectionPrompt,
     showFullscreenButton,
     setReaderDefault,
     resetReaderDefaults,
-    setDebugForceFullscreen
+    setDebugForceFullscreen,
+    setDebugAutoUpdateCheck,
+    setImportCollectionPrompt
   };
 });

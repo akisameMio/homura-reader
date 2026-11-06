@@ -206,6 +206,23 @@
           </div>
 
           <div class="settings-block">
+            <div class="settings-head">
+              <span class="settings-title">导入书库</span>
+              <span class="settings-value">{{ settings.importCollectionPrompt ? '按目录询问' : '已关闭' }}</span>
+            </div>
+            <MdSwitch
+              :model-value="settings.importCollectionPrompt"
+              title="导入多本作品时询问是否创建书库"
+              @update:model-value="settings.setImportCollectionPrompt"
+            >
+              <span class="settings-value-copy">
+                <b>导入时询问创建书库</b>
+                <span>默认直接导入；开启后，目录导入会先询问是否按目录创建一级书库。</span>
+              </span>
+            </MdSwitch>
+          </div>
+
+          <div class="settings-block">
             <div class="storage-overview">
               <strong>{{ storageUsageText }}</strong>
               <span>{{ storageQuotaText }}</span>
@@ -259,6 +276,23 @@
           <div class="settings-section-heading">
             <h2>调试</h2>
             <span>仅保存在本机</span>
+          </div>
+
+          <div class="settings-block">
+            <div class="settings-head">
+              <span class="settings-title">自动检测更新</span>
+              <span class="settings-value">{{ settings.debugAutoUpdateCheck ? '启动时检查' : '已关闭' }}</span>
+            </div>
+            <MdSwitch
+              :model-value="settings.debugAutoUpdateCheck"
+              title="启动时自动检查 GitHub 稳定版更新"
+              @update:model-value="settings.setDebugAutoUpdateCheck"
+            >
+              <span class="settings-value-copy">
+                <b>启动时静默检查</b>
+                <span>默认关闭；开启后启动时静默请求更新信息，「关于」页始终可手动检查。</span>
+              </span>
+            </MdSwitch>
           </div>
 
           <div class="settings-block">

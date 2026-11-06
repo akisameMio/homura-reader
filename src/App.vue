@@ -106,6 +106,7 @@ import { ref, shallowRef, computed, onMounted, onBeforeUnmount, watch } from 'vu
 import { useThemeStore } from './stores/theme.js';
 import { useShelfStore } from './stores/shelf.js';
 import { useReaderStore } from './stores/reader.js';
+import { useSettingsStore } from './stores/settings.js';
 import { useUiStore } from './stores/ui.js';
 import { useUpdateStore } from './stores/updates.js';
 import { fileAccept, canPickFolder, hasFileSystemAccess } from './services/platform.js';
@@ -138,6 +139,7 @@ import ShelfDialog from './components/ShelfDialog.vue';
 const theme = useThemeStore();
 const shelf = useShelfStore();
 const reader = useReaderStore();
+const settings = useSettingsStore();
 const ui = useUiStore();
 const updates = useUpdateStore();
 const importer = useImporter();
@@ -403,7 +405,9 @@ onMounted(async () => {
   window.addEventListener('keydown', onFullscreenKeydown);
   // 关窗 / 切后台时兜底刷写进度，防止防抖窗口内的最后一次翻页丢失
   installProgressFlushHooks(reader, shelf);
-  updates.checkForUpdates({ startup: true });
+  if (settings.debugAutoUpdateCheck) {
+    updates.checkForUpdates({ startup: true });
+  }
 
   try {
     // 书架上一次导入的作品会从 IndexedDB 里恢复；第一次使用才放示例书
