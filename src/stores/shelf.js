@@ -11,7 +11,7 @@ import { shallowRef, ref } from 'vue';
 import { collectionNameError, moveCollectionBooks, restoreCollections } from '../services/collections.js';
 import { sortShelfBooks } from '../services/bookTitles.js';
 import { HomuraStore } from '../services/storage.js';
-import { restoreLibrary, persistBook } from '../services/restore.js';
+import { restoreLibrary, persistBook, persistBooks } from '../services/restore.js';
 import { loadProgressMap } from '../services/progress.js';
 import { createDemoManga, createDemoNovel } from '../services/demo.js';
 import { prepareBookCover } from '../services/bookCover.js';
@@ -87,11 +87,43 @@ export const useShelfStore = defineStore('shelf', () => {
     if (!source) throw new Error('缺少原文件来源');
     try {
       const result = await persistBook(book, source, options);
+      if (options.onSaved) {
+        try {
+          await options.onSaved(book);
+        } catch (err) {
+          console.warn('[HOMURA] 书本入架前释放资源失败', err);
+        }
+      }
       // 只有元数据与原文件都提交成功后才公开这本书，避免失败导入留下无法恢复的幽灵书。
       unshiftBook(book);
       return result;
     } catch (err) {
       console.error('[HOMURA] 本地存档写入失败', err);
+      throw err;
+    }
+  }
+
+  // 批量导入：整批落盘成功后只替换一次 library，避免每加一本就重排整架。
+  async function addBooks(items, options = {}) {
+    if (!items.length) return { saved: [], failed: [] };
+    try {
+      const result = await persistBooks(items, options);
+      if (options.onSaved) {
+        for (const book of result.saved) {
+          try {
+            await options.onSaved(book);
+          } catch (err) {
+            console.warn('[HOMURA] 书本入架前释放资源失败', err);
+          }
+        }
+      }
+      if (result.saved.length) {
+        // 与逐本 unshift 的最终顺序保持一致：后导入的排在前面。
+        library.value = [...result.saved.slice().reverse(), ...library.value];
+      }
+      return result;
+    } catch (err) {
+      console.error('[HOMURA] 本地存档批量写入失败', err);
       throw err;
     }
   }
@@ -310,6 +342,7 @@ export const useShelfStore = defineStore('shelf', () => {
     deleteCollection,
     moveBooks,
     addBook,
+    addBooks,
     unshiftBook,
     removeBook,
     clearShelf,

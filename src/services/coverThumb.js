@@ -36,6 +36,21 @@ function base64ToBlob(value, mime) {
   return new Blob([bytes], { type: mime || 'image/webp' });
 }
 
+function resultToBlob(result, original) {
+  if (!result || typeof result !== 'object') return null;
+  if (!result.changed) return original;
+  if (typeof result.bytesBase64 !== 'string' || !result.bytesBase64) return null;
+  return base64ToBlob(result.bytesBase64, result.mime);
+}
+
+function handleNativeFailure(err) {
+  if ([NativeErrorCode.UNAVAILABLE, NativeErrorCode.DISABLED].includes(err?.code)) {
+    disableNativeFeature(FEATURE, err.message);
+  }
+  // 安全上限不能交给 JS 再试一次；普通格式不支持或解码失败则继续兜底。
+  if ([NativeErrorCode.SECURITY_LIMIT, NativeErrorCode.LIMIT_EXCEEDED].includes(err?.code)) throw err;
+}
+
 async function createWithNative(blob, maxEdge) {
   if (!canUseNativeBridge() || blob.size > MAX_NATIVE_COVER_BYTES) return null;
   try {
@@ -47,16 +62,36 @@ async function createWithNative(blob, maxEdge) {
       { bytesBase64: base64, maxEdge },
       { feature: FEATURE }
     );
-    if (!result || typeof result !== 'object') return null;
-    if (!result.changed) return blob;
-    if (typeof result.bytesBase64 !== 'string' || !result.bytesBase64) return null;
-    return base64ToBlob(result.bytesBase64, result.mime);
+    return resultToBlob(result, blob);
   } catch (err) {
-    if ([NativeErrorCode.UNAVAILABLE, NativeErrorCode.DISABLED].includes(err?.code)) {
-      disableNativeFeature(FEATURE, err.message);
-    }
-    // 安全上限不能交给 JS 再试一次；普通格式不支持或解码失败则继续 Canvas 兜底。
-    if ([NativeErrorCode.SECURITY_LIMIT, NativeErrorCode.LIMIT_EXCEEDED].includes(err?.code)) throw err;
+    handleNativeFailure(err);
+    return null;
+  }
+}
+
+// 原生压缩包已经在 AppData 里，直接按条目路径读取封面，避免大图从 Blob
+// 转成 Base64 再走一遍 IPC。输出仍用 Base64 返回，缩略图只有几十 KB。
+async function createWithNativeArchive(blob, maxEdge, nativeCover) {
+  if (
+    !canUseNativeBridge()
+    || !nativeCover?.archivePath
+    || !nativeCover?.entryPath
+    || blob?.size > MAX_NATIVE_COVER_BYTES
+  ) return null;
+  try {
+    const result = await invokeNativeCommand(
+      null,
+      'create_cover_thumbnail_from_archive',
+      {
+        archivePath: nativeCover.archivePath,
+        entryPath: nativeCover.entryPath,
+        maxEdge
+      },
+      { feature: FEATURE }
+    );
+    return resultToBlob(result, blob);
+  } catch (err) {
+    handleNativeFailure(err);
     return null;
   }
 }
@@ -101,8 +136,20 @@ export async function createCoverThumbnailWithCanvas(blob, maxEdge = COVER_MAX_E
   }
 }
 
-export async function createCoverThumbnail(blob, maxEdge = COVER_MAX_EDGE) {
-  if (!blob || typeof blob.size !== 'number' || (blob.type && !String(blob.type).startsWith('image/'))) return null;
+export async function createCoverThumbnail(blob, maxEdge = COVER_MAX_EDGE, nativeCover = null) {
+  const validBlob = !!blob
+    && typeof blob.size === 'number'
+    && (!blob.type || String(blob.type).startsWith('image/'));
+  if (!validBlob && !(nativeCover?.archivePath && nativeCover?.entryPath)) return null;
+  if (nativeCover) {
+    try {
+      const viaArchive = await createWithNativeArchive(blob, maxEdge, nativeCover);
+      if (viaArchive) return viaArchive;
+    } catch (err) {
+      return null;
+    }
+  }
+  if (!validBlob) return null;
   let native = null;
   try {
     native = await createWithNative(blob, maxEdge);

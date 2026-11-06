@@ -317,6 +317,24 @@ fn upsert_book(connection: &Connection, book: &BookRecord) -> Result<(), String>
     Ok(())
 }
 
+fn upsert_books(connection: &mut Connection, books: &[BookRecord]) -> Result<(), String> {
+    if books.is_empty() {
+        return Ok(());
+    }
+    if books.len() > MAX_BOOKS {
+        return Err(limit_exceeded("书目数量过多"));
+    }
+    let transaction = connection
+        .transaction()
+        .map_err(|error| db_error("开始书目批量写入事务失败", error))?;
+    for book in books {
+        upsert_book(&transaction, book)?;
+    }
+    transaction
+        .commit()
+        .map_err(|error| db_error("提交书目批量写入事务失败", error))
+}
+
 fn normalize_collection(
     collection: &CollectionRecord,
 ) -> Result<(String, String, i64, String), String> {
@@ -636,6 +654,15 @@ pub fn metadata_upsert_book(
     state.with_connection(&app, |connection| upsert_book(connection, &book))
 }
 
+#[tauri::command(async)]
+pub fn metadata_upsert_books(
+    app: AppHandle,
+    state: State<'_, MetadataState>,
+    books: Vec<BookRecord>,
+) -> Result<(), String> {
+    state.with_connection(&app, |connection| upsert_books(connection, &books))
+}
+
 #[tauri::command]
 pub fn metadata_delete_book(
     app: AppHandle,
@@ -786,6 +813,30 @@ mod tests {
         assert_eq!(loaded.books.len(), 1);
         assert_eq!(loaded.progress.len(), 1);
         assert_eq!(loaded.progress[0]["id"], "book-2");
+        drop(connection);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn batch_upserts_in_one_transaction_and_rolls_back_on_error() {
+        let (dir, path) = temp_db();
+        let mut connection = open_database(&path).unwrap();
+        upsert_books(&mut connection, &[book("book-1", 10), book("book-2", 20)]).unwrap();
+        let loaded = load_all(&connection).unwrap();
+        assert_eq!(loaded.books.len(), 2);
+        assert_eq!(loaded.books[1].id, "book-1");
+
+        let mut invalid = book("book-3", 30);
+        invalid.cover_base64 = Some("不是 base64".to_string());
+        let error = upsert_books(
+            &mut connection,
+            &[book("book-4", 40), invalid, book("book-5", 50)],
+        )
+        .unwrap_err();
+        assert!(error.starts_with("NATIVE_INVALID_DATA"));
+        let loaded = load_all(&connection).unwrap();
+        assert_eq!(loaded.books.len(), 2);
+        assert!(loaded.books.iter().all(|item| item.id != "book-4"));
         drop(connection);
         let _ = fs::remove_dir_all(dir);
     }

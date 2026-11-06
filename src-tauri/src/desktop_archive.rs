@@ -773,6 +773,43 @@ fn copy_entry_to<W: Write>(
     Ok(CopyOutcome::Copied(total))
 }
 
+fn read_zip_entry_bytes(
+    archive_path: &Path,
+    entry_path: &str,
+    limit: u64,
+) -> Result<Vec<u8>, String> {
+    if entry_path.trim().is_empty() {
+        return Err(invalid_data("缺少 ZIP 条目路径"));
+    }
+    let archive = read_zip_archive(archive_path)?;
+    let entry = archive
+        .entries
+        .iter()
+        .find(|entry| entry.name == entry_path)
+        .ok_or_else(|| invalid_data("压缩包内未找到指定条目"))?;
+    if entry.uncompressed_size > limit {
+        return Err(limit_exceeded("压缩包条目过大"));
+    }
+    let capacity =
+        usize::try_from(entry.uncompressed_size).map_err(|_| limit_exceeded("压缩包条目过大"))?;
+    let mut bytes = Vec::with_capacity(capacity);
+    match copy_entry_to(archive_path, entry, limit, &mut bytes)? {
+        CopyOutcome::Copied(_) => Ok(bytes),
+        CopyOutcome::TooLarge => Err(limit_exceeded("压缩包条目过大")),
+    }
+}
+
+// 封面缩略图直接读取已暂存的原生压缩包条目，避免把整张图片送进 WebView。
+pub(crate) fn read_native_entry_bytes(
+    app: &AppHandle,
+    archive_path: &str,
+    entry_path: &str,
+    limit: u64,
+) -> Result<Vec<u8>, String> {
+    let archive_file = resolve_archive_file(app, archive_path)?;
+    read_zip_entry_bytes(&archive_file, entry_path, limit)
+}
+
 fn trim_cache(dir: &Path, keep: Option<&Path>) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
@@ -1347,6 +1384,29 @@ mod tests {
             CopyOutcome::Copied(second.len() as u64)
         );
         assert_eq!(output, second);
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn reads_single_entry_for_cover_thumbnail() {
+        let cover = b"cover image bytes";
+        let path = temp_zip(&build_zip(&[
+            ("OEBPS/Text/chapter.xhtml", b"text".as_slice(), true),
+            ("OEBPS/Images/cover.jpg", cover.as_slice(), true),
+        ]));
+
+        assert_eq!(
+            read_zip_entry_bytes(&path, "OEBPS/Images/cover.jpg", 1024).unwrap(),
+            cover
+        );
+        assert!(
+            read_zip_entry_bytes(&path, "OEBPS/Images/missing.jpg", 1024)
+                .unwrap_err()
+                .starts_with("NATIVE_INVALID_DATA")
+        );
+        assert!(read_zip_entry_bytes(&path, "OEBPS/Images/cover.jpg", 4)
+            .unwrap_err()
+            .starts_with("NATIVE_LIMIT_EXCEEDED"));
         let _ = fs::remove_file(path);
     }
 

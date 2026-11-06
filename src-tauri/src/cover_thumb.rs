@@ -7,10 +7,12 @@ HOMURA · 封面缩略图
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use image::codecs::{jpeg::JpegEncoder, webp::WebPEncoder};
-use image::imageops::FilterType;
 use image::{ExtendedColorType, ImageEncoder, ImageFormat, ImageReader, Limits};
 use serde::Serialize;
 use std::io::Cursor;
+use tauri::AppHandle;
+
+use crate::desktop_archive::read_native_entry_bytes;
 
 const DEFAULT_MAX_EDGE: u32 = 480;
 const MIN_MAX_EDGE: u32 = 64;
@@ -62,7 +64,7 @@ fn supported_format(format: ImageFormat) -> bool {
     )
 }
 
-fn max_edge(value: Option<u32>) -> Result<u32, String> {
+fn valid_max_edge(value: Option<u32>) -> Result<u32, String> {
     let edge = value.unwrap_or(DEFAULT_MAX_EDGE);
     if !(MIN_MAX_EDGE..=MAX_MAX_EDGE).contains(&edge) {
         return Err(limit_exceeded("封面缩略图边长超出允许范围"));
@@ -138,7 +140,7 @@ fn create_thumbnail(bytes: &[u8], requested_edge: Option<u32>) -> Result<CoverTh
     if bytes.len() > MAX_INPUT_BYTES {
         return Err(limit_exceeded("封面图片过大"));
     }
-    let edge = max_edge(requested_edge)?;
+    let edge = valid_max_edge(requested_edge)?;
     let (reader, format, width, height) = reader_for(bytes)?;
     let mime = format.to_mime_type().to_string();
 
@@ -155,7 +157,9 @@ fn create_thumbnail(bytes: &[u8], requested_edge: Option<u32>) -> Result<CoverTh
     let image = reader
         .decode()
         .map_err(|error| image_error("解码封面失败", error))?;
-    let resized = image.resize(edge, edge, FilterType::Lanczos3);
+    // 书架封面只需 480px，thumbnail 的快速整数缩放比 Lanczos3 快一个数量级，
+    // 在这个尺寸下肉眼差异很小，却能把导入时的解码占屏时间压下来。
+    let resized = image.thumbnail(edge, edge);
     let output = if image.color().has_alpha() {
         encode_webp(&resized)?
     } else {
@@ -189,18 +193,50 @@ fn create_thumbnail(bytes: &[u8], requested_edge: Option<u32>) -> Result<CoverTh
     })
 }
 
-#[tauri::command]
-pub fn create_cover_thumbnail(
+#[tauri::command(async)]
+pub async fn create_cover_thumbnail(
     bytes_base64: String,
     max_edge: Option<u32>,
 ) -> Result<CoverThumbnail, String> {
     if bytes_base64.len() > MAX_BASE64_CHARS {
         return Err(limit_exceeded("封面图片过大"));
     }
-    let bytes = STANDARD
-        .decode(bytes_base64.as_bytes())
-        .map_err(|_| invalid_data("封面图片 Base64 无效"))?;
-    create_thumbnail(&bytes, max_edge)
+    // 解码与缩放是 CPU 密集任务，放进阻塞线程池，避免占住 async runtime。
+    tauri::async_runtime::spawn_blocking(move || {
+        let bytes = STANDARD
+            .decode(bytes_base64.as_bytes())
+            .map_err(|_| invalid_data("封面图片 Base64 无效"))?;
+        create_thumbnail(&bytes, max_edge)
+    })
+    .await
+    .map_err(|error| {
+        native_error(
+            "NATIVE_COMMAND_FAILED",
+            format!("封面缩略图任务失败：{error}"),
+        )
+    })?
+}
+
+#[tauri::command(async)]
+pub async fn create_cover_thumbnail_from_archive(
+    app: AppHandle,
+    archive_path: String,
+    entry_path: String,
+    max_edge: Option<u32>,
+) -> Result<CoverThumbnail, String> {
+    let edge = valid_max_edge(max_edge)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let bytes =
+            read_native_entry_bytes(&app, &archive_path, &entry_path, MAX_INPUT_BYTES as u64)?;
+        create_thumbnail(&bytes, Some(edge))
+    })
+    .await
+    .map_err(|error| {
+        native_error(
+            "NATIVE_COMMAND_FAILED",
+            format!("封面缩略图任务失败：{error}"),
+        )
+    })?
 }
 
 #[cfg(test)]
@@ -248,17 +284,21 @@ mod tests {
         assert!(create_thumbnail(b"not an image", Some(480))
             .unwrap_err()
             .starts_with("NATIVE_UNSUPPORTED"));
-        assert!(max_edge(Some(1))
+        assert!(valid_max_edge(Some(1))
             .unwrap_err()
             .starts_with("NATIVE_LIMIT_EXCEEDED"));
-        assert!(max_edge(Some(MAX_MAX_EDGE + 1))
+        assert!(valid_max_edge(Some(MAX_MAX_EDGE + 1))
             .unwrap_err()
             .starts_with("NATIVE_LIMIT_EXCEEDED"));
     }
 
     #[test]
     fn command_rejects_invalid_base64() {
-        let error = create_cover_thumbnail("不是 base64".to_string(), Some(480)).unwrap_err();
+        let error = tauri::async_runtime::block_on(create_cover_thumbnail(
+            "不是 base64".to_string(),
+            Some(480),
+        ))
+        .unwrap_err();
         assert!(error.starts_with("NATIVE_INVALID_DATA"));
     }
 }

@@ -248,15 +248,8 @@ async function stageSource(bookId, source) {
   return source;
 }
 
-// 失败时抛错，由调用方（shelf store）统一提示
-export async function persistBook(book, source, options = {}) {
-  const timing = options.timing || null;
-  // 封面解码和原文件暂存可以并行，避免导入多等一次缩略图生成。
-  // 导入流水线会预先并发生成缩略图，这里直接复用结果，避免重复解码。
-  const coverThumbTask = options.coverThumb !== undefined
-    ? Promise.resolve(options.coverThumb)
-    : createCoverThumbnail(book.coverBlob).catch(() => null);
-  const meta = {
+function createBookMeta(book) {
+  return {
     id: book.id,
     type: book.type,
     format: book.format || null,
@@ -266,6 +259,17 @@ export async function persistBook(book, source, options = {}) {
     addedAt: Date.now(),
     coverBlob: book.coverBlob || null
   };
+}
+
+// 失败时抛错，由调用方（shelf store）统一提示
+export async function persistBook(book, source, options = {}) {
+  const timing = options.timing || null;
+  // 封面解码和原文件暂存可以并行，避免导入多等一次缩略图生成。
+  // 导入流水线会预先并发生成缩略图，这里直接复用结果，避免重复解码。
+  const coverThumbTask = options.coverThumb !== undefined
+    ? Promise.resolve(options.coverThumb)
+    : createCoverThumbnail(book.coverBlob, undefined, book.coverNative).catch(() => null);
+  const meta = createBookMeta(book);
   // 在用户触发导入时申请持久存储，避免配额压力下先清掉小体积的书架记录
   try {
     const persistence = await HomuraStore.requestPersistence();
@@ -283,6 +287,72 @@ export async function persistBook(book, source, options = {}) {
   } catch (err) {
     // 元数据没有提交成功时，OPFS / AppData 里已暂存的文件都属于失败导入，必须一并回收。
     await Promise.allSettled([removeBookDir(book.id), removeNativeBookDir(book.id)]);
+    throw err;
+  }
+}
+
+// 批量导入的提交层：一次申请持久存储、一次 IndexedDB 事务、一次 SQLite 镜像。
+// 单本暂存失败只影响该本；整批事务失败时清掉已暂存目录，由调用方逐本重试。
+export async function persistBooks(items, options = {}) {
+  const timing = options.timing || null;
+  if (!items.length) return { persistence: null, saved: [], failed: [] };
+
+  let persistence = null;
+  try {
+    persistence = await HomuraStore.requestPersistence();
+  } catch (err) {
+    console.warn('[HOMURA] 无法申请持久存储', err);
+  }
+
+  const entries = [];
+  const failed = [];
+  for (const item of items) {
+    const { book, source } = item;
+    try {
+      const coverThumb = item.coverThumb !== undefined
+        ? await Promise.resolve(item.coverThumb)
+        : await createCoverThumbnail(book.coverBlob, undefined, book.coverNative).catch(() => null);
+      const meta = createBookMeta(book);
+      if (coverThumb) meta.coverBlob = coverThumb;
+      const stageStarted = timing ? nowMs() : 0;
+      let staged;
+      try {
+        staged = await stageSource(book.id, source);
+      } finally {
+        if (timing) timing.stageMs += nowMs() - stageStarted;
+      }
+      entries.push({
+        book,
+        meta,
+        source: Object.assign({ id: book.id }, staged),
+        preStaged: !!source?.preStaged
+      });
+    } catch (err) {
+      failed.push({ book, error: err });
+      console.warn('[HOMURA] 本地存档暂存失败，已跳过', book.title, err);
+      // 预存目录留给单本重试复用；最终仍失败时由调用方 discardParsedBook 回收。
+      if (!source?.preStaged) {
+        await Promise.allSettled([removeBookDir(book.id), removeNativeBookDir(book.id)]);
+      }
+    }
+  }
+
+  if (!entries.length) return { persistence, saved: [], failed };
+
+  try {
+    await HomuraStore.saveBooks(entries, { timing });
+    return {
+      persistence,
+      saved: entries.map(entry => entry.book),
+      failed
+    };
+  } catch (err) {
+    // 预存的 EPUB / CBZ 目录由导入准备阶段创建，批事务失败后逐本重试还要复用。
+    const cleanupEntries = entries.filter(entry => !entry.preStaged);
+    await Promise.allSettled(cleanupEntries.flatMap(entry => [
+      removeBookDir(entry.book.id),
+      removeNativeBookDir(entry.book.id)
+    ]));
     throw err;
   }
 }
@@ -584,9 +654,12 @@ export async function hydrateBook(book) {
   book.nativeArchiveStaged = false;
   // 书架元数据里保存的是小封面，重新解析出的大图不应覆盖它；
   // 只有旧存档没有封面时才回退到解析结果。
-  if (book.customCoverBlob || book.cover) releaseParsedCover(parsed);
-  else book.cover = parsed.cover || book.cover;
-  book.coverBlob = parsed.coverBlob;
+  if (book.customCoverBlob || book.coverBlob || book.cover) releaseParsedCover(parsed);
+  else {
+    book.cover = parsed.cover || book.cover;
+    book.coverBlob = parsed.coverBlob;
+  }
+  if (!book.coverBlob) book.coverBlob = parsed.coverBlob;
   book.restored = false;
   // 旧版本可能把带彩插的轻小说存成漫画；重新解析后把更正写回书架元数据。
   const metaNeedsRefresh = previousMeta.type !== book.type

@@ -13,12 +13,12 @@
       <h2 id="duplicate-import-title" class="text-[17px] font-semibold">发现同名书本</h2>
       <div id="duplicate-import-description" class="mt-3 text-[13px] leading-relaxed text-[var(--md-on-surface-variant)]">
         <template v-if="pendingDuplicate.batch">
-          <p class="break-words">按文件名检测到 {{ pendingDuplicate.count }} 本可能与书架现有书名重复：</p>
+          <p class="break-words">按文件名检测到 {{ pendingDuplicate.count }} 本可能与已有书名重复：</p>
           <p class="mt-2 break-words">{{ batchTitles }}</p>
           <p class="mt-2 break-words">这批文件将按同一选择处理；仍然导入会保留为独立书本。</p>
         </template>
         <template v-else>
-          <p class="break-words">书架中已有《{{ pendingDuplicate.existingTitle }}》。</p>
+          <p class="break-words">已有同名书《{{ pendingDuplicate.existingTitle }}》。</p>
           <p class="mt-2 break-words">是否仍要导入《{{ pendingDuplicate.title }}》？仍然导入会保留为独立书本。</p>
         </template>
       </div>

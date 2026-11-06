@@ -45,6 +45,9 @@ export async function parseCbzNativeArchive(nativePath, options = {}) {
       title: name.replace(/\.(cbz|zip)$/i, ''),
       cover: coverUrl,
       coverBlob: first.blob,
+      coverNative: entries[0]?.path
+        ? { archivePath: nativePath, entryPath: entries[0].path }
+        : null,
       pageItems,
       pageCount: pageItems.length,
       nativeArchiveId: archiveId,

@@ -2,7 +2,9 @@ import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   loadNativeMetadata,
-  replaceNativeMetadata
+  replaceNativeMetadata,
+  upsertNativeBook,
+  upsertNativeBooks
 } from '../src/services/nativeMetadata.js';
 import {
   bytesToBase64,
@@ -147,6 +149,78 @@ test('完整迁移会把 Blob 封面序列化进 SQLite 快照', async () => {
   assert.equal(calls[0].args.snapshot.books[0].coverBase64, bytesToBase64(cover));
   assert.equal(calls[0].args.snapshot.books[0].coverMime, 'image/webp');
   assert.equal(calls[0].args.snapshot.progress[0].index, 2);
+});
+
+test('批量书目只调用一次原生命令并保留封面数据', async () => {
+  const calls = [];
+  installNative(async (command, args) => {
+    calls.push({ command, args });
+    return null;
+  });
+  const cover = new Uint8Array([9, 8, 7]);
+
+  await upsertNativeBooks([
+    {
+      id: 'book-1',
+      type: 'novel',
+      format: 'epub',
+      title: '第一本',
+      favorite: false,
+      pageCount: 12,
+      addedAt: 10,
+      coverBlob: new Blob([cover], { type: 'image/webp' })
+    },
+    {
+      id: 'book-2',
+      type: 'manga',
+      format: 'cbz',
+      title: '第二本',
+      favorite: true,
+      pageCount: 34,
+      addedAt: 20,
+      coverBlob: null
+    }
+  ]);
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, 'metadata_upsert_books');
+  assert.deepEqual(calls[0].args.books.map(book => book.id), ['book-1', 'book-2']);
+  assert.equal(calls[0].args.books[0].coverBase64, bytesToBase64(cover));
+  assert.equal(calls[0].args.books[0].coverMime, 'image/webp');
+  assert.equal(calls[0].args.books[1].coverBase64, null);
+});
+
+test('空书目不会触发原生命令', async () => {
+  let calls = 0;
+  installNative(async () => {
+    calls++;
+    return null;
+  });
+
+  await upsertNativeBooks([]);
+  await upsertNativeBooks(null);
+  assert.equal(calls, 0);
+});
+
+test('单本书目继续使用原有的单本命令', async () => {
+  const calls = [];
+  installNative(async (command, args) => {
+    calls.push({ command, args });
+    return null;
+  });
+
+  await upsertNativeBook({
+    id: 'book-1',
+    type: 'novel',
+    format: 'txt',
+    title: '单本',
+    pageCount: 1,
+    addedAt: 1
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, 'metadata_upsert_book');
+  assert.equal(calls[0].args.book.id, 'book-1');
 });
 
 test('原生初始化读取不会触发 IndexedDB 全量扫描', async () => {

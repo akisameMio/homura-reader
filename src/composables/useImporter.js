@@ -31,6 +31,7 @@ import {
   shouldFallbackNativeImport
 } from '../services/nativeImport.js';
 import { createCoverThumbnail } from '../services/coverThumb.js';
+import { releaseBookPageUrls } from '../services/pagination.js';
 import { runShelfMutation } from '../services/mutationQueue.js';
 
 let quotaWarned = false;
@@ -39,6 +40,12 @@ const LARGE_FILE_BYTES = 64 * 1024 * 1024;
 const VERY_LARGE_FILE_BYTES = 256 * 1024 * 1024;
 const DESKTOP_IMPORT_CONCURRENCY = 4;
 const ANDROID_IMPORT_CONCURRENCY = 2;
+const DESKTOP_COMMIT_BATCH_SIZE = 20;
+const ANDROID_COMMIT_BATCH_SIZE = 10;
+const LARGE_COMMIT_BATCH_SIZE = 8;
+const VERY_LARGE_COMMIT_BATCH_SIZE = 4;
+const DESKTOP_COMMIT_MAX_BYTES = 256 * 1024 * 1024;
+const ANDROID_COMMIT_MAX_BYTES = 96 * 1024 * 1024;
 
 const now = typeof performance !== 'undefined' && typeof performance.now === 'function'
   ? () => performance.now()
@@ -56,6 +63,8 @@ function createImportMetrics(files, tasks) {
     tasks: tasks.length,
     importTasks: tasks.length,
     concurrency: 1,
+    commitBatchSize: 1,
+    commitBatches: 0,
     saved: 0,
     skipped: 0,
     failed: 0,
@@ -84,6 +93,8 @@ function logImportMetrics(metrics, savedCount) {
     tasks: metrics.tasks,
     importTasks: metrics.importTasks,
     concurrency: metrics.concurrency,
+    commitBatchSize: metrics.commitBatchSize,
+    commitBatches: metrics.commitBatches,
     saved: savedCount,
     skipped: metrics.skipped,
     failed: metrics.failed,
@@ -144,6 +155,49 @@ function chooseImportConcurrency(tasks) {
   if (maxSize > VERY_LARGE_FILE_BYTES) return 2;
   if (maxSize > LARGE_FILE_BYTES) return 3;
   return Math.min(DESKTOP_IMPORT_CONCURRENCY, tasks.length);
+}
+
+function chooseCommitBatchSize(tasks) {
+  if (tasks.length <= 1) return 1;
+  const maxSize = tasks.reduce((max, task) => Math.max(max, task.size || 0), 0);
+  const countCap = isAndroid
+    ? (maxSize > 32 * 1024 * 1024 ? VERY_LARGE_COMMIT_BATCH_SIZE : ANDROID_COMMIT_BATCH_SIZE)
+    : maxSize > VERY_LARGE_FILE_BYTES
+      ? VERY_LARGE_COMMIT_BATCH_SIZE
+      : maxSize > LARGE_FILE_BYTES
+        ? LARGE_COMMIT_BATCH_SIZE
+        : Math.min(DESKTOP_COMMIT_BATCH_SIZE, tasks.length);
+  const byteCap = isAndroid ? ANDROID_COMMIT_MAX_BYTES : DESKTOP_COMMIT_MAX_BYTES;
+  let count = 0;
+  let bytes = 0;
+  for (const task of tasks) {
+    if (count >= countCap) break;
+    const size = task.size || 0;
+    if (count > 0 && bytes + size > byteCap) break;
+    bytes += size;
+    count++;
+  }
+  return Math.max(1, count);
+}
+
+// 有界滚动并发池：同一批任务按原始 index 回填结果，提交顺序不随完成先后变化。
+async function runPool(items, concurrency, worker, onError) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function lane() {
+    while (next < items.length) {
+      const index = next++;
+      try {
+        results[index] = await worker(items[index], index);
+      } catch (err) {
+        console.warn('[HOMURA] 导入预处理任务失败', err);
+        results[index] = null;
+        onError?.(err, items[index], index);
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, lane));
+  return results;
 }
 
 // 移动端原文件会整份落盘，配额比桌面更容易吃满，导入后检查一次
@@ -453,39 +507,147 @@ export function useImporter() {
     }
 
     const coverStarted = now();
-    prepared.coverThumb = await createCoverThumbnail(prepared.book.coverBlob).catch(() => null);
+    prepared.coverThumb = await createCoverThumbnail(
+      prepared.book.coverBlob,
+      undefined,
+      prepared.book.coverNative
+    ).catch(() => null);
     metrics.coverMs += now() - coverStarted;
     return prepared;
   }
 
-  async function commitPreparedBook(prepared, task, savedBooks, metrics) {
-    const { book, source, coverThumb } = prepared;
-    const titleKey = normalizeBookTitle(book.title);
-    const existingBook = findSameTitleBook(shelf.library, book.title);
-    if (existingBook && task?.duplicateApprovedTitleKey !== titleKey) {
-      if (!(await confirmDuplicate(book, existingBook))) {
-        metrics.skipped++;
-        await discardParsedBook(book);
-        return null;
+  // 保存成功后书架只需要元数据与封面；下次打开由 hydrateBook 重新解析原文件。
+  async function releaseImportedBookRuntime(book, coverThumb) {
+    try {
+      releaseBookPageUrls(book);
+      for (const url of new Set(book.resourceUrls || [])) {
+        if (typeof url === 'string' && url.startsWith('blob:') && url !== book.cover) URL.revokeObjectURL(url);
       }
+      if (book.pdfDoc?.loadingTask?.destroy) await book.pdfDoc.loadingTask.destroy();
+      else if (book.pdfDoc?.destroy) await book.pdfDoc.destroy();
+    } catch (err) {
+      console.warn('[HOMURA] 释放导入后的页面资源失败', book.title, err);
+    }
+    try {
+      await releaseNativeArchiveSession(book);
+    } catch (err) {
+      console.warn('[HOMURA] 释放导入后的原生压缩包会话失败', book.title, err);
     }
 
+    if (coverThumb && coverThumb !== book.coverBlob) {
+      try {
+        const previousCover = book.cover;
+        book.coverBlob = coverThumb;
+        book.cover = URL.createObjectURL(coverThumb);
+        if (previousCover?.startsWith('blob:') && previousCover !== book.cover) URL.revokeObjectURL(previousCover);
+      } catch (err) {
+        console.warn('[HOMURA] 替换导入后的封面缩略图失败', book.title, err);
+      }
+    }
+    book.chapters = null;
+    book.pageItems = null;
+    book.resourceUrls = null;
+    book.zipContent = null;
+    book.pdfDoc = null;
+    book.nativeArchiveId = null;
+    book.nativeArchivePath = null;
+    book.nativeArchiveMode = null;
+    book.nativeEntryIndexByPath = null;
+    book.nativeArchiveStaged = false;
+    book.coverNative = null;
+    book.restored = true;
+  }
+
+  // 同一批内也要按顺序判重，前一本确认保留后，后一本必须继续询问。
+  async function confirmPreparedDuplicates(preparedList, taskList, metrics) {
+    const accepted = [];
+    const knownInBatch = new Map();
+    for (let index = 0; index < preparedList.length; index++) {
+      const prepared = preparedList[index];
+      if (!prepared) continue;
+      const task = taskList[index];
+      const { book } = prepared;
+      const titleKey = normalizeBookTitle(book.title);
+      const existingBook = (titleKey && knownInBatch.get(titleKey)) || findSameTitleBook(shelf.library, book.title);
+      if (existingBook && task?.duplicateApprovedTitleKey !== titleKey) {
+        if (!(await confirmDuplicate(book, existingBook))) {
+          metrics.skipped++;
+          await discardParsedBook(book);
+          continue;
+        }
+      }
+      if (titleKey && !knownInBatch.has(titleKey)) knownInBatch.set(titleKey, book);
+      accepted.push(prepared);
+    }
+    return accepted;
+  }
+
+  async function commitPreparedBatch(preparedList, taskList, savedBooks, metrics) {
+    const accepted = await confirmPreparedDuplicates(preparedList, taskList, metrics);
+    if (!accepted.length) return;
+
+    metrics.commitBatches++;
+    const coverThumbs = new Map(accepted.map(prepared => [prepared.book.id, prepared.coverThumb]));
+    const preparedById = new Map(accepted.map(prepared => [prepared.book.id, prepared]));
     const started = now();
     try {
-      // 提交仍然串行：下一本的同名检测必须能看到这一批已保存的书。
-      await shelf.addBook(book, source, { coverThumb, timing: metrics });
-      savedBooks.push(book);
-      metrics.saved++;
-      await releaseNativeArchiveSession(book);
-      book.nativeArchiveStaged = false;
-      metrics.commitMs += now() - started;
-      return book;
+      const result = await shelf.addBooks(
+        accepted.map(prepared => ({
+          book: prepared.book,
+          source: prepared.source,
+          coverThumb: prepared.coverThumb
+        })),
+        {
+          timing: metrics,
+          onSaved: book => releaseImportedBookRuntime(book, coverThumbs.get(book.id))
+        }
+      );
+      for (const book of result.saved) {
+        savedBooks.push(book);
+        metrics.saved++;
+      }
+      for (const failure of result.failed) {
+        const prepared = preparedById.get(failure.book.id);
+        if (!prepared) {
+          metrics.failed++;
+          await discardParsedBook(failure.book);
+          continue;
+        }
+        // 暂存阶段的单本失败只重试这一本，不让整批回退。
+        try {
+          await shelf.addBook(prepared.book, prepared.source, {
+            coverThumb: prepared.coverThumb,
+            timing: metrics,
+            onSaved: book => releaseImportedBookRuntime(book, prepared.coverThumb)
+          });
+          savedBooks.push(prepared.book);
+          metrics.saved++;
+        } catch (singleErr) {
+          metrics.failed++;
+          console.warn('[HOMURA] 本地存档单本重试失败，已跳过', prepared.book.title, singleErr);
+          await discardParsedBook(prepared.book);
+        }
+      }
     } catch (err) {
-      metrics.failed++;
-      console.warn('[HOMURA] 本地存档写入失败，已跳过', book.title, err);
-      await discardParsedBook(book);
+      // 整批事务失败时逐本重试，避免一本坏数据拖垮整批。
+      console.warn('[HOMURA] 批量存档失败，改为逐本提交', err);
+      for (const prepared of accepted) {
+        try {
+          await shelf.addBook(prepared.book, prepared.source, {
+            coverThumb: prepared.coverThumb,
+            timing: metrics,
+            onSaved: book => releaseImportedBookRuntime(book, prepared.coverThumb)
+          });
+          savedBooks.push(prepared.book);
+          metrics.saved++;
+        } catch (singleErr) {
+          metrics.failed++;
+          console.warn('[HOMURA] 本地存档写入失败，已跳过', prepared.book.title, singleErr);
+          await discardParsedBook(prepared.book);
+        }
+      }
+    } finally {
       metrics.commitMs += now() - started;
-      return null;
     }
   }
 
@@ -509,12 +671,17 @@ export function useImporter() {
 
     const savedBooks = [];
     metrics.concurrency = chooseImportConcurrency(importTasks);
-    for (let start = 0; start < importTasks.length; start += metrics.concurrency) {
-      const chunk = importTasks.slice(start, start + metrics.concurrency);
-      const prepared = await Promise.all(chunk.map(task => prepareImportTask(task, metrics)));
-      for (let index = 0; index < prepared.length; index++) {
-        if (prepared[index]) await commitPreparedBook(prepared[index], chunk[index], savedBooks, metrics);
-      }
+    const commitBatchSize = chooseCommitBatchSize(importTasks);
+    metrics.commitBatchSize = commitBatchSize;
+    for (let start = 0; start < importTasks.length; start += commitBatchSize) {
+      const batchTasks = importTasks.slice(start, start + commitBatchSize);
+      const prepared = await runPool(
+        batchTasks,
+        metrics.concurrency,
+        task => prepareImportTask(task, metrics),
+        () => { metrics.parseFailed++; }
+      );
+      await commitPreparedBatch(prepared, batchTasks, savedBooks, metrics);
     }
 
     if (metrics.failed > 0) {

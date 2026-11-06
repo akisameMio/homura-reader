@@ -114,6 +114,34 @@ test('导入只有在存档提交成功后才公开书本', async t => {
   assert.deepEqual(store.library.map(book => book.id), ['book-1']);
 });
 
+test('批量导入只刷新一次书架，并在入架前完成资源释放', async t => {
+  const store = makeStore();
+  const savedBatches = [];
+  let libraryLengthDuringRelease = -1;
+  stubStore(t, {
+    requestPersistence: async () => ({ supported: true, persisted: true }),
+    saveBooks: async entries => {
+      savedBatches.push(entries.map(entry => entry.meta.id));
+    }
+  });
+
+  const items = ['book-a', 'book-b', 'book-c'].map(id => ({
+    book: makeBook(id),
+    source: makeSource(),
+    coverThumb: null
+  }));
+  const result = await store.addBooks(items, {
+    onSaved: () => {
+      libraryLengthDuringRelease = store.library.length;
+    }
+  });
+
+  assert.deepEqual(savedBatches, [['book-a', 'book-b', 'book-c']]);
+  assert.equal(libraryLengthDuringRelease, 0);
+  assert.deepEqual(store.library.map(book => book.id), ['book-c', 'book-b', 'book-a']);
+  assert.deepEqual(result.saved.map(book => book.id), ['book-a', 'book-b', 'book-c']);
+});
+
 test('存档写入失败不会留下幽灵书', async t => {
   const store = makeStore();
   silenceExpectedLogs(t);

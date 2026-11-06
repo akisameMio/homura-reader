@@ -144,6 +144,20 @@ export async function upsertNativeBook(book) {
   );
 }
 
+export async function upsertNativeBooks(books) {
+  if (!Array.isArray(books) || books.length === 0) return;
+  const payload = [];
+  for (const book of books) {
+    payload.push(await serializeBook(book));
+  }
+  await invokeNativeCommand(
+    null,
+    'metadata_upsert_books',
+    { books: payload },
+    { feature: FEATURE }
+  );
+}
+
 export async function saveNativeCollections(collections) {
   await invokeNativeCommand(
     null,

@@ -26,7 +26,8 @@ import {
   replaceNativeMetadata,
   saveNativeCollections,
   saveNativeProgress,
-  upsertNativeBook
+  upsertNativeBook,
+  upsertNativeBooks
 } from './nativeMetadata.js';
 
 const nowMs = typeof performance !== 'undefined' && typeof performance.now === 'function'
@@ -105,6 +106,23 @@ export const HomuraStore = (() => {
       const tx = db.transaction([STORE_BOOKS, STORE_SOURCES], 'readwrite');
       tx.objectStore(STORE_BOOKS).put(meta);
       tx.objectStore(STORE_SOURCES).put(source);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    }));
+  }
+
+  // 批量导入时把整批书目与来源放进同一次事务，避免每本一次提交。
+  function idbSaveBooks(entries) {
+    if (disabled) return Promise.reject(new Error('IndexedDB 不可用'));
+    return openDb().then(db => new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE_BOOKS, STORE_SOURCES], 'readwrite');
+      const books = tx.objectStore(STORE_BOOKS);
+      const sources = tx.objectStore(STORE_SOURCES);
+      for (const entry of entries) {
+        books.put(entry.meta);
+        sources.put(entry.source);
+      }
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);
@@ -358,6 +376,12 @@ export const HomuraStore = (() => {
     if (written) upsertCachedBook(meta);
   }
 
+  async function mirrorBooks(metas) {
+    if (!canUseNativeMetadata() || metas.length === 0) return;
+    const written = await queueNativeMirror(() => upsertNativeBooks(metas));
+    if (written) metas.forEach(upsertCachedBook);
+  }
+
   async function saveBook(meta, source, options = {}) {
     const timing = options.timing || null;
     markNativeDirty();
@@ -367,6 +391,19 @@ export const HomuraStore = (() => {
     upsertCachedBook(meta);
     const sqliteStarted = timing ? nowMs() : 0;
     await mirrorBook(meta);
+    if (timing) timing.sqliteMs += nowMs() - sqliteStarted;
+  }
+
+  async function saveBooks(entries, options = {}) {
+    if (!entries.length) return;
+    const timing = options.timing || null;
+    markNativeDirty();
+    const idbStarted = timing ? nowMs() : 0;
+    await idbSaveBooks(entries);
+    if (timing) timing.idbMs += nowMs() - idbStarted;
+    entries.forEach(entry => upsertCachedBook(entry.meta));
+    const sqliteStarted = timing ? nowMs() : 0;
+    await mirrorBooks(entries.map(entry => entry.meta));
     if (timing) timing.sqliteMs += nowMs() - sqliteStarted;
   }
 
@@ -527,6 +564,7 @@ export const HomuraStore = (() => {
 
   return {
     saveBook,
+    saveBooks,
     listBooks,
     updateBookCover,
     updateBookMeta,

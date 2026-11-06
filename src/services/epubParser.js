@@ -174,12 +174,15 @@ export async function createNativeEpubArchive(nativePath, options = {}) {
 }
 
 async function readEpubCover(archive, path) {
-  if (!path) return { cover: null, coverBlob: null };
+  if (!path) return { cover: null, coverBlob: null, coverNative: null };
   const coverBlob = await archive.readBlobByPath(path);
   if (!coverBlob) throw new Error('无法读取 EPUB 封面图');
   return {
     cover: URL.createObjectURL(coverBlob),
-    coverBlob
+    coverBlob,
+    coverNative: archive.kind === 'native' && archive.nativeArchivePath
+      ? { archivePath: archive.nativeArchivePath, entryPath: path }
+      : null
   };
 }
 
@@ -298,7 +301,7 @@ export async function parseEpubArchive(archive, options = {}) {
   });
 
   if (isMangaEpub && lazyMangaPaths.length > 0) {
-    const { cover, coverBlob } = await readEpubCover(archive, lazyMangaPaths[0]);
+    const { cover, coverBlob, coverNative } = await readEpubCover(archive, lazyMangaPaths[0]);
     const pageItems = lazyMangaPaths.map((path, index) => (
       archive.makePageItem(path, index === 0 ? cover : null)
     ));
@@ -310,6 +313,7 @@ export async function parseEpubArchive(archive, options = {}) {
       title: bookTitle,
       cover,
       coverBlob,
+      coverNative,
       pageItems,
       pageCount: pageItems.length,
       ...archive.bookFields()
@@ -318,7 +322,7 @@ export async function parseEpubArchive(archive, options = {}) {
 
   if (chapters.length === 0) throw new Error('未能提取出有效章节内容');
 
-  const { cover, coverBlob } = await readEpubCover(archive, lazyMangaPaths[0]);
+  const { cover, coverBlob, coverNative } = await readEpubCover(archive, lazyMangaPaths[0]);
   return {
     id,
     type: 'epub',
@@ -326,6 +330,7 @@ export async function parseEpubArchive(archive, options = {}) {
     title: bookTitle,
     cover,
     coverBlob,
+    coverNative,
     chapters,
     pageCount: chapters.length,
     ...archive.bookFields()
