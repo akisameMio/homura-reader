@@ -2,12 +2,11 @@
   <div
     ref="rootRef"
     class="desktop-island md-fab-pos"
-    :class="{ 'is-replacing': replaceSurface }"
   >
     <Transition
       name="island-surface"
       mode="out-in"
-      @enter="syncSurfaceSeed"
+      @enter="onSurfaceEnter"
       @before-leave="onSurfaceBeforeLeave"
       @after-leave="onSurfaceAfterLeave"
       @leave-cancelled="onSurfaceLeaveCancelled"
@@ -35,6 +34,7 @@
             : surface === 'import'
               ? 'import-progress-title'
               : surface === 'update' ? 'update-island-title' : undefined"
+        :aria-owns="surfaceKey ? 'homura-island-action' : undefined"
       >
         <div v-if="surface === 'menu'" class="island-menu" role="menu" aria-label="导入与书库">
           <header class="island-card-head">
@@ -63,16 +63,13 @@
             <div class="md-surface-aux">
               <button type="button" class="md-surface-text-button" @click="menuOpen = false">取消</button>
             </div>
-            <button type="button" class="md-surface-action is-import" @click="choose('pick-files')">
-              <MdIcon name="upload_file" />
-              选择文件
-            </button>
           </div>
         </div>
 
         <ImportProgressPanel
           v-else-if="surface === 'import'"
           ref="importPanelRef"
+          host-primary-action
           @retry="$emit('retry-failed')"
           @close="closeImport"
         />
@@ -80,6 +77,7 @@
         <DuplicateImportContent
           v-else-if="surface === 'duplicate'"
           ref="duplicateContentRef"
+          host-primary-action
           :pending="pendingDuplicate"
           @resolve="resolveImport"
         />
@@ -87,6 +85,7 @@
         <ShelfDialogContent
           v-else-if="surface === 'shelf'"
           ref="shelfContentRef"
+          host-primary-action
           :request="pendingShelfDialog"
           @resolve="resolveShelfDialog"
         />
@@ -94,6 +93,7 @@
         <UpdateIslandPanel
           v-else-if="surface === 'update'"
           ref="updatePanelRef"
+          host-primary-action
           :status="updates.updateStatus"
           :release="updates.latestRelease"
           :current-version="updates.appVersion"
@@ -111,7 +111,7 @@
       </div>
     </Transition>
 
-    <div class="island-trigger-row" role="group" aria-label="导入与更新">
+    <div class="island-trigger-row">
       <Transition name="island-orb">
         <button
           v-if="showUpdateOrb"
@@ -132,51 +132,79 @@
         </button>
       </Transition>
 
-      <button
-        ref="importButtonRef"
-        type="button"
-        class="island-import-trigger"
-        :class="{
-          'is-ring': importProgress.status !== 'idle',
-          'is-failed': importProgress.status !== 'idle' && importProgress.hasFailures,
-          'is-open': surface === 'menu' || surface === 'import',
-          'is-collapsed': triggerCollapsed,
-          'is-handoff': triggerHandoff
-        }"
-        :title="importButtonTitle"
-        :aria-label="importButtonLabel"
-        :aria-haspopup="importProgress.status === 'idle' ? 'menu' : 'dialog'"
-        :aria-expanded="importProgress.status === 'idle' ? surface === 'menu' : importProgress.expanded"
-        :inert="triggerCollapsed"
-        :tabindex="triggerCollapsed ? -1 : undefined"
-        @click="onImportClick"
-      >
-        <span class="island-import-layer" :class="{ 'is-hidden': importProgress.status !== 'idle' }" aria-hidden="true">
-          <MdIcon name="upload_file" filled />
-          <span>导入</span>
-        </span>
-        <span class="island-import-layer" :class="{ 'is-hidden': importProgress.status === 'idle' }" aria-hidden="true">
-          <svg class="island-ring" viewBox="0 0 44 44">
-            <circle class="island-ring-track" cx="22" cy="22" r="18"></circle>
-            <circle
-              class="island-ring-value"
-              cx="22"
-              cy="22"
-              r="18"
-              :stroke-dasharray="ringLength"
-              :stroke-dashoffset="ringOffset"
-            ></circle>
-          </svg>
-          <MdIcon v-if="importProgress.status === 'done' && !importProgress.hasFailures" name="check" class="island-ring-icon" />
-          <MdIcon
-            v-else-if="importProgress.status === 'done' || importProgress.status === 'cancelled'"
-            :name="importProgress.status === 'cancelled' ? 'close' : 'warning'"
-            class="island-ring-icon"
-          />
-          <span v-else class="island-ring-number">{{ importProgress.done }}</span>
-        </span>
-      </button>
+      <span
+        class="island-trigger-spacer"
+        :class="{ 'is-collapsed': !!surfaceKey }"
+        :style="{ '--trigger-slot-width': `${importProgress.status === 'idle' ? 104 : 56}px` }"
+        aria-hidden="true"
+      ></span>
     </div>
+
+    <!-- 导入胶囊、进度圆环和卡片主行动共用这颗按钮，卡片只让出右下角操作位。 -->
+    <button
+      id="homura-island-action"
+      ref="importButtonRef"
+      type="button"
+      class="island-import-trigger"
+      :class="{
+        'is-ring': importProgress.status !== 'idle' && !actionFaceShown,
+        'is-failed': importProgress.status !== 'idle' && importProgress.hasFailures && !actionFaceShown,
+        'is-card-position': !!surface && !surfaceSwapping,
+        'is-card-primary': actionFaceShown && heldAction?.variant === 'primary',
+        'is-card-tonal': actionFaceShown && heldAction?.variant === 'tonal',
+        'is-card-danger': actionFaceShown && heldAction?.variant === 'danger',
+        'is-returning': surfaceLeaving || surfaceSwapping
+      }"
+      :style="{ width: `${buttonWidth}px` }"
+      :title="buttonTitle"
+      :aria-label="buttonLabel"
+      :aria-haspopup="buttonHasPopup"
+      :aria-expanded="buttonExpanded"
+      :disabled="buttonDisabled"
+      @click="onImportClick"
+    >
+      <span
+        class="island-action-face"
+        :class="{ 'is-visible': actionFaceShown }"
+        aria-hidden="true"
+      >
+        <MdIcon v-if="heldAction?.icon" :name="heldAction.icon" />
+        <span>{{ heldAction?.label || '' }}</span>
+      </span>
+
+      <span
+        class="island-import-layer"
+        :class="{ 'is-hidden': importProgress.status !== 'idle' || actionFaceShown }"
+        aria-hidden="true"
+      >
+        <MdIcon name="upload_file" filled />
+        <span>导入</span>
+      </span>
+      <span
+        class="island-import-layer"
+        :class="{ 'is-hidden': importProgress.status === 'idle' || actionFaceShown }"
+        aria-hidden="true"
+      >
+        <svg class="island-ring" viewBox="0 0 44 44">
+          <circle class="island-ring-track" cx="22" cy="22" r="18"></circle>
+          <circle
+            class="island-ring-value"
+            cx="22"
+            cy="22"
+            r="18"
+            :stroke-dasharray="ringLength"
+            :stroke-dashoffset="ringOffset"
+          ></circle>
+        </svg>
+        <MdIcon v-if="importProgress.status === 'done' && !importProgress.hasFailures" name="check" class="island-ring-icon" />
+        <MdIcon
+          v-else-if="importProgress.status === 'done' || importProgress.status === 'cancelled'"
+          :name="importProgress.status === 'cancelled' ? 'close' : 'warning'"
+          class="island-ring-icon"
+        />
+        <span v-else class="island-ring-number">{{ importProgress.done }}</span>
+      </span>
+    </button>
   </div>
 </template>
 
@@ -223,14 +251,13 @@ const updateButtonRef = shallowRef(null);
 const menuOpen = ref(false);
 const lastTrigger = shallowRef(null);
 const restoreFocusTarget = shallowRef(null);
-const actionGhost = shallowRef(null);
-const hiddenAction = shallowRef(null);
-const triggerHandoff = ref(false);
-const triggerMorphing = ref(false);
+const heldAction = shallowRef(null);
+const actionFaceShown = ref(false);
+const surfaceSwapping = ref(false);
 const surfaceLeaving = ref(false);
 const returnFocus = ref('import');
 let autoDismissTimer = 0;
-let actionGhostCleanupTimer = 0;
+let actionFaceTimer = 0;
 
 const updatePending = computed(() => (
   updates.hasNewRelease
@@ -280,10 +307,6 @@ const seedScale = computed(() => {
     radius: importProgress.status === 'idle' ? '28px' : '999px'
   };
 });
-const replaceSurface = computed(() => !!surface.value);
-const triggerCollapsed = computed(() => (
-  replaceSurface.value || triggerMorphing.value || surfaceLeaving.value
-));
 const showUpdateOrb = computed(() => (
   updatePending.value
   && !surface.value
@@ -310,6 +333,55 @@ const importButtonLabel = computed(() => {
   if (importProgress.status === 'idle') return '导入作品';
   return `${importButtonTitle.value}，${importProgress.expanded ? '收起进度详情' : '展开进度详情'}`;
 });
+const menuPrimaryAction = Object.freeze({
+  label: '选择文件',
+  icon: 'upload_file',
+  variant: 'primary',
+  disabled: false
+});
+const activeContent = computed(() => {
+  if (surface.value === 'import') return importPanelRef.value;
+  if (surface.value === 'duplicate') return duplicateContentRef.value;
+  if (surface.value === 'shelf') return shelfContentRef.value;
+  if (surface.value === 'update') return updatePanelRef.value;
+  return null;
+});
+const activeAction = computed(() => {
+  if (!surface.value) return null;
+  if (surface.value === 'menu') return menuPrimaryAction;
+  return activeContent.value?.primaryAction || null;
+});
+const buttonWidth = computed(() => {
+  if (!surface.value || surfaceSwapping.value || !actionFaceShown.value || !heldAction.value) {
+    return importProgress.status === 'idle' ? 104 : 56;
+  }
+  // 当前字号下中文字宽约 13.2px，用估算宽度让胶囊到卡片动作的尺寸过渡连续。
+  const labelLength = [...String(heldAction.value.label || '')].length;
+  const iconWidth = heldAction.value.icon ? 20 : 0;
+  const iconGap = heldAction.value.icon ? 7 : 0;
+  return Math.max(104, Math.ceil(26 + iconWidth + iconGap + labelLength * 13.2));
+});
+const buttonTitle = computed(() => (
+  actionFaceShown.value ? heldAction.value?.label || '处理中' : importButtonTitle.value
+));
+const buttonLabel = computed(() => (
+  actionFaceShown.value ? heldAction.value?.label || '处理中' : importButtonLabel.value
+));
+const buttonHasPopup = computed(() => {
+  if (actionFaceShown.value) return undefined;
+  return importProgress.status === 'idle' ? 'menu' : 'dialog';
+});
+const buttonExpanded = computed(() => {
+  if (actionFaceShown.value) return undefined;
+  return importProgress.status === 'idle'
+    ? surface.value === 'menu'
+    : importProgress.expanded;
+});
+const buttonDisabled = computed(() => (
+  actionFaceShown.value
+  && !surfaceLeaving.value
+  && !!heldAction.value?.disabled
+));
 
 function choose(action) {
   menuOpen.value = false;
@@ -323,6 +395,11 @@ function openUpdate() {
 }
 
 function onImportClick() {
+  if (surface.value) {
+    if (!surfaceLeaving.value && !surfaceSwapping.value) runActiveAction();
+    return;
+  }
+  if (surfaceLeaving.value) return;
   returnFocus.value = 'import';
   lastTrigger.value = importButtonRef.value;
   if (importProgress.status === 'idle') {
@@ -332,160 +409,81 @@ function onImportClick() {
   importProgress.toggleExpanded(!importProgress.expanded);
 }
 
+function runActiveAction() {
+  if (surface.value === 'menu') {
+    choose('pick-files');
+    return;
+  }
+  if (activeAction.value?.disabled) return;
+  activeContent.value?.runPrimaryAction?.();
+}
+
 function closeImport() {
   importProgress.dismiss();
   nextTick(() => importButtonRef.value?.focus());
 }
 
-function naturalTriggerRect() {
-  const trigger = importButtonRef.value;
-  if (!trigger) return null;
-  const previousTransform = trigger.style.transform;
-  const previousTransition = trigger.style.transition;
-  trigger.style.transition = 'none';
-  trigger.style.transform = 'none';
-  const rect = trigger.getBoundingClientRect();
-  trigger.style.transform = previousTransform;
-  trigger.style.transition = previousTransition;
-  return rect;
+function clearActionFaceTimer() {
+  window.clearTimeout(actionFaceTimer);
+  actionFaceTimer = 0;
 }
 
-function clearActionGhost() {
-  window.clearTimeout(actionGhostCleanupTimer);
-  actionGhostCleanupTimer = 0;
-  actionGhost.value?.remove();
-  actionGhost.value = null;
-  if (hiddenAction.value?.isConnected) hiddenAction.value.style.visibility = '';
-  hiddenAction.value = null;
+function releaseActionFace() {
+  clearActionFaceTimer();
+  if (surfaceKey.value) return;
+  actionFaceShown.value = false;
+  heldAction.value = null;
+}
+
+function syncActiveAction() {
+  const action = activeAction.value;
+  if (!action || !surface.value || surfaceSwapping.value) return;
+  clearActionFaceTimer();
+  heldAction.value = action;
+  actionFaceShown.value = true;
+}
+
+function beginSurfaceSwap() {
+  surfaceSwapping.value = true;
+  clearActionFaceTimer();
+  actionFaceShown.value = false;
+  heldAction.value = null;
+}
+
+function scheduleActionFaceRelease() {
+  clearActionFaceTimer();
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    releaseActionFace();
+    return;
+  }
+  actionFaceTimer = window.setTimeout(releaseActionFace, 140);
 }
 
 function onSurfaceLeaveCancelled() {
-  clearActionGhost();
-  triggerMorphing.value = false;
+  clearActionFaceTimer();
   surfaceLeaving.value = false;
+  surfaceSwapping.value = false;
+  syncActiveAction();
+}
+
+function onSurfaceEnter(element) {
+  syncSurfaceSeed(element);
+  if (!surfaceSwapping.value) return;
+  surfaceSwapping.value = false;
+  syncActiveAction();
 }
 
 function onSurfaceBeforeLeave(element) {
   syncSurfaceSeed(element);
-  clearActionGhost();
-  if (surface.value || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  startActionHandoff(element);
 }
 
 function onSurfaceAfterLeave() {
+  if (surfaceKey.value) return;
+  clearActionFaceTimer();
   surfaceLeaving.value = false;
-  hiddenAction.value = null;
-  if (!surfaceKey.value) focusSurface(null);
-  if (!actionGhost.value) {
-    triggerMorphing.value = false;
-    return;
-  }
-  triggerHandoff.value = true;
-  triggerMorphing.value = false;
-  const ghost = actionGhost.value;
-  actionGhost.value = null;
-  requestAnimationFrame(() => {
-    ghost.remove();
-    actionGhostCleanupTimer = window.setTimeout(() => {
-      triggerHandoff.value = false;
-      actionGhostCleanupTimer = 0;
-    }, 80);
-  });
-}
-
-function startActionHandoff(element) {
-  const action = element?.querySelector('.md-surface-action');
-  const trigger = importButtonRef.value;
-  if (!action || !trigger || !rootRef.value) return;
-  const actionRect = action.getBoundingClientRect();
-  const triggerRect = naturalTriggerRect();
-  if (!triggerRect || !actionRect.width || !actionRect.height) return;
-
-  const scaleX = triggerRect.width / actionRect.width;
-  const scaleY = triggerRect.height / actionRect.height;
-  const shiftX = triggerRect.right - actionRect.right;
-  const shiftY = triggerRect.bottom - actionRect.bottom;
-  const actionStyle = getComputedStyle(action);
-  const triggerStyle = getComputedStyle(trigger);
-  const ghost = action.cloneNode(true);
-  ghost.classList.add('island-action-handoff');
-  ghost.removeAttribute('id');
-  ghost.setAttribute('aria-hidden', 'true');
-  ghost.tabIndex = -1;
-  Object.assign(ghost.style, {
-    position: 'fixed',
-    left: `${actionRect.left}px`,
-    top: `${actionRect.top}px`,
-    width: `${actionRect.width}px`,
-    height: `${actionRect.height}px`,
-    margin: '0',
-    padding: actionStyle.padding,
-    gap: actionStyle.gap,
-    zIndex: '2',
-    pointerEvents: 'none',
-    transformOrigin: '100% 100%'
-  });
-
-  const original = document.createElement('span');
-  original.style.cssText = [
-    'display:flex',
-    'align-items:center',
-    'justify-content:center',
-    `gap:${actionStyle.gap}`,
-    'white-space:nowrap'
-  ].join(';');
-  while (ghost.firstChild) original.appendChild(ghost.firstChild);
-  ghost.appendChild(original);
-
-  const triggerLayer = trigger.querySelector('.island-import-layer:not(.is-hidden)');
-  const face = triggerLayer
-    ? triggerLayer.cloneNode(true)
-    : document.createElement('span');
-  face.classList.add('island-action-handoff-face');
-  face.style.transformOrigin = 'center';
-  face.style.transform = `scale(${1 / scaleX}, ${1 / scaleY})`;
-  ghost.appendChild(face);
-
-  rootRef.value.appendChild(ghost);
-  action.style.visibility = 'hidden';
-  hiddenAction.value = action;
-  actionGhost.value = ghost;
-  triggerMorphing.value = true;
-
-  const timing = {
-    duration: 280,
-    delay: 80,
-    easing: 'cubic-bezier(0.2, 0, 0, 1)',
-    fill: 'both'
-  };
-  ghost.animate([
-    {
-      transform: 'translate(0px, 0px) scale(1, 1)',
-      backgroundColor: actionStyle.backgroundColor,
-      color: actionStyle.color,
-      borderRadius: actionStyle.borderRadius,
-      boxShadow: actionStyle.boxShadow
-    },
-    {
-      transform: `translate(${shiftX}px, ${shiftY}px) scale(${scaleX}, ${scaleY})`,
-      backgroundColor: triggerStyle.backgroundColor,
-      color: triggerStyle.color,
-      borderRadius: triggerStyle.borderRadius,
-      boxShadow: triggerStyle.boxShadow
-    }
-  ], timing);
-  original.animate([
-    { opacity: 1, offset: 0 },
-    { opacity: 1, offset: 0.46 },
-    { opacity: 0, offset: 0.62 },
-    { opacity: 0, offset: 1 }
-  ], { ...timing, easing: 'linear' });
-  face.animate([
-    { opacity: 0, offset: 0 },
-    { opacity: 0, offset: 0.54 },
-    { opacity: 1, offset: 0.72 },
-    { opacity: 1, offset: 1 }
-  ], { ...timing, easing: 'linear' });
+  surfaceSwapping.value = false;
+  releaseActionFace();
+  focusSurface(null);
 }
 
 function syncSurfaceSeed(element) {
@@ -555,10 +553,18 @@ async function focusSurface(key) {
       || active.isContentEditable
     );
     if (isTextEntry && !rootRef.value?.contains(active)) return;
+    if (actionFaceShown.value && !heldAction.value?.disabled) {
+      importButtonRef.value?.focus();
+      return;
+    }
     updatePanelRef.value?.focusInitial();
     return;
   }
   if (surface.value === 'import') {
+    if (actionFaceShown.value && !heldAction.value?.disabled) {
+      importButtonRef.value?.focus();
+      return;
+    }
     importPanelRef.value?.focusInitial();
     return;
   }
@@ -569,9 +575,18 @@ async function focusSurface(key) {
 
 function focusableElements() {
   if (!surfaceRef.value) return [];
-  return Array.from(surfaceRef.value.querySelectorAll(
+  const elements = Array.from(surfaceRef.value.querySelectorAll(
     'button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])'
   ));
+  if (
+    surface.value
+    && !surfaceSwapping.value
+    && importButtonRef.value
+    && !importButtonRef.value.disabled
+  ) {
+    elements.push(importButtonRef.value);
+  }
+  return elements;
 }
 
 function onKeydown(event) {
@@ -715,8 +730,22 @@ watch(
   }
 );
 
-watch(surfaceKey, key => {
-  surfaceLeaving.value = !key;
+watch(activeAction, value => {
+  if (!value) return;
+  syncActiveAction();
+}, { immediate: true });
+
+watch(surfaceKey, (key, previous) => {
+  if (key) {
+    clearActionFaceTimer();
+    surfaceLeaving.value = false;
+    if (previous && previous !== key) beginSurfaceSwap();
+    return;
+  }
+  if (!previous) return;
+  surfaceSwapping.value = false;
+  surfaceLeaving.value = true;
+  scheduleActionFaceRelease();
 }, { flush: 'sync' });
 
 onMounted(() => {
@@ -726,7 +755,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.clearTimeout(autoDismissTimer);
-  clearActionGhost();
+  clearActionFaceTimer();
   document.removeEventListener('pointerdown', onDocumentPointerDown);
   window.removeEventListener('keydown', onKeydown);
 });
@@ -749,9 +778,20 @@ onBeforeUnmount(() => {
   gap: 14px;
 }
 
+.island-trigger-spacer {
+  display: block;
+  width: var(--trigger-slot-width, 104px);
+  height: 56px;
+  flex: none;
+  transition: width var(--md-duration-medium) var(--md-ease-emphasized);
+}
+
+.island-trigger-spacer.is-collapsed {
+  width: 0;
+}
+
 .island-update-orb,
 .island-import-trigger {
-  position: relative;
   display: flex;
   flex: none;
   align-items: center;
@@ -765,14 +805,18 @@ onBeforeUnmount(() => {
     0 6px 16px -8px color-mix(in oklab, var(--md-shadow-color) 38%, transparent);
   transition:
     width var(--md-duration-medium) var(--md-ease-emphasized),
+    right var(--md-duration-medium) var(--md-ease-emphasized),
+    bottom var(--md-duration-medium) var(--md-ease-emphasized),
     border-radius var(--md-duration-medium) var(--md-ease-emphasized),
     background-color var(--md-duration-short) var(--md-ease-emphasized),
+    color var(--md-duration-short) var(--md-ease-emphasized),
     opacity var(--md-duration-short) var(--md-ease-emphasized),
     transform var(--md-duration-medium) var(--md-ease-emphasized),
     box-shadow var(--md-duration-short) var(--md-ease-emphasized);
 }
 
 .island-update-orb {
+  position: relative;
   width: 56px;
   border-radius: 50%;
   background: var(--md-secondary-container);
@@ -805,6 +849,10 @@ onBeforeUnmount(() => {
 }
 
 .island-import-trigger {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
   width: 104px;
   border-radius: 28px;
   background: var(--md-primary-container);
@@ -812,8 +860,15 @@ onBeforeUnmount(() => {
   transform-origin: 100% 50%;
 }
 
-.island-import-trigger:not(.is-collapsed) {
-  transition-delay: 0s, 0s, 0s, 250ms, 0s, 0s;
+.island-import-trigger.is-card-position {
+  right: 20px;
+  bottom: 20px;
+  transition-delay: 60ms;
+}
+
+.island-import-trigger.is-returning {
+  transition-delay: 0s;
+  pointer-events: none;
 }
 
 .island-import-trigger.is-ring {
@@ -826,21 +881,57 @@ onBeforeUnmount(() => {
   color: var(--md-on-error-container);
 }
 
-.island-import-trigger.is-open {
-  background: color-mix(in oklab, var(--md-primary-container) 92%, var(--md-on-primary-container));
+.island-import-trigger.is-card-primary {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  box-shadow: none;
 }
 
-.island-import-trigger.is-collapsed {
+.island-import-trigger.is-card-tonal {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  box-shadow: none;
+}
+
+.island-import-trigger.is-card-danger {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+  box-shadow: none;
+}
+
+.island-import-trigger:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.island-action-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
   opacity: 0;
-  transform: scale(0.9);
-  transition-delay: 0s;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
   pointer-events: none;
+  transform: scale(0.9);
+  transition:
+    opacity var(--md-duration-short) var(--md-ease-emphasized),
+    transform var(--md-duration-medium) var(--md-ease-emphasized);
 }
 
-.island-import-trigger.is-handoff {
+.island-action-face.is-visible {
   opacity: 1;
   transform: none;
-  transition: none;
+}
+
+.island-action-face :deep(svg) {
+  width: 20px;
+  height: 20px;
+  flex: none;
 }
 
 .island-import-layer {
@@ -955,42 +1046,8 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.desktop-island-surface :deep(.md-surface-action) {
-  gap: 7px;
-  padding: 0 13px;
-  border-radius: 28px;
-  font-weight: 650;
-  box-shadow: none;
-  transition:
-    background-color var(--md-duration-short) var(--md-ease-emphasized),
-    color var(--md-duration-short) var(--md-ease-emphasized),
-    transform var(--md-duration-short) var(--md-ease-emphasized),
-    box-shadow var(--md-duration-short) var(--md-ease-emphasized);
-}
-
-.desktop-island-surface :deep(.md-surface-action > svg) {
-  width: 20px;
-  height: 20px;
-}
-
-.desktop-island-surface :deep(.md-surface-action.is-primary) {
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-}
-
-.desktop-island-surface :deep(.md-surface-action.is-danger) {
-  background: var(--md-error-container);
-  color: var(--md-on-error-container);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .desktop-island-surface :deep(.md-surface-action.is-primary:hover:not(:disabled)) {
-    background: color-mix(in oklab, var(--md-primary-container) 92%, var(--md-on-primary-container));
-  }
-
-  .desktop-island-surface :deep(.md-surface-action.is-danger:hover:not(:disabled)) {
-    background: color-mix(in oklab, var(--md-error-container) 92%, var(--md-on-error-container));
-  }
+.desktop-island-surface :deep(.md-surface-actionbar) {
+  min-height: 56px;
 }
 
 .island-menu {
@@ -1111,10 +1168,6 @@ onBeforeUnmount(() => {
   border-top: 0;
 }
 
-.island-menu > .md-surface-actionbar .md-surface-action {
-  margin-left: auto;
-}
-
 .island-surface-enter-active {
   transition:
     transform 320ms var(--md-ease-emphasized),
@@ -1182,14 +1235,14 @@ onBeforeUnmount(() => {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .island-import-trigger:not(.is-open):hover,
+  .island-import-trigger:not(.is-card-primary):not(.is-card-tonal):not(.is-card-danger):hover,
   .island-update-orb:hover {
     box-shadow:
       0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color) 30%, transparent),
       0 10px 24px -10px color-mix(in oklab, var(--md-shadow-color) 42%, transparent);
   }
 
-  .island-import-trigger:not(.is-failed):not(.is-open):hover {
+  .island-import-trigger:not(.is-failed):not(.is-card-primary):not(.is-card-tonal):not(.is-card-danger):hover {
     background: color-mix(in oklab, var(--md-primary-container) 92%, var(--md-on-primary-container));
   }
 
@@ -1217,6 +1270,8 @@ onBeforeUnmount(() => {
   .desktop-island,
   .island-update-orb,
   .island-import-trigger,
+  .island-trigger-spacer,
+  .island-action-face,
   .island-import-layer,
   .island-ring-value,
   .island-surface-enter-active,

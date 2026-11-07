@@ -43,6 +43,7 @@
 
       <div class="md-surface-actionbar">
         <button
+          v-if="!hostPrimaryAction"
           ref="primaryActionRef"
           type="button"
           class="md-surface-action is-tonal"
@@ -78,6 +79,7 @@
           <button type="button" class="md-surface-text-button" @click="$emit('close')">稍后安装</button>
         </div>
         <button
+          v-if="!hostPrimaryAction"
           ref="primaryActionRef"
           type="button"
           class="md-surface-action is-primary"
@@ -98,10 +100,13 @@
         <p class="md-surface-subtitle">当前版本 v{{ currentVersion }} · 稳定通道</p>
       </header>
 
-      <div v-if="status === 'loading'" class="update-state" role="status">
-        <span class="update-spinner" aria-hidden="true"></span>
-        <span><b>正在连接 GitHub Releases</b><small>读取稳定版本与安装包信息，请稍候。</small></span>
-      </div>
+      <template v-if="status === 'loading'">
+        <div class="update-state" role="status">
+          <span class="update-spinner" aria-hidden="true"></span>
+          <span><b>正在连接 GitHub Releases</b><small>读取稳定版本与安装包信息，请稍候。</small></span>
+        </div>
+        <div v-if="hostPrimaryAction" class="md-surface-actionbar" aria-hidden="true"></div>
+      </template>
 
       <template v-else-if="status === 'available' && release">
         <div class="update-version-line">
@@ -131,6 +136,7 @@
             <button type="button" class="md-surface-text-button" @click="openDetails">查看详情</button>
           </div>
           <button
+            v-if="!hostPrimaryAction"
             ref="primaryActionRef"
             type="button"
             class="md-surface-action is-primary"
@@ -151,7 +157,7 @@
           <div class="md-surface-aux">
             <button type="button" class="md-surface-text-button" @click="$emit('close')">关闭</button>
           </div>
-          <button ref="primaryActionRef" type="button" class="md-surface-action is-primary" @click="$emit('changelog')">
+          <button v-if="!hostPrimaryAction" ref="primaryActionRef" type="button" class="md-surface-action is-primary" @click="$emit('changelog')">
             查看更新日志
           </button>
         </div>
@@ -170,6 +176,7 @@
             <button type="button" class="md-surface-text-button" @click="$emit('close')">关闭</button>
           </div>
           <button
+            v-if="!hostPrimaryAction"
             ref="primaryActionRef"
             type="button"
             class="md-surface-action is-primary"
@@ -195,6 +202,7 @@ import MdIcon from './MdIcon.vue';
 
 const props = defineProps({
   status: { type: String, default: 'idle' },
+  hostPrimaryAction: { type: Boolean, default: false },
   release: { type: Object, default: null },
   currentVersion: { type: String, required: true },
   packageInfo: { type: Object, required: true },
@@ -216,7 +224,7 @@ const props = defineProps({
   downloadError: { type: Object, default: null }
 });
 
-defineEmits(['close', 'retry', 'changelog', 'download', 'cancel-download', 'install']);
+const emit = defineEmits(['close', 'retry', 'changelog', 'download', 'cancel-download', 'install']);
 
 const panelRef = shallowRef(null);
 const primaryActionRef = shallowRef(null);
@@ -270,6 +278,70 @@ const summaryItems = computed(() => {
       ? [props.release.notes.intro]
       : [];
 });
+const primaryAction = computed(() => {
+  if (props.status === 'loading') {
+    return {
+      label: '检查中',
+      icon: 'update',
+      variant: 'primary',
+      disabled: true
+    };
+  }
+  if (props.status === 'downloading') {
+    return {
+      label: '取消下载',
+      icon: 'close',
+      variant: 'tonal',
+      disabled: false
+    };
+  }
+  if (props.status === 'downloaded') {
+    return {
+      label: '立即安装',
+      icon: 'check',
+      variant: 'primary',
+      disabled: false
+    };
+  }
+  if (props.status === 'available') {
+    return {
+      label: '下载更新',
+      icon: 'download',
+      variant: 'primary',
+      disabled: false
+    };
+  }
+  if (props.status === 'latest') {
+    return {
+      label: '查看更新日志',
+      icon: 'article',
+      variant: 'primary',
+      disabled: false
+    };
+  }
+  if (props.status === 'download-error') {
+    return {
+      label: '重新下载',
+      icon: 'update',
+      variant: 'primary',
+      disabled: false
+    };
+  }
+  if (props.status === 'error') {
+    return {
+      label: '再试一次',
+      icon: 'update',
+      variant: 'primary',
+      disabled: false
+    };
+  }
+  return {
+    label: '关闭',
+    icon: 'close',
+    variant: 'tonal',
+    disabled: false
+  };
+});
 
 async function openDetails() {
   if (!props.release) return;
@@ -288,7 +360,31 @@ async function focusInitial() {
   if (!primaryActionRef.value) panelRef.value?.focus({ preventScroll: true });
 }
 
-defineExpose({ focusInitial });
+function runPrimaryAction() {
+  if (props.status === 'downloading') {
+    emit('cancel-download');
+    return;
+  }
+  if (props.status === 'downloaded') {
+    emit('install');
+    return;
+  }
+  if (props.status === 'available' || props.status === 'download-error') {
+    emit('download');
+    return;
+  }
+  if (props.status === 'latest') {
+    emit('changelog');
+    return;
+  }
+  if (props.status === 'error') {
+    emit('retry');
+    return;
+  }
+  if (props.status !== 'loading') emit('close');
+}
+
+defineExpose({ focusInitial, primaryAction, runPrimaryAction });
 </script>
 
 <style scoped>

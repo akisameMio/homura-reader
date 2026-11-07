@@ -133,14 +133,16 @@ z-index: 40;
   - 更新 surface：`min(680px, calc(100dvh - 112px))`
 - 更新 surface 自己滚动，`overscroll-behavior: contain`
 - 书库 surface 在移动目标很多时自己滚动，不能裁掉后段选项
-- 内容层右下角只放一个主行动胶囊；它承担导入按钮的视觉落点，其他操作使用 text button
-- 主行动胶囊与导入胶囊同族：高度 `56px`、圆角 `28px`、
-  `primary-container / on-primary-container`、图标 `20px`；默认 `gap: 7px`、
-  水平 padding `13px`，四字文案约 `106 × 56px`，与 `104 × 56px` 的导入胶囊几乎同宽
-- 卡片内主行动胶囊不投影，保持平面；只有触发行里的导入胶囊保留悬浮阴影，
-  按钮交接时由克隆层在移动过程中补回
-- island surface 内的 `is-primary` 统一映射为 `primary-container`，`is-danger`
-  使用 `error-container`；不要在卡片里再放实心 `primary` 大按钮
+- 内容层右下角只让出主行动位置，不再渲染第二颗主按钮；实际操作按钮就是导入胶囊本体
+- 同一颗按钮在关闭时是导入胶囊 / 进度圆环，展开后移动到卡片右下角并切换为当前动作：
+  高度 `56px`、圆角 `28px`、图标 `20px`、`gap: 7px`、水平 padding `13px`；
+  四字文案约 `106 × 56px`，与 `104 × 56px` 的导入胶囊几乎同宽
+- 卡片动作不投影，保持平面；回到导入胶囊时再恢复悬浮阴影。不要用克隆层补按钮
+- 动作色调：`primary` 用 `primary-container / on-primary-container`，`tonal` 用
+  `secondary-container / on-secondary-container`，`danger` 用
+  `error-container / on-error-container`；不要在卡片里再放实心 `primary` 大按钮
+- 共享内容组件通过 `host-primary-action` 在桌面端隐藏内部主按钮，并暴露
+  `primaryAction` / `runPrimaryAction()`；手机 bottom sheet 不传该属性，继续渲染原按钮
 - 桌面 surface 不显示右上角关闭图标；点外部、`Escape` 或底部取消 / 关闭动作退出
 
 surface 宽度由 `surfaceWidth` 决定，并写入 CSS 变量：
@@ -154,9 +156,10 @@ surface 宽度由 `surfaceWidth` 决定，并写入 CSS 变量：
 }"
 ```
 
-`DesktopIsland` 根节点保持右侧按钮的自然占位，surface 使用
-`position: absolute; right: 0; bottom: 0`，缩放原点固定为 `100% 100%`。
-这样按钮宽度变化、更新圆钮进出和 flex 重排都不会推动 surface。
+`DesktopIsland` 触发行的 spacer 保持右侧按钮的自然占位，surface 与真实按钮都使用
+`position: absolute`：surface 锚定 `right: 0; bottom: 0`，按钮关闭时锚定
+`right: 0; bottom: 0`、展开时锚定 `right: 20px; bottom: 20px`。
+surface 的缩放原点固定为 `100% 100%`，按钮宽度变化和更新圆钮进出都不会推动 surface。
 
 新增 surface 时先在这里补宽度，不要给内容组件单独写一个会破坏锚点的 `position: fixed`。
 
@@ -223,15 +226,12 @@ import
 
 ### 4.4 胶囊收起
 
-```js
-const replaceSurface = computed(() => !!surface.value);
-const triggerCollapsed = computed(() => replaceSurface.value);
-```
-
-- 打开任意 surface 时：导入胶囊保留自然占位，透明度下降、轻微缩小、`inert` 且 `tabindex="-1"`，surface 覆盖锚点。
-- 触发按钮不能收成 `width: 0`：它一旦恢复宽度就会重新参与 flex 布局，把正在缩回的 surface 横向推偏。
-- 更新面板也收起导入胶囊；surface 右下角的主行动胶囊承担原来的锚点位置。
-- surface 退出后，触发按钮重新获得焦点。
+- 触发行只保留一个与导入胶囊同宽的 spacer（idle `104px`、导入进行中 `56px`）和更新圆钮；
+  surface 打开时 spacer 收成零宽，真实按钮是 `position: absolute`，不会推动 surface。
+- 打开任意 surface 时，真实按钮不隐藏、不 `inert`、不复制；它直接移动到卡片右下角，
+  切换成当前 surface 的 `primaryAction`，并承担卡片主行动。
+- 内容组件在桌面端通过 `host-primary-action` 隐藏自己的主按钮，只保留其他辅助 text button。
+- surface 退出后，同一颗按钮回到导入胶囊位置并恢复焦点。
 
 ### 4.5 更新待处理与分裂
 
@@ -304,27 +304,28 @@ surface 离开：
 - `clip-path` / `border-radius` 280ms，延迟 80ms
 - 起点是比 surface 外扩 `80px` 的裁切框，保留正常投影；终点收成右下角
   `104 × 56`（导入进行中为 `56 × 56`），圆角使用 `var(--seed-radius)`
-- 整体透明度 100ms，延迟 260ms，只在最后交接给导入胶囊时淡出
-- 内容层不参与缩放：文字与主行动按钮保持原尺寸，由裁切框从右下角向左上收走
-- 内容层 160ms 后开始淡出；卡片收缩阶段右下角主行动按钮的矩形保持不变
-- 卡片缩到锚点后，克隆的主行动按钮从原位置滑到导入胶囊的真实矩形；
-  位置、圆角、底色、文字色与阴影在同一段 280ms、延迟 80ms 的动画里完成
-- 原按钮文案在 46%→62% 淡出，导入文案在 54%→72% 淡入，保留重叠，避免中间出现空帧
-- `is-primary` 与导入胶囊本来就同色，视觉上应是同一颗按钮在移动，而不是两颗按钮交叉淡出
-- 测量导入胶囊终点时必须临时关闭 `transform` 过渡（inline `transition: none` +
-  `transform: none`），否则 `is-collapsed` 的 `scale(0.9)` 会让终点小 10%
-- 收起期间保持 `surfaceLeaving` 为真，避免导入胶囊在 surface 卸载与按钮交接之间闪一下
-- `prefers-reduced-motion` 下跳过克隆交接，直接恢复导入胶囊
-- 结束矩形必须与导入胶囊一致：右侧、底边、宽高都由同一锚点推导
-- 导入按钮的透明度延迟 250ms 恢复；开始展开时仍然立即淡出，避免中途透出
+- 整体透明度 100ms，延迟 260ms，只在最后收成胶囊时淡出
+- 内容层不参与缩放：文字保持原尺寸，由裁切框从右下角向左上收走
+- 内容层 160ms 后开始淡出
+- 同一颗真实按钮从卡片操作位 `right: 20px; bottom: 20px` 回到触发锚点
+  `right: 0; bottom: 0`；位置、宽度、圆角、底色、文字色与阴影在同一段 280ms 内完成
+- 动作文案先保留约 140ms，再与导入文案交叉淡入淡出；不允许出现克隆节点
+- 收起期间 `surfaceLeaving` 为真，按钮关闭指针事件，避免动画中途重复触发动作
+- 非空 surface 之间切换（例如更新 `available → downloading`）时 Transition 是
+  `out-in`；`surfaceSwapping` 让按钮先回到导入胶囊位，新卡片进入时再展开，
+  避免卡片离场期间出现一颗悬空按钮
+- `prefers-reduced-motion` 下跳过位移与文案延迟，直接恢复到导入胶囊
 
-进入仍使用 `transform` 从真实导入控件尺寸放大；离开改用 `clip-path`，避免
-主行动按钮跟着整张卡片一起缩小。实现只过渡 `clip-path` / `border-radius` /
-`opacity`，不过渡 surface 宽高。
-surface 不参与触发行的 flex 宽度计算；导入按钮自身也不再收成零宽。
-改这里时先用 1440×900 实测：展开首帧右下角应等于导入胶囊，收起末帧应精确回到
-`x = viewportRight - 28 - 104`、`y = viewportBottom - 26 - 56` 的同一矩形；
-同时确认 `.md-surface-action` 在卡片收缩阶段宽高不变，交接末帧与导入胶囊矩形完全重合。
+进入仍使用 `transform` 从真实导入控件尺寸放大；离开改用 `clip-path`，避免内容
+跟着整张卡片一起缩小。实现只过渡 `clip-path` / `border-radius` / `opacity`，
+不过渡 surface 宽高。按钮自己只过渡位置、宽度、圆角、颜色与阴影。
+
+改这里时先用 1440×900 实测：展开首帧按钮应在导入胶囊原矩形内，展开末帧右下角
+应精确落在 `x = surfaceRight - 20 - buttonWidth`、
+`y = surfaceBottom - 20 - 56`；收起末帧应回到
+`x = viewportRight - 28 - 104`、`y = viewportBottom - 26 - 56`。
+同时确认展开 / 收起前后 `document.querySelector('.island-import-trigger')`
+仍是同一个节点，且页面中不存在 `.island-action-handoff`。
 
 ### 5.2 为什么不用弹簧
 
@@ -448,7 +449,8 @@ const title = await askShelfDialog({ kind: 'name', ... });
 
 ### 7.3 Tab 与 Escape
 
-- 焦点进入 surface 后，Tab 在 surface 内循环。
+- 焦点进入 surface 后，Tab 在 surface 内循环；桌面端真实主行动按钮位于 surface 外，
+  由 `focusableElements()` 追加到循环末尾，而不是在内容层复制一份。
 - `Escape` 顺序：同名确认 → 书库确认 → 导入菜单 → 导入进度 → 更新。
 - 删除确认不能因为点外部空白就消失；必须点“取消”或按 `Escape` 明确结束。
 - 同名确认点外部按“跳过”结束，避免没有可见关闭图标时卡住。
@@ -475,7 +477,9 @@ const isTextEntry = active && (
 - 导入进度 surface：`role="dialog"`，标题 `import-progress-title`；内容面板内部使用 `role="group"`。
 - 更新 surface：自身 `role="dialog"`，不声明 `aria-modal`，`aria-busy` 跟随 loading / downloading。
 - 菜单：`role="menu"`，条目 `role="menuitem"`。
-- 导入触发：`aria-haspopup` 与 `aria-expanded` 跟随菜单 / 进度。
+- 导入触发 / 卡片主行动：关闭时 `aria-haspopup` 与 `aria-expanded` 跟随菜单 / 进度；
+  展开为卡片动作时移除这两个属性，标题改成当前动作文案。surface 通过
+  `aria-owns="homura-island-action"` 把外置按钮纳入对话框语义。
 - 更新圆钮：`aria-haspopup="dialog"`，标题明确“有新版本可用”或“更新已下载”。
 - 所有颜色必须来自 `--md-*`；禁止新增 hex / `rgb()` / 纯黑纯白。
 - 投影必须使用 `var(--md-shadow-color)`，否则夜间会泛白。
@@ -496,11 +500,12 @@ const isTextEntry = active && (
 1. 在 `DesktopIsland.vue` 的 `surface` computed 中加入状态来源。
 2. 明确它相对现有五级的优先级。
 3. 在 `surfaceKey`、`surfaceWidth`、`surfaceClass` 补分支。
-4. 新建内容组件，至少暴露 `focusInitial()`。
-5. 在模板中挂到 `.desktop-island-surface` 内，不要 `Teleport` 到 body。
-6. 在 `onKeydown` / `onDocumentPointerDown` 决定 Escape 与点外部行为。
-7. 在 `prefers-reduced-motion` 下关闭新动效。
-8. 手机端是否同步？确认后优先复用同一个内容组件，只替换成 bottom sheet 外壳。
+4. 新建内容组件，至少暴露 `focusInitial()`、`primaryAction` 与 `runPrimaryAction()`。
+5. 内容组件接受 `hostPrimaryAction`；桌面端隐藏内部主按钮，手机端保持默认按钮。
+6. 在模板中挂到 `.desktop-island-surface` 内并传 `host-primary-action`，不要 `Teleport` 到 body。
+7. 在 `onKeydown` / `onDocumentPointerDown` 决定 Escape 与点外部行为。
+8. 在 `prefers-reduced-motion` 下关闭新动效。
+9. 手机端是否同步？确认后优先复用同一个内容组件，只替换成 bottom sheet 外壳。
 
 ### 10.2 新增一个更新状态
 

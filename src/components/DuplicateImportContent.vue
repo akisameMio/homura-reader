@@ -45,7 +45,12 @@
           {{ pending.batch ? '跳过这批' : '跳过此书' }}
         </button>
       </div>
-      <button type="button" class="md-surface-action is-primary" @click="emit('resolve', true)">
+      <button
+        v-if="!hostPrimaryAction"
+        type="button"
+        class="md-surface-action is-primary"
+        @click="emit('resolve', true)"
+      >
         <MdIcon name="upload_file" />
         仍然导入
       </button>
@@ -58,7 +63,8 @@ import { computed, nextTick, shallowRef } from 'vue';
 import MdIcon from './MdIcon.vue';
 
 const props = defineProps({
-  pending: { type: Object, default: null }
+  pending: { type: Object, default: null },
+  hostPrimaryAction: { type: Boolean, default: false }
 });
 const emit = defineEmits(['resolve']);
 
@@ -69,13 +75,23 @@ const incomingItems = computed(() => {
   if (!pending.batch) return [{ title: pending.title || '待导入文件', count: 1 }];
   return (pending.items || []).slice(0, 2);
 });
+const primaryAction = computed(() => ({
+  label: '仍然导入',
+  icon: 'upload_file',
+  variant: 'primary',
+  disabled: false
+}));
 
 async function focusInitial() {
   await nextTick();
   skipButtonRef.value?.focus();
 }
 
-defineExpose({ focusInitial });
+function runPrimaryAction() {
+  emit('resolve', true);
+}
+
+defineExpose({ focusInitial, primaryAction, runPrimaryAction });
 </script>
 
 <style scoped>

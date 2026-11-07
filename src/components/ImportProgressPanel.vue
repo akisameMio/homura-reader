@@ -85,6 +85,7 @@
     <div class="md-surface-actionbar">
       <template v-if="store.status === 'running'">
         <button
+          v-if="!hostPrimaryAction"
           ref="primaryActionRef"
           type="button"
           class="md-surface-action is-tonal"
@@ -100,7 +101,7 @@
           <button type="button" class="md-surface-text-button" @click="close">关闭</button>
         </div>
         <button
-          v-if="store.canRetry"
+          v-if="store.canRetry && !hostPrimaryAction"
           ref="primaryActionRef"
           type="button"
           class="md-surface-action is-primary"
@@ -109,7 +110,7 @@
           重试失败项
         </button>
         <button
-          v-else
+          v-else-if="!store.canRetry && !hostPrimaryAction"
           ref="primaryActionRef"
           type="button"
           class="md-surface-action is-primary"
@@ -134,6 +135,9 @@ import {
 } from '../stores/importProgress.js';
 import MdIcon from './MdIcon.vue';
 
+const props = defineProps({
+  hostPrimaryAction: { type: Boolean, default: false }
+});
 const emit = defineEmits(['retry', 'close']);
 
 const store = useImportProgressStore();
@@ -172,6 +176,30 @@ const statusMeta = computed(() => {
   if (store.status === 'cancelled') return '已停止';
   return store.hasFailures ? `失败 ${store.failed}` : '全部完成';
 });
+const primaryAction = computed(() => {
+  if (store.status === 'running') {
+    return {
+      label: store.cancelRequested ? '正在停止' : '停止导入',
+      icon: 'close',
+      variant: 'tonal',
+      disabled: store.cancelRequested
+    };
+  }
+  if (store.canRetry) {
+    return {
+      label: '重试失败项',
+      icon: 'update',
+      variant: 'primary',
+      disabled: false
+    };
+  }
+  return {
+    label: '完成',
+    icon: 'check',
+    variant: 'primary',
+    disabled: false
+  };
+});
 
 const liveMessage = ref('');
 let lastLiveAt = 0;
@@ -195,6 +223,18 @@ function stepState(key) {
 
 function close() {
   emit('close');
+}
+
+function runPrimaryAction() {
+  if (store.status === 'running') {
+    store.requestCancel();
+    return;
+  }
+  if (store.canRetry) {
+    emit('retry');
+    return;
+  }
+  close();
 }
 
 async function focusInitial() {
@@ -226,6 +266,7 @@ watch(
 watch(
   () => store.status,
   async () => {
+    if (props.hostPrimaryAction) return;
     const panel = panelRef.value;
     if (!panel?.contains(document.activeElement)) return;
     await nextTick();
@@ -236,7 +277,7 @@ watch(
   }
 );
 
-defineExpose({ focusInitial });
+defineExpose({ focusInitial, primaryAction, runPrimaryAction });
 </script>
 
 <style scoped>

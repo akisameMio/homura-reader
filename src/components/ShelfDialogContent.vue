@@ -115,41 +115,43 @@
         </button>
       </div>
 
-      <button
-        v-if="request.kind === 'folder'"
-        type="button"
-        class="md-surface-action is-primary"
-        @click="$emit('resolve', true)"
-      >
-        <MdIcon name="create_new_folder" />
-        创建书库
-      </button>
-      <button
-        v-else-if="request.kind === 'name'"
-        type="submit"
-        class="md-surface-action is-primary"
-      >
-        <MdIcon name="create_new_folder" />
-        {{ nameActionLabel }}
-      </button>
-      <button
-        v-else-if="request.kind === 'confirm'"
-        type="button"
-        class="md-surface-action"
-        :class="isDestructive ? 'is-danger' : 'is-tonal'"
-        @click="$emit('resolve', true)"
-      >
-        <MdIcon :name="isDestructive ? 'delete' : 'star'" />
-        {{ request.confirmLabel || '确认' }}
-      </button>
-      <button
-        v-else
-        type="button"
-        class="md-surface-action is-tonal"
-        @click="$emit('resolve', null)"
-      >
-        取消
-      </button>
+      <template v-if="!hostPrimaryAction">
+        <button
+          v-if="request.kind === 'folder'"
+          type="button"
+          class="md-surface-action is-primary"
+          @click="$emit('resolve', true)"
+        >
+          <MdIcon name="create_new_folder" />
+          创建书库
+        </button>
+        <button
+          v-else-if="request.kind === 'name'"
+          type="submit"
+          class="md-surface-action is-primary"
+        >
+          <MdIcon name="create_new_folder" />
+          {{ nameActionLabel }}
+        </button>
+        <button
+          v-else-if="request.kind === 'confirm'"
+          type="button"
+          class="md-surface-action"
+          :class="isDestructive ? 'is-danger' : 'is-tonal'"
+          @click="$emit('resolve', true)"
+        >
+          <MdIcon :name="isDestructive ? 'delete' : 'star'" />
+          {{ request.confirmLabel || '确认' }}
+        </button>
+        <button
+          v-else
+          type="button"
+          class="md-surface-action is-tonal"
+          @click="$emit('resolve', null)"
+        >
+          取消
+        </button>
+      </template>
     </div>
   </form>
 </template>
@@ -159,7 +161,8 @@ import { computed, nextTick, ref, shallowRef, watch } from 'vue';
 import MdIcon from './MdIcon.vue';
 
 const props = defineProps({
-  request: { type: Object, default: null }
+  request: { type: Object, default: null },
+  hostPrimaryAction: { type: Boolean, default: false }
 });
 const emit = defineEmits(['resolve']);
 
@@ -207,6 +210,40 @@ const folderScanHint = computed(() => {
 const nameActionLabel = computed(() => (
   String(props.request?.title || '').includes('重命名') ? '保存名称' : '创建书库'
 ));
+const primaryAction = computed(() => {
+  const request = props.request;
+  if (!request) return null;
+  if (request.kind === 'folder') {
+    return {
+      label: '创建书库',
+      icon: 'create_new_folder',
+      variant: 'primary',
+      disabled: false
+    };
+  }
+  if (request.kind === 'name') {
+    return {
+      label: nameActionLabel.value,
+      icon: 'create_new_folder',
+      variant: 'primary',
+      disabled: false
+    };
+  }
+  if (request.kind === 'confirm') {
+    return {
+      label: request.confirmLabel || '确认',
+      icon: isDestructive.value ? 'delete' : 'star',
+      variant: isDestructive.value ? 'danger' : 'tonal',
+      disabled: false
+    };
+  }
+  return {
+    label: '取消',
+    icon: 'close',
+    variant: 'tonal',
+    disabled: false
+  };
+});
 
 watch(
   () => props.request,
@@ -236,7 +273,21 @@ function submitName() {
   if (!error.value) emit('resolve', name.value.trim());
 }
 
-defineExpose({ focusInitial });
+function runPrimaryAction() {
+  const request = props.request;
+  if (!request) return;
+  if (request.kind === 'name') {
+    submitName();
+    return;
+  }
+  if (request.kind === 'move') {
+    emit('resolve', null);
+    return;
+  }
+  emit('resolve', true);
+}
+
+defineExpose({ focusInitial, primaryAction, runPrimaryAction });
 </script>
 
 <style scoped>
