@@ -9,7 +9,7 @@ import {
   parseEpubFile,
   parseEpubNativeArchive
 } from '../src/services/epubParser.js';
-import { closeNativeArchive } from '../src/services/nativeArchive.js';
+import { closeNativeArchive, isNativeArchiveSessionOpen } from '../src/services/nativeArchive.js';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 globalThis.window = dom.window;
@@ -31,9 +31,9 @@ function escapeXml(value) {
   }[char]));
 }
 
-function buildOpf({ title, items }) {
+function buildOpf({ title, items, metadata = '', guide = '' }) {
   const manifest = items.map(item => (
-    `<item id="${escapeXml(item.id)}" href="${escapeXml(item.href)}" media-type="${escapeXml(item.mediaType)}"/>`
+    `<item id="${escapeXml(item.id)}" href="${escapeXml(item.href)}" media-type="${escapeXml(item.mediaType)}"${item.properties ? ` properties="${escapeXml(item.properties)}"` : ''}/>`
   )).join('');
   const spine = items
     .filter(item => item.spine)
@@ -44,9 +44,11 @@ function buildOpf({ title, items }) {
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:identifier id="book-id">homura-test</dc:identifier>
     <dc:title>${escapeXml(title)}</dc:title>
+    ${metadata}
   </metadata>
   <manifest>${manifest}</manifest>
   <spine>${spine}</spine>
+  ${guide ? `<guide>${guide}</guide>` : ''}
 </package>`;
 }
 
@@ -55,6 +57,8 @@ async function buildEpub({
   opfPath = 'OEBPS/content.opf',
   containerOpfPath = opfPath,
   items = [],
+  metadata = '',
+  guide = '',
   includeContainer = true
 } = {}) {
   const zip = new JSZip();
@@ -74,7 +78,7 @@ async function buildEpub({
   </rootfiles>
 </container>`);
   }
-  addEntry(opfPath, buildOpf({ title, items }));
+  addEntry(opfPath, buildOpf({ title, items, metadata, guide }));
   for (const item of items) {
     addEntry(item.path, item.content);
   }
@@ -405,6 +409,14 @@ test('原生 EPUB 路径越界不会回退 JSZip', async () => {
       }),
       error => error.code === 'NATIVE_SECURITY_LIMIT'
     );
+    await assert.rejects(
+      parseEpubFile(epubFile(epub), {
+        id: 'epub-native-security-metadata',
+        nativePath: '../outside/book.epub',
+        metadataOnly: true
+      }),
+      error => error.code === 'NATIVE_SECURITY_LIMIT'
+    );
   } finally {
     delete dom.window.__TAURI__;
   }
@@ -538,5 +550,351 @@ test('原生 EPUB 解析与 JSZip 保持相同的章节结果', async () => {
     releaseBookUrls(jsZipBook);
     releaseBookUrls(nativeBook);
     await closeNativeArchive(nativeId);
+  }
+});
+
+test('metadataOnly 对长篇漫画只稀疏读取 spine，并优先使用 OPF 封面', async () => {
+  const items = [];
+  for (let index = 0; index < 80; index++) {
+    const page = String(index + 1).padStart(3, '0');
+    items.push(
+      xhtmlItem(
+        `p${index}`,
+        `Text/page-${page}.xhtml`,
+        `OEBPS/Text/page-${page}.xhtml`,
+        `<img src="../Images/page-${page}.jpg" alt=""/>`
+      ),
+      imageItem(`i${index}`, `Images/page-${page}.jpg`, `OEBPS/Images/page-${page}.jpg`)
+    );
+  }
+  items.push({
+    ...imageItem('cover-art', 'Images/opf-cover.jpg', 'OEBPS/Images/opf-cover.jpg'),
+    properties: 'cover-image',
+    content: new Uint8Array([9, 8, 7, 6, 5])
+  });
+  const epub = await buildEpub({ title: '长篇漫画', items });
+  const archive = await createJsZipEpubArchive(epub.bytes);
+  const originalReadTexts = archive.readTexts.bind(archive);
+  let spineTextReads = 0;
+  archive.readTexts = async paths => {
+    spineTextReads += paths.filter(path => /\.xhtml$/i.test(path)).length;
+    return originalReadTexts(paths);
+  };
+
+  const metadataBook = await parseEpubArchive(archive, {
+    id: 'epub-metadata-manga',
+    fallbackTitle: '文件名',
+    metadataOnly: true
+  });
+  const fullBook = await parseEpubArchive(
+    await createJsZipEpubArchive(epub.bytes),
+    { id: 'epub-full-manga', fallbackTitle: '文件名' }
+  );
+
+  try {
+    assert.equal(metadataBook.metadataOnly, true);
+    assert.equal(metadataBook.type, 'manga');
+    assert.equal(metadataBook.chapters, null);
+    assert.equal(metadataBook.pageItems, null);
+    assert.ok(metadataBook.pageCount >= 80);
+    assert.equal(metadataBook.coverBlob.size, 5);
+    assert.ok(spineTextReads < 20, `spine 读取 ${spineTextReads} 页，没有保持稀疏采样`);
+    assert.equal(fullBook.type, metadataBook.type);
+    assert.equal(fullBook.pageCount, 80);
+  } finally {
+    releaseBookUrls(metadataBook);
+    releaseBookUrls(fullBook);
+  }
+});
+
+test('metadataOnly 不会把大量彩插的轻小说误判成漫画', async () => {
+  const longText = '这是轻小说正文，虽然有很多整页彩插，但文字章节仍然占绝大多数。'.repeat(4);
+  const items = [];
+  for (let index = 0; index < 30; index++) {
+    const page = String(index + 1).padStart(3, '0');
+    if (index < 4) {
+      items.push(
+        xhtmlItem(
+          `p${index}`,
+          `Text/page-${page}.xhtml`,
+          `OEBPS/Text/page-${page}.xhtml`,
+          `<img src="../Images/color-${page}.jpg" alt="彩插"/>`
+        ),
+        imageItem(`i${index}`, `Images/color-${page}.jpg`, `OEBPS/Images/color-${page}.jpg`)
+      );
+      continue;
+    }
+    items.push(xhtmlItem(
+      `p${index}`,
+      `Text/page-${page}.xhtml`,
+      `OEBPS/Text/page-${page}.xhtml`,
+      `<h2>第 ${index + 1} 章</h2><p>${longText}</p>`
+    ));
+  }
+  items.push({
+    ...imageItem('cover', 'Images/cover.jpg', 'OEBPS/Images/cover.jpg'),
+    content: new Uint8Array([4, 4, 4, 4, 4, 4])
+  });
+  const epub = await buildEpub({
+    title: '彩插轻小说',
+    items,
+    metadata: '<meta name="cover" content="cover"/>'
+  });
+  const metadataBook = await parseEpubArchive(
+    await createJsZipEpubArchive(epub.bytes),
+    { id: 'epub-metadata-novel', fallbackTitle: '文件名', metadataOnly: true }
+  );
+  const fullBook = await parseEpubArchive(
+    await createJsZipEpubArchive(epub.bytes),
+    { id: 'epub-full-novel', fallbackTitle: '文件名' }
+  );
+
+  try {
+    assert.equal(metadataBook.type, 'epub');
+    assert.equal(metadataBook.pageCount, 30);
+    assert.equal(metadataBook.coverBlob.size, 6);
+    assert.equal(fullBook.type, metadataBook.type);
+    assert.equal(fullBook.chapters.length, 30);
+  } finally {
+    releaseBookUrls(metadataBook);
+    releaseBookUrls(fullBook);
+  }
+});
+
+test('metadataOnly 对纯文本长篇估算页数并在无封面时留空', async () => {
+  const longText = '这是一段足够长的正文，用来确认采样页会被识别为文字章节。'.repeat(4);
+  const items = [];
+  for (let index = 0; index < 120; index++) {
+    items.push(xhtmlItem(
+      `c${index}`,
+      `Text/chapter-${index + 1}.xhtml`,
+      `OEBPS/Text/chapter-${index + 1}.xhtml`,
+      `<h2>第 ${index + 1} 章</h2><p>${longText}</p>`
+    ));
+  }
+  const epub = await buildEpub({ title: '纯文本长篇', items });
+  const book = await parseEpubArchive(
+    await createJsZipEpubArchive(epub.bytes),
+    { id: 'epub-metadata-text', fallbackTitle: '文件名', metadataOnly: true }
+  );
+
+  try {
+    assert.equal(book.type, 'epub');
+    assert.equal(book.pageCount, 120);
+    assert.equal(book.cover, null);
+    assert.equal(book.coverBlob, null);
+    assert.equal(book.chapters, null);
+  } finally {
+    releaseBookUrls(book);
+  }
+});
+
+test('metadataOnly 不因空白 spine 页强制全量解析', async () => {
+  const longText = '空白页也是合法 spine 条目，不应被当成采样缺失。'.repeat(4);
+  const items = [];
+  for (let index = 0; index < 120; index++) {
+    items.push(xhtmlItem(
+      `c${index}`,
+      `Text/chapter-${index + 1}.xhtml`,
+      `OEBPS/Text/chapter-${index + 1}.xhtml`,
+      index === 13 ? '' : `<h2>第 ${index + 1} 章</h2><p>${longText}</p>`
+    ));
+  }
+  const epub = await buildEpub({ title: '含空白页的长篇', items });
+  const book = await parseEpubArchive(
+    await createJsZipEpubArchive(epub.bytes),
+    { id: 'epub-metadata-blank-page', fallbackTitle: '文件名', metadataOnly: true }
+  );
+
+  try {
+    assert.equal(book.needsFullParse, undefined);
+    assert.equal(book.type, 'epub');
+    assert.equal(book.pageCount, 120);
+  } finally {
+    releaseBookUrls(book);
+  }
+});
+
+test('metadataOnly 支持 guide 封面页', async () => {
+  const items = [
+    xhtmlItem(
+      'cover-page',
+      'Text/cover.xhtml',
+      'OEBPS/Text/cover.xhtml',
+      '<img src="../Images/guide-cover.jpg" alt="封面"/>'
+    )
+  ];
+  items.push({
+    ...imageItem('guide-cover', 'Images/guide-cover.jpg', 'OEBPS/Images/guide-cover.jpg'),
+    content: new Uint8Array([6, 6, 6, 6, 6, 6, 6])
+  });
+  for (let index = 0; index < 99; index++) {
+    items.push(xhtmlItem(
+      `page-${index}`,
+      `Text/page-${index + 1}.xhtml`,
+      `OEBPS/Text/page-${index + 1}.xhtml`,
+      `<img src="../Images/page-${index + 1}.jpg" alt=""/>`
+    ));
+    items.push(imageItem(
+      `image-${index}`,
+      `Images/page-${index + 1}.jpg`,
+      `OEBPS/Images/page-${index + 1}.jpg`
+    ));
+  }
+  const epub = await buildEpub({
+    title: 'guide 封面与模糊采样',
+    items,
+    guide: '<reference type="cover" title="封面" href="Text/cover.xhtml"/>'
+  });
+
+  const metadataBook = await parseEpubArchive(
+    await createJsZipEpubArchive(epub.bytes),
+    { id: 'epub-metadata-guide', fallbackTitle: '文件名', metadataOnly: true }
+  );
+  try {
+    assert.equal(metadataBook.needsFullParse, undefined);
+    assert.equal(metadataBook.type, 'manga');
+    assert.equal(metadataBook.coverBlob.size, 7);
+  } finally {
+    releaseBookUrls(metadataBook);
+  }
+});
+
+test('原生 EPUB metadataOnly 只读取采样章节并保留书包会话', async () => {
+  const longText = '原生稀疏读取正文，确保文字章节比例足以直接判为小说。'.repeat(4);
+  const items = [];
+  for (let index = 0; index < 120; index++) {
+    items.push(xhtmlItem(
+      `c${index}`,
+      `Text/chapter-${index + 1}.xhtml`,
+      `OEBPS/Text/chapter-${index + 1}.xhtml`,
+      `<h2>第 ${index + 1} 章</h2><p>${longText}</p>`
+    ));
+  }
+  const epub = await buildEpub({ title: '原生懒解析', items });
+  const entries = Array.from(epub.entries.entries());
+  const requestedTextPages = [];
+  dom.window.__TAURI__ = {
+    core: {
+      invoke: async (command, args) => {
+        const name = command.split('|').pop();
+        if (name === 'openDocument') {
+          return {
+            archiveId: args.archiveId,
+            entries: entries.map(([path, bytes], index) => ({
+              index,
+              path,
+              name: path,
+              size: bytes.length
+            }))
+          };
+        }
+        if (name === 'readTextBatch') {
+          const requested = JSON.parse(args.pathsJson);
+          requestedTextPages.push(...requested.filter(path => /\.xhtml$/i.test(path)));
+          return {
+            texts: requested.flatMap(path => {
+              const bytes = epub.entries.get(path);
+              return bytes ? [{ path, text: decoder.decode(bytes), size: bytes.length }] : [];
+            })
+          };
+        }
+        if (name === 'close') return null;
+        throw new Error(`未模拟原生命令：${name}`);
+      }
+    }
+  };
+
+  const id = 'epub-native-metadata-only';
+  const book = await parseEpubNativeArchive(
+    'homura-native-sources/epub-native-metadata-only/source/book.epub',
+    { id, name: '原生懒解析.epub', metadataOnly: true }
+  );
+  try {
+    assert.equal(book.metadataOnly, true);
+    assert.equal(book.type, 'epub');
+    assert.equal(book.pageCount, 120);
+    assert.equal(book.chapters, null);
+    assert.equal(book.nativeArchiveId, id);
+    assert.equal(isNativeArchiveSessionOpen(id), true);
+    assert.ok(requestedTextPages.length < 30, `原生读取 ${requestedTextPages.length} 页，没有保持稀疏采样`);
+  } finally {
+    releaseBookUrls(book);
+    await closeNativeArchive(id);
+  }
+});
+
+test('metadataOnly 在采样比例贴边时要求全量解析', async () => {
+  const items = [];
+  const textIndices = new Set([49, 55]);
+  for (let index = 0; index < 100; index++) {
+    const page = String(index + 1).padStart(3, '0');
+    if (textIndices.has(index)) {
+      items.push(xhtmlItem(
+        `p${index}`,
+        `Text/page-${page}.xhtml`,
+        `OEBPS/Text/page-${page}.xhtml`,
+        `<p>${'边界文字'.repeat(20)}</p>`
+      ));
+    } else {
+      items.push(
+        xhtmlItem(
+          `p${index}`,
+          `Text/page-${page}.xhtml`,
+          `OEBPS/Text/page-${page}.xhtml`,
+          `<img src="../Images/page-${page}.jpg" alt=""/>`
+        ),
+        imageItem(`i${index}`, `Images/page-${page}.jpg`, `OEBPS/Images/page-${page}.jpg`)
+      );
+    }
+  }
+  const epub = await buildEpub({ title: '模糊采样', items });
+  const metadataBook = await parseEpubArchive(
+    await createJsZipEpubArchive(epub.bytes),
+    { id: 'epub-metadata-edge', fallbackTitle: '文件名', metadataOnly: true }
+  );
+  const fullBook = await parseEpubArchive(
+    await createJsZipEpubArchive(epub.bytes),
+    { id: 'epub-full-edge', fallbackTitle: '文件名' }
+  );
+
+  try {
+    assert.equal(metadataBook.needsFullParse, true);
+    assert.equal(fullBook.type, 'manga');
+  } finally {
+    releaseBookUrls(fullBook);
+  }
+});
+
+test('懒导入后的全量解析会补齐章节与页数', async () => {
+  const longText = '这是一段足够长的正文，用于验证首次打开会恢复完整章节。'.repeat(4);
+  const items = [];
+  for (let index = 0; index < 40; index++) {
+    items.push(xhtmlItem(
+      `c${index}`,
+      `Text/chapter-${index + 1}.xhtml`,
+      `OEBPS/Text/chapter-${index + 1}.xhtml`,
+      `<h2>第 ${index + 1} 章</h2><p>${longText}</p>`
+    ));
+  }
+  const epub = await buildEpub({ title: '懒导入恢复', items });
+  const metadataBook = await parseEpubArchive(
+    await createJsZipEpubArchive(epub.bytes),
+    { id: 'epub-hydrate', fallbackTitle: '文件名', metadataOnly: true }
+  );
+  const fullBook = await parseEpubArchive(
+    await createJsZipEpubArchive(epub.bytes),
+    { id: 'epub-hydrate-full', fallbackTitle: '文件名' }
+  );
+
+  try {
+    assert.equal(metadataBook.chapters, null);
+    assert.equal(fullBook.type, metadataBook.type);
+    assert.equal(fullBook.chapters.length, 40);
+    assert.equal(fullBook.pageCount, 40);
+    assert.match(fullBook.chapters[0].htmlContent, /第 1 章/);
+  } finally {
+    releaseBookUrls(metadataBook);
+    releaseBookUrls(fullBook);
   }
 });

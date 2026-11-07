@@ -36,6 +36,7 @@ import {
 import { createCoverThumbnail } from '../services/coverThumb.js';
 import { releaseBookPageUrls } from '../services/pagination.js';
 import { runShelfMutation } from '../services/mutationQueue.js';
+import { NativeErrorCode } from '../services/nativeRuntime.js';
 
 let quotaWarned = false;
 const IMPORT_TIMING_ENABLED = !!import.meta.env?.DEV;
@@ -384,17 +385,45 @@ export function useImporter() {
 
     const parseStarted = now();
     let book = null;
+    const parseOptions = {
+      id: bookId,
+      name: file.name,
+      nativePath,
+      loadFallbackFile: nativePath
+        ? () => materializeStagedNativeImportFile(file, nativePath)
+        : undefined
+    };
+    const parseFullEpub = () => parseEpubFile(file, parseOptions);
     try {
-      book = await parseEpubFile(file, {
-        id: bookId,
-        name: file.name,
-        nativePath,
-        loadFallbackFile: nativePath
-          ? () => materializeStagedNativeImportFile(file, nativePath)
-          : undefined
-      });
-    } catch (err) {
-      console.warn('[HOMURA] EPUB 解析失败', err);
+      let metadataError = null;
+      try {
+        book = await parseEpubFile(file, { ...parseOptions, metadataOnly: true });
+      } catch (err) {
+        metadataError = err;
+      }
+
+      if (metadataError) {
+        const canRetryFull = metadataError.code !== NativeErrorCode.SECURITY_LIMIT
+          && metadataError.code !== NativeErrorCode.LIMIT_EXCEEDED
+          && metadataError.code !== NativeErrorCode.CANCELLED;
+        if (!canRetryFull) {
+          console.warn('[HOMURA] EPUB 被安全或限额规则拒绝，不再回退', metadataError);
+        } else {
+          try {
+            book = await parseFullEpub();
+          } catch (fullError) {
+            console.warn('[HOMURA] EPUB 解析失败', fullError);
+          }
+        }
+      } else if (book?.needsFullParse) {
+        if (IMPORT_TIMING_ENABLED) console.info('[HOMURA] EPUB 元数据采样不足，回退全量解析');
+        try {
+          book = await parseFullEpub();
+        } catch (fullError) {
+          console.warn('[HOMURA] EPUB 解析失败', fullError);
+          book = null;
+        }
+      }
     } finally {
       metrics.parseMs += now() - parseStarted;
     }
