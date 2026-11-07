@@ -143,13 +143,14 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 
 - 字体：`font-sans` 正文（Inter/PingFang），`font-display` 书封标题，`font-mono` 元信息，竖排书封用宋体 / Instrument Serif。
 - 字号沿用现有档位：页面标题 21/22、sheet 标题 17、正文/输入 13、分组标签 11、分段控件 10.5、元信息 8-8.5。不要随手插 14/15/16。
-- 动效统一 200ms `cubic-bezier(0.2, 0, 0, 1)`；卡片 hover 可用 280ms `cubic-bezier(0.16, 1, 0.3, 1)`。只过渡颜色/位移/阴影，不给布局属性加 transition；侧栏展开/折叠的宽度与内部重排过渡是唯一例外。
+- 动效统一 200ms `cubic-bezier(0.2, 0, 0, 1)`；卡片 hover 可用 280ms `cubic-bezier(0.16, 1, 0.3, 1)`。只过渡颜色/位移/阴影，不给布局属性加 transition；侧栏展开/折叠、桌面灵动胶囊分裂/合并的宽度与内部重排过渡是仅有的例外。
 - 尊重 `prefers-reduced-motion`。图标按钮必须有 `title` 或 `aria-label`；开关用 `role="switch"`；禁止 `<div @click>` 当按钮。
 
 ### 5.5 参考
 
 - 新增或重做组件前，先读 [references/md3-component-guide.md](references/md3-component-guide.md)；里面有按钮、开关、分段控件、列表和抽屉的直接写法。
 - Token 全表见 [references/tokens.md](references/tokens.md)，系统级布局说明见 [references/ui-component-spec.md](references/ui-component-spec.md)。
+- 桌面灵动胶囊的状态机、尺寸、分裂 / 合并动效与焦点规则见 [references/desktop-island.md](references/desktop-island.md)。
 - 旧笔记 `.trae/skills/homura-md3-ui/SKILL.md` 只作补充；`.trae/` 被 gitignore，克隆仓库后可能不存在。与上述文档或当前 `src/` 冲突时，以当前代码和 `references/md3-component-guide.md` 为准。
 
 ## 6. 不能破坏的行为

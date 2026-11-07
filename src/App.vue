@@ -62,9 +62,9 @@
     </div>
   </div>
 
-  <LibraryImportActions
-    v-if="!isCompact && (activeNav !== 'settings' || importProgress.status !== 'idle')"
-    v-model:open="importMenuOpen"
+  <DesktopIsland
+    v-if="desktopIslandVisible"
+    :active-nav="activeNav"
     @create-collection="createCollection"
     @pick-files="pickFiles"
     @pick-folder="pickFolder"
@@ -79,6 +79,7 @@
   <div v-if="reader.currentBook" class="reader-back-scrim md-scrim" aria-hidden="true"></div>
   <ReaderModal />
   <UpdateDialog
+    v-if="isCompact"
     :open="updates.updateDialogOpen"
     :status="updates.updateStatus"
     :release="updates.latestRelease"
@@ -105,7 +106,7 @@
     @retry="updates.loadChangelog(true)"
   />
   <DuplicateImportDialog />
-  <ShelfDialog />
+  <ShelfDialog v-if="isCompact" />
 
   <!-- Offscreen Measurer for Smart Novel Screen-Fit Pagination -->
   <div ref="measurerRef" id="novelPaginationMeasurer" class="fixed -left-[9999px] top-0 pointer-events-none invisible z-[-1] epub-content font-sans leading-relaxed"></div>
@@ -140,6 +141,7 @@ import { useScrollBounce } from './composables/useScrollBounce.js';
 import SideNav from './components/SideNav.vue';
 import LibraryHeader from './components/LibraryHeader.vue';
 import LibraryImportActions from './components/LibraryImportActions.vue';
+import DesktopIsland from './components/DesktopIsland.vue';
 import ImportStatusBar from './components/ImportStatusBar.vue';
 import AppearanceSheet from './components/AppearanceSheet.vue';
 import BookShelf from './components/BookShelf.vue';
@@ -193,6 +195,20 @@ const headerTitle = computed(() => {
   return activeCollection.value?.title || '书架';
 });
 const headerCount = computed(() => activeCollection.value ? activeCollectionBookCount.value : favoritesOnly.value ? favoriteBooks.value.length : shelf.library.length);
+const desktopIslandVisible = computed(() => (
+  !isCompact.value
+  && (
+    activeNav.value !== 'settings'
+    || importProgress.status !== 'idle'
+    || updates.updateDialogOpen
+    || updates.hasNewRelease
+    || updates.hasPendingInstall
+    || !!pendingShelfDialog.value
+  )
+));
+const overlayLocksBody = computed(() => (
+  updates.changelogOpen || (isCompact.value && updates.updateDialogOpen)
+));
 const FORMAT_FILTERS = ['epub', 'pdf', 'mobi', 'txt', 'markdown'];
 const SPLASH_MIN_DURATION = 720;
 let previousUpdateBodyOverflow = '';
@@ -222,7 +238,7 @@ useAndroidBackExit(reader, () => {
 });
 
 watch(
-  () => updates.overlayOpen,
+  () => overlayLocksBody.value,
   open => {
     if (open && !updateBodyLocked) {
       previousUpdateBodyOverflow = document.body.style.overflow;

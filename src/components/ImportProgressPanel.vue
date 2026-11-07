@@ -1,6 +1,7 @@
 <template>
   <section
     class="import-progress-panel bg-[var(--md-surface-container)] text-[var(--md-on-surface)]"
+    :class="{ 'is-embedded': embedded }"
     role="dialog"
     aria-label="导入进度"
     aria-modal="false"
@@ -171,6 +172,9 @@ import {
 } from '../stores/importProgress.js';
 import MdIcon from './MdIcon.vue';
 
+defineProps({
+  embedded: Boolean
+});
 const emit = defineEmits(['retry', 'close']);
 
 const store = useImportProgressStore();
@@ -251,6 +255,14 @@ watch(
   box-shadow:
     0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color) 28%, transparent),
     0 18px 48px -18px color-mix(in oklab, var(--md-shadow-color) 48%, transparent);
+}
+
+.import-progress-panel.is-embedded {
+  width: 100%;
+  max-height: min(680px, calc(100dvh - 112px));
+  border-radius: 0;
+  box-shadow: none;
+  padding: 20px;
 }
 
 .import-progress-fill {

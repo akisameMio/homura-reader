@@ -76,8 +76,6 @@ export const useUpdateStore = defineStore('updates', () => {
     !!downloadedUpdate.value
     && isVersionNewer(downloadedUpdate.value.version, appVersion)
   );
-  const overlayOpen = computed(() => updateDialogOpen.value || changelogOpen.value);
-
   function restorePendingUpdate() {
     const pending = loadPendingUpdate();
     if (
@@ -168,6 +166,19 @@ export const useUpdateStore = defineStore('updates', () => {
       return;
     }
     checkForUpdates();
+  }
+
+  function openUpdateDialog() {
+    if (hasPendingInstall.value) {
+      openDownloadedUpdate();
+      return;
+    }
+    if (!latestRelease.value) {
+      checkForUpdates();
+      return;
+    }
+    if (updateStatus.value === 'idle') updateStatus.value = 'available';
+    updateDialogOpen.value = true;
   }
 
   async function startUpdateDownload() {
@@ -337,9 +348,9 @@ export const useUpdateStore = defineStore('updates', () => {
     updatePackage,
     hasNewRelease,
     hasPendingInstall,
-    overlayOpen,
     checkForUpdates,
     handlePrimaryUpdateAction,
+    openUpdateDialog,
     startUpdateDownload,
     cancelCurrentDownload,
     closeUpdateDialog,
