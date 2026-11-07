@@ -1,11 +1,18 @@
 <template>
-  <dialog ref="dialogRef" class="md-library-dialog" aria-labelledby="shelf-dialog-title" @cancel.prevent="resolveShelfDialog()" @keydown.stop="onKeydown">
+  <dialog
+    ref="dialogRef"
+    class="md-bottom-sheet"
+    aria-labelledby="shelf-dialog-title"
+    @cancel.prevent="resolveShelfDialog()"
+    @click="onBackdropClick"
+    @keydown.stop="onKeydown"
+  >
     <ShelfDialogContent ref="contentRef" :request="pendingShelfDialog" @resolve="resolveShelfDialog" />
   </dialog>
 </template>
 
 <script setup>
-import { shallowRef, watch, nextTick, onBeforeUnmount } from 'vue';
+import { shallowRef, watch, nextTick } from 'vue';
 import { useShelfDialogs } from '../composables/useShelfDialogs.js';
 import ShelfDialogContent from './ShelfDialogContent.vue';
 
@@ -38,5 +45,8 @@ function onKeydown(event) {
   }
 }
 
-onBeforeUnmount(() => resolveShelfDialog());
+function onBackdropClick(event) {
+  if (event.target === dialogRef.value) resolveShelfDialog();
+}
+
 </script>

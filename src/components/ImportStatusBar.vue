@@ -10,23 +10,23 @@
       <div class="px-4 py-2.5">
         <template v-if="store.status === 'running'">
           <div class="flex items-start gap-3">
-            <div class="min-w-0 flex-1">
-              <div class="flex min-w-0 items-baseline gap-2">
-                <p class="shrink-0 text-[13px] font-semibold">
+            <button type="button" class="import-status-main min-w-0 flex-1" @click="openDetails">
+              <span class="flex min-w-0 items-baseline gap-2">
+                <span class="shrink-0 text-[13px] font-semibold">
                   导入中
                   <span class="ml-0.5 font-mono">{{ store.done }} / {{ store.total }}</span>
-                </p>
+                </span>
                 <span class="shrink-0 rounded-full bg-[var(--md-primary-container)] px-2 py-0.5 text-[11px] font-semibold text-[var(--md-on-primary-container)]">
                   {{ phaseLabel }}
                 </span>
                 <span class="ml-auto shrink-0 font-mono text-[11px] text-[var(--md-on-surface-variant)]">
                   {{ bytesLabel }}
                 </span>
-              </div>
-              <p class="mt-1 min-w-0 truncate text-[11px] text-[var(--md-on-surface-variant)]">
+              </span>
+              <span class="mt-1 block min-w-0 truncate text-[11px] text-[var(--md-on-surface-variant)]">
                 {{ store.currentName || '准备下一本…' }} · 导入到：{{ store.targetLabel }}
-              </p>
-            </div>
+              </span>
+            </button>
             <button
               type="button"
               class="import-stop-button shrink-0"
@@ -47,14 +47,14 @@
 
         <template v-else>
           <div class="flex items-center gap-3">
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-[13px] font-semibold">
+            <button type="button" class="import-status-main min-w-0 flex-1" @click="openDetails">
+              <span class="block truncate text-[13px] font-semibold">
                 {{ summaryTitle }}
-              </p>
-              <p class="mt-1 truncate font-mono text-[11px] text-[var(--md-on-surface-variant)]">
+              </span>
+              <span class="mt-1 block truncate font-mono text-[11px] text-[var(--md-on-surface-variant)]">
                 {{ bytesLabel }} · 导入到：{{ store.targetLabel }}
-              </p>
-            </div>
+              </span>
+            </button>
             <div class="flex shrink-0 items-center gap-1.5">
               <button
                 v-if="store.canRetry"
@@ -92,7 +92,7 @@ import MdIcon from './MdIcon.vue';
 defineEmits(['retry']);
 
 const store = useImportProgressStore();
-const visible = computed(() => store.status !== 'idle');
+const visible = computed(() => store.status !== 'idle' && !store.expanded);
 const phaseLabel = computed(() => importPhaseLabel(store.phase));
 const bytesLabel = computed(() => (
   store.bytesTotal > 0
@@ -110,6 +110,11 @@ const liveMessage = ref('');
 let lastLiveAt = 0;
 let lastLiveDone = 0;
 let dismissTimer = 0;
+
+function openDetails() {
+  clearDismissTimer();
+  store.toggleExpanded(true);
+}
 
 function clearDismissTimer() {
   if (!dismissTimer) return;
@@ -138,9 +143,10 @@ watch(
   () => store.status,
   status => {
     clearDismissTimer();
-    if (!store.isAutoDismissable) return;
+    if (!store.isAutoDismissable || store.expanded) return;
     dismissTimer = window.setTimeout(() => {
       dismissTimer = 0;
+      if (store.expanded) return;
       if (document.activeElement?.closest?.('[data-import-status-bar]')) return;
       store.dismiss();
     }, 8000);
@@ -161,6 +167,16 @@ onBeforeUnmount(clearDismissTimer);
 .import-bar-fill {
   transform-origin: left center;
   transition: transform var(--md-duration-short) var(--md-ease-emphasized);
+}
+
+.import-status-main {
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  padding: 0;
+  background: transparent;
+  color: var(--md-on-surface);
+  text-align: left;
 }
 
 .import-stop-button,
@@ -221,6 +237,9 @@ onBeforeUnmount(clearDismissTimer);
 }
 
 @media (hover: hover) and (pointer: fine) {
+  .import-status-main:hover {
+    background: color-mix(in oklab, var(--md-primary) 6%, transparent);
+  }
   .import-stop-button:not(:disabled):hover,
   .import-bar-action:hover {
     background: var(--md-surface-highest);

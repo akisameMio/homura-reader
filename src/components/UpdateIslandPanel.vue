@@ -2,131 +2,185 @@
   <section
     ref="panelRef"
     class="update-island-panel"
-    role="dialog"
-    aria-modal="false"
+    role="group"
     aria-labelledby="update-island-title"
     :aria-busy="status === 'loading' || status === 'downloading'"
     tabindex="-1"
   >
+    <div class="md-sheet-grip" aria-hidden="true"></div>
+
     <template v-if="status === 'downloading'">
-      <h2 id="update-island-title" class="update-island-title">正在下载更新</h2>
-      <p class="update-island-subtitle">
-        HOMURA v{{ release?.version || currentVersion }} ·
-        {{ download.packageLabel || packageInfo.label }}
-      </p>
-      <div class="update-island-download">
+      <header>
+        <p class="md-surface-kicker">软件更新</p>
+        <h2 id="update-island-title" class="md-surface-title">正在下载更新</h2>
+        <p class="md-surface-subtitle">
+          HOMURA v{{ release?.version || currentVersion }} · {{ download.packageLabel || packageInfo.label }}
+        </p>
+      </header>
+
+      <div class="update-progress">
         <div
-          class="update-island-track"
-          :style="{ '--update-progress': downloadPercent / 100 }"
+          class="update-track"
           role="progressbar"
           aria-label="更新下载进度"
           aria-valuemin="0"
           aria-valuemax="100"
           :aria-valuenow="Math.round(downloadPercent * 10) / 10"
         >
-          <i></i>
+          <i :style="{ transform: `scaleX(${downloadPercent / 100})` }"></i>
         </div>
-        <p>{{ downloadPercentLabel }}</p>
+        <div class="update-progress-meta">
+          <b>{{ downloadPercentLabel }}</b>
+          <span>{{ downloadSizeLabel }}</span>
+        </div>
       </div>
-      <div class="update-island-actions">
-        <button ref="cancelDownloadButtonRef" type="button" class="update-island-text-button" @click="$emit('cancel-download')">取消</button>
+
+      <div class="update-current">
+        <MdIcon name="download" />
+        <span>下载完成后可立即安装</span>
+        <code>{{ download.fileName || packageInfo.label }}</code>
+      </div>
+
+      <div class="md-surface-actionbar">
+        <button
+          ref="primaryActionRef"
+          type="button"
+          class="md-surface-action is-tonal"
+          @click="$emit('cancel-download')"
+        >
+          <MdIcon name="close" />
+          取消下载
+        </button>
       </div>
     </template>
 
     <template v-else-if="status === 'downloaded'">
-      <h2 id="update-island-title" class="update-island-title">下载完成</h2>
-      <div class="update-island-ready">
-        <span class="update-island-check" aria-hidden="true">
-          <MdIcon name="check" />
-        </span>
+      <header>
+        <p class="md-surface-kicker">软件更新</p>
+        <h2 id="update-island-title" class="md-surface-title">下载完成</h2>
+      </header>
+
+      <div class="update-success">
+        <span class="update-success-icon" aria-hidden="true"><MdIcon name="check" /></span>
         <span>
-          <b>新版本 v{{ download.version }} 已下载完成</b>
+          <b>HOMURA v{{ download.version }} 已准备就绪</b>
           <small>{{ installWarning }}</small>
         </span>
       </div>
-      <div class="update-island-file">
+
+      <div class="update-file">
         <span>文件位置</span>
         <code><template v-for="(part, index) in downloadPathParts" :key="`${index}-${part}`">{{ part }}<wbr v-if="part === '/' || part === '\\'" /></template></code>
       </div>
-      <div class="update-island-actions">
-        <button type="button" class="update-island-text-button" @click="$emit('close')">稍后安装</button>
-        <button type="button" class="update-island-primary-button" @click="$emit('install')">立即安装</button>
+
+      <div class="md-surface-actionbar">
+        <div class="md-surface-aux">
+          <button type="button" class="md-surface-text-button" @click="$emit('close')">稍后安装</button>
+        </div>
+        <button
+          ref="primaryActionRef"
+          type="button"
+          class="md-surface-action is-primary"
+          @click="$emit('install')"
+        >
+          <MdIcon name="check" />
+          立即安装
+        </button>
       </div>
-      <p v-if="downloadError" class="update-island-error" role="alert">{{ downloadErrorMessage }}</p>
+
+      <p v-if="downloadError" class="update-error" role="alert">{{ downloadErrorMessage }}</p>
     </template>
 
     <template v-else>
-      <header class="update-island-head">
-        <span class="update-island-icon" aria-hidden="true"><MdIcon name="update" /></span>
-        <div class="update-island-copy">
-          <p class="update-island-kicker">{{ kicker }}</p>
-          <h2 id="update-island-title">{{ title }}</h2>
-          <p class="update-island-current">当前版本 v{{ currentVersion }} · 稳定通道</p>
-        </div>
-        <button ref="closeButtonRef" type="button" class="update-island-icon-button" title="关闭更新提示" aria-label="关闭更新提示" @click="$emit('close')">
-          <MdIcon name="close" />
-        </button>
+      <header>
+        <p class="md-surface-kicker">软件更新</p>
+        <h2 id="update-island-title" class="md-surface-title">{{ title }}</h2>
+        <p class="md-surface-subtitle">当前版本 v{{ currentVersion }} · 稳定通道</p>
       </header>
 
-      <div v-if="status === 'loading'" class="update-island-state" role="status">
-        <span class="update-island-spinner" aria-hidden="true"></span>
-        <div>
-          <b>正在连接 GitHub Releases</b>
-          <p>读取稳定版本与安装包信息，请稍候。</p>
-        </div>
+      <div v-if="status === 'loading'" class="update-state" role="status">
+        <span class="update-spinner" aria-hidden="true"></span>
+        <span><b>正在连接 GitHub Releases</b><small>读取稳定版本与安装包信息，请稍候。</small></span>
       </div>
 
       <template v-else-if="status === 'available' && release">
-        <div class="update-island-release">
-          <div class="update-island-release-head">
-            <strong>本次更新</strong>
-            <span>{{ release.dateLabel }}</span>
-          </div>
+        <div class="update-version-line">
+          <span class="update-version-pill">v{{ currentVersion }}</span>
+          <MdIcon name="chevron_right" />
+          <span class="update-version-pill is-new">v{{ release.version }}</span>
+          <span class="update-version-date">{{ release.dateLabel }}</span>
+        </div>
+
+        <div class="update-release-notes">
+          <h3>本次更新</h3>
           <ul v-if="summaryItems.length">
             <li v-for="item in summaryItems" :key="item">{{ item }}</li>
           </ul>
           <p v-else>该版本没有提供可展示的更新摘要。</p>
         </div>
-        <button type="button" class="update-island-install" :title="`下载 ${packageInfo.label}`" @click="$emit('download')">
-          <span class="update-island-download-icon" aria-hidden="true"><MdIcon name="download" filled /></span>
-          <span><b>{{ packageInfo.label }}</b><small>{{ packageInfo.note }}</small></span>
+
+        <button type="button" class="update-package-row" :title="`下载 ${packageInfo.label}`" @click="$emit('download')">
+          <span class="update-package-icon"><MdIcon name="download" /></span>
+          <span class="update-package-copy"><b>{{ packageInfo.label }}</b><small>{{ packageInfo.note }}</small></span>
           <MdIcon name="chevron_right" />
         </button>
-        <div class="update-island-actions">
-          <button type="button" class="update-island-text-button" @click="$emit('close')">稍后提醒</button>
-          <button type="button" class="update-island-text-button" @click="openDetails">查看详情</button>
-          <button type="button" class="update-island-primary-button" @click="$emit('download')">立即更新</button>
+
+        <div class="md-surface-actionbar">
+          <div class="md-surface-aux">
+            <button type="button" class="md-surface-text-button" @click="$emit('close')">稍后提醒</button>
+            <button type="button" class="md-surface-text-button" @click="openDetails">查看详情</button>
+          </div>
+          <button
+            ref="primaryActionRef"
+            type="button"
+            class="md-surface-action is-primary"
+            @click="$emit('download')"
+          >
+            <MdIcon name="download" />
+            下载更新
+          </button>
         </div>
       </template>
 
       <template v-else-if="status === 'latest'">
-        <div class="update-island-state is-success">
-          <span class="update-island-symbol" aria-hidden="true"><MdIcon name="check" /></span>
-          <div><b>已经是最新稳定版</b><p>当前安装的 HOMURA 与 GitHub 最新版本一致。</p></div>
+        <div class="update-state is-success">
+          <span class="update-state-icon" aria-hidden="true"><MdIcon name="check" /></span>
+          <span><b>已经是最新稳定版</b><small>当前安装的 HOMURA 与 GitHub 最新版本一致。</small></span>
         </div>
-        <div class="update-island-actions">
-          <button type="button" class="update-island-text-button" @click="$emit('close')">关闭</button>
-          <button type="button" class="update-island-primary-button" @click="$emit('changelog')">查看更新日志</button>
+        <div class="md-surface-actionbar">
+          <div class="md-surface-aux">
+            <button type="button" class="md-surface-text-button" @click="$emit('close')">关闭</button>
+          </div>
+          <button ref="primaryActionRef" type="button" class="md-surface-action is-primary" @click="$emit('changelog')">
+            查看更新日志
+          </button>
         </div>
       </template>
 
       <template v-else>
-        <div class="update-island-state is-error" role="alert">
-          <span class="update-island-symbol" aria-hidden="true"><MdIcon name="error" /></span>
-          <div>
+        <div class="update-state is-error" role="alert">
+          <span class="update-state-icon" aria-hidden="true"><MdIcon name="error" /></span>
+          <span>
             <b>{{ status === 'download-error' ? '下载没有完成' : '暂时无法检查更新' }}</b>
-            <p>{{ errorMessage }}</p>
-          </div>
+            <small>{{ errorMessage }}</small>
+          </span>
         </div>
-        <div class="update-island-actions">
-          <button type="button" class="update-island-text-button" @click="$emit('close')">关闭</button>
-          <button type="button" class="update-island-primary-button" @click="$emit(status === 'download-error' ? 'download' : 'retry')">
+        <div class="md-surface-actionbar">
+          <div class="md-surface-aux">
+            <button type="button" class="md-surface-text-button" @click="$emit('close')">关闭</button>
+          </div>
+          <button
+            ref="primaryActionRef"
+            type="button"
+            class="md-surface-action is-primary"
+            @click="$emit(status === 'download-error' ? 'download' : 'retry')"
+          >
             {{ status === 'download-error' ? '重新下载' : '再试一次' }}
           </button>
         </div>
       </template>
 
-      <p v-if="linkError" class="update-island-error" role="alert">{{ linkError }}</p>
+      <p v-if="linkError" class="update-error" role="alert">{{ linkError }}</p>
     </template>
   </section>
 </template>
@@ -134,6 +188,7 @@
 <script setup>
 import { computed, nextTick, ref, shallowRef } from 'vue';
 import { openGitHubUrl } from '../services/external.js';
+import { formatBytes } from '../services/platform.js';
 import { getUpdateErrorMessage } from '../services/updates.js';
 import { getDownloadErrorMessage } from '../services/updateDownload.js';
 import MdIcon from './MdIcon.vue';
@@ -164,16 +219,8 @@ const props = defineProps({
 defineEmits(['close', 'retry', 'changelog', 'download', 'cancel-download', 'install']);
 
 const panelRef = shallowRef(null);
-const closeButtonRef = shallowRef(null);
-const cancelDownloadButtonRef = shallowRef(null);
+const primaryActionRef = shallowRef(null);
 const linkError = ref('');
-
-const kicker = computed(() => {
-  if (props.status === 'loading') return 'CHECKING RELEASES';
-  if (props.status === 'available') return 'UPDATE AVAILABLE';
-  if (props.status === 'latest') return 'YOU ARE UP TO DATE';
-  return 'UPDATE CHECK FAILED';
-});
 
 const title = computed(() => {
   if (props.status === 'loading') return '正在检查更新';
@@ -196,6 +243,12 @@ const downloadPercent = computed(() => {
 const downloadPercentLabel = computed(() => (
   downloadPercent.value >= 100 ? '100%' : `${downloadPercent.value.toFixed(1)}%`
 ));
+const downloadSizeLabel = computed(() => {
+  const total = Number(props.download.totalBytes) || Number(props.download.size) || 0;
+  if (!total) return props.packageInfo.note || '';
+  const done = Number(props.download.downloadedBytes) || 0;
+  return `${formatBytes(done)} / ${formatBytes(total)}`;
+});
 const downloadPathParts = computed(() =>
   String(props.download.path || '').split(/([\\/])/).filter(Boolean)
 );
@@ -231,12 +284,8 @@ async function openDetails() {
 
 async function focusInitial() {
   await nextTick();
-  if (props.status === 'downloading') {
-    cancelDownloadButtonRef.value?.focus();
-    return;
-  }
-  closeButtonRef.value?.focus();
-  if (!closeButtonRef.value) panelRef.value?.focus({ preventScroll: true });
+  primaryActionRef.value?.focus();
+  if (!primaryActionRef.value) panelRef.value?.focus({ preventScroll: true });
 }
 
 defineExpose({ focusInitial });
@@ -247,366 +296,381 @@ defineExpose({ focusInitial });
   width: 100%;
   padding: 20px;
   outline: none;
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
 }
 
-.update-island-title {
-  margin: 0;
-  font-size: 21px;
-  font-weight: 680;
-  line-height: 1.25;
-  letter-spacing: -0.025em;
-}
-
-.update-island-subtitle {
-  margin: 8px 0 0;
-  color: var(--md-on-surface-variant);
-  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10.5px;
-  line-height: 1.55;
-}
-
-.update-island-download {
+.update-progress {
   margin-top: 24px;
 }
 
-.update-island-track {
-  position: relative;
+.update-track {
   height: 5px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--md-surface-high);
 }
 
-.update-island-track i {
+.update-track i {
   display: block;
   width: 100%;
   height: 100%;
   border-radius: inherit;
   background: var(--md-primary);
-  transform: scaleX(var(--update-progress, 0));
   transform-origin: left center;
   transition: transform var(--md-duration-short) var(--md-ease-emphasized);
 }
 
-.update-island-download > p {
-  margin: 12px 0 0;
-  color: var(--md-on-surface);
-  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 14px;
-  font-weight: 560;
-  text-align: center;
-}
-
-.update-island-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.update-island-icon {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
-  place-items: center;
-  border-radius: 14px;
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-}
-
-.update-island-icon :deep(svg) {
-  width: 22px;
-  height: 22px;
-}
-
-.update-island-copy {
-  min-width: 0;
-  flex: 1;
-}
-
-.update-island-kicker {
-  margin: 0;
-  color: var(--md-primary);
-  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-}
-
-.update-island-copy h2 {
-  margin: 5px 0 0;
-  font-size: 17px;
-  font-weight: 680;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-}
-
-.update-island-current {
-  margin: 6px 0 0;
-  color: var(--md-on-surface-variant);
-  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10px;
-}
-
-.update-island-icon-button {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
-  place-items: center;
-  border-radius: 50%;
-  color: var(--md-on-surface-variant);
-}
-
-.update-island-icon-button :deep(svg) {
-  width: 18px;
-  height: 18px;
-}
-
-.update-island-state,
-.update-island-ready {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-top: 18px;
-  padding: 16px;
-  border-radius: 18px;
-  background: var(--md-surface-low);
-}
-
-.update-island-state b,
-.update-island-ready b {
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.update-island-state p,
-.update-island-ready small {
-  display: block;
-  margin: 6px 0 0;
-  color: var(--md-on-surface-variant);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.update-island-spinner {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
-  border: 2.5px solid color-mix(in oklab, var(--md-primary) 18%, transparent);
-  border-top-color: var(--md-primary);
-  border-radius: 50%;
-  animation: update-island-spin 800ms linear infinite;
-}
-
-.update-island-symbol,
-.update-island-check {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-}
-
-.update-island-symbol :deep(svg),
-.update-island-check :deep(svg) {
-  width: 18px;
-  height: 18px;
-}
-
-.update-island-state.is-error .update-island-symbol {
-  background: var(--md-error-container);
-  color: var(--md-on-error-container);
-}
-
-.update-island-release {
-  margin-top: 18px;
-  padding: 14px;
-  border-radius: 17px;
-  background: var(--md-surface-low);
-}
-
-.update-island-release-head {
+.update-progress-meta {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
+  margin-top: 11px;
 }
 
-.update-island-release-head strong {
-  font-size: 12px;
+.update-progress-meta b {
+  color: var(--md-primary);
+  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 17px;
+  font-weight: 720;
+}
+
+.update-progress-meta span {
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+}
+
+.update-current {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  margin-top: 15px;
+  padding: 11px 12px;
+  border-radius: 15px;
+  background: var(--md-surface-low);
+  box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--md-outline-variant) 78%, transparent);
+}
+
+.update-current :deep(svg) {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  color: var(--md-primary);
+}
+
+.update-current span {
+  min-width: 0;
+  flex: 1;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+}
+
+.update-current code {
+  max-width: 46%;
+  overflow: hidden;
+  color: var(--md-on-surface);
+  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.update-success {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-top: 18px;
+  padding: 15px;
+  border-radius: 19px;
+  background: color-mix(in oklab, var(--md-primary-container) 30%, var(--md-surface-container));
+}
+
+.update-success-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  box-shadow: 0 0 0 6px color-mix(in oklab, var(--md-primary) 10%, transparent);
+}
+
+.update-success-icon :deep(svg) {
+  width: 22px;
+  height: 22px;
+}
+
+.update-success b,
+.update-success small {
+  display: block;
+}
+
+.update-success b {
+  font-size: 13px;
   font-weight: 650;
 }
 
-.update-island-release-head span {
-  color: var(--md-on-surface-variant);
-  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 9.5px;
-}
-
-.update-island-release ul {
-  display: grid;
-  gap: 6px;
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.update-island-release li {
-  position: relative;
-  padding-left: 12px;
+.update-success small {
+  margin-top: 3px;
   color: var(--md-on-surface-variant);
   font-size: 11px;
   line-height: 1.5;
 }
 
-.update-island-release li::before {
-  content: "";
-  position: absolute;
-  top: 0.62em;
-  left: 0;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--md-primary);
-}
-
-.update-island-release > p {
-  margin: 10px 0 0;
-  color: var(--md-on-surface-variant);
-  font-size: 11px;
-}
-
-.update-island-install {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 56px;
-  margin-top: 12px;
-  padding: 9px 11px;
-  border: 1px solid var(--md-outline-variant);
-  border-radius: 16px;
-  background: var(--md-surface);
-  color: var(--md-on-surface);
-  text-align: left;
-}
-
-.update-island-download-icon {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-  place-items: center;
-  border-radius: 11px;
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-}
-
-.update-island-install > span:nth-child(2) {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.update-island-install b {
-  font-size: 11px;
-  font-weight: 650;
-}
-
-.update-island-install small {
-  color: var(--md-on-surface-variant);
-  font-size: 9.5px;
-}
-
-.update-island-install > :deep(svg) {
-  width: 17px;
-  height: 17px;
-  flex: none;
-  color: var(--md-on-surface-variant);
-}
-
-.update-island-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 3px;
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--md-outline-variant);
-}
-
-.update-island-text-button,
-.update-island-primary-button {
-  min-height: 40px;
-  padding: 0 14px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 640;
-}
-
-.update-island-text-button {
-  color: var(--md-primary);
-}
-
-.update-island-primary-button {
-  background: var(--md-primary);
-  color: var(--md-on-primary);
-}
-
-.update-island-file {
+.update-file {
   margin-top: 14px;
   padding: 12px 14px;
   border-radius: 16px;
   background: var(--md-surface-low);
+  box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--md-outline-variant) 80%, transparent);
 }
 
-.update-island-file span {
+.update-file span {
   display: block;
   margin-bottom: 5px;
   color: var(--md-on-surface-variant);
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 650;
 }
 
-.update-island-file code {
+.update-file code {
   display: block;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
   color: var(--md-on-surface);
   font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10px;
-  line-height: 1.65;
+  font-size: 10.5px;
+  line-height: 1.6;
 }
 
-.update-island-error {
-  margin: 10px 0 0;
-  color: var(--md-error);
+.update-version-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 17px;
+  background: var(--md-surface-low);
+  box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--md-outline-variant) 82%, transparent);
+}
+
+.update-version-pill {
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: var(--md-surface-high);
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.update-version-pill.is-new {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+
+.update-version-line :deep(svg) {
+  width: 16px;
+  height: 16px;
+  color: var(--md-on-surface-variant);
+}
+
+.update-version-date {
+  margin-left: auto;
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+}
+
+.update-release-notes {
+  margin-top: 16px;
+}
+
+.update-release-notes h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.update-release-notes ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.update-release-notes li {
+  position: relative;
+  padding-left: 15px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.update-release-notes li::before {
+  content: "";
+  position: absolute;
+  top: 0.68em;
+  left: 1px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--md-primary);
+}
+
+.update-release-notes > p {
+  margin: 0;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.update-package-row {
+  display: flex;
+  width: 100%;
+  min-height: 60px;
+  align-items: center;
+  gap: 11px;
+  margin-top: 15px;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 17px;
+  background: color-mix(in oklab, var(--md-primary-container) 24%, var(--md-surface-container));
+  color: var(--md-on-surface);
+  box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--md-primary) 24%, var(--md-outline-variant));
+  text-align: left;
+}
+
+.update-package-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+
+.update-package-icon :deep(svg) {
+  width: 19px;
+  height: 19px;
+}
+
+.update-package-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.update-package-copy b,
+.update-package-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.update-package-copy b {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.update-package-copy small {
+  margin-top: 2px;
+  color: var(--md-on-surface-variant);
   font-size: 11px;
 }
 
-@keyframes update-island-spin {
+.update-package-row > :deep(svg:last-child) {
+  width: 18px;
+  height: 18px;
+  color: var(--md-on-surface-variant);
+}
+
+.update-state {
+  display: flex;
+  min-height: 132px;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 19px;
+  background: var(--md-surface-low);
+  box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--md-outline-variant) 78%, transparent);
+}
+
+.update-state b,
+.update-state small {
+  display: block;
+}
+
+.update-state b {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.update-state small {
+  margin-top: 5px;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.update-state-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+
+.update-state-icon :deep(svg) {
+  width: 20px;
+  height: 20px;
+}
+
+.update-state.is-error .update-state-icon {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+
+.update-spinner {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  border: 2.5px solid color-mix(in oklab, var(--md-primary) 18%, transparent);
+  border-top-color: var(--md-primary);
+  border-radius: 50%;
+  animation: update-spin 800ms linear infinite;
+}
+
+.update-error {
+  margin: 12px 0 0;
+  color: var(--md-error);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+@keyframes update-spin {
   to { transform: rotate(360deg); }
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .update-island-text-button:hover,
-  .update-island-icon-button:hover {
-    background: var(--md-surface-high);
-  }
-
-  .update-island-primary-button:hover {
-    background: color-mix(in oklab, var(--md-primary) 90%, var(--md-on-primary));
+  .update-package-row:hover {
+    background: color-mix(in oklab, var(--md-primary-container) 32%, var(--md-surface-container));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .update-island-track i,
-  .update-island-spinner {
+  .update-track i,
+  .update-spinner {
     transition: none;
     animation: none;
   }

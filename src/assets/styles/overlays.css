@@ -5,6 +5,69 @@
         transform var(--md-duration-short) var(--md-ease-emphasized),
         opacity var(--md-duration-short) var(--md-ease-emphasized);
     }
+
+    .md-bottom-sheet {
+      position: fixed;
+      inset: auto 0 0;
+      margin: 0;
+      width: 100%;
+      max-width: none;
+      max-height: min(78dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 24px));
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border: 0;
+      border-radius: 28px 28px 0 0;
+      padding: 0 0 env(safe-area-inset-bottom, 0px);
+      background: var(--md-surface-container);
+      color: var(--md-on-surface);
+      box-shadow:
+        0 -2px 8px -4px color-mix(in oklab, var(--md-shadow-color) 24%, transparent),
+        0 -24px 54px -30px color-mix(in oklab, var(--md-shadow-color) 52%, transparent);
+      animation: md-sheet-rise var(--md-duration-short) var(--md-ease-emphasized);
+    }
+    .md-bottom-sheet::backdrop {
+      background: color-mix(in oklab, var(--md-shadow-color) 32%, transparent);
+      animation: md-scrim-in var(--md-duration-short) var(--md-ease-emphasized);
+    }
+    .md-bottom-sheet-body {
+      padding: 10px 20px 20px;
+    }
+    .md-bottom-sheet .md-surface-title {
+      font-size: 17px;
+    }
+    .md-sheet-grip {
+      width: 32px;
+      height: 4px;
+      margin: 0 auto 16px;
+      border-radius: 999px;
+      background: color-mix(in oklab, var(--md-shadow-color) 28%, transparent);
+    }
+    @media (min-width: 900px) {
+      .md-sheet-grip {
+        display: none;
+      }
+    }
+    @keyframes md-sheet-rise {
+      from {
+        opacity: 0;
+        transform: translateY(18px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    @keyframes md-scrim-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .md-bottom-sheet,
+      .md-bottom-sheet::backdrop {
+        animation: none;
+      }
+    }
+
     .md-fade-enter-active,
     .md-fade-leave-active {
       transition: opacity var(--md-duration-short) var(--md-ease-emphasized);

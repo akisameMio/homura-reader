@@ -1,58 +1,30 @@
 <template>
   <dialog
     ref="dialogRef"
-    class="duplicate-import-dialog bg-[var(--md-surface-container)] text-[var(--md-on-surface)] shadow-2xl"
+    class="md-bottom-sheet"
     aria-labelledby="duplicate-import-title"
-    aria-describedby="duplicate-import-description"
     @cancel.prevent="resolveImport()"
     @click="onBackdropClick"
     @keydown.stop="onKeydown"
   >
-    <div v-if="pendingDuplicate" class="p-6">
-      <div class="min-[900px]:hidden w-8 h-1 rounded-full bg-[var(--md-outline-variant)] mx-auto mb-5" aria-hidden="true"></div>
-      <h2 id="duplicate-import-title" class="text-[17px] font-semibold">发现同名书本</h2>
-      <div id="duplicate-import-description" class="mt-3 text-[13px] leading-relaxed text-[var(--md-on-surface-variant)]">
-        <template v-if="pendingDuplicate.batch">
-          <p class="break-words">按文件名检测到 {{ pendingDuplicate.count }} 本可能与已有书名重复：</p>
-          <p class="mt-2 break-words">{{ batchTitles }}</p>
-          <p class="mt-2 break-words">这批文件将按同一选择处理；仍然导入会保留为独立书本。</p>
-        </template>
-        <template v-else>
-          <p class="break-words">已有同名书《{{ pendingDuplicate.existingTitle }}》。</p>
-          <p class="mt-2 break-words">是否仍要导入《{{ pendingDuplicate.title }}》？仍然导入会保留为独立书本。</p>
-        </template>
-      </div>
-      <div class="mt-6 flex flex-wrap justify-end gap-2">
-        <button
-          class="min-h-11 px-4 rounded-full text-[13px] font-semibold text-[var(--md-primary)] hover:bg-[var(--md-surface-high)] transition-colors duration-200"
-          @click="resolveImport(true)"
-        >{{ pendingDuplicate.batch ? '仍然导入这批' : '仍然导入' }}</button>
-        <button
-          ref="skipButtonRef"
-          autofocus
-          class="min-h-11 px-4 rounded-full text-[13px] font-semibold bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)] hover:bg-[var(--md-surface-high)] transition-colors duration-200"
-          @click="resolveImport()"
-        >{{ pendingDuplicate.batch ? '跳过这批' : '跳过此书' }}</button>
-      </div>
+    <div class="md-bottom-sheet-body">
+      <DuplicateImportContent
+        ref="contentRef"
+        :pending="pendingDuplicate"
+        @resolve="resolveImport"
+      />
     </div>
   </dialog>
 </template>
 
 <script setup>
-import { computed, shallowRef, watch, nextTick, onBeforeUnmount } from 'vue';
+import { shallowRef, watch, nextTick } from 'vue';
 import { useDuplicateImport } from '../composables/useDuplicateImport.js';
+import DuplicateImportContent from './DuplicateImportContent.vue';
 
 const dialogRef = shallowRef(null);
-const skipButtonRef = shallowRef(null);
+const contentRef = shallowRef(null);
 const { pendingDuplicate, resolveImport } = useDuplicateImport();
-
-const batchTitles = computed(() => {
-  const items = pendingDuplicate.value?.items || [];
-  const shown = items.slice(0, 3);
-  const names = shown.map(item => `《${item.title}》`).join('、');
-  const shownCount = shown.reduce((total, item) => total + (item.count || 1), 0);
-  return shownCount < (pendingDuplicate.value?.count || 0) ? `${names} 等 ${pendingDuplicate.value.count} 本` : names;
-});
 
 watch(pendingDuplicate, async pending => {
   if (!pending) {
@@ -62,8 +34,8 @@ watch(pendingDuplicate, async pending => {
   await nextTick();
   if (!pendingDuplicate.value) return;
   if (!dialogRef.value.open) dialogRef.value.showModal();
-  skipButtonRef.value?.focus();
-});
+  contentRef.value?.focusInitial();
+}, { immediate: true });
 
 function onBackdropClick(event) {
   if (event.target !== dialogRef.value) return;
@@ -87,35 +59,4 @@ function onKeydown(event) {
   }
 }
 
-onBeforeUnmount(() => resolveImport());
 </script>
-
-<style scoped>
-.duplicate-import-dialog {
-  position: fixed;
-  inset: auto 0 0;
-  margin: 0;
-  width: 100%;
-  max-width: none;
-  max-height: 78dvh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border: 0;
-  border-radius: 28px 28px 0 0;
-  padding: 0 0 env(safe-area-inset-bottom);
-}
-
-.duplicate-import-dialog::backdrop {
-  background: color-mix(in oklab, var(--md-shadow-color) 32%, transparent);
-}
-
-@media (min-width: 900px) {
-  .duplicate-import-dialog {
-    inset: 0;
-    margin: auto;
-    width: 372px;
-    border-radius: 28px;
-    padding: 0;
-  }
-}
-</style>

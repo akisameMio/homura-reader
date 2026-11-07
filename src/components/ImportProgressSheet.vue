@@ -1,0 +1,54 @@
+<template>
+  <dialog
+    ref="dialogRef"
+    class="md-bottom-sheet"
+    aria-labelledby="import-progress-title"
+    @cancel.prevent="closeSheet"
+    @click="onBackdropClick"
+  >
+    <ImportProgressPanel
+      ref="panelRef"
+      @retry="$emit('retry')"
+      @close="closeSheet"
+    />
+  </dialog>
+</template>
+
+<script setup>
+import { computed, nextTick, shallowRef, watch } from 'vue';
+import { useImportProgressStore } from '../stores/importProgress.js';
+import ImportProgressPanel from './ImportProgressPanel.vue';
+
+defineEmits(['retry']);
+
+const store = useImportProgressStore();
+const dialogRef = shallowRef(null);
+const panelRef = shallowRef(null);
+const open = computed(() => store.status !== 'idle' && store.expanded);
+
+watch(
+  open,
+  async visible => {
+    await nextTick();
+    if (visible) {
+      if (!dialogRef.value?.open) dialogRef.value?.showModal();
+      panelRef.value?.focusInitial();
+      return;
+    }
+    dialogRef.value?.close();
+  },
+  { immediate: true }
+);
+
+function closeSheet() {
+  if (store.status === 'running') {
+    store.toggleExpanded(false);
+    return;
+  }
+  store.dismiss();
+}
+
+function onBackdropClick(event) {
+  if (event.target === dialogRef.value) closeSheet();
+}
+</script>

@@ -1,48 +1,8 @@
 <template>
   <div
-    ref="rootRef"
     :class="compact ? 'relative flex items-center' : 'md-fab-pos flex flex-col items-end'"
   >
-    <div v-if="menuVisible" class="fixed inset-0 z-20" @click="$emit('update:open', false)"></div>
-    <Transition
-      enter-active-class="md-sheet-enter-active"
-      enter-from-class="translate-y-2 opacity-0"
-      enter-to-class="translate-y-0 opacity-100"
-      leave-active-class="md-sheet-leave-active"
-      leave-from-class="translate-y-0 opacity-100"
-      leave-to-class="translate-y-2 opacity-0"
-    >
-      <div
-        v-if="menuVisible"
-        class="absolute right-0 w-60 z-30 md-menu"
-        :class="compact ? 'top-full mt-2' : 'bottom-[calc(100%+12px)]'"
-        role="menu"
-        aria-label="导入与书库"
-      >
-        <p role="presentation" class="md-menu-label">导入作品</p>
-        <button type="button" role="menuitem" class="md-menu-item" @click="choose('pick-files')">
-          <MdIcon name="upload_file" />
-          <span class="flex-1">导入文件</span>
-        </button>
-        <button v-if="canPickFolder" type="button" role="menuitem" class="md-menu-item" @click="choose('pick-folder')">
-          <MdIcon name="folder_open" />
-          <span class="flex-1">导入文件夹</span>
-        </button>
-        <button type="button" role="menuitem" class="md-menu-item" @click="choose('create-collection')">
-          <MdIcon name="create_new_folder" />
-          <span class="flex-1">新建书库</span>
-        </button>
-      </div>
-    </Transition>
-
-    <Transition name="import-panel">
-      <div v-if="showPanel" class="import-panel-position">
-        <ImportProgressPanel @retry="$emit('retry-failed')" @close="closePanel" />
-      </div>
-    </Transition>
-
     <button
-      ref="buttonRef"
       type="button"
       class="import-fab relative z-10"
       :class="{
@@ -53,8 +13,8 @@
       }"
       :title="buttonTitle"
       :aria-label="buttonLabel"
-      :aria-haspopup="isIdle ? 'menu' : compact ? undefined : 'dialog'"
-      :aria-expanded="isIdle ? open : compact ? undefined : store.expanded"
+      :aria-haspopup="isIdle ? 'menu' : 'dialog'"
+      :aria-expanded="isIdle ? open : store.expanded"
       @click="onFabClick"
     >
       <span class="import-fab-layer" :class="{ 'is-hidden': !isIdle }" aria-hidden="true">
@@ -91,10 +51,8 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { canPickFolder } from '../services/platform.js';
+import { computed } from 'vue';
 import { useImportProgressStore } from '../stores/importProgress.js';
-import ImportProgressPanel from './ImportProgressPanel.vue';
 import MdIcon from './MdIcon.vue';
 
 const props = defineProps({
@@ -102,19 +60,11 @@ const props = defineProps({
   open: Boolean
 });
 const emit = defineEmits([
-  'update:open',
-  'create-collection',
-  'pick-files',
-  'pick-folder',
-  'retry-failed'
+  'update:open'
 ]);
 
 const store = useImportProgressStore();
-const rootRef = ref(null);
-const buttonRef = ref(null);
 const isIdle = computed(() => store.status === 'idle');
-const menuVisible = computed(() => props.open && isIdle.value);
-const showPanel = computed(() => !props.compact && !isIdle.value && store.expanded);
 const ringLength = 2 * Math.PI * 18;
 const ringOffset = computed(() => ringLength * (1 - store.percent / 100));
 const buttonTitle = computed(() => {
@@ -129,82 +79,13 @@ const buttonLabel = computed(() => {
   return `${buttonTitle.value}，${store.expanded ? '收起进度详情' : '展开进度详情'}`;
 });
 
-let dismissTimer = 0;
-
-function clearDismissTimer() {
-  if (!dismissTimer) return;
-  window.clearTimeout(dismissTimer);
-  dismissTimer = 0;
-}
-
 function onFabClick() {
   if (isIdle.value) {
     emit('update:open', !props.open);
     return;
   }
-  if (props.compact) {
-    const stopButton = document.querySelector('[data-import-status-bar] button');
-    stopButton?.focus();
-    return;
-  }
-  if (store.expanded) {
-    store.toggleExpanded(false);
-    buttonRef.value?.focus();
-    return;
-  }
   store.toggleExpanded(true);
-  nextTick(() => {
-    rootRef.value?.querySelector('.import-progress-panel')?.focus();
-  });
 }
-
-function choose(action) {
-  emit('update:open', false);
-  emit(action);
-}
-
-function closePanel() {
-  store.dismiss();
-  buttonRef.value?.focus();
-}
-
-function onDocumentPointerDown(event) {
-  if (props.compact || !showPanel.value || rootRef.value?.contains(event.target)) return;
-  store.toggleExpanded(false);
-}
-
-function onKeydown(event) {
-  if (event.key !== 'Escape' || props.compact) return;
-  if (showPanel.value) {
-    store.toggleExpanded(false);
-    buttonRef.value?.focus();
-  }
-}
-
-watch(
-  () => store.status,
-  status => {
-    if (status !== 'idle') emit('update:open', false);
-    clearDismissTimer();
-    if (props.compact || !store.isAutoDismissable) return;
-    dismissTimer = window.setTimeout(() => {
-      dismissTimer = 0;
-      if (document.activeElement?.closest?.('.import-progress-panel')) return;
-      store.dismiss();
-    }, 8000);
-  }
-);
-
-onMounted(() => {
-  document.addEventListener('pointerdown', onDocumentPointerDown);
-  window.addEventListener('keydown', onKeydown);
-});
-
-onBeforeUnmount(() => {
-  clearDismissTimer();
-  document.removeEventListener('pointerdown', onDocumentPointerDown);
-  window.removeEventListener('keydown', onKeydown);
-});
 </script>
 
 <style scoped>

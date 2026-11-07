@@ -1,160 +1,122 @@
 <template>
   <section
-    class="import-progress-panel bg-[var(--md-surface-container)] text-[var(--md-on-surface)]"
-    :class="{ 'is-embedded': embedded }"
-    role="dialog"
-    aria-label="导入进度"
-    aria-modal="false"
+    ref="panelRef"
+    class="import-progress-panel"
+    role="group"
+    aria-labelledby="import-progress-title"
     tabindex="-1"
   >
-    <div class="flex items-start gap-3">
-      <div class="min-w-0 flex-1">
-        <p class="text-[11px] font-semibold tracking-wide text-[var(--md-on-surface-variant)]">
-          {{ statusTitle }}
-        </p>
-        <h2 class="mt-1 text-[17px] font-semibold leading-snug">
-          {{ panelTitle }}
-        </h2>
+    <div class="md-sheet-grip" aria-hidden="true"></div>
+
+    <header>
+      <p class="md-surface-kicker">{{ statusTitle }}</p>
+      <h2 id="import-progress-title" class="md-surface-title">{{ panelTitle }}</h2>
+      <p class="md-surface-subtitle">{{ panelSubtitle }}</p>
+    </header>
+
+    <div class="import-overview">
+      <div class="import-count">
+        <b>{{ store.done }}<span> / {{ store.total }}</span></b>
+        <small>本作品已处理</small>
       </div>
-      <span
-        v-if="store.status === 'running'"
-        class="shrink-0 rounded-full bg-[var(--md-primary-container)] px-2.5 py-1 text-[11px] font-semibold text-[var(--md-on-primary-container)]"
-      >
-        {{ phaseLabel }}
-      </span>
-      <span
-        v-else-if="store.hasFailures"
-        class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--md-error-container)] text-[var(--md-on-error-container)]"
-        aria-hidden="true"
-      >
-        <MdIcon name="warning" class="h-4 w-4" />
-      </span>
-      <span
-        v-else-if="store.status === 'cancelled'"
-        class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--md-surface-high)] text-[var(--md-on-surface-variant)]"
-        aria-hidden="true"
-      >
-        <MdIcon name="close" class="h-4 w-4" />
-      </span>
-      <span
-        v-else
-        class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]"
-        aria-hidden="true"
-      >
-        <MdIcon name="check" class="h-4 w-4" />
-      </span>
+      <div class="import-percent">
+        <b>{{ store.percent }}%</b>
+        <span>{{ statusMeta }}</span>
+      </div>
     </div>
 
     <div
-      class="mt-5"
-      role="status"
-      aria-live="off"
-      :aria-label="`${store.done} / ${store.total}，${phaseLabel}`"
+      class="import-track"
+      role="progressbar"
+      aria-label="导入进度"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      :aria-valuenow="store.percent"
     >
-      <div class="flex items-end justify-between gap-4">
-        <div class="min-w-0">
-          <p class="font-mono text-[21px] font-semibold leading-none tracking-tight">
-            {{ store.done }} / {{ store.total }}
-          </p>
-          <p class="mt-2 font-mono text-[11px] text-[var(--md-on-surface-variant)]">
-            {{ bytesLabel }}
-            <template v-if="store.status === 'running' && store.etaLabel"> · 剩余 {{ store.etaLabel }}</template>
-          </p>
-        </div>
-        <p class="shrink-0 font-mono text-[17px] font-semibold text-[var(--md-primary)]">
-          {{ store.percent }}%
-        </p>
-      </div>
-
-      <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--md-surface-high)]" aria-hidden="true">
-        <div class="import-progress-fill h-full rounded-full bg-[var(--md-primary)]" :style="{ transform: `scaleX(${store.percent / 100})` }"></div>
-      </div>
-
-      <div class="mt-3 flex items-center gap-1.5 text-[11px] font-medium" aria-hidden="true">
-        <template v-for="(step, index) in steps" :key="step.key">
-          <span
-            class="inline-flex items-center gap-1.5 rounded-full px-2 py-1"
-            :class="stepState(step.key) === 'active'
-              ? 'bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]'
-              : stepState(step.key) === 'complete'
-                ? 'text-[var(--md-primary)]'
-                : 'text-[var(--md-on-surface-variant)]'"
-          >
-            <MdIcon
-              :name="stepState(step.key) === 'complete' ? 'check' : 'radio_button_unchecked'"
-              class="h-3 w-3"
-            />
-            {{ step.label }}
-          </span>
-          <span v-if="index < steps.length - 1" class="h-px w-3 bg-[var(--md-outline-variant)]"></span>
-        </template>
-      </div>
-
-      <div
-        v-if="store.status !== 'running'"
-        class="mt-3 flex items-center gap-4 rounded-[16px] bg-[var(--md-surface-high)] px-3 py-2 text-[11px] text-[var(--md-on-surface-variant)]"
-      >
-        <span>已添加 <strong class="font-mono text-[13px] text-[var(--md-on-surface)]">{{ store.saved }}</strong></span>
-        <span>跳过 <strong class="font-mono text-[13px] text-[var(--md-on-surface)]">{{ store.skipped }}</strong></span>
-        <span>失败 <strong class="font-mono text-[13px]" :class="store.failed ? 'text-[var(--md-error)]' : 'text-[var(--md-on-surface)]'">{{ store.failed }}</strong></span>
-      </div>
+      <i :style="{ transform: `scaleX(${store.percent / 100})` }"></i>
     </div>
 
-    <div class="mt-5 space-y-2 border-t border-[var(--md-outline-variant)] pt-4">
-      <p v-if="store.status === 'running'" class="flex min-w-0 items-center gap-2 text-[13px]">
-        <span class="shrink-0 text-[11px] font-semibold text-[var(--md-on-surface-variant)]">当前文件</span>
-        <span class="min-w-0 truncate font-medium">{{ store.currentName || '准备下一本…' }}</span>
-      </p>
-      <p class="flex min-w-0 items-center gap-2 text-[11px] text-[var(--md-on-surface-variant)]">
-        <MdIcon name="local_library" class="h-3.5 w-3.5 shrink-0" />
-        <span class="min-w-0 truncate">导入到：{{ store.targetLabel }}</span>
-      </p>
+    <div class="import-steps" aria-hidden="true">
+      <template v-for="(step, index) in steps" :key="step.key">
+        <span
+          class="import-step"
+          :class="{
+            'is-done': stepState(step.key) === 'complete',
+            'is-active': stepState(step.key) === 'active'
+          }"
+        >
+          <MdIcon
+            v-if="stepState(step.key) === 'complete'"
+            name="check"
+          />
+          {{ step.label }}
+        </span>
+        <span v-if="index < steps.length - 1" class="import-step-line"></span>
+      </template>
     </div>
 
-    <div
-      v-if="store.hasFailures"
-      class="mt-4 rounded-[16px] bg-[var(--md-error-container)] px-3 py-2.5 text-[var(--md-on-error-container)]"
-    >
-      <p class="text-[11px] font-semibold">未能导入</p>
-      <ul class="mt-2 space-y-1.5">
-        <li v-for="(failure, index) in visibleFailures" :key="`${failure.name}-${failure.reason}-${index}`" class="flex min-w-0 gap-2 text-[13px]">
-          <MdIcon name="error" class="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span class="min-w-0 leading-snug">
-            <span class="font-medium">{{ failure.name }}</span>
-            <span class="block truncate text-[11px] opacity-80">{{ failure.reason }}</span>
+    <div v-if="store.status === 'running'" class="import-current">
+      <MdIcon name="upload_file" />
+      <span>当前文件</span>
+      <b>{{ store.currentName || '准备下一本…' }}</b>
+    </div>
+
+    <div class="import-target">
+      <MdIcon name="folder" />
+      <span>导入到：{{ store.targetLabel }}</span>
+      <code>{{ bytesLabel }}</code>
+    </div>
+
+    <div v-if="store.hasFailures" class="import-failures">
+      <p><MdIcon name="warning" />未能导入</p>
+      <ul>
+        <li v-for="(failure, index) in visibleFailures" :key="`${failure.name}-${failure.reason}-${index}`">
+          <span>
+            <b>{{ failure.name }}</b>
+            <small>{{ failure.reason }}</small>
           </span>
         </li>
       </ul>
-      <p v-if="store.failures.length > visibleFailures.length" class="mt-2 pl-[22px] text-[11px] opacity-80">
+      <p v-if="store.failures.length > visibleFailures.length" class="import-failure-more">
         等 {{ store.failures.length }} 本
       </p>
     </div>
 
-    <div class="mt-5 flex items-center justify-end gap-2">
-      <button
-        v-if="store.status === 'running'"
-        type="button"
-        class="import-action-button import-action-button--stop"
-        :disabled="store.cancelRequested"
-        @click="store.requestCancel()"
-      >
-        {{ store.cancelRequested ? '正在停止…' : '停止导入' }}
-      </button>
+    <div class="md-surface-actionbar">
+      <template v-if="store.status === 'running'">
+        <button
+          ref="primaryActionRef"
+          type="button"
+          class="md-surface-action is-tonal"
+          :disabled="store.cancelRequested"
+          @click="store.requestCancel()"
+        >
+          <MdIcon name="close" />
+          {{ store.cancelRequested ? '正在停止' : '停止导入' }}
+        </button>
+      </template>
       <template v-else>
+        <div v-if="store.canRetry" class="md-surface-aux">
+          <button type="button" class="md-surface-text-button" @click="close">关闭</button>
+        </div>
         <button
           v-if="store.canRetry"
+          ref="primaryActionRef"
           type="button"
-          class="import-action-button import-action-button--primary"
+          class="md-surface-action is-primary"
           @click="$emit('retry')"
         >
           重试失败项
         </button>
         <button
+          v-else
+          ref="primaryActionRef"
           type="button"
-          class="import-action-button"
+          class="md-surface-action is-primary"
           @click="close"
         >
-          关闭
+          <MdIcon name="check" />
+          完成
         </button>
       </template>
     </div>
@@ -164,7 +126,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, shallowRef, watch } from 'vue';
 import {
   useImportProgressStore,
   importPhaseLabel,
@@ -172,12 +134,11 @@ import {
 } from '../stores/importProgress.js';
 import MdIcon from './MdIcon.vue';
 
-defineProps({
-  embedded: Boolean
-});
 const emit = defineEmits(['retry', 'close']);
 
 const store = useImportProgressStore();
+const panelRef = shallowRef(null);
+const primaryActionRef = shallowRef(null);
 const steps = [
   { key: 'read', label: '读取' },
   { key: 'parse', label: '解析' },
@@ -192,13 +153,24 @@ const bytesLabel = computed(() => (
 ));
 const statusTitle = computed(() => {
   if (store.status === 'running') return '导入进行中';
-  if (store.status === 'cancelled') return '已停止';
-  return store.hasFailures ? '导入结束，有项目未完成' : '全部完成';
+  if (store.status === 'cancelled') return '导入已停止';
+  return store.hasFailures ? '导入完成，有项目未完成' : '导入完成';
 });
 const panelTitle = computed(() => {
   if (store.status === 'running') return '正在整理你的书架';
   if (store.status === 'cancelled') return '导入已停止';
-  return store.hasFailures ? '部分内容未导入' : '导入完成';
+  return store.hasFailures ? '部分内容未导入' : '书架整理好了';
+});
+const panelSubtitle = computed(() => {
+  if (store.status === 'running') return `正在${phaseLabel.value} · ${bytesLabel.value}`;
+  if (store.status === 'cancelled') return `已添加 ${store.saved} 本，其余内容已停止处理。`;
+  if (store.hasFailures) return `已添加 ${store.saved} 本，失败 ${store.failed} 本。`;
+  return `已添加 ${store.saved} 本，跳过 ${store.skipped} 本。`;
+});
+const statusMeta = computed(() => {
+  if (store.status === 'running') return store.etaLabel ? `剩余 ${store.etaLabel}` : phaseLabel.value;
+  if (store.status === 'cancelled') return '已停止';
+  return store.hasFailures ? `失败 ${store.failed}` : '全部完成';
 });
 
 const liveMessage = ref('');
@@ -206,7 +178,9 @@ let lastLiveAt = 0;
 let lastLiveDone = 0;
 
 function stepState(key) {
-  if (store.status === 'done') return 'complete';
+  if (store.status === 'done' || store.status === 'cancelled') {
+    return store.phase === 'save' || store.status === 'done' ? 'complete' : 'pending';
+  }
   if (store.phase === 'save') {
     if (key === 'save') return 'active';
     return 'complete';
@@ -221,6 +195,12 @@ function stepState(key) {
 
 function close() {
   emit('close');
+}
+
+async function focusInitial() {
+  await nextTick();
+  primaryActionRef.value?.focus();
+  if (!primaryActionRef.value) panelRef.value?.focus({ preventScroll: true });
 }
 
 watch(
@@ -241,76 +221,271 @@ watch(
     }
   }
 );
+
+// 状态切换会替换主行动按钮；焦点原本在面板内时，顺手交给新的主行动。
+watch(
+  () => store.status,
+  async () => {
+    const panel = panelRef.value;
+    if (!panel?.contains(document.activeElement)) return;
+    await nextTick();
+    const active = document.activeElement;
+    if (!active || active === document.body || !panelRef.value?.contains(active)) {
+      primaryActionRef.value?.focus();
+    }
+  }
+);
+
+defineExpose({ focusInitial });
 </script>
 
 <style scoped>
 .import-progress-panel {
-  width: min(372px, calc(100vw - 32px));
-  max-height: calc(100dvh - 140px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  outline: none;
-  border-radius: 28px;
-  padding: 20px;
-  box-shadow:
-    0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color) 28%, transparent),
-    0 18px 48px -18px color-mix(in oklab, var(--md-shadow-color) 48%, transparent);
-}
-
-.import-progress-panel.is-embedded {
   width: 100%;
   max-height: min(680px, calc(100dvh - 112px));
-  border-radius: 0;
-  box-shadow: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 28px;
   padding: 20px;
+  outline: none;
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
 }
 
-.import-progress-fill {
+.import-overview {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.import-count b {
+  display: block;
+  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 32px;
+  font-weight: 720;
+  letter-spacing: -0.055em;
+  line-height: 1;
+}
+
+.import-count b span {
+  color: var(--md-on-surface-variant);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.import-count small {
+  display: block;
+  margin-top: 7px;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.import-percent {
+  text-align: right;
+}
+
+.import-percent b {
+  display: block;
+  color: var(--md-primary);
+  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 22px;
+  font-weight: 720;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.import-percent span {
+  display: block;
+  margin-top: 5px;
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+}
+
+.import-track {
+  height: 5px;
+  margin-top: 15px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--md-surface-high);
+}
+
+.import-track i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--md-primary);
   transform-origin: left center;
   transition: transform var(--md-duration-short) var(--md-ease-emphasized);
 }
 
-.import-action-button {
-  min-height: 40px;
-  padding: 0 16px;
-  border: 1px solid var(--md-outline-variant);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--md-primary);
-  font-size: 13px;
-  font-weight: 600;
-  transition:
-    background-color var(--md-duration-short) var(--md-ease-emphasized),
-    opacity var(--md-duration-short) var(--md-ease-emphasized);
+.import-steps {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 13px;
 }
 
-.import-action-button--primary {
+.import-step {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: var(--md-on-surface-variant);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.import-step :deep(svg) {
+  width: 12px;
+  height: 12px;
+}
+
+.import-step.is-done {
+  color: var(--md-primary);
+}
+
+.import-step.is-active {
   background: var(--md-primary-container);
   color: var(--md-on-primary-container);
-  border-color: transparent;
 }
 
-.import-action-button--stop {
-  color: var(--md-tertiary);
+.import-step-line {
+  width: 12px;
+  height: 0.5px;
+  flex: none;
+  background: color-mix(in oklab, var(--md-outline-variant) 82%, transparent);
 }
 
-.import-action-button:disabled {
-  cursor: wait;
-  opacity: 0.62;
+.import-current,
+.import-target {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  border-radius: 15px;
+  background: var(--md-surface-low);
+  box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--md-outline-variant) 78%, transparent);
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .import-action-button:not(:disabled):hover {
-    background: var(--md-surface-high);
-  }
-  .import-action-button--primary:not(:disabled):hover {
-    background: color-mix(in oklab, var(--md-primary-container) 90%, var(--md-on-primary-container));
+.import-current {
+  margin-top: 15px;
+  padding: 11px 12px;
+}
+
+.import-current :deep(svg),
+.import-target :deep(svg) {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  color: var(--md-primary);
+}
+
+.import-current span {
+  flex: none;
+  color: var(--md-on-surface-variant);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.import-current b {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-target {
+  margin-top: 11px;
+  padding: 9px 12px;
+  color: var(--md-on-surface-variant);
+  box-shadow: none;
+  background: transparent;
+  font-size: 11px;
+}
+
+.import-target span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-target code {
+  margin-left: auto;
+  flex: none;
+  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+}
+
+.import-failures {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+
+.import-failures > p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.import-failures ul {
+  display: grid;
+  gap: 7px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.import-failures li b,
+.import-failures li small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-failures li b {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.import-failures li small {
+  margin-top: 2px;
+  font-size: 10px;
+  opacity: 0.82;
+}
+
+.import-failure-more {
+  margin-top: 7px !important;
+  opacity: 0.8;
+}
+
+@media (max-width: 899px) {
+  .import-progress-panel {
+    max-height: calc(78dvh - env(safe-area-inset-bottom, 0px));
+    padding: 20px;
+    border-radius: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .import-progress-fill,
-  .import-action-button {
+  .import-track i {
     transition: none;
   }
 }

@@ -38,9 +38,6 @@
             <LibraryImportActions
               compact
               v-model:open="importMenuOpen"
-              @create-collection="createCollection"
-              @pick-files="pickFiles"
-              @pick-folder="pickFolder"
             />
           </template>
         </LibraryHeader>
@@ -75,6 +72,14 @@
   <input v-if="canPickFolder" ref="folderInput" type="file" webkitdirectory directory multiple class="hidden" @change="onFileChange" />
 
   <AppearanceSheet v-model:open="appearanceOpen" />
+  <ImportMenuSheet
+    v-if="isCompact"
+    v-model:open="importMenuOpen"
+    @create-collection="createCollection"
+    @pick-files="pickFiles"
+    @pick-folder="pickFolder"
+  />
+  <ImportProgressSheet v-if="isCompact" @retry="retryFailedImport" />
   <DragOverlay />
   <div v-if="reader.currentBook" class="reader-back-scrim md-scrim" aria-hidden="true"></div>
   <ReaderModal />
@@ -105,7 +110,7 @@
     @close="updates.closeChangelog"
     @retry="updates.loadChangelog(true)"
   />
-  <DuplicateImportDialog />
+  <DuplicateImportDialog v-if="isCompact" />
   <ShelfDialog v-if="isCompact" />
 
   <!-- Offscreen Measurer for Smart Novel Screen-Fit Pagination -->
@@ -141,6 +146,8 @@ import { useScrollBounce } from './composables/useScrollBounce.js';
 import SideNav from './components/SideNav.vue';
 import LibraryHeader from './components/LibraryHeader.vue';
 import LibraryImportActions from './components/LibraryImportActions.vue';
+import ImportMenuSheet from './components/ImportMenuSheet.vue';
+import ImportProgressSheet from './components/ImportProgressSheet.vue';
 import DesktopIsland from './components/DesktopIsland.vue';
 import ImportStatusBar from './components/ImportStatusBar.vue';
 import AppearanceSheet from './components/AppearanceSheet.vue';
@@ -203,11 +210,22 @@ const desktopIslandVisible = computed(() => (
     || updates.updateDialogOpen
     || updates.hasNewRelease
     || updates.hasPendingInstall
+    || !!pendingDuplicate.value
     || !!pendingShelfDialog.value
   )
 ));
 const overlayLocksBody = computed(() => (
-  updates.changelogOpen || (isCompact.value && updates.updateDialogOpen)
+  updates.changelogOpen
+  || (
+    isCompact.value
+    && (
+      updates.updateDialogOpen
+      || importMenuOpen.value
+      || (importProgress.status !== 'idle' && importProgress.expanded)
+      || !!pendingDuplicate.value
+      || !!pendingShelfDialog.value
+    )
+  )
 ));
 const FORMAT_FILTERS = ['epub', 'pdf', 'mobi', 'txt', 'markdown'];
 const SPLASH_MIN_DURATION = 720;
@@ -227,6 +245,14 @@ useAndroidBackExit(reader, () => {
   }
   if (importMenuOpen.value) {
     importMenuOpen.value = false;
+    return true;
+  }
+  if (isCompact.value && importProgress.status !== 'idle' && importProgress.expanded) {
+    importProgress.toggleExpanded(false);
+    return true;
+  }
+  if (isCompact.value && updates.updateDialogOpen) {
+    updates.closeUpdateDialog();
     return true;
   }
   if (appearanceOpen.value) {
@@ -254,6 +280,9 @@ watch(
 );
 
 watch(isCompact, () => { importMenuOpen.value = false; });
+watch(() => importProgress.status, status => {
+  if (status !== 'idle') importMenuOpen.value = false;
+});
 
 // 进入阅读器时收起外观浮层，避免它悬在阅读舞台之上
 watch(() => reader.currentBook, book => {

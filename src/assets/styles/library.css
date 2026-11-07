@@ -244,24 +244,138 @@
     .md-library-tonal-button { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
     .md-library-tonal-button:hover { background: color-mix(in oklab, var(--md-secondary-container) 92%, var(--md-on-secondary-container)); }
     .md-library-text-button:disabled, .md-library-tonal-button:disabled { opacity: 0.45; }
-    .md-library-dialog {
-      position: fixed;
-      inset: auto 0 0;
-      margin: 0;
-      width: 100%;
-      max-width: none;
-      max-height: 78dvh;
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      border: 0;
-      border-radius: 28px 28px 0 0;
-      padding: 0 0 env(safe-area-inset-bottom);
-      background: var(--md-surface-container);
-      color: var(--md-on-surface);
+
+    /* 灵动胶囊与手机 sheet 共用的内容语法：一个主行动胶囊固定在右下角。 */
+    .md-surface-kicker {
+      margin: 0 0 4px;
+      color: var(--md-primary);
+      font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      line-height: 1.4;
     }
-    .md-library-dialog::backdrop { background: color-mix(in oklab, var(--md-shadow-color) 32%, transparent); }
-    @media (min-width: 900px) {
-      .md-library-dialog { inset: 0; margin: auto; width: 372px; border-radius: 28px; padding: 0; }
+    .md-surface-title {
+      margin: 0;
+      color: var(--md-on-surface);
+      font-size: 22px;
+      font-weight: 680;
+      letter-spacing: -0.025em;
+      line-height: 1.24;
+    }
+    .md-surface-subtitle {
+      margin: 6px 0 0;
+      color: var(--md-on-surface-variant);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .md-surface-actionbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 0.5px solid color-mix(in oklab, var(--md-outline-variant) 82%, transparent);
+    }
+    .md-surface-actionbar > .md-surface-action {
+      margin-left: auto;
+    }
+    .md-surface-aux {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 4px;
+      margin-right: auto;
+    }
+    .md-surface-text-button {
+      display: inline-flex;
+      min-height: 48px;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 0 16px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--md-primary);
+      font-size: 13px;
+      font-weight: 650;
+      line-height: 1.2;
+      transition:
+        background-color var(--md-duration-short) var(--md-ease-emphasized),
+        color var(--md-duration-short) var(--md-ease-emphasized);
+    }
+    .md-surface-action {
+      display: inline-flex;
+      min-width: 104px;
+      height: 56px;
+      flex: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 20px;
+      border: 0;
+      border-radius: 28px;
+      font-size: 13px;
+      font-weight: 680;
+      line-height: 1.2;
+      white-space: nowrap;
+      box-shadow:
+        0 2px 4px -2px color-mix(in oklab, var(--md-shadow-color) 28%, transparent),
+        0 6px 16px -8px color-mix(in oklab, var(--md-shadow-color) 38%, transparent);
+      transition:
+        background-color var(--md-duration-short) var(--md-ease-emphasized),
+        color var(--md-duration-short) var(--md-ease-emphasized),
+        transform var(--md-duration-short) var(--md-ease-emphasized);
+    }
+    .md-surface-action > svg {
+      width: 19px;
+      height: 19px;
+      flex: none;
+    }
+    .md-surface-action.is-import {
+      background: var(--md-primary-container);
+      color: var(--md-on-primary-container);
+    }
+    .md-surface-action.is-primary {
+      background: var(--md-primary);
+      color: var(--md-on-primary);
+    }
+    .md-surface-action.is-tonal {
+      background: var(--md-secondary-container);
+      color: var(--md-on-secondary-container);
+    }
+    .md-surface-action.is-danger {
+      background: var(--md-error);
+      color: var(--md-on-error);
+    }
+    .md-surface-action:disabled,
+    .md-surface-text-button:disabled {
+      opacity: 0.38;
+      cursor: default;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .md-surface-text-button:hover:not(:disabled) {
+        background: color-mix(in oklab, var(--md-primary) 8%, transparent);
+      }
+      .md-surface-action:not(:disabled):hover {
+        transform: translateY(-1px);
+      }
+      .md-surface-action.is-primary:hover:not(:disabled) {
+        background: color-mix(in oklab, var(--md-primary) 92%, var(--md-on-primary));
+      }
+      .md-surface-action.is-tonal:hover:not(:disabled) {
+        background: color-mix(in oklab, var(--md-secondary-container) 92%, var(--md-on-secondary-container));
+      }
+      .md-surface-action.is-danger:hover:not(:disabled) {
+        background: color-mix(in oklab, var(--md-error) 92%, var(--md-on-error));
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .md-surface-text-button,
+      .md-surface-action {
+        transition: none;
+      }
     }
 
     /* 书库卡与书本卡同构：封面固定 3:4，底部信息栏共用相同的内边距与字号。 */

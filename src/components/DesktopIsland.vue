@@ -4,39 +4,84 @@
     class="desktop-island md-fab-pos"
     :class="{ 'is-replacing': replaceSurface }"
   >
-    <Transition name="island-surface" mode="out-in">
+    <Transition
+      name="island-surface"
+      mode="out-in"
+      @enter="syncSurfaceSeed"
+      @before-leave="onSurfaceBeforeLeave"
+      @after-leave="onSurfaceAfterLeave"
+      @leave-cancelled="onSurfaceLeaveCancelled"
+    >
       <div
         v-if="surfaceKey"
         :key="surfaceKey"
         ref="surfaceRef"
         class="desktop-island-surface"
         :class="surfaceClass"
-        :style="{ '--island-width': `${surfaceWidth}px` }"
-        :role="surface === 'shelf' ? (pendingShelfDialog?.kind === 'confirm' ? 'alertdialog' : 'dialog') : undefined"
-        :aria-modal="surface === 'shelf' ? 'true' : undefined"
-        :aria-labelledby="surface === 'shelf' ? 'shelf-dialog-title' : undefined"
+        :style="{
+          '--island-width': `${surfaceWidth}px`,
+          '--seed-x': seedScale.x,
+          '--seed-y': seedScale.y,
+          '--seed-radius': seedScale.radius
+        }"
+        :role="surface === 'shelf'
+          ? (pendingShelfDialog?.kind === 'confirm' ? 'alertdialog' : 'dialog')
+          : ['duplicate', 'import', 'update'].includes(surface) ? 'dialog' : undefined"
+        :aria-modal="surface === 'shelf' || surface === 'duplicate' ? 'true' : undefined"
+        :aria-labelledby="surface === 'shelf'
+          ? 'shelf-dialog-title'
+          : surface === 'duplicate'
+            ? 'duplicate-import-title'
+            : surface === 'import'
+              ? 'import-progress-title'
+              : surface === 'update' ? 'update-island-title' : undefined"
       >
         <div v-if="surface === 'menu'" class="island-menu" role="menu" aria-label="导入与书库">
-          <p role="presentation" class="island-menu-label">导入作品</p>
-          <button type="button" role="menuitem" class="island-menu-item" @click="choose('pick-files')">
-            <MdIcon name="upload_file" />
-            <span><b>导入文件</b><small>EPUB · PDF · MOBI · TXT</small></span>
-          </button>
-          <button v-if="canPickFolder" type="button" role="menuitem" class="island-menu-item" @click="choose('pick-folder')">
-            <MdIcon name="folder_open" />
-            <span><b>导入文件夹</b><small>图片目录会合并成一本漫画</small></span>
-          </button>
-          <button type="button" role="menuitem" class="island-menu-item" @click="choose('create-collection')">
-            <MdIcon name="create_new_folder" />
-            <span><b>新建书库</b><small>先建一个书库，再放入作品</small></span>
-          </button>
+          <header class="island-card-head">
+            <p class="md-surface-kicker">导入作品</p>
+            <h2 class="md-surface-title">添加内容</h2>
+          </header>
+          <div class="island-menu-list">
+            <button type="button" role="menuitem" class="island-menu-item is-selected" @click="choose('pick-files')">
+              <span class="island-menu-icon"><MdIcon name="upload_file" /></span>
+              <span class="island-menu-copy"><b>导入文件</b><small>EPUB / PDF / MOBI / TXT</small></span>
+              <span class="island-menu-check" aria-hidden="true"><MdIcon name="check" /></span>
+            </button>
+            <button v-if="canPickFolder" type="button" role="menuitem" class="island-menu-item" @click="choose('pick-folder')">
+              <span class="island-menu-icon"><MdIcon name="folder_open" /></span>
+              <span class="island-menu-copy"><b>导入文件夹</b><small>图片目录会合并成一本漫画</small></span>
+              <span class="island-menu-check is-empty" aria-hidden="true"></span>
+            </button>
+            <div class="island-menu-divider" aria-hidden="true"></div>
+            <button type="button" role="menuitem" class="island-menu-item" @click="choose('create-collection')">
+              <span class="island-menu-icon is-plain"><MdIcon name="create_new_folder" /></span>
+              <span class="island-menu-copy"><b>新建书库</b><small>先建一个书库，再放入作品</small></span>
+              <span class="island-menu-check is-empty" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="md-surface-actionbar">
+            <div class="md-surface-aux">
+              <button type="button" class="md-surface-text-button" @click="menuOpen = false">取消</button>
+            </div>
+            <button type="button" class="md-surface-action is-import" @click="choose('pick-files')">
+              <MdIcon name="upload_file" />
+              选择文件
+            </button>
+          </div>
         </div>
 
         <ImportProgressPanel
           v-else-if="surface === 'import'"
-          embedded
+          ref="importPanelRef"
           @retry="$emit('retry-failed')"
           @close="closeImport"
+        />
+
+        <DuplicateImportContent
+          v-else-if="surface === 'duplicate'"
+          ref="duplicateContentRef"
+          :pending="pendingDuplicate"
+          @resolve="resolveImport"
         />
 
         <ShelfDialogContent
@@ -95,7 +140,8 @@
           'is-ring': importProgress.status !== 'idle',
           'is-failed': importProgress.status !== 'idle' && importProgress.hasFailures,
           'is-open': surface === 'menu' || surface === 'import',
-          'is-collapsed': triggerCollapsed
+          'is-collapsed': triggerCollapsed,
+          'is-handoff': triggerHandoff
         }"
         :title="importButtonTitle"
         :aria-label="importButtonLabel"
@@ -148,6 +194,8 @@ import { canPickFolder } from '../services/platform.js';
 import { useImportProgressStore } from '../stores/importProgress.js';
 import { useUpdateStore } from '../stores/updates.js';
 import { useShelfDialogs } from '../composables/useShelfDialogs.js';
+import { useDuplicateImport } from '../composables/useDuplicateImport.js';
+import DuplicateImportContent from './DuplicateImportContent.vue';
 import ShelfDialogContent from './ShelfDialogContent.vue';
 import ImportProgressPanel from './ImportProgressPanel.vue';
 import UpdateIslandPanel from './UpdateIslandPanel.vue';
@@ -161,9 +209,12 @@ const emit = defineEmits(['create-collection', 'pick-files', 'pick-folder', 'ret
 const importProgress = useImportProgressStore();
 const updates = useUpdateStore();
 const { pendingShelfDialog, resolveShelfDialog } = useShelfDialogs();
+const { pendingDuplicate, resolveImport } = useDuplicateImport();
 
 const rootRef = shallowRef(null);
 const surfaceRef = shallowRef(null);
+const importPanelRef = shallowRef(null);
+const duplicateContentRef = shallowRef(null);
 const shelfContentRef = shallowRef(null);
 const updatePanelRef = shallowRef(null);
 const importButtonRef = shallowRef(null);
@@ -172,8 +223,14 @@ const updateButtonRef = shallowRef(null);
 const menuOpen = ref(false);
 const lastTrigger = shallowRef(null);
 const restoreFocusTarget = shallowRef(null);
+const actionGhost = shallowRef(null);
+const hiddenAction = shallowRef(null);
+const triggerHandoff = ref(false);
+const triggerMorphing = ref(false);
+const surfaceLeaving = ref(false);
 const returnFocus = ref('import');
 let autoDismissTimer = 0;
+let actionGhostCleanupTimer = 0;
 
 const updatePending = computed(() => (
   updates.hasNewRelease
@@ -184,6 +241,7 @@ const importSurfaceOpen = computed(() => (
   importProgress.status !== 'idle' && importProgress.expanded
 ));
 const surface = computed(() => {
+  if (pendingDuplicate.value) return 'duplicate';
   if (pendingShelfDialog.value) return 'shelf';
   if (menuOpen.value && importProgress.status === 'idle') return 'menu';
   if (importSurfaceOpen.value) return 'import';
@@ -191,25 +249,41 @@ const surface = computed(() => {
   return null;
 });
 const surfaceKey = computed(() => {
+  if (surface.value === 'duplicate') return 'duplicate';
   if (surface.value === 'shelf') return `shelf-${pendingShelfDialog.value?.kind || 'dialog'}`;
   if (surface.value === 'update') return `update-${updates.updateStatus}`;
   return surface.value;
 });
 const surfaceWidth = computed(() => {
-  if (surface.value === 'menu') return 292;
-  if (surface.value === 'import') return 372;
+  if (surface.value === 'menu') return 348;
+  if (surface.value === 'import') return 432;
+  if (surface.value === 'duplicate') return 432;
   if (surface.value === 'shelf') {
-    return pendingShelfDialog.value?.kind === 'confirm' ? 372 : 390;
+    return 432;
   }
-  if (surface.value === 'update') return 430;
+  if (surface.value === 'update') return 448;
   return 0;
 });
 const surfaceClass = computed(() => ({
+  'is-menu': surface.value === 'menu',
+  'is-import': surface.value === 'import',
+  'is-duplicate': surface.value === 'duplicate',
   'is-shelf': surface.value === 'shelf',
   'is-update': surface.value === 'update'
 }));
-const replaceSurface = computed(() => !!surface.value && surface.value !== 'update');
-const triggerCollapsed = computed(() => replaceSurface.value);
+const seedScale = computed(() => {
+  const triggerWidth = importProgress.status === 'idle' ? 104 : 56;
+  const width = surfaceWidth.value || triggerWidth;
+  return {
+    x: (triggerWidth / width).toFixed(4),
+    y: '0.14',
+    radius: importProgress.status === 'idle' ? '28px' : '999px'
+  };
+});
+const replaceSurface = computed(() => !!surface.value);
+const triggerCollapsed = computed(() => (
+  replaceSurface.value || triggerMorphing.value || surfaceLeaving.value
+));
 const showUpdateOrb = computed(() => (
   updatePending.value
   && !surface.value
@@ -263,6 +337,178 @@ function closeImport() {
   nextTick(() => importButtonRef.value?.focus());
 }
 
+function naturalTriggerRect() {
+  const trigger = importButtonRef.value;
+  if (!trigger) return null;
+  const previousTransform = trigger.style.transform;
+  const previousTransition = trigger.style.transition;
+  trigger.style.transition = 'none';
+  trigger.style.transform = 'none';
+  const rect = trigger.getBoundingClientRect();
+  trigger.style.transform = previousTransform;
+  trigger.style.transition = previousTransition;
+  return rect;
+}
+
+function clearActionGhost() {
+  window.clearTimeout(actionGhostCleanupTimer);
+  actionGhostCleanupTimer = 0;
+  actionGhost.value?.remove();
+  actionGhost.value = null;
+  if (hiddenAction.value?.isConnected) hiddenAction.value.style.visibility = '';
+  hiddenAction.value = null;
+}
+
+function onSurfaceLeaveCancelled() {
+  clearActionGhost();
+  triggerMorphing.value = false;
+  surfaceLeaving.value = false;
+}
+
+function onSurfaceBeforeLeave(element) {
+  syncSurfaceSeed(element);
+  clearActionGhost();
+  if (surface.value || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  startActionHandoff(element);
+}
+
+function onSurfaceAfterLeave() {
+  surfaceLeaving.value = false;
+  hiddenAction.value = null;
+  if (!surfaceKey.value) focusSurface(null);
+  if (!actionGhost.value) {
+    triggerMorphing.value = false;
+    return;
+  }
+  triggerHandoff.value = true;
+  triggerMorphing.value = false;
+  const ghost = actionGhost.value;
+  actionGhost.value = null;
+  requestAnimationFrame(() => {
+    ghost.remove();
+    actionGhostCleanupTimer = window.setTimeout(() => {
+      triggerHandoff.value = false;
+      actionGhostCleanupTimer = 0;
+    }, 80);
+  });
+}
+
+function startActionHandoff(element) {
+  const action = element?.querySelector('.md-surface-action');
+  const trigger = importButtonRef.value;
+  if (!action || !trigger || !rootRef.value) return;
+  const actionRect = action.getBoundingClientRect();
+  const triggerRect = naturalTriggerRect();
+  if (!triggerRect || !actionRect.width || !actionRect.height) return;
+
+  const scaleX = triggerRect.width / actionRect.width;
+  const scaleY = triggerRect.height / actionRect.height;
+  const shiftX = triggerRect.right - actionRect.right;
+  const shiftY = triggerRect.bottom - actionRect.bottom;
+  const actionStyle = getComputedStyle(action);
+  const triggerStyle = getComputedStyle(trigger);
+  const ghost = action.cloneNode(true);
+  ghost.classList.add('island-action-handoff');
+  ghost.removeAttribute('id');
+  ghost.setAttribute('aria-hidden', 'true');
+  ghost.tabIndex = -1;
+  Object.assign(ghost.style, {
+    position: 'fixed',
+    left: `${actionRect.left}px`,
+    top: `${actionRect.top}px`,
+    width: `${actionRect.width}px`,
+    height: `${actionRect.height}px`,
+    margin: '0',
+    padding: actionStyle.padding,
+    gap: actionStyle.gap,
+    zIndex: '2',
+    pointerEvents: 'none',
+    transformOrigin: '100% 100%'
+  });
+
+  const original = document.createElement('span');
+  original.style.cssText = [
+    'display:flex',
+    'align-items:center',
+    'justify-content:center',
+    `gap:${actionStyle.gap}`,
+    'white-space:nowrap'
+  ].join(';');
+  while (ghost.firstChild) original.appendChild(ghost.firstChild);
+  ghost.appendChild(original);
+
+  const triggerLayer = trigger.querySelector('.island-import-layer:not(.is-hidden)');
+  const face = triggerLayer
+    ? triggerLayer.cloneNode(true)
+    : document.createElement('span');
+  face.classList.add('island-action-handoff-face');
+  face.style.transformOrigin = 'center';
+  face.style.transform = `scale(${1 / scaleX}, ${1 / scaleY})`;
+  ghost.appendChild(face);
+
+  rootRef.value.appendChild(ghost);
+  action.style.visibility = 'hidden';
+  hiddenAction.value = action;
+  actionGhost.value = ghost;
+  triggerMorphing.value = true;
+
+  const timing = {
+    duration: 280,
+    delay: 80,
+    easing: 'cubic-bezier(0.2, 0, 0, 1)',
+    fill: 'both'
+  };
+  ghost.animate([
+    {
+      transform: 'translate(0px, 0px) scale(1, 1)',
+      backgroundColor: actionStyle.backgroundColor,
+      color: actionStyle.color,
+      borderRadius: actionStyle.borderRadius,
+      boxShadow: actionStyle.boxShadow
+    },
+    {
+      transform: `translate(${shiftX}px, ${shiftY}px) scale(${scaleX}, ${scaleY})`,
+      backgroundColor: triggerStyle.backgroundColor,
+      color: triggerStyle.color,
+      borderRadius: triggerStyle.borderRadius,
+      boxShadow: triggerStyle.boxShadow
+    }
+  ], timing);
+  original.animate([
+    { opacity: 1, offset: 0 },
+    { opacity: 1, offset: 0.46 },
+    { opacity: 0, offset: 0.62 },
+    { opacity: 0, offset: 1 }
+  ], { ...timing, easing: 'linear' });
+  face.animate([
+    { opacity: 0, offset: 0 },
+    { opacity: 0, offset: 0.54 },
+    { opacity: 1, offset: 0.72 },
+    { opacity: 1, offset: 1 }
+  ], { ...timing, easing: 'linear' });
+}
+
+function syncSurfaceSeed(element) {
+  if (!element?.isConnected) return;
+  const width = element.offsetWidth;
+  const height = element.offsetHeight;
+  if (!width || !height) return;
+  const triggerWidth = importProgress.status === 'idle' ? 104 : 56;
+  element.style.setProperty('--seed-x', (triggerWidth / width).toFixed(4));
+  element.style.setProperty('--seed-y', (56 / height).toFixed(4));
+}
+
+function focusImportWhenReady(remaining = 5) {
+  const trigger = importButtonRef.value;
+  if (!trigger?.isConnected) return;
+  if (!trigger.inert) {
+    trigger.focus();
+    return;
+  }
+  if (remaining <= 0 || surfaceKey.value) return;
+  requestAnimationFrame(() => focusImportWhenReady(remaining - 1));
+}
+
 async function focusSurface(key) {
   if (!key) {
     await nextTick();
@@ -281,19 +527,23 @@ async function focusSurface(key) {
     } else if (returnFocus.value === 'update' && updateButtonRef.value?.isConnected) {
       updateButtonRef.value.focus();
     } else if (importButtonRef.value?.isConnected) {
-      importButtonRef.value.focus();
+      focusImportWhenReady();
     } else if (lastTrigger.value?.isConnected) {
       lastTrigger.value.focus();
     } else if (updatePending.value) {
       updateButtonRef.value?.focus();
     } else {
-      importButtonRef.value?.focus();
+      focusImportWhenReady();
     }
     restoreFocusTarget.value = null;
     return;
   }
 
   await nextTick();
+  if (surface.value === 'duplicate') {
+    duplicateContentRef.value?.focusInitial();
+    return;
+  }
   if (surface.value === 'shelf') {
     shelfContentRef.value?.focusInitial();
     return;
@@ -309,7 +559,7 @@ async function focusSurface(key) {
     return;
   }
   if (surface.value === 'import') {
-    surfaceRef.value?.querySelector('.import-progress-panel')?.focus();
+    importPanelRef.value?.focusInitial();
     return;
   }
   if (surface.value === 'menu') {
@@ -326,6 +576,11 @@ function focusableElements() {
 
 function onKeydown(event) {
   if (event.key === 'Escape') {
+    if (pendingDuplicate.value) {
+      event.preventDefault();
+      resolveImport();
+      return;
+    }
     if (pendingShelfDialog.value) {
       event.preventDefault();
       resolveShelfDialog();
@@ -366,6 +621,10 @@ function onKeydown(event) {
 
 function onDocumentPointerDown(event) {
   if (rootRef.value?.contains(event.target)) return;
+  if (pendingDuplicate.value) {
+    resolveImport();
+    return;
+  }
   if (pendingShelfDialog.value) return;
   if (menuOpen.value) {
     menuOpen.value = false;
@@ -379,6 +638,22 @@ function onDocumentPointerDown(event) {
     updates.closeUpdateDialog();
   }
 }
+
+watch(
+  () => pendingDuplicate.value,
+  (pending, previous) => {
+    if (pending && !previous) {
+      const active = document.activeElement;
+      restoreFocusTarget.value = active && active !== document.body ? active : null;
+    }
+    if (pending && surface.value === 'duplicate') {
+      nextTick(() => {
+        if (pending === pendingDuplicate.value) duplicateContentRef.value?.focusInitial();
+      });
+    }
+  },
+  { immediate: true }
+);
 
 watch(
   () => pendingShelfDialog.value,
@@ -416,7 +691,7 @@ watch(
     if (status !== 'idle') menuOpen.value = false;
     window.clearTimeout(autoDismissTimer);
     autoDismissTimer = 0;
-    if (!importProgress.isAutoDismissable) return;
+    if (!importProgress.isAutoDismissable || importProgress.expanded) return;
     autoDismissTimer = window.setTimeout(() => {
       autoDismissTimer = 0;
       if (document.activeElement?.closest?.('.desktop-island-surface')) return;
@@ -440,6 +715,10 @@ watch(
   }
 );
 
+watch(surfaceKey, key => {
+  surfaceLeaving.value = !key;
+}, { flush: 'sync' });
+
 onMounted(() => {
   document.addEventListener('pointerdown', onDocumentPointerDown);
   window.addEventListener('keydown', onKeydown);
@@ -447,6 +726,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.clearTimeout(autoDismissTimer);
+  clearActionGhost();
   document.removeEventListener('pointerdown', onDocumentPointerDown);
   window.removeEventListener('keydown', onKeydown);
 });
@@ -456,17 +736,13 @@ onBeforeUnmount(() => {
 .desktop-island {
   display: flex;
   align-items: flex-end;
-  gap: 14px;
   min-height: 56px;
   transform-origin: 100% 100%;
-  transition: gap var(--md-duration-medium) var(--md-ease-emphasized);
-}
-
-.desktop-island.is-replacing {
-  gap: 0;
 }
 
 .island-trigger-row {
+  position: relative;
+  z-index: 0;
   display: flex;
   flex: none;
   align-items: center;
@@ -536,6 +812,10 @@ onBeforeUnmount(() => {
   transform-origin: 100% 50%;
 }
 
+.island-import-trigger:not(.is-collapsed) {
+  transition-delay: 0s, 0s, 0s, 250ms, 0s, 0s;
+}
+
 .island-import-trigger.is-ring {
   width: 56px;
   border-radius: 50%;
@@ -551,11 +831,16 @@ onBeforeUnmount(() => {
 }
 
 .island-import-trigger.is-collapsed {
-  width: 0;
-  border-radius: 0;
   opacity: 0;
-  transform: scale(0.82);
+  transform: scale(0.9);
+  transition-delay: 0s;
   pointer-events: none;
+}
+
+.island-import-trigger.is-handoff {
+  opacity: 1;
+  transform: none;
+  transition: none;
 }
 
 .island-import-layer {
@@ -638,9 +923,14 @@ onBeforeUnmount(() => {
 }
 
 .desktop-island-surface {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
   width: var(--island-width);
   max-height: calc(100dvh - 112px);
   overflow: hidden;
+  clip-path: inset(-80px -80px -80px -80px round 28px);
   border-radius: 28px;
   background: var(--md-surface-container);
   color: var(--md-on-surface);
@@ -661,77 +951,213 @@ onBeforeUnmount(() => {
   overscroll-behavior: contain;
 }
 
-.desktop-island-surface :deep(.shelf-dialog-content) {
-  padding: 20px;
+.desktop-island-surface.is-duplicate {
+  overflow: hidden;
+}
+
+.desktop-island-surface :deep(.md-surface-action) {
+  gap: 7px;
+  padding: 0 13px;
+  border-radius: 28px;
+  font-weight: 650;
+  box-shadow: none;
+  transition:
+    background-color var(--md-duration-short) var(--md-ease-emphasized),
+    color var(--md-duration-short) var(--md-ease-emphasized),
+    transform var(--md-duration-short) var(--md-ease-emphasized),
+    box-shadow var(--md-duration-short) var(--md-ease-emphasized);
+}
+
+.desktop-island-surface :deep(.md-surface-action > svg) {
+  width: 20px;
+  height: 20px;
+}
+
+.desktop-island-surface :deep(.md-surface-action.is-primary) {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+
+.desktop-island-surface :deep(.md-surface-action.is-danger) {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .desktop-island-surface :deep(.md-surface-action.is-primary:hover:not(:disabled)) {
+    background: color-mix(in oklab, var(--md-primary-container) 92%, var(--md-on-primary-container));
+  }
+
+  .desktop-island-surface :deep(.md-surface-action.is-danger:hover:not(:disabled)) {
+    background: color-mix(in oklab, var(--md-error-container) 92%, var(--md-on-error-container));
+  }
 }
 
 .island-menu {
-  padding: 10px;
+  display: flex;
+  min-height: 372px;
+  flex-direction: column;
+  padding: 20px 20px 92px;
 }
 
-.island-menu-label {
-  margin: 4px 10px 8px;
-  color: var(--md-on-surface-variant);
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
+.island-card-head {
+  flex: none;
+}
+
+.island-menu-list {
+  display: grid;
+  gap: 4px;
+  margin-top: 18px;
 }
 
 .island-menu-item {
   display: flex;
   width: 100%;
-  min-height: 56px;
+  min-height: 68px;
   align-items: center;
-  gap: 11px;
-  padding: 7px 9px;
+  gap: 12px;
+  padding: 8px 8px 8px 10px;
   border-radius: 18px;
   color: var(--md-on-surface);
   text-align: left;
+  transition:
+    background-color var(--md-duration-short) var(--md-ease-emphasized),
+    transform var(--md-duration-short) var(--md-ease-emphasized);
 }
 
-.island-menu-item :deep(svg) {
-  width: 20px;
-  height: 20px;
+.island-menu-item.is-selected {
+  background: color-mix(in oklab, var(--md-primary-container) 48%, var(--md-surface-low));
+}
+
+.island-menu-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
   flex: none;
-  color: var(--md-primary);
+  place-items: center;
+  border-radius: 14px;
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
 }
 
-.island-menu-item > span {
+.island-menu-icon.is-plain {
+  background: var(--md-surface-high);
+  color: var(--md-on-surface);
+}
+
+.island-menu-icon :deep(svg) {
+  width: 21px;
+  height: 21px;
+}
+
+.island-menu-copy {
   display: flex;
   min-width: 0;
+  flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
-.island-menu-item b {
+.island-menu-copy b {
+  overflow: hidden;
   font-size: 13px;
   font-weight: 650;
-}
-
-.island-menu-item small {
-  overflow: hidden;
-  color: var(--md-on-surface-variant);
-  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.island-menu-copy small {
+  overflow: hidden;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.island-menu-check {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+
+.island-menu-check.is-empty {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--md-outline) 48%, transparent);
+}
+
+.island-menu-check :deep(svg) {
+  width: 14px;
+  height: 14px;
+}
+
+.island-menu-divider {
+  height: 0.5px;
+  margin: 7px 12px;
+  background: color-mix(in oklab, var(--md-outline-variant) 75%, transparent);
+}
+
+.island-menu > .md-surface-actionbar {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  left: 20px;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.island-menu > .md-surface-actionbar .md-surface-action {
+  margin-left: auto;
+}
+
 .island-surface-enter-active {
   transition:
-    opacity var(--md-duration-short) var(--md-ease-emphasized) 60ms,
-    transform var(--md-duration-medium) var(--md-ease-emphasized) 40ms;
+    transform 320ms var(--md-ease-emphasized),
+    border-radius 320ms var(--md-ease-emphasized),
+    opacity 160ms linear;
+  will-change: transform, opacity;
+}
+
+.island-surface-enter-active > * {
+  animation: island-content-in 180ms var(--md-ease-emphasized) 80ms both;
 }
 
 .island-surface-leave-active {
   transition:
-    opacity 120ms var(--md-ease-accelerate),
-    transform 160ms var(--md-ease-accelerate);
+    clip-path 280ms var(--md-ease-emphasized) 80ms,
+    transform 160ms var(--md-ease-emphasized),
+    border-radius 280ms var(--md-ease-emphasized) 80ms,
+    opacity 100ms linear 260ms;
+  pointer-events: none;
+  will-change: clip-path, opacity;
 }
 
-.island-surface-enter-from,
-.island-surface-leave-to {
+.island-surface-leave-active > * {
   opacity: 0;
-  transform: translate3d(8px, 16px, 0) scale(0.3);
+  transition: opacity 140ms linear 160ms;
+}
+
+.island-surface-enter-from {
+  border-radius: var(--seed-radius, 28px);
+  opacity: 0.72;
+  transform: scale(var(--seed-x, 0.24), var(--seed-y, 0.14));
+}
+
+.island-surface-leave-to {
+  border-radius: var(--seed-radius, 28px);
+  clip-path: inset(
+    calc(100% - 56px)
+    0
+    0
+    calc(100% - 104px)
+    round var(--seed-radius, 28px)
+  );
+  opacity: 0.62;
 }
 
 .island-orb-enter-active,
@@ -776,6 +1202,17 @@ onBeforeUnmount(() => {
   to { transform: rotate(360deg); }
 }
 
+@keyframes island-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .desktop-island,
   .island-update-orb,
@@ -784,9 +1221,12 @@ onBeforeUnmount(() => {
   .island-ring-value,
   .island-surface-enter-active,
   .island-surface-leave-active,
+  .island-surface-enter-active > *,
+  .island-surface-leave-active > *,
   .island-orb-enter-active,
   .island-orb-leave-active {
     transition: none;
+    animation: none;
   }
 
   .island-update-orb.is-checking :deep(svg) {

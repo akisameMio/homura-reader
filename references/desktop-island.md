@@ -12,9 +12,12 @@
 相关文件：
 
 - [DesktopIsland.vue](../src/components/DesktopIsland.vue)：唯一锚点、surface 路由、分裂 / 合并、焦点管理。
-- [ImportProgressPanel.vue](../src/components/ImportProgressPanel.vue)：导入进度内容，桌面用 embedded 模式嵌入 island。
+- [ImportProgressPanel.vue](../src/components/ImportProgressPanel.vue)：导入进度内容，桌面与手机共用。
+- [DuplicateImportContent.vue](../src/components/DuplicateImportContent.vue)：同名导入确认，桌面与手机共用内容。
 - [ShelfDialogContent.vue](../src/components/ShelfDialogContent.vue)：删除 / 建库 / 命名 / 移动书库的内容层。
 - [UpdateIslandPanel.vue](../src/components/UpdateIslandPanel.vue)：检查更新、下载、完成、失败等更新状态。
+- [ImportMenuSheet.vue](../src/components/ImportMenuSheet.vue)：手机导入菜单 bottom sheet。
+- [ImportProgressSheet.vue](../src/components/ImportProgressSheet.vue)：手机导入进行中 / 完成 bottom sheet。
 - [useShelfDialogs.js](../src/composables/useShelfDialogs.js)：书库确认的 Promise 队列。
 - [importProgress.js](../src/stores/importProgress.js)：导入任务、取消、失败重试、自动收起。
 - [updates.js](../src/stores/updates.js)：更新版本、下载、安装与更新面板开关。
@@ -29,7 +32,7 @@
 3. **可分裂**：存在待处理更新时，可以分成“更新圆钮 + 导入胶囊”两个并列控件。
 4. **可合并**：更新处理完或不再需要提示时，更新圆钮收拢、淡出，回到单颗导入胶囊。
 5. **业务不分叉**：桌面只替换外壳；导入、更新、书库确认仍调用原 store / composable。
-6. **手机不动**：`< 900px` 继续使用原有顶部导入按钮、状态条、bottom sheet 和居中确认框。
+6. **手机同源**：`< 900px` 使用顶部导入按钮、状态条和 bottom sheet；菜单、导入进度、同名确认、书库确认与更新共享同一套内容组件。
 
 不要把它做成“居中的多个 dialog 换个位置”。如果新增状态需要多个互相竞争的浮层，先回到这张状态机重新排序。
 
@@ -39,6 +42,8 @@
 
 ```html
 <LibraryImportActions v-if="isCompact" compact ... />
+<ImportMenuSheet v-if="isCompact" ... />
+<ImportProgressSheet v-if="isCompact" ... />
 
 <DesktopIsland
   v-if="desktopIslandVisible"
@@ -47,14 +52,15 @@
 />
 
 <UpdateDialog v-if="isCompact" ... />
+<DuplicateImportDialog v-if="isCompact" />
 <ShelfDialog v-if="isCompact" />
 ```
 
 规则：
 
-- `isCompact === true`：手机 / 窄屏仍走旧路径。
-- `isCompact === false`：桌面走 `DesktopIsland`；桌面不再挂载 `UpdateDialog` 与 `ShelfDialog`。
-- 桌面 island 也不在设置页无条件出现，只有导入运行、更新待处理或更新面板打开时才保留入口。
+- `isCompact === true`：手机 / 窄屏使用顶部导入按钮与 bottom sheet；同名确认、书库确认与更新的内容层与桌面共用。
+- `isCompact === false`：桌面走 `DesktopIsland`；桌面不挂载手机 sheet 外壳。
+- 桌面 island 不在设置页无条件出现，只有导入运行、更新待处理、更新面板打开或待处理确认时才保留入口。
 
 当前 `desktopIslandVisible` 条件：
 
@@ -66,6 +72,7 @@
   || updates.updateDialogOpen
   || updates.hasNewRelease
   || updates.hasPendingInstall
+  || !!pendingDuplicate.value
   || !!pendingShelfDialog.value
 )
 ```
@@ -109,11 +116,11 @@ z-index: 40;
 
 | surface | 宽度 | 内容 |
 | --- | --- | --- |
-| 导入菜单 | `292px` | 文件 / 文件夹 / 新建书库 |
-| 导入进度 | `372px` | `ImportProgressPanel embedded` |
-| 删除 / 取消收藏确认 | `372px` | `ShelfDialogContent` |
-| 文件夹建库 / 命名 / 移动 | `390px` | `ShelfDialogContent` |
-| 更新 | `430px` | `UpdateIslandPanel` |
+| 导入菜单 | `348px` | 文件 / 文件夹 / 新建书库 |
+| 导入进度 | `432px` | `ImportProgressPanel` |
+| 同名确认 | `432px` | `DuplicateImportContent` |
+| 删除 / 建库 / 命名 / 移动 | `432px` | `ShelfDialogContent` |
+| 更新 | `448px` | `UpdateIslandPanel` |
 
 统一规则：
 
@@ -126,12 +133,30 @@ z-index: 40;
   - 更新 surface：`min(680px, calc(100dvh - 112px))`
 - 更新 surface 自己滚动，`overscroll-behavior: contain`
 - 书库 surface 在移动目标很多时自己滚动，不能裁掉后段选项
+- 内容层右下角只放一个主行动胶囊；它承担导入按钮的视觉落点，其他操作使用 text button
+- 主行动胶囊与导入胶囊同族：高度 `56px`、圆角 `28px`、
+  `primary-container / on-primary-container`、图标 `20px`；默认 `gap: 7px`、
+  水平 padding `13px`，四字文案约 `106 × 56px`，与 `104 × 56px` 的导入胶囊几乎同宽
+- 卡片内主行动胶囊不投影，保持平面；只有触发行里的导入胶囊保留悬浮阴影，
+  按钮交接时由克隆层在移动过程中补回
+- island surface 内的 `is-primary` 统一映射为 `primary-container`，`is-danger`
+  使用 `error-container`；不要在卡片里再放实心 `primary` 大按钮
+- 桌面 surface 不显示右上角关闭图标；点外部、`Escape` 或底部取消 / 关闭动作退出
 
 surface 宽度由 `surfaceWidth` 决定，并写入 CSS 变量：
 
 ```html
-:style="{ '--island-width': `${surfaceWidth}px` }"
+:style="{
+  '--island-width': `${surfaceWidth}px`,
+  '--seed-x': seedScale.x,
+  '--seed-y': seedScale.y,
+  '--seed-radius': seedScale.radius
+}"
 ```
+
+`DesktopIsland` 根节点保持右侧按钮的自然占位，surface 使用
+`position: absolute; right: 0; bottom: 0`，缩放原点固定为 `100% 100%`。
+这样按钮宽度变化、更新圆钮进出和 flex 重排都不会推动 surface。
 
 新增 surface 时先在这里补宽度，不要给内容组件单独写一个会破坏锚点的 `position: fixed`。
 
@@ -139,19 +164,21 @@ surface 宽度由 `surfaceWidth` 决定，并写入 CSS 变量：
 
 ### 4.1 输入状态
 
-`DesktopIsland` 只看四组输入：
+`DesktopIsland` 只看五组输入：
 
-1. `pendingShelfDialog`：来自 `useShelfDialogs()`，代表删除、建库、命名或移动。
-2. `menuOpen`：导入菜单。
-3. `importProgress.status` / `importProgress.expanded`：导入任务和进度面。
-4. `updates.updateDialogOpen` 与 `updates.updateStatus`：更新面板。
+1. `pendingDuplicate`：来自 `useDuplicateImport()`，代表同名导入确认。
+2. `pendingShelfDialog`：来自 `useShelfDialogs()`，代表删除、建库、命名或移动。
+3. `menuOpen`：导入菜单。
+4. `importProgress.status` / `importProgress.expanded`：导入任务和进度面。
+5. `updates.updateDialogOpen` 与 `updates.updateStatus`：更新面板。
 
 ### 4.2 surface 优先级
 
 当前顺序：
 
 ```text
-书库确认
+同名确认
+  > 书库确认
   > 导入菜单
   > 导入进度
   > 更新面板
@@ -162,6 +189,7 @@ surface 宽度由 `surfaceWidth` 决定，并写入 CSS 变量：
 
 ```js
 const surface = computed(() => {
+  if (pendingDuplicate.value) return 'duplicate';
   if (pendingShelfDialog.value) return 'shelf';
   if (menuOpen.value && importProgress.status === 'idle') return 'menu';
   if (importSurfaceOpen.value) return 'import';
@@ -172,6 +200,7 @@ const surface = computed(() => {
 
 为什么是这个顺序：
 
+- 同名确认直接决定“保留还是跳过”，必须先于导入进度和书库整理。
 - 删除 / 建库是阻断性确认，不能被导入进度或更新提示挤掉。
 - 导入菜单是用户刚刚主动打开的短任务，优先级高于后台更新。
 - 导入进度优先级高于更新，因为导入可能正在写 IndexedDB / 原生文件。
@@ -182,6 +211,7 @@ const surface = computed(() => {
 `surfaceKey` 控制进入 / 离开过渡：
 
 ```js
+duplicate
 shelf-${kind}
 update-${updateStatus}
 menu
@@ -194,12 +224,13 @@ import
 ### 4.4 胶囊收起
 
 ```js
-const replaceSurface = computed(() => !!surface.value && surface.value !== 'update');
+const replaceSurface = computed(() => !!surface.value);
 const triggerCollapsed = computed(() => replaceSurface.value);
 ```
 
-- 打开菜单、导入进度、书库确认时：导入胶囊宽度收为 `0`、透明度下降、`inert` 且 `tabindex="-1"`，surface 占用锚点。
-- 打开更新面板时：导入胶囊保留，更新圆钮让位给更新 surface。
+- 打开任意 surface 时：导入胶囊保留自然占位，透明度下降、轻微缩小、`inert` 且 `tabindex="-1"`，surface 覆盖锚点。
+- 触发按钮不能收成 `width: 0`：它一旦恢复宽度就会重新参与 flex 布局，把正在缩回的 surface 横向推偏。
+- 更新面板也收起导入胶囊；surface 右下角的主行动胶囊承担原来的锚点位置。
 - surface 退出后，触发按钮重新获得焦点。
 
 ### 4.5 更新待处理与分裂
@@ -218,6 +249,9 @@ const showUpdateOrb = computed(() => (
   && !importSurfaceOpen.value
 ));
 ```
+
+更新圆钮只在没有 surface 时出现。更新面板打开后，导入胶囊收起、圆钮隐藏，
+整块更新内容占用同一个右下角锚点。
 
 分裂态的典型路径：
 
@@ -258,15 +292,39 @@ const showUpdateOrb = computed(() => (
 
 surface 进入：
 
-- opacity 200ms，延迟 60ms
-- transform 280ms，延迟 40ms
-- 从 `translate3d(8px, 16px, 0) scale(0.3)` 展开
+- `transform` / `border-radius` 320ms `--md-ease-emphasized`
+- `opacity` 160ms linear
+- surface 绝对定位在根节点右下角，`transform-origin: 100% 100%`
+- 起点缩放使用导入控件的真实宽度：idle 为 `104 × 56 / 28px` 圆角，导入进行中为 `56 × 56 / 999px`
+- `--seed-x` 为 `triggerWidth / surfaceWidth`；`--seed-y` 在 `enter` / `before-leave` 时按当前 surface 高度实测为 `56 / offsetHeight`
+- 内容层 180ms、延迟 80ms 进入，让文字和主行动按钮跟着外壳一起长出来，而不是先出现一张空卡
 
 surface 离开：
 
-- opacity 120ms
-- transform 160ms
-- `--md-ease-accelerate`
+- `clip-path` / `border-radius` 280ms，延迟 80ms
+- 起点是比 surface 外扩 `80px` 的裁切框，保留正常投影；终点收成右下角
+  `104 × 56`（导入进行中为 `56 × 56`），圆角使用 `var(--seed-radius)`
+- 整体透明度 100ms，延迟 260ms，只在最后交接给导入胶囊时淡出
+- 内容层不参与缩放：文字与主行动按钮保持原尺寸，由裁切框从右下角向左上收走
+- 内容层 160ms 后开始淡出；卡片收缩阶段右下角主行动按钮的矩形保持不变
+- 卡片缩到锚点后，克隆的主行动按钮从原位置滑到导入胶囊的真实矩形；
+  位置、圆角、底色、文字色与阴影在同一段 280ms、延迟 80ms 的动画里完成
+- 原按钮文案在 46%→62% 淡出，导入文案在 54%→72% 淡入，保留重叠，避免中间出现空帧
+- `is-primary` 与导入胶囊本来就同色，视觉上应是同一颗按钮在移动，而不是两颗按钮交叉淡出
+- 测量导入胶囊终点时必须临时关闭 `transform` 过渡（inline `transition: none` +
+  `transform: none`），否则 `is-collapsed` 的 `scale(0.9)` 会让终点小 10%
+- 收起期间保持 `surfaceLeaving` 为真，避免导入胶囊在 surface 卸载与按钮交接之间闪一下
+- `prefers-reduced-motion` 下跳过克隆交接，直接恢复导入胶囊
+- 结束矩形必须与导入胶囊一致：右侧、底边、宽高都由同一锚点推导
+- 导入按钮的透明度延迟 250ms 恢复；开始展开时仍然立即淡出，避免中途透出
+
+进入仍使用 `transform` 从真实导入控件尺寸放大；离开改用 `clip-path`，避免
+主行动按钮跟着整张卡片一起缩小。实现只过渡 `clip-path` / `border-radius` /
+`opacity`，不过渡 surface 宽高。
+surface 不参与触发行的 flex 宽度计算；导入按钮自身也不再收成零宽。
+改这里时先用 1440×900 实测：展开首帧右下角应等于导入胶囊，收起末帧应精确回到
+`x = viewportRight - 28 - 104`、`y = viewportBottom - 26 - 56` 的同一矩形；
+同时确认 `.md-surface-action` 在卡片收缩阶段宽高不变，交接末帧与导入胶囊矩形完全重合。
 
 ### 5.2 为什么不用弹簧
 
@@ -304,11 +362,10 @@ surface 离开：
 
 ### 6.2 导入进度
 
-桌面复用 `ImportProgressPanel`，传入 `embedded`：
+桌面复用 `ImportProgressPanel`：
 
-- 去掉自身 `372px` 宽、28px 外圆角和外阴影
-- 内容宽 `100%`，padding 由 island 内部保持 20px
-- 进度面板本身仍有 `role="dialog"` 与 `aria-label="导入进度"`
+- 内容宽 `100%`，padding 由面板自身保持 20px；外圆角与阴影由 island surface 承担
+- 进度面板本身有 `role="group"` 与 `aria-labelledby="import-progress-title"`
 - `aria-live` 在内部节流；不会每帧播报
 
 导入完成后：
@@ -318,11 +375,16 @@ surface 离开：
 - 用户停止：保留“已停止”状态。
 - 面板打开时不自动收起用户正在操作的 surface。
 
-### 6.3 书库确认 / 建库 / 命名
+手机 `ImportProgressSheet` 复用同一内容组件：进行中与完成后都使用 bottom sheet，
+关闭进行中的 sheet 只收起内容，不取消导入任务；取消任务仍由“停止导入”按钮完成。
 
-桌面使用 `ShelfDialogContent`，手机仍使用 `ShelfDialog`。两边共享内容与 Promise 队列：
+### 6.3 同名确认 / 书库确认 / 建库 / 命名
+
+桌面使用 `DuplicateImportContent` 与 `ShelfDialogContent`；手机分别使用
+`DuplicateImportDialog` 与 `ShelfDialog` 的 bottom sheet 外壳。两边共享内容与 Promise 队列：
 
 ```js
+const keep = await confirmDuplicates([{ title, existingTitle }]);
 const title = await askShelfDialog({ kind: 'name', ... });
 ```
 
@@ -330,12 +392,14 @@ const title = await askShelfDialog({ kind: 'name', ... });
 
 内容规则：
 
+- `pendingDuplicate`：先于书库确认处理；默认焦点落在“跳过”，明确选择后才继续导入。
 - `kind: 'confirm'`：删除书本 / 删除书库 / 取消收藏。
 - `kind: 'folder'`：为导入内容创建书库。
 - `kind: 'name'`：新建 / 重命名 / 创建导入书库。
 - `kind: 'move'`：移动所选书本到其他书库。
 - 只有消息里确实包含“原始文件”时，才展示“原始文件与阅读记录会一起移除”的警告。删除空书库不能误报。
 - 删除确认的初始焦点应落在安全按钮（取消），不能默认聚焦“确认删除”。
+- 手机同名确认保留 bottom sheet；其他手机确认也同样使用 bottom sheet 外壳，不再回到居中 modal。
 
 ### 6.4 更新
 
@@ -366,9 +430,10 @@ const title = await askShelfDialog({ kind: 'name', ... });
 ### 7.1 初始焦点
 
 - 菜单：第一个菜单项。
-- 导入进度：`.import-progress-panel`。
+- 导入进度：当前主行动（进行中为停止，完成为重试 / 完成）。
+- 同名确认：跳过按钮。
 - 书库确认：取消按钮；命名：输入框并选中文本。
-- 更新：关闭按钮；下载中：取消按钮。
+- 更新：当前主行动；下载中为取消。
 
 ### 7.2 关闭后恢复
 
@@ -384,8 +449,9 @@ const title = await askShelfDialog({ kind: 'name', ... });
 ### 7.3 Tab 与 Escape
 
 - 焦点进入 surface 后，Tab 在 surface 内循环。
-- `Escape` 顺序：书库确认 → 导入菜单 → 导入进度 → 更新。
+- `Escape` 顺序：同名确认 → 书库确认 → 导入菜单 → 导入进度 → 更新。
 - 删除确认不能因为点外部空白就消失；必须点“取消”或按 `Escape` 明确结束。
+- 同名确认点外部按“跳过”结束，避免没有可见关闭图标时卡住。
 - 更新面板在下载中按 `Escape` 会走 `closeUpdateDialog()`，即取消下载；这是当前行为。
 
 ### 7.4 不要抢输入焦点
@@ -405,7 +471,9 @@ const isTextEntry = active && (
 ## 8. ARIA 与视觉 token
 
 - 书库确认 surface：`role="alertdialog"`（确认）或 `role="dialog"`，`aria-modal="true"`，标题 `shelf-dialog-title`。
-- 更新 surface：自身 `role="dialog"`、`aria-modal="false"`、`aria-busy` 跟随 loading / downloading。
+- 同名确认 surface：`role="dialog"`、`aria-modal="true"`，标题 `duplicate-import-title`。
+- 导入进度 surface：`role="dialog"`，标题 `import-progress-title`；内容面板内部使用 `role="group"`。
+- 更新 surface：自身 `role="dialog"`，不声明 `aria-modal`，`aria-busy` 跟随 loading / downloading。
 - 菜单：`role="menu"`，条目 `role="menuitem"`。
 - 导入触发：`aria-haspopup` 与 `aria-expanded` 跟随菜单 / 进度。
 - 更新圆钮：`aria-haspopup="dialog"`，标题明确“有新版本可用”或“更新已下载”。
@@ -417,7 +485,7 @@ const isTextEntry = active && (
 ## 9. 已知取舍
 
 - 书库确认的 surface 使用 `aria-modal="true"` 和手写焦点环，但当前没有把整个书架 DOM 设为 `inert`。如果后续要更严格的屏幕阅读器隔离，需要额外做背景 inert，而不是只加 `aria-modal`。
-- 更新面板打开时，如果用户打开导入菜单，菜单会临时覆盖更新 surface；关掉菜单后，因为 `updateDialogOpen` 仍为 `true`，更新面会恢复。这个行为来自当前优先级，不是两个 surface 同时存在。
+- 更新面板打开时导入胶囊会收起，因此不能在更新 surface 上再叠一个导入菜单；它们共享同一个锚点，同一时刻只存在一个 surface。
 - 更新下载中暂不以“后台下载 + 圆钮进度”形式收起；当前必须保持面板或取消。若要做后台下载，需要单独设计 `update-collapsed` 状态，不能直接放行外部点击。
 - 桌面更新不再锁定 `body` 滚动；只有手机更新弹窗和更新日志会锁定。不要为了“统一”把桌面 island 重新改成全屏 modal。
 
@@ -426,13 +494,13 @@ const isTextEntry = active && (
 ### 10.1 新增一个 desktop surface
 
 1. 在 `DesktopIsland.vue` 的 `surface` computed 中加入状态来源。
-2. 明确它相对现有四级的优先级。
+2. 明确它相对现有五级的优先级。
 3. 在 `surfaceKey`、`surfaceWidth`、`surfaceClass` 补分支。
 4. 新建内容组件，至少暴露 `focusInitial()`。
 5. 在模板中挂到 `.desktop-island-surface` 内，不要 `Teleport` 到 body。
 6. 在 `onKeydown` / `onDocumentPointerDown` 决定 Escape 与点外部行为。
 7. 在 `prefers-reduced-motion` 下关闭新动效。
-8. 手机端是否同步？默认不同步；先确认是否需要 mobile sheet。
+8. 手机端是否同步？确认后优先复用同一个内容组件，只替换成 bottom sheet 外壳。
 
 ### 10.2 新增一个更新状态
 
@@ -458,14 +526,13 @@ const isTextEntry = active && (
 
 每次修改灵动胶囊，至少验证：
 
-- [ ] `npm test`
 - [ ] `npm run build:vite`
 - [ ] `npm run check:dark-glow`
 - [ ] `git diff --check`
-- [ ] 1440px 桌面：idle / 菜单 / 导入进度 / 删除确认 / 建库 / 命名 / 更新 available / downloading / downloaded
+- [ ] 1440px 桌面：idle / 菜单 / 导入进度 / 同名确认 / 删除确认 / 建库 / 命名 / 更新 available / downloading / downloaded
 - [ ] 1440px 桌面：更新关闭后的双状态、更新圆钮点击、下载结束后的重新合并
 - [ ] 900px：surface 不横向溢出，不盖住可操作按钮
-- [ ] 390px：仍走原有手机状态条 / bottom sheet / 居中弹窗，不能出现桌面 island
+- [ ] 390px：导入菜单、导入进度、同名确认、书库确认与更新都走 bottom sheet，不能出现桌面 island
 - [ ] `prefers-reduced-motion: reduce` 下不崩、不闪、不残留中间态
 - [ ] 键盘：Tab 不逃出 surface，Escape 能关闭，关闭后焦点回到正确触发点
 - [ ] 输入框聚焦时后台更新不会抢焦点
