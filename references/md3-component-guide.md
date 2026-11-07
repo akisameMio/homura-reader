@@ -61,13 +61,15 @@
 - 一屏只有一个实心 `primary` 主行动。抽屉底部的「完成」与页面 FAB 不同时出现。
 - 需要透明度时优先叠在正确容器上，不要靠降低整个组件 `opacity` 来解决层级。
 
-### 2.2 当前没有 error token
+### 2.2 Error token
 
-当前 `homura.css` 没有定义 `--md-error`。新组件不要直接使用未定义变量。
+`homura.css` 已在白昼 / 护眼 / 夜间三个表面统一定义 `--md-error*`，10 套主题共用；
+颜色表同步在 `tokens.md`。
 
-- 可恢复错误使用 `role="alert"` 的内联提示，容器为 `surface-high` / `surface-container`，文字使用 `on-surface`。
+- 可恢复错误可使用 `role="alert"` 的内联提示，容器为 `surface-high` / `surface-container`，文字使用 `on-surface`。
 - 阻断性错误留在对应区域内说明原因与下一步，不弹 toast、`alert` 或全局浮条。
-- 如果确实要新增错误语义色，必须一次补齐 10 套主题的明暗 `--md-error*` 对，并同步 `tokens.md`；不要只给某个组件写死红色。
+- 需要错误容器时使用 `--md-error-container` / `--md-on-error-container` 成对 token；需要错误文字时使用 `--md-error`。
+- 修改 error 色值必须三个表面一起改，并同步 `tokens.md`；不要让单个组件写死红色。
 
 ### 2.3 字号与密度
 

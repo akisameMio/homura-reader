@@ -15,7 +15,13 @@
       ]"
       data-app-scroll
     >
-      <SettingsView v-if="activeNav === 'settings'" />
+      <template v-if="activeNav === 'settings'">
+        <SettingsView>
+          <template #status>
+            <ImportStatusBar v-if="isCompact" @retry="retryFailedImport" />
+          </template>
+        </SettingsView>
+      </template>
       <template v-else>
         <LibraryHeader
           :count="headerCount"
@@ -39,10 +45,13 @@
           </template>
         </LibraryHeader>
 
+        <ImportStatusBar v-if="isCompact" @retry="retryFailedImport" />
+
         <main
           ref="libraryScrollRef"
           class="library-scroll relative isolate flex-1 w-full flex flex-col min-[900px]:pb-40"
           :class="{ 'md-bottom-nav-space': isCompact }"
+          :aria-busy="importProgress.isRunning"
           data-app-scroll
         >
           <p v-if="shelf.error || (!reader.currentBook && reader.openError)" role="alert" class="mx-4 min-[900px]:mx-7 mt-3 text-[13px] text-[var(--md-error)]">{{ shelf.error || reader.openError }}</p>
@@ -54,11 +63,12 @@
   </div>
 
   <LibraryImportActions
-    v-if="!isCompact && activeNav !== 'settings'"
+    v-if="!isCompact && (activeNav !== 'settings' || importProgress.status !== 'idle')"
     v-model:open="importMenuOpen"
     @create-collection="createCollection"
     @pick-files="pickFiles"
     @pick-folder="pickFolder"
+    @retry-failed="retryFailedImport"
   />
 
   <input ref="fileInput" type="file" multiple :accept="fileAccept" class="hidden" @change="onFileChange" />
@@ -109,6 +119,7 @@ import { useReaderStore } from './stores/reader.js';
 import { useSettingsStore } from './stores/settings.js';
 import { useUiStore } from './stores/ui.js';
 import { useUpdateStore } from './stores/updates.js';
+import { useImportProgressStore } from './stores/importProgress.js';
 import { fileAccept, canPickFolder, hasFileSystemAccess } from './services/platform.js';
 import {
   canUseNativeImport,
@@ -129,6 +140,7 @@ import { useScrollBounce } from './composables/useScrollBounce.js';
 import SideNav from './components/SideNav.vue';
 import LibraryHeader from './components/LibraryHeader.vue';
 import LibraryImportActions from './components/LibraryImportActions.vue';
+import ImportStatusBar from './components/ImportStatusBar.vue';
 import AppearanceSheet from './components/AppearanceSheet.vue';
 import BookShelf from './components/BookShelf.vue';
 import EmptyShelf from './components/EmptyShelf.vue';
@@ -146,6 +158,7 @@ const reader = useReaderStore();
 const settings = useSettingsStore();
 const ui = useUiStore();
 const updates = useUpdateStore();
+const importProgress = useImportProgressStore();
 const importer = useImporter();
 const { pendingDuplicate, resolveImport } = useDuplicateImport();
 const { pendingShelfDialog, askShelfDialog, resolveShelfDialog } = useShelfDialogs();
@@ -272,6 +285,7 @@ const visibleBooks = computed(() => {
 });
 
 async function openFilePicker() {
+  if (importProgress.isRunning) return;
   if (canUseNativeImport()) {
     try {
       await importer.pickNativeFiles({ offerCollection: isCompact.value });
@@ -296,6 +310,7 @@ async function openFilePicker() {
 }
 
 async function openFolderPicker() {
+  if (importProgress.isRunning) return;
   if (!canPickFolder) return;
   if (canUseNativeImport()) {
     try {
@@ -334,6 +349,12 @@ function pickFiles() {
 function pickFolder() {
   importMenuOpen.value = false;
   openFolderPicker();
+}
+
+function retryFailedImport() {
+  return importer.retryFailed()?.catch(err => {
+    console.warn('[HOMURA] 重试导入中断', err);
+  });
 }
 
 // 设置是一级页面；书架 / 最近 / 收藏复用书库筛选状态。

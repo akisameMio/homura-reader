@@ -1,0 +1,239 @@
+<template>
+  <Transition name="import-bar">
+    <section
+      v-if="visible"
+      class="import-status-bar bg-[var(--md-surface-container)] text-[var(--md-on-surface)]"
+      data-import-status-bar
+      role="status"
+      aria-live="off"
+    >
+      <div class="px-4 py-2.5">
+        <template v-if="store.status === 'running'">
+          <div class="flex items-start gap-3">
+            <div class="min-w-0 flex-1">
+              <div class="flex min-w-0 items-baseline gap-2">
+                <p class="shrink-0 text-[13px] font-semibold">
+                  导入中
+                  <span class="ml-0.5 font-mono">{{ store.done }} / {{ store.total }}</span>
+                </p>
+                <span class="shrink-0 rounded-full bg-[var(--md-primary-container)] px-2 py-0.5 text-[11px] font-semibold text-[var(--md-on-primary-container)]">
+                  {{ phaseLabel }}
+                </span>
+                <span class="ml-auto shrink-0 font-mono text-[11px] text-[var(--md-on-surface-variant)]">
+                  {{ bytesLabel }}
+                </span>
+              </div>
+              <p class="mt-1 min-w-0 truncate text-[11px] text-[var(--md-on-surface-variant)]">
+                {{ store.currentName || '准备下一本…' }} · 导入到：{{ store.targetLabel }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="import-stop-button shrink-0"
+              :disabled="store.cancelRequested"
+              :title="store.cancelRequested ? '正在停止导入' : '停止导入'"
+              :aria-label="store.cancelRequested ? '正在停止导入' : '停止导入'"
+              @click="store.requestCancel()"
+            >
+              <MdIcon name="close" class="h-4 w-4" />
+              <span>{{ store.cancelRequested ? '正在停止…' : '停止' }}</span>
+            </button>
+          </div>
+
+          <div class="mt-2 h-[3px] overflow-hidden rounded-full bg-[var(--md-surface-high)]" aria-hidden="true">
+            <div class="import-bar-fill h-full rounded-full bg-[var(--md-primary)]" :style="{ transform: `scaleX(${store.percent / 100})` }"></div>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="flex items-center gap-3">
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-[13px] font-semibold">
+                {{ summaryTitle }}
+              </p>
+              <p class="mt-1 truncate font-mono text-[11px] text-[var(--md-on-surface-variant)]">
+                {{ bytesLabel }} · 导入到：{{ store.targetLabel }}
+              </p>
+            </div>
+            <div class="flex shrink-0 items-center gap-1.5">
+              <button
+                v-if="store.canRetry"
+                type="button"
+                class="import-bar-action import-bar-action--primary"
+                @click="$emit('retry')"
+              >
+                重试失败项
+              </button>
+              <button
+                type="button"
+                class="import-bar-action"
+                @click="store.dismiss()"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </section>
+  </Transition>
+  <span class="sr-only" aria-live="polite">{{ liveMessage }}</span>
+</template>
+
+<script setup>
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import {
+  useImportProgressStore,
+  importPhaseLabel,
+  formatImportBytes
+} from '../stores/importProgress.js';
+import MdIcon from './MdIcon.vue';
+
+defineEmits(['retry']);
+
+const store = useImportProgressStore();
+const visible = computed(() => store.status !== 'idle');
+const phaseLabel = computed(() => importPhaseLabel(store.phase));
+const bytesLabel = computed(() => (
+  store.bytesTotal > 0
+    ? `${formatImportBytes(store.bytesDone)} / ${formatImportBytes(store.bytesTotal)}`
+    : formatImportBytes(store.bytesDone)
+));
+const summaryTitle = computed(() => {
+  if (store.status === 'cancelled') {
+    return `已停止 · 已添加 ${store.saved} · 跳过 ${store.skipped} · 失败 ${store.failed}`;
+  }
+  return `已添加 ${store.saved} · 跳过 ${store.skipped} · 失败 ${store.failed}`;
+});
+
+const liveMessage = ref('');
+let lastLiveAt = 0;
+let lastLiveDone = 0;
+let dismissTimer = 0;
+
+function clearDismissTimer() {
+  if (!dismissTimer) return;
+  window.clearTimeout(dismissTimer);
+  dismissTimer = 0;
+}
+
+watch(
+  () => [store.status, store.done],
+  ([status, done]) => {
+    const current = Date.now();
+    if (status === 'running') {
+      if (done - lastLiveDone < 5 && current - lastLiveAt < 2000) return;
+      liveMessage.value = `正在导入，已完成 ${done} / ${store.total} 本，当前${phaseLabel.value}。`;
+      lastLiveDone = done;
+      lastLiveAt = current;
+    } else if (status === 'done') {
+      liveMessage.value = `导入完成，已添加 ${store.saved} 本，跳过 ${store.skipped} 本，失败 ${store.failed} 本。`;
+    } else if (status === 'cancelled') {
+      liveMessage.value = `导入已停止，已添加 ${store.saved} 本。`;
+    }
+  }
+);
+
+watch(
+  () => store.status,
+  status => {
+    clearDismissTimer();
+    if (!store.isAutoDismissable) return;
+    dismissTimer = window.setTimeout(() => {
+      dismissTimer = 0;
+      if (document.activeElement?.closest?.('[data-import-status-bar]')) return;
+      store.dismiss();
+    }, 8000);
+  }
+);
+
+onBeforeUnmount(clearDismissTimer);
+</script>
+
+<style scoped>
+.import-status-bar {
+  flex: none;
+  max-height: 96px;
+  overflow: hidden;
+  border-bottom: 1px solid color-mix(in oklab, var(--md-outline-variant) 72%, transparent);
+}
+
+.import-bar-fill {
+  transform-origin: left center;
+  transition: transform var(--md-duration-short) var(--md-ease-emphasized);
+}
+
+.import-stop-button,
+.import-bar-action {
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--md-surface-high);
+  color: var(--md-on-surface);
+  font-size: 11px;
+  font-weight: 600;
+  transition:
+    background-color var(--md-duration-short) var(--md-ease-emphasized),
+    opacity var(--md-duration-short) var(--md-ease-emphasized);
+}
+
+.import-stop-button {
+  display: inline-flex;
+  min-width: 72px;
+  padding: 0 11px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--md-tertiary);
+}
+
+.import-stop-button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.import-bar-action {
+  padding: 0 12px;
+  color: var(--md-primary);
+}
+
+.import-bar-action--primary {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+
+.import-bar-enter-active {
+  transition:
+    opacity var(--md-duration-short) var(--md-ease-emphasized),
+    transform var(--md-duration-short) var(--md-ease-emphasized);
+}
+
+.import-bar-leave-active {
+  transition:
+    opacity var(--md-duration-short) var(--md-ease-accelerate),
+    transform var(--md-duration-short) var(--md-ease-accelerate);
+}
+
+.import-bar-enter-from,
+.import-bar-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .import-stop-button:not(:disabled):hover,
+  .import-bar-action:hover {
+    background: var(--md-surface-highest);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .import-bar-fill,
+  .import-stop-button,
+  .import-bar-action,
+  .import-bar-enter-active,
+  .import-bar-leave-active {
+    transition: none;
+  }
+}
+</style>

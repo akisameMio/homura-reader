@@ -17,6 +17,10 @@
       </div>
     </header>
 
+    <div v-if="isCompact && $slots.status" class="settings-import-status">
+      <slot name="status"></slot>
+    </div>
+
     <div
       class="settings-layout"
       :class="{ 'has-preview': activeSection === 'appearance' }"
@@ -811,6 +815,13 @@ onBeforeUnmount(() => {
 .settings-topbar {
   position: sticky;
   top: 0;
+}
+
+.settings-import-status {
+  position: sticky;
+  top: calc(64px + env(safe-area-inset-top));
+  z-index: 19;
+  flex: none;
 }
 
 .settings-topbar-inner {

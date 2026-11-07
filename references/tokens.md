@@ -43,6 +43,10 @@
 | surface-highest | #DDE3EA | #E1D9C8 | #272C34 |
 | on-surface | #111827 | #221E17 | #E2E6EC |
 | on-surface-variant | #475569 | #57503F | #B9C2CE |
+| error | #B3261E | #B3261E | #F2B8B5 |
+| on-error | #FFFFFF | #FFFFFF | #601410 |
+| error-container | #F9DEDC | #F9DEDC | #8C1D18 |
+| on-error-container | #410E0B | #410E0B | #F9DEDC |
 | outline | #6B7280 | #8A7F68 | #8B95A3 |
 | outline-variant | #CBD5E1 | #D8CDB6 | #3A424C |
 | shadow-color | `on-surface` | `on-surface` | `surface` |

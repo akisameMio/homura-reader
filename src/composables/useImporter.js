@@ -6,6 +6,7 @@
 
 import { useShelfStore } from '../stores/shelf.js';
 import { useSettingsStore } from '../stores/settings.js';
+import { useImportProgressStore, importFailureReason } from '../stores/importProgress.js';
 import { useDuplicateImport } from './useDuplicateImport.js';
 import { useShelfDialogs } from './useShelfDialogs.js';
 import { planFolderCollections, availableCollectionName, collectionNameError } from '../services/collections.js';
@@ -39,6 +40,7 @@ import { runShelfMutation } from '../services/mutationQueue.js';
 import { NativeErrorCode } from '../services/nativeRuntime.js';
 
 let quotaWarned = false;
+let activeImportBatch = null;
 const IMPORT_TIMING_ENABLED = !!import.meta.env?.DEV;
 const LARGE_FILE_BYTES = 64 * 1024 * 1024;
 const VERY_LARGE_FILE_BYTES = 256 * 1024 * 1024;
@@ -185,12 +187,12 @@ function chooseCommitBatchSize(tasks) {
 
 // 有界滚动并发池：同一批任务按原始 index 回填结果，提交顺序不随完成先后变化。
 // 原生导入失败需要整批交给用户重选，必须等已在跑的任务收尾，避免后台继续写盘。
-async function runPool(items, concurrency, worker, onError) {
+async function runPool(items, concurrency, worker, onError, shouldStop = () => false) {
   const results = new Array(items.length);
   let next = 0;
   let fatalError = null;
   async function lane() {
-    while (!fatalError && next < items.length) {
+    while (!fatalError && !shouldStop() && next < items.length) {
       const index = next++;
       try {
         results[index] = await worker(items[index], index);
@@ -234,25 +236,59 @@ async function warnIfStorageTight() {
 export function useImporter() {
   const shelf = useShelfStore();
   const settings = useSettingsStore();
+  const importProgress = useImportProgressStore();
   const { confirmDuplicate, confirmDuplicates } = useDuplicateImport();
   const { askShelfDialog } = useShelfDialogs();
 
-  function handleFiles(fileList, { offerCollection = false } = {}) {
+  function taskFiles(task) {
+    if (!task) return [];
+    if (task.group?.files?.length) return task.group.files.slice();
+    return task.file ? [task.file] : [];
+  }
+
+  function markTaskFailure(task, error) {
+    if (task && !task.failureReason) task.failureReason = importFailureReason(error);
+  }
+
+  function recordTaskFailure(task, error, fallbackName = '') {
+    importProgress.recordFailure({
+      name: task?.title || fallbackName || '未命名文件',
+      reason: task?.failureReason || importFailureReason(error),
+      kind: task?.kind || '',
+      files: taskFiles(task)
+    });
+  }
+
+  function handleFiles(fileList, { offerCollection = false, targetId = shelf.activeCollectionId } = {}) {
     if (!fileList || fileList.length === 0) return;
+    // useImporter 会被 App 与 DragOverlay 分别实例化，锁必须放在模块级；
+    // 否则拖拽入口能绕过锁，第二批会覆盖当前进度。
+    if (activeImportBatch || importProgress.isRunning) return;
     const files = Array.from(fileList).filter(f => !f.name.startsWith('.'));
     if (files.length === 0) return;
 
     // 所有导入入口与清空书架共用互斥队列，防止同名漏判和源文件删除竞态。
-    const targetId = shelf.activeCollectionId;
-    return runShelfMutation(() => importBatch(files, targetId, offerCollection)).catch(err => {
+    activeImportBatch = runShelfMutation(() => importBatch(files, targetId, offerCollection)).catch(err => {
       console.error('[HOMURA] 导入失败', err);
       throw err;
+    }).finally(() => {
+      activeImportBatch = null;
     });
+    return activeImportBatch;
+  }
+
+  function retryFailed() {
+    const files = importProgress.retryFiles.slice();
+    if (!files.length) return;
+    return handleFiles(files, { targetId: importProgress.targetId });
   }
 
   async function importBatch(files, targetId, offerCollection) {
+    const targetLabel = targetId
+      ? (shelf.collections.find(item => item.id === targetId)?.title || '全部作品')
+      : '全部作品';
     const importIntoCurrent = async () => {
-      const ids = await importFiles(files);
+      const ids = await importFiles(files, { targetId, targetLabel });
       if (ids.length && targetId && shelf.collections.some(item => item.id === targetId)) await shelf.moveBooks(ids, targetId);
     };
     if (!settings.importCollectionPrompt) return importIntoCurrent();
@@ -276,7 +312,10 @@ export function useImporter() {
       groups.push({ ...group, title });
     }
     for (const group of groups) {
-      const ids = await importFiles(group.files);
+      const ids = await importFiles(group.files, {
+        targetId: '',
+        targetLabel: `新建书库「${group.title}」`
+      });
       if (!ids.length) continue;
       const collection = await shelf.createCollection(group.title);
       await shelf.moveBooks(ids, collection.id);
@@ -339,6 +378,7 @@ export function useImporter() {
     const bookId = makeEpubId();
     let source = makeFileSource(file);
     let nativePath = '';
+    importProgress.setPhase('read');
 
     // 原生 EPUB 先流式落到 AppData。解析只读 spine 文本和封面，
     // 大画集不再把整个压缩包搬进 WebView 内存。
@@ -355,6 +395,7 @@ export function useImporter() {
       } catch (err) {
         if (!shouldFallbackNativeImport(err)) {
           console.warn('[HOMURA] 原生 EPUB 预存被拒绝', err);
+          markTaskFailure(task, err);
           return null;
         }
         // Android 的 content:// 授权只存在于当前选择会话。普通复制失败时
@@ -372,6 +413,7 @@ export function useImporter() {
             file = await materializeNativeImportFile(file);
           } catch (readError) {
             console.warn('[HOMURA] 读取原生 EPUB 失败', readError);
+            markTaskFailure(task, readError);
             return null;
           } finally {
             metrics.readMs += now() - readStarted;
@@ -394,12 +436,15 @@ export function useImporter() {
         : undefined
     };
     const parseFullEpub = () => parseEpubFile(file, parseOptions);
+    importProgress.setPhase('parse');
+    let parseFailure = null;
     try {
       let metadataError = null;
       try {
         book = await parseEpubFile(file, { ...parseOptions, metadataOnly: true });
       } catch (err) {
         metadataError = err;
+        parseFailure = err;
       }
 
       if (metadataError) {
@@ -413,6 +458,7 @@ export function useImporter() {
             book = await parseFullEpub();
           } catch (fullError) {
             console.warn('[HOMURA] EPUB 解析失败', fullError);
+            parseFailure = fullError;
           }
         }
       } else if (book?.needsFullParse) {
@@ -421,6 +467,7 @@ export function useImporter() {
           book = await parseFullEpub();
         } catch (fullError) {
           console.warn('[HOMURA] EPUB 解析失败', fullError);
+          parseFailure = fullError;
           book = null;
         }
       }
@@ -428,6 +475,7 @@ export function useImporter() {
       metrics.parseMs += now() - parseStarted;
     }
     if (!book) {
+      markTaskFailure(task, parseFailure || new Error('无法解析 EPUB'));
       if (nativePath) await removeNativeBookDir(bookId).catch(() => {});
       return null;
     }
@@ -441,6 +489,7 @@ export function useImporter() {
     let book = null;
     let stagedBookId = '';
     let stagedSource = null;
+    importProgress.setPhase('read');
     try {
       if (isNativeImportFile(file)) {
         if (isAndroidContentUri(file.nativePath)) {
@@ -469,6 +518,7 @@ export function useImporter() {
           }
         }
       }
+      importProgress.setPhase('parse');
       book = await parser(file);
     } catch (err) {
       if (err?.nativeImportFallback) {
@@ -476,6 +526,7 @@ export function useImporter() {
         throw err;
       }
       console.warn(`[HOMURA] ${label} 解析失败`, err);
+      markTaskFailure(task, err);
     } finally {
       metrics.parseMs += now() - started;
     }
@@ -499,6 +550,7 @@ export function useImporter() {
     else if (task.kind === 'markdown') prepared = await prepareParsedTask(task, parseMarkdownFile, metrics, 'Markdown');
     else if (task.kind === 'txt') prepared = await prepareParsedTask(task, parseTxtFile, metrics, 'TXT');
     else if (task.kind === 'images') {
+      importProgress.setPhase('read');
       let group = task.group;
       if (group?.files?.some(file => isNativeImportFile(file))) {
         const readStarted = now();
@@ -552,11 +604,13 @@ export function useImporter() {
             await removeNativeBookDir(group.book.id).catch(() => {});
           }
           if (err?.nativeImportFallback) throw err;
+          markTaskFailure(task, err);
           return null;
         } finally {
           metrics.readMs += now() - readStarted;
         }
       }
+      importProgress.setPhase('parse');
       if (!prepared) {
         prepared = {
           book: group.book,
@@ -566,9 +620,11 @@ export function useImporter() {
     }
     if (!prepared) {
       metrics.parseFailed++;
+      markTaskFailure(task, new Error('无法解析这个文件'));
       return null;
     }
 
+    importProgress.setPhase('cover');
     const coverStarted = now();
     prepared.coverThumb = await createCoverThumbnail(
       prepared.book.coverBlob,
@@ -632,8 +688,13 @@ export function useImporter() {
       const titleKey = normalizeBookTitle(book.title);
       const existingBook = (titleKey && knownInBatch.get(titleKey)) || findSameTitleBook(shelf.library, book.title);
       if (existingBook && task?.duplicateApprovedTitleKey !== titleKey) {
-        if (!(await confirmDuplicate(book, existingBook))) {
+        importProgress.setPhase('confirm');
+        importProgress.setCurrentName(book.title);
+        const keep = await confirmDuplicate(book, existingBook);
+        importProgress.setPhase('save');
+        if (!keep) {
           metrics.skipped++;
+          importProgress.addSkipped(1);
           await discardParsedBook(book);
           continue;
         }
@@ -645,12 +706,25 @@ export function useImporter() {
   }
 
   async function commitPreparedBatch(preparedList, taskList, savedBooks, metrics) {
+    importProgress.setPhase('save');
     const accepted = await confirmPreparedDuplicates(preparedList, taskList, metrics);
     if (!accepted.length) return;
 
     metrics.commitBatches++;
     const coverThumbs = new Map(accepted.map(prepared => [prepared.book.id, prepared.coverThumb]));
     const preparedById = new Map(accepted.map(prepared => [prepared.book.id, prepared]));
+    const acceptedIds = new Set(accepted.map(prepared => prepared.book.id));
+    const taskByBookId = new Map();
+    for (let index = 0; index < preparedList.length; index++) {
+      const prepared = preparedList[index];
+      if (prepared && acceptedIds.has(prepared.book.id)) {
+        taskByBookId.set(prepared.book.id, taskList[index]);
+      }
+    }
+    importProgress.setPhase('save');
+    importProgress.setCurrentName(
+      accepted.length === 1 ? accepted[0].book.title : `本批 ${accepted.length} 本作品`
+    );
     const started = now();
     try {
       const result = await shelf.addBooks(
@@ -667,11 +741,13 @@ export function useImporter() {
       for (const book of result.saved) {
         savedBooks.push(book);
         metrics.saved++;
+        importProgress.addSaved(1);
       }
       for (const failure of result.failed) {
         const prepared = preparedById.get(failure.book.id);
         if (!prepared) {
           metrics.failed++;
+          recordTaskFailure(taskByBookId.get(failure.book.id), failure.error, failure.book.title);
           await discardParsedBook(failure.book);
           continue;
         }
@@ -684,9 +760,11 @@ export function useImporter() {
           });
           savedBooks.push(prepared.book);
           metrics.saved++;
+          importProgress.addSaved(1);
         } catch (singleErr) {
           metrics.failed++;
           console.warn('[HOMURA] 本地存档单本重试失败，已跳过', prepared.book.title, singleErr);
+          recordTaskFailure(taskByBookId.get(prepared.book.id), singleErr, prepared.book.title);
           await discardParsedBook(prepared.book);
         }
       }
@@ -702,9 +780,11 @@ export function useImporter() {
           });
           savedBooks.push(prepared.book);
           metrics.saved++;
+          importProgress.addSaved(1);
         } catch (singleErr) {
           metrics.failed++;
           console.warn('[HOMURA] 本地存档写入失败，已跳过', prepared.book.title, singleErr);
+          recordTaskFailure(taskByBookId.get(prepared.book.id), singleErr, prepared.book.title);
           await discardParsedBook(prepared.book);
         }
       }
@@ -713,10 +793,11 @@ export function useImporter() {
     }
   }
 
-  async function importFiles(files) {
+  async function importFiles(files, { targetId = shelf.activeCollectionId, targetLabel = '' } = {}) {
     const tasks = buildImportTasks(files);
     const metrics = createImportMetrics(files, tasks);
     if (!tasks.length) {
+      importProgress.dismiss();
       console.warn('[HOMURA] 未找到支持的漫画或小说格式');
       logImportMetrics(metrics, 0);
       return [];
@@ -727,9 +808,18 @@ export function useImporter() {
     metrics.skipped += preflight.skipped;
     metrics.importTasks = importTasks.length;
     if (!importTasks.length) {
+      importProgress.dismiss();
       logImportMetrics(metrics, 0);
       return [];
     }
+    const targetCollection = shelf.collections.find(item => item.id === targetId);
+    importProgress.begin({
+      total: importTasks.length,
+      bytesTotal: importTasks.reduce((sum, task) => sum + (task.size || 0), 0),
+      skipped: preflight.skipped,
+      targetId,
+      targetLabel: targetLabel || targetCollection?.title || '全部作品'
+    });
 
     const savedBooks = [];
     metrics.concurrency = chooseImportConcurrency(importTasks);
@@ -741,10 +831,28 @@ export function useImporter() {
         const prepared = await runPool(
           batchTasks,
           metrics.concurrency,
-          task => prepareImportTask(task, metrics),
-          () => { metrics.parseFailed++; }
+          async task => {
+            importProgress.taskStarted(task, task.title);
+            try {
+              const result = await prepareImportTask(task, metrics);
+              if (!result) {
+                markTaskFailure(task, new Error('无法解析或读取这个文件'));
+                recordTaskFailure(task, new Error(task.failureReason));
+              }
+              return result;
+            } finally {
+              importProgress.taskSettled(task, task.size);
+            }
+          },
+          (err, task) => {
+            metrics.parseFailed++;
+            markTaskFailure(task, err);
+            recordTaskFailure(task, err);
+          },
+          () => importProgress.cancelRequested
         );
         await commitPreparedBatch(prepared, batchTasks, savedBooks, metrics);
+        if (importProgress.cancelRequested) break;
       }
     } catch (err) {
       if (err?.nativeImportFallback) {
@@ -754,7 +862,14 @@ export function useImporter() {
         err.nativeSavedCount = savedBooks.length;
         logImportMetrics(metrics, savedBooks.length);
       }
+      importProgress.recordFailure({
+        name: '导入批次',
+        reason: importFailureReason(err),
+        kind: 'batch'
+      });
       throw err;
+    } finally {
+      importProgress.finish();
     }
 
     if (metrics.failed > 0) {
@@ -920,6 +1035,7 @@ export function useImporter() {
 
   return {
     handleFiles,
+    retryFailed,
     handleDrop,
     pickFilesViaFSA,
     pickFolderViaFSA,
