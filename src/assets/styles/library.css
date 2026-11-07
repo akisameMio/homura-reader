@@ -1,0 +1,463 @@
+    /* ==========================================================================
+       5. MD3 基础组件（rail / FAB / 卡片网格 / sheet 动效）
+       ========================================================================== */
+
+    /* Filter Chip：32px 视觉高度，48px 触摸目标；选中态使用 secondary-container */
+    .md-filter-chip {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      height: 48px;
+      min-height: 48px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      box-shadow: none;
+      color: var(--md-on-surface);
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1;
+      white-space: nowrap;
+      transition:
+        color 200ms cubic-bezier(0.2, 0, 0, 1);
+    }
+    .md-filter-chip::before {
+      content: '';
+      position: absolute;
+      inset: 8px 0;
+      z-index: 0;
+      border-radius: 8px;
+      background: transparent;
+      box-shadow: inset 0 0 0 1px var(--md-outline-variant);
+      transition:
+        background-color 200ms cubic-bezier(0.2, 0, 0, 1),
+        box-shadow 200ms cubic-bezier(0.2, 0, 0, 1);
+    }
+    .md-filter-chip > * {
+      position: relative;
+      z-index: 1;
+    }
+    .md-filter-chip > svg {
+      width: 18px;
+      height: 18px;
+      flex: none;
+    }
+    .md-filter-chip.is-selected {
+      color: var(--md-on-secondary-container);
+    }
+    .md-filter-chip.is-selected::before {
+      background: var(--md-secondary-container);
+      box-shadow: none;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .md-filter-chip:hover::before {
+        background: color-mix(in oklab, var(--md-on-surface) 8%, transparent);
+      }
+      .md-filter-chip.is-selected:hover::before {
+        background: color-mix(in oklab, var(--md-secondary-container) 92%, var(--md-on-secondary-container));
+      }
+    }
+    .md-filter-chip:active::before {
+      background: color-mix(in oklab, var(--md-on-surface) 12%, transparent);
+    }
+    .md-filter-chip.is-selected:active::before {
+      background: color-mix(in oklab, var(--md-secondary-container) 86%, var(--md-on-secondary-container));
+    }
+    .md-filter-chip:focus-visible {
+      outline: none;
+    }
+    .md-filter-chip:focus-visible::before {
+      box-shadow: inset 0 0 0 2px var(--md-primary);
+    }
+
+    /* Menu：small shape 8px，容器 surface-container，条目 48px */
+    .md-menu {
+      padding: 4px;
+      overflow: hidden;
+      border-radius: 8px;
+      background: var(--md-surface-container);
+      color: var(--md-on-surface);
+      box-shadow:
+        0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color) 24%, transparent),
+        0 8px 24px -12px color-mix(in oklab, var(--md-shadow-color) 36%, transparent);
+    }
+    .md-menu-label {
+      padding: 8px 12px 4px;
+      color: var(--md-on-surface-variant);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+    .md-menu-item {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      min-height: 48px;
+      padding: 0 12px;
+      gap: 12px;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--md-on-surface);
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.35;
+      text-align: left;
+      transition: background-color 200ms cubic-bezier(0.2, 0, 0, 1);
+    }
+    .md-menu-item > svg {
+      width: 20px;
+      height: 20px;
+      flex: none;
+    }
+    .md-menu-item > svg:not(.md-menu-check) {
+      color: var(--md-on-surface-variant);
+    }
+    .md-menu-item .md-menu-check {
+      color: var(--md-primary);
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .md-menu-item:hover {
+        background: color-mix(in oklab, var(--md-on-surface) 8%, transparent);
+      }
+    }
+    .md-menu-item:active {
+      background: color-mix(in oklab, var(--md-on-surface) 12%, transparent);
+    }
+
+    /* 书架网格：手机 3 列；桌面随可用宽度提升密度，避免窄桌面把书卡压成条 */
+    .md-shelf-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--md-space-150);
+      padding: var(--md-space-200) var(--md-space-200) 0;
+    }
+    /* 768–899 仍使用底部导航，但信息密度要接近桌面，避免三列巨卡 */
+    @media (min-width: 768px) and (max-width: 899px) {
+      .md-shelf-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: var(--md-space-200);
+        padding-inline: var(--md-space-250);
+      }
+    }
+    @media (min-width: 900px) {
+      .md-shelf-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: var(--md-space-200);
+        padding: var(--md-space-200) 28px 0;
+      }
+    }
+    @media (min-width: 1080px) {
+      .md-shelf-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+    }
+    @media (min-width: 1280px) {
+      .md-shelf-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+      }
+    }
+    /* 超大屏加密度，避免书卡被拉成相框 */
+    @media (min-width: 1600px) {
+      .md-shelf-grid {
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+        gap: var(--md-space-300);
+        padding-inline: 36px;
+      }
+    }
+
+    /* 继续阅读特色卡：手机整行 / 桌面跨三列 */
+    .md-featured-cell {
+      grid-column: span 3;
+    }
+    @media (min-width: 768px) and (max-width: 899px) {
+      .md-featured-cell { grid-column: span 2; }
+    }
+    @media (min-width: 900px) {
+      .md-featured-cell { grid-column: span 3; }
+    }
+
+    /* ==========================================================================
+       MD3 Cards — 12px medium shape。Filled 为书架默认卡型，
+       hover / focus / pressed 只叠加状态层，不抬升、不加投影。
+       Featured 是应用内的 tonal 特色卡，沿用同一套几何与交互语言。
+       ========================================================================== */
+    .md-card {
+      position: relative;
+      isolation: isolate;
+      overflow: hidden;
+      border-radius: 12px;
+      background-color: var(--md-surface-highest);
+      color: var(--md-on-surface);
+      box-shadow: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .md-card--filled { background-color: var(--md-surface-highest); }
+    .md-card--outlined {
+      border: 1px solid var(--md-outline-variant);
+      background-color: var(--md-surface);
+    }
+    .md-card--elevated {
+      background-color: var(--md-surface-low);
+      box-shadow: var(--md-elevation-level1);
+    }
+    .md-card--featured {
+      background-color: var(--md-primary-container);
+      color: var(--md-on-primary-container);
+    }
+    .md-card:focus-visible,
+    .md-card:has(:focus-visible) {
+      outline: 2px solid var(--md-primary);
+      outline-offset: 2px;
+    }
+    /* 书架卡默认在屏外跳过布局与绘制；auto 会记住首屏实测高度，避免滚动时抖动 */
+    .md-shelf-card {
+      content-visibility: auto;
+      contain-intrinsic-size: auto 208px;
+    }
+    @media (min-width: 768px) and (max-width: 899px) {
+      .md-shelf-card { contain-intrinsic-size: auto 248px; }
+    }
+    @media (min-width: 900px) {
+      .md-shelf-card { contain-intrinsic-size: auto 272px; }
+    }
+    @media (min-width: 1280px) {
+      .md-shelf-card { contain-intrinsic-size: auto 312px; }
+    }
+    .md-shelf-card.is-touch-dragging { opacity: 0.38; transform: scale(0.96); }
+
+    .md-library-text-button, .md-library-tonal-button {
+      min-height: 44px;
+      padding: 8px 16px;
+      border-radius: 22px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--md-primary);
+      transition: background-color 200ms cubic-bezier(0.2, 0, 0, 1);
+    }
+    .md-library-text-button:hover { background: color-mix(in oklab, var(--md-primary) 8%, transparent); }
+    .md-library-tonal-button { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+    .md-library-tonal-button:hover { background: color-mix(in oklab, var(--md-secondary-container) 92%, var(--md-on-secondary-container)); }
+    .md-library-text-button:disabled, .md-library-tonal-button:disabled { opacity: 0.45; }
+    .md-library-dialog {
+      position: fixed;
+      inset: auto 0 0;
+      margin: 0;
+      width: 100%;
+      max-width: none;
+      max-height: 78dvh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border: 0;
+      border-radius: 28px 28px 0 0;
+      padding: 0 0 env(safe-area-inset-bottom);
+      background: var(--md-surface-container);
+      color: var(--md-on-surface);
+    }
+    .md-library-dialog::backdrop { background: color-mix(in oklab, var(--md-shadow-color) 32%, transparent); }
+    @media (min-width: 900px) {
+      .md-library-dialog { inset: 0; margin: auto; width: 372px; border-radius: 28px; padding: 0; }
+    }
+
+    /* 书库卡与书本卡同构：封面固定 3:4，底部信息栏共用相同的内边距与字号。 */
+    .md-collection-card {
+      display: flex;
+      min-width: 0;
+    }
+    .md-collection-open { display: flex; flex: 1; flex-direction: column; width: 100%; padding: 0; text-align: left; color: var(--md-on-surface); }
+    .md-collection-art { display: block; position: relative; aspect-ratio: 3 / 4; background: var(--md-surface-high); }
+    .md-collection-board {
+      position: absolute;
+      inset: 5px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-rows: repeat(2, minmax(0, 1fr));
+      gap: 4px;
+      padding: 4px;
+      border-radius: 8px;
+      background: var(--md-surface-container);
+    }
+    .md-collection-tile {
+      position: relative;
+      display: grid;
+      min-width: 0;
+      overflow: hidden;
+      place-items: center;
+      border-radius: 4px;
+      background: var(--md-surface-high);
+    }
+    .md-collection-tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .md-collection-tile.is-empty {
+      background: var(--md-surface-highest);
+      color: color-mix(in oklab, var(--md-on-surface-variant) 36%, transparent);
+    }
+    .md-collection-tile.is-empty svg { width: 16px; height: 16px; }
+    .md-collection-fallback {
+      display: -webkit-box;
+      overflow: hidden;
+      height: 100%;
+      padding: 5px;
+      font-family: var(--font-display, serif);
+      font-size: 8px;
+      font-weight: 650;
+      line-height: 1.15;
+      overflow-wrap: anywhere;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      background: linear-gradient(145deg, var(--md-primary-container), var(--md-secondary-container));
+      color: var(--md-on-primary-container);
+    }
+    @media (min-width: 768px) {
+      .md-collection-board { inset: 8px; gap: 6px; padding: 7px; border-radius: 11px; }
+      .md-collection-tile { border-radius: 6px; }
+      .md-collection-tile.is-empty svg { width: 18px; height: 18px; }
+      .md-collection-fallback { padding: 6px; font-size: 9px; }
+    }
+    .md-collection-info { display: flex; flex: 1; flex-direction: column; gap: var(--md-space-50); min-width: 0; padding: var(--md-space-100); }
+    .md-collection-title { overflow: hidden; font-size: 12px; font-weight: 700; line-height: 1.375; text-overflow: ellipsis; white-space: nowrap; }
+    .md-collection-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; min-width: 0; color: var(--md-on-surface-variant); font-size: 10px; line-height: normal; font-variant-numeric: tabular-nums; }
+    .md-collection-count { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .md-collection-action, .md-collection-drop { color: var(--md-primary); font-weight: 600; white-space: nowrap; }
+    .md-collection-action { flex: none; }
+    @media (min-width: 768px) {
+      .md-collection-info { padding: var(--md-space-100) var(--md-space-150) var(--md-space-150); }
+      .md-collection-title { font-size: 13px; }
+      .md-collection-meta { font-size: 11px; }
+    }
+    .md-collection-card.is-drop-target .md-collection-board { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+    .md-library-text-button.is-drop-target { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+    .md-select-badge {
+      position: absolute;
+      z-index: 2;
+      top: 8px;
+      right: 8px;
+      display: grid;
+      width: 28px;
+      height: 28px;
+      place-items: center;
+      border-radius: 999px;
+      background: var(--md-secondary-container);
+      color: var(--md-on-secondary-container);
+      pointer-events: none;
+    }
+    .md-book-selected,
+    .md-collection-selected { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+
+    /* 触摸长按拖动：浮层跟随指尖，只负责显示，不拦截命中测试 */
+    .md-touch-dragging { cursor: grabbing; }
+    .md-touch-drag-ghost {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 65;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: max-content;
+      max-width: min(220px, calc(100vw - 24px));
+      padding: 7px 12px 7px 7px;
+      border-radius: 18px;
+      background: var(--md-surface-high);
+      color: var(--md-on-surface);
+      box-shadow:
+        0 18px 40px -18px color-mix(in oklab, var(--md-shadow-color) 46%, transparent),
+        0 0 0 0.5px color-mix(in oklab, var(--md-outline-variant) 70%, transparent);
+      pointer-events: none;
+      will-change: transform;
+    }
+    .md-touch-drag-cover {
+      position: relative;
+      display: grid;
+      flex: none;
+      width: 38px;
+      height: 50px;
+      overflow: hidden;
+      place-items: center;
+      border-radius: 9px;
+      background: var(--md-primary-container);
+      color: var(--md-on-primary-container);
+    }
+    .md-touch-drag-cover img { width: 100%; height: 100%; object-fit: cover; }
+    .md-touch-drag-mark { font-family: var(--font-display); font-size: 16px; font-weight: 800; }
+    .md-touch-drag-count {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      display: grid;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 4px;
+      place-items: center;
+      border-radius: 9px;
+      background: var(--md-primary);
+      color: var(--md-on-primary);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .md-touch-drag-copy { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+    .md-touch-drag-copy b { overflow: hidden; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .md-touch-drag-copy small { overflow: hidden; color: var(--md-primary); font-size: 10px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* MD3 状态层：hover 8%，focus / pressed 10%，不做位移与悬浮投影。 */
+    .md-card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      border-radius: inherit;
+      background: var(--md-on-surface);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 200ms cubic-bezier(0.2, 0, 0, 1);
+    }
+    .md-card--featured::after { background: var(--md-on-primary-container); }
+    @media (hover: hover) and (pointer: fine) {
+      .md-card:hover::after { opacity: 0.08; }
+    }
+    .md-card:focus-visible::after,
+    .md-card:has(:focus-visible)::after,
+    .md-card:active::after {
+      opacity: 0.10;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .md-filter-chip,
+      .md-filter-chip::before,
+      .md-menu-item,
+      .md-card,
+      .md-card::after {
+        transition: none;
+      }
+    }
+
+    /* 主行动 FAB：桌面右下角 / 手机上浮于底部导航之上 */
+    .md-fab-pos {
+      position: fixed;
+      right: 28px;
+      bottom: 26px;
+      z-index: 40;
+    }
+    @media (max-width: 899px) {
+      .md-fab-pos {
+        position: absolute;
+        right: 18px;
+        bottom: calc(6.5rem + env(safe-area-inset-bottom));
+      }
+    }
+
+    /* 手机悬浮胶囊底栏预留高度（14px 外边距 + 76px 栏高 + 14px 余量） */
+    .md-bottom-nav-space {
+      padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+    }
+
+    .md-scrim {
+      background: color-mix(in oklab, var(--md-shadow-color) 32%, transparent);
+    }
+    .md-scrim-soft {
+      background: color-mix(in oklab, var(--md-shadow-color) 30%, transparent);
+    }

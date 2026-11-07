@@ -1,0 +1,75 @@
+    /* Uiverse-inspired tactile button */
+    .uiverse-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      padding: 0.45rem 0.9rem;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+      color: var(--fg-main);
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-line);
+      border-radius: 8px;
+      box-shadow: 0 2px 0 0 var(--border-line);
+      transition: all 0.12s cubic-bezier(0.2, 0, 0, 1);
+      cursor: pointer;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .uiverse-btn:hover {
+        border-color: var(--brand-primary);
+        color: var(--brand-primary);
+        box-shadow: 0 2px 0 0 var(--brand-primary);
+        transform: translateY(-1px);
+      }
+    }
+    .uiverse-btn:active {
+      transform: translateY(1px);
+      box-shadow: 0 0px 0 0 var(--brand-primary);
+    }
+
+    /* Primary Theme tactile button */
+    .uiverse-btn-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      padding: 0.45rem 1rem;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--brand-on-primary);
+      background-color: var(--brand-primary);
+      border: 1px solid var(--brand-primary-hover);
+      border-radius: 8px;
+      box-shadow: 0 2px 0 0 var(--brand-shadow);
+      transition: all 0.12s cubic-bezier(0.2, 0, 0, 1);
+      cursor: pointer;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .uiverse-btn-primary:hover {
+        background-color: var(--brand-primary-hover);
+        transform: translateY(-1px);
+        box-shadow: 0 3px 0 0 var(--brand-shadow);
+      }
+    }
+    .uiverse-btn-primary:active {
+      transform: translateY(1px);
+      box-shadow: 0 0px 0 0 var(--brand-shadow);
+    }
+
+    /* Editorial Card */
+    .editorial-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-line);
+      border-radius: 12px;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .editorial-card:hover {
+        border-color: var(--brand-primary);
+        transform: translateY(-3px);
+        box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.14);
+      }
+    }

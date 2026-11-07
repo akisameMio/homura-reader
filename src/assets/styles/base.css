@@ -1,0 +1,235 @@
+    html {
+      /* 阅读器进出时隐藏 body 滚动不会让整页横向跳动 */
+      scrollbar-gutter: stable;
+      /* 预见式返回平移书架时禁止横向溢出，避免 WebView 放大布局视口把 fixed 底栏推下屏幕 */
+      overflow-x: clip;
+    }
+
+    /* 阅读器打开时只锁根节点滚动。不要给 body 加 overflow:hidden：
+       body 一旦成为滚动容器，书架里的 position:sticky 侧栏/顶栏会失去吸顶，
+       退场动画期间先滚出视口再跳回来，看起来像组件闪没。 */
+    html.reader-scroll-locked {
+      overflow-y: hidden;
+    }
+
+    /* 阅读器隐藏真实滚动条，但保留原来的可用宽度，避免退出时书架回流 */
+    html.reader-scroll-reserved body {
+      width: calc(100vw - var(--homura-reader-scrollbar-width, 0px));
+    }
+
+    /* fixed 元素不受 body 宽度补偿影响，需同步补上滚动条偏移 */
+    html.reader-scroll-reserved .md-fab-pos {
+      right: calc(28px + var(--homura-reader-scrollbar-width, 0px));
+    }
+
+    @media (max-width: 899px) {
+      html.reader-scroll-reserved .md-fab-pos {
+        right: calc(18px + var(--homura-reader-scrollbar-width, 0px));
+      }
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--fg-main);
+      min-height: 100vh;
+      overflow-x: clip;
+      overscroll-behavior-y: contain;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #app {
+      min-height: 100vh;
+    }
+
+    /* 手机书架：整页固定外壳，只有内容列滚动。
+       顶栏 / 底栏 / FAB 都留在不滚动的外壳里，避开安卓 WebView 固定层的滚动抖动。 */
+    @media (max-width: 899px) {
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+        overscroll-behavior: none;
+      }
+
+      #app {
+        position: fixed;
+        inset: 0;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      #homura-mobile-nav-root {
+        position: absolute;
+        inset: auto 0 0;
+        z-index: 40;
+        height: 0;
+        pointer-events: none;
+      }
+
+      #homura-mobile-nav-root .mobile-nav {
+        pointer-events: auto;
+      }
+
+      .library-main-column {
+        height: 100%;
+        min-height: 0;
+      }
+
+      .library-main-column.is-settings {
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .library-scroll {
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+        -webkit-overflow-scrolling: touch;
+      }
+    }
+
+    /* 预见式返回：系统 BackEvent / 本地指针共用进度，驱动阅读器、书架和遮罩 */
+    :root {
+      --homura-back-reader-x: 0px;
+      --homura-back-reader-scale: 1;
+      --homura-back-reader-radius: 0px;
+      --homura-back-library-x: -28px;
+      --homura-back-scrim-opacity: 1;
+    }
+
+    .reader-dismiss-layer {
+      transform-origin: center center;
+      transform:
+        translate3d(var(--homura-back-reader-x), 0, 0)
+        scale(var(--homura-back-reader-scale));
+      border-radius: var(--homura-back-reader-radius);
+      will-change: transform, border-radius;
+    }
+
+    /* 整页只做二维平移，避免 WebView 把书架合成层当纹理缩放 */
+    .library-back-layer.is-under-reader {
+      transform: translateX(var(--homura-back-library-x));
+    }
+
+    html.reader-back-settling .library-back-layer.is-under-reader,
+    html.reader-back-entering .library-back-layer.is-under-reader {
+      will-change: transform;
+    }
+
+    /* 桌面书架跟随窗口滚动，整页平移会让 sticky 侧栏/顶栏跟着左右晃；
+       桌面只让阅读器自己滑出，书架保持原位。手机仍保留跟手平移。 */
+    @media (min-width: 900px) {
+      .library-back-layer.is-under-reader {
+        transform: none;
+      }
+
+      html.reader-back-entering .library-back-layer.is-under-reader {
+        animation: none;
+      }
+
+      html.reader-back-settling .library-back-layer.is-under-reader,
+      html.reader-back-entering .library-back-layer.is-under-reader {
+        will-change: auto;
+      }
+    }
+
+    .reader-back-scrim {
+      position: fixed;
+      inset: 0;
+      z-index: 45;
+      pointer-events: none;
+      opacity: var(--homura-back-scrim-opacity);
+      will-change: opacity;
+    }
+
+    .reader-back-edge {
+      position: fixed;
+      left: 0;
+      top: calc(env(safe-area-inset-top, 0px) + 84px);
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 92px);
+      z-index: 31;
+      width: 30px;
+      touch-action: pan-y;
+    }
+
+    html.reader-back-settling .reader-dismiss-layer,
+    html.reader-back-settling .library-back-layer.is-under-reader,
+    html.reader-back-settling .reader-back-scrim {
+      transition:
+        transform 300ms var(--md-ease-emphasized),
+        border-radius 300ms var(--md-ease-emphasized),
+        opacity 300ms var(--md-ease-emphasized);
+    }
+
+    html.reader-back-entering .reader-dismiss-layer {
+      animation: homura-reader-enter 300ms var(--md-ease-emphasized) both;
+    }
+
+    html.reader-back-entering .library-back-layer.is-under-reader {
+      animation: homura-library-enter 300ms var(--md-ease-emphasized) both;
+    }
+
+    html.reader-back-entering .reader-back-scrim {
+      animation: homura-scrim-enter 300ms var(--md-ease-emphasized) both;
+    }
+
+    @keyframes homura-reader-enter {
+      from {
+        transform: translate3d(100vw, 0, 0) scale(0.945);
+        border-radius: 26px;
+      }
+      to {
+        transform:
+          translate3d(var(--homura-back-reader-x), 0, 0)
+          scale(var(--homura-back-reader-scale));
+        border-radius: var(--homura-back-reader-radius);
+      }
+    }
+
+    @keyframes homura-library-enter {
+      from { transform: translateX(0); }
+      to { transform: translateX(var(--homura-back-library-x)); }
+    }
+
+    @keyframes homura-scrim-enter {
+      from { opacity: 0; }
+      to { opacity: var(--homura-back-scrim-opacity); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html.reader-back-settling .reader-dismiss-layer,
+      html.reader-back-settling .library-back-layer.is-under-reader,
+      html.reader-back-settling .reader-back-scrim,
+      html.reader-back-entering .reader-dismiss-layer,
+      html.reader-back-entering .library-back-layer.is-under-reader,
+      html.reader-back-entering .reader-back-scrim {
+        transition: none;
+        animation: none;
+      }
+    }
+
+    button,
+    select,
+    textarea {
+      touch-action: manipulation;
+    }
+
+    input[type="search"]::-webkit-search-cancel-button {
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    /* 键盘导航必须看得见焦点；鼠标点击不触发 */
+    :where(button, a, input, select, textarea, [tabindex]):focus-visible {
+      outline: 2px solid var(--md-primary);
+      outline-offset: 2px;
+    }
+    /* 书架搜索框的焦点反馈由外层胶囊承载，输入本体不再画方框 */
+    .library-search-input:focus-visible {
+      outline: none;
+    }
+    .library-search-field:focus-within {
+      background-color: var(--md-surface-highest);
+    }

@@ -1,0 +1,111 @@
+    /* 图标视觉尺寸可以小，但命中区域统一补到 44px */
+    .md-hit-target {
+      position: relative;
+    }
+    .md-hit-target::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
+
+    /* 移动菜单条目至少 44px，手指不需要精准点小字 */
+    @media (max-width: 899px) {
+      .md-mobile-menu-item {
+        min-height: 44px;
+      }
+    }
+
+    /* MD3 Slider：16px 胶囊轨道 + 4×44px 手柄，48px 触控高度 */
+    .md-range {
+      --md-range-progress: 0%;
+      --md-range-direction: to right;
+      -webkit-appearance: none;
+      appearance: none;
+      display: block;
+      width: 100%;
+      height: 48px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+    .md-range.rtl-slider {
+      --md-range-direction: to left;
+      direction: rtl;
+    }
+    .md-range:focus-visible {
+      outline: none;
+    }
+    /* 8px = 6dp 视觉留白 + 4dp 手柄的半宽，保证活动/未活动轨道不贴住手柄 */
+    .md-range::-webkit-slider-runnable-track {
+      height: 16px;
+      border-radius: 999px;
+      background:
+        linear-gradient(
+          var(--md-range-direction),
+          var(--md-primary) 0,
+          var(--md-primary) calc(var(--md-range-progress) - 8px),
+          transparent calc(var(--md-range-progress) - 8px),
+          transparent calc(var(--md-range-progress) + 8px),
+          var(--md-secondary-container) calc(var(--md-range-progress) + 8px),
+          var(--md-secondary-container) 100%
+        );
+    }
+    .md-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 4px;
+      height: 44px;
+      margin-top: -14px;
+      border: 0;
+      border-radius: 2px;
+      background: var(--md-primary);
+    }
+    .md-range:focus-visible::-webkit-slider-thumb {
+      box-shadow:
+        0 0 0 2px var(--md-range-focus-gap, var(--md-surface)),
+        0 0 0 4px var(--md-primary);
+    }
+    .md-range::-moz-range-track {
+      height: 16px;
+      border: 0;
+      border-radius: 999px;
+      background:
+        linear-gradient(
+          var(--md-range-direction),
+          var(--md-primary) 0,
+          var(--md-primary) calc(var(--md-range-progress) - 8px),
+          transparent calc(var(--md-range-progress) - 8px),
+          transparent calc(var(--md-range-progress) + 8px),
+          var(--md-secondary-container) calc(var(--md-range-progress) + 8px),
+          var(--md-secondary-container) 100%
+        );
+    }
+    .md-range::-moz-range-progress {
+      height: 16px;
+      background: transparent;
+    }
+    .md-range::-moz-range-thumb {
+      width: 4px;
+      height: 44px;
+      border: 0;
+      border-radius: 2px;
+      background: var(--md-primary);
+    }
+    .md-range:focus-visible::-moz-range-thumb {
+      box-shadow:
+        0 0 0 2px var(--md-range-focus-gap, var(--md-surface)),
+        0 0 0 4px var(--md-primary);
+    }
+    .md-range:disabled {
+      cursor: default;
+      opacity: 0.38;
+    }
+    .md-reader-bottombar,
+    .md-drawer {
+      --md-range-focus-gap: var(--md-surface-container);
+    }

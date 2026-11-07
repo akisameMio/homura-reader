@@ -1,0 +1,73 @@
+    /* 主题色板：固定 5 列，10 套主题稳定排成两行 */
+    .theme-swatch-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 6px;
+      width: 100%;
+      max-width: 248px;
+      margin-inline: auto;
+    }
+    .theme-swatch-tile {
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-width: 0;
+      aspect-ratio: 1;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--md-on-surface);
+      cursor: pointer;
+      transition: transform var(--md-duration-short) var(--md-ease-emphasized);
+    }
+    .theme-swatch-disc {
+      width: 30px;
+      aspect-ratio: 1;
+      border-radius: 9999px;
+      background-color: var(--swatch-base);
+      background-image: linear-gradient(to right, var(--swatch-light) 50%, var(--swatch-deep) 50%);
+      background-repeat: no-repeat;
+      background-position: bottom;
+      background-size: 100% 50%;
+      box-shadow:
+        inset 0 0 0 0.5px color-mix(in oklab, var(--md-shadow-color) 14%, transparent),
+        0 0 0 1px color-mix(in oklab, var(--md-shadow-color) 22%, transparent);
+      transition: transform var(--md-duration-short) var(--md-ease-emphasized);
+    }
+    .theme-swatch-check {
+      position: absolute;
+      display: grid;
+      place-items: center;
+      width: 17px;
+      height: 17px;
+      border-radius: 9999px;
+      background: var(--md-surface-container);
+      color: var(--md-on-surface);
+      box-shadow: 0 1px 4px color-mix(in oklab, var(--md-shadow-color) 18%, transparent);
+    }
+    .theme-swatch-check svg {
+      width: 10px;
+      height: 10px;
+    }
+    .theme-swatch-tile:focus-visible {
+      outline: 2px solid var(--md-primary);
+      outline-offset: 2px;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .theme-swatch-tile:hover {
+        transform: translateY(-1px);
+      }
+      .theme-swatch-tile:hover .theme-swatch-disc {
+        transform: scale(1.08);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .theme-swatch-tile,
+      .theme-swatch-disc {
+        transition: none;
+      }
+      .theme-swatch-tile:hover,
+      .theme-swatch-tile:hover .theme-swatch-disc {
+        transform: none;
+      }
+    }

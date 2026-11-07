@@ -1,0 +1,121 @@
+    /* ==========================================================================
+       移动端基础：动态视口高度与安全区
+       ========================================================================== */
+    .app-dvh {
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    .safe-bottom {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .safe-top {
+      padding-top: env(safe-area-inset-top);
+    }
+
+    /* 底部标签栏：固定高度 + 安全区，内容区用它做底部留白 */
+    .mobile-tabbar {
+      min-height: 3.5rem;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    /* 触屏上没有 hover：书本卡片的移除按钮隐藏，删除走选择模式 */
+    .card-remove-btn {
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+    .group:hover .card-remove-btn {
+      opacity: 1;
+    }
+    @media (hover: none) {
+      .card-remove-btn {
+        display: none;
+      }
+    }
+
+    /* 触屏阅读手势层：翻页模式无需滚动，全部手势交给 JS，避免纵向抖动触发 pointercancel */
+    .reader-gesture-layer {
+      touch-action: none;
+      overscroll-behavior: contain;
+    }
+
+    /* 切换阅读模式时临时禁用过渡，让内容区与原生标题栏在同一帧完成换色 */
+    html.surface-switching,
+    html.surface-switching *,
+    html.surface-switching *::before,
+    html.surface-switching *::after {
+      transition: none !important;
+    }
+
+    /* 阅读模式切换：旧表面色遮罩中央的透明孔从按钮位置扩大，露出新配色 */
+    .surface-reveal {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      opacity: 0.68;
+      pointer-events: none;
+      -webkit-mask-repeat: no-repeat;
+      mask-repeat: no-repeat;
+      -webkit-mask-size: 100% 100%;
+      mask-size: 100% 100%;
+      will-change: -webkit-mask-image, mask-image;
+    }
+
+    .manga-page-img {
+      filter: var(--manga-filter);
+      transform: translateZ(0);
+      backface-visibility: hidden;
+      -webkit-user-drag: none;
+    }
+
+    /* 安卓 WebView 给整屏大图加 color filter 会多一次离屏合成，
+       暖色 / 夜间模式翻页明显掉帧；移动端直接跳过这层滤镜。 */
+    html[data-platform="android"] .manga-page-img {
+      filter: none;
+    }
+
+    /* GPU-Accelerated Double-Buffer Stage Layer */
+    .stage-buffer-layer {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backface-visibility: hidden;
+      transform: translate3d(0, 0, 0);
+      overflow: hidden;
+    }
+
+    /* 安卓 WebView 对超长小说章节跳过屏外排版，减少滚动时的样式与绘制开销。
+       auto 会记住已经渲染过的高度，回滚时不会明显跳动。 */
+    html[data-platform="android"] .webtoon-chapter {
+      content-visibility: auto;
+      contain-intrinsic-size: auto 1200px;
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--brand-primary); opacity: 0.35; border-radius: 9999px; }
+
+    /* 移动端（手机 / 紧凑布局）隐藏所有滚动条，保留滚动与手势能力 */
+    @media (max-width: 899px) {
+      * {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+      *::-webkit-scrollbar {
+        display: none;
+        width: 0;
+        height: 0;
+      }
+      html {
+        scrollbar-gutter: auto;
+      }
+    }
+
+    /* 隐藏滚动条但保留可滚动能力（窄窗口下的阅读器工具栏） */
+    .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+    .no-scrollbar::-webkit-scrollbar { display: none; width: 0; height: 0; }
