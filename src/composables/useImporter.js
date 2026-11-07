@@ -14,7 +14,7 @@ import { findSameTitleBook, normalizeBookTitle } from '../services/bookTitles.js
 import { HomuraStore } from '../services/storage.js';
 import { formatBytes, isAndroid } from '../services/platform.js';
 import { parseTxtFile, parseMobiFileLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks, discardParsedBook } from '../services/parsers.js';
-import { makeEpubId, parseEpubFile } from '../services/epubParser.js';
+import { createNativeMangaManifest, makeEpubId, parseEpubFile } from '../services/epubParser.js';
 import {
   makeFileSource,
   makeFolderSource,
@@ -461,14 +461,19 @@ export function useImporter() {
             parseFailure = fullError;
           }
         }
-      } else if (book?.needsFullParse) {
+      } else if (book?.needsFullParse || (book?.type === 'manga' && !book.pageItems?.length)) {
         if (IMPORT_TIMING_ENABLED) console.info('[HOMURA] EPUB 元数据采样不足，回退全量解析');
         try {
           book = await parseFullEpub();
         } catch (fullError) {
-          console.warn('[HOMURA] EPUB 解析失败', fullError);
-          parseFailure = fullError;
-          book = null;
+          if (book?.needsFullParse) {
+            console.warn('[HOMURA] EPUB 解析失败', fullError);
+            parseFailure = fullError;
+            book = null;
+          } else {
+            // 漫画索引失败时仍允许入架，首次打开会回退到完整解析。
+            console.warn('[HOMURA] EPUB 漫画页清单生成失败，保留元数据', fullError);
+          }
         }
       }
     } finally {
@@ -480,6 +485,8 @@ export function useImporter() {
       return null;
     }
     book.nativeArchiveStaged = !!nativePath;
+    const pageManifest = createNativeMangaManifest(book);
+    if (pageManifest) source = { ...source, nativePageManifest: pageManifest };
     return { book, source };
   }
 

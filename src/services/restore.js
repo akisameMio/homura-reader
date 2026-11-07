@@ -16,9 +16,17 @@ import {
   removeNativeFile
 } from './nativeStorage.js';
 import { parseEpubFileLazy, parseTxtFile, parseMobiFileLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks } from './parsers.js';
-import { parseEpubNativeArchive } from './epubParser.js';
+import {
+  createNativeMangaManifest,
+  isNativeMangaManifestValid,
+  parseEpubNativeArchive
+} from './epubParser.js';
 import { createCoverThumbnail } from './coverThumb.js';
-import { canUseNativeArchive, shouldFallbackNativeArchive } from './nativeArchive.js';
+import {
+  canUseNativeArchive,
+  ensureNativeArchiveSession,
+  shouldFallbackNativeArchive
+} from './nativeArchive.js';
 import {
   isAndroidContentUri,
   stageNativeImportPath,
@@ -551,6 +559,29 @@ function sourceFailureMessage(source, failures, isFolder) {
   return `本地存档中的原${subject}不存在，请重新导入该作品`;
 }
 
+function restoreNativeMangaManifest(book, source, manifest) {
+  const nativeArchiveId = book.nativeArchiveId || book.id;
+  const nativeArchivePath = source.nativePath;
+  const pageItems = manifest.items.map(item => ({
+    nativeArchiveId,
+    nativeArchivePath,
+    nativeIndex: item.index,
+    imageWidth: Math.max(0, Number(item.width) || 0),
+    imageHeight: Math.max(0, Number(item.height) || 0),
+    url: null
+  }));
+  return {
+    id: book.id,
+    type: 'manga',
+    format: 'epub',
+    title: book.title,
+    pageItems,
+    pageCount: pageItems.length,
+    nativeArchiveId,
+    nativeArchivePath
+  };
+}
+
 // 书架里只有元数据；第一次点开时才回到存档里取原始文件重新解析
 export async function hydrateBook(book) {
   let source = null;
@@ -586,17 +617,35 @@ export async function hydrateBook(book) {
     // 原生 EPUB 不需要把整个原文件读回 JS；允许恢复的失败才回退 Blob 解析。
     if (source.nativePath && canUseNativeArchive()) {
       if (/\.epub$/i.test(source.name || '')) {
-        try {
-          parsed = await parseEpubNativeArchive(source.nativePath, {
-            id: book.id,
-            name: source.name
-          });
-        } catch (err) {
-          if (!shouldFallbackNativeArchive(err)) {
-            console.warn('[HOMURA] 原生 EPUB 被安全或限额规则拒绝，不再回退', err);
-            return false;
+        if (isNativeMangaManifestValid(source.nativePageManifest)) {
+          try {
+            // 快路径仍要验证 ZipFile 会话；失败时按既有规则回退完整存档读取。
+            await ensureNativeArchiveSession({
+              nativeArchiveId: book.nativeArchiveId || book.id,
+              nativeArchivePath: source.nativePath
+            });
+            // 漫画页清单已包含页序与尺寸，恢复书架时不需要读正文。
+            parsed = restoreNativeMangaManifest(book, source, source.nativePageManifest);
+          } catch (err) {
+            if (!shouldFallbackNativeArchive(err)) {
+              console.warn('[HOMURA] 漫画页清单对应的原生会话被安全或限额规则拒绝', err);
+              return false;
+            }
+            console.warn('[HOMURA] 漫画页清单原生会话不可用，回退完整存档读取', err);
           }
-          console.warn('[HOMURA] 原生 EPUB 恢复失败，回退完整存档读取', err);
+        } else {
+          try {
+            parsed = await parseEpubNativeArchive(source.nativePath, {
+              id: book.id,
+              name: source.name
+            });
+          } catch (err) {
+            if (!shouldFallbackNativeArchive(err)) {
+              console.warn('[HOMURA] 原生 EPUB 被安全或限额规则拒绝，不再回退', err);
+              return false;
+            }
+            console.warn('[HOMURA] 原生 EPUB 恢复失败，回退完整存档读取', err);
+          }
         }
       }
     }
@@ -624,6 +673,15 @@ export async function hydrateBook(book) {
   }
 
   if (!parsed) return false;
+  const nativePageManifest = createNativeMangaManifest(parsed);
+  if (nativePageManifest && source.nativePath && !isNativeMangaManifestValid(source.nativePageManifest)) {
+    // 旧存档第一次仍要完整解析；把页清单补进来源，下次冷启动直接走快路径。
+    try {
+      await HomuraStore.updateSourceManifest(book.id, nativePageManifest);
+    } catch (err) {
+      console.warn('[HOMURA] 漫画页清单回写失败', err);
+    }
+  }
   const previousMeta = {
     type: book.type,
     format: book.format || null,

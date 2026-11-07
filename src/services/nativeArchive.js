@@ -72,9 +72,16 @@ function nativeArchivePathFor(book) {
     || '';
 }
 
-export function openNativeDocument(archiveId, path) {
+export function openNativeDocument(archiveId, path, options = {}) {
   return enqueueLifecycle(archiveId, async () => {
-    const result = await invokeNative('openDocument', { archiveId, path });
+    // 已持久化页清单时只需要恢复 ZipFile 会话，不再扫描全部图片尺寸或
+    // 把几千条 ZIP 元数据经 IPC 送回 WebView。
+    const args = { archiveId, path };
+    if (isAndroid) {
+      args.scanDimensions = options.scanDimensions !== false;
+      args.includeEntries = options.includeEntries !== false;
+    }
+    const result = await invokeNative('openDocument', args);
     openArchives.add(archiveId);
     return result;
   });
@@ -139,7 +146,10 @@ export function ensureNativeArchiveSession(book) {
   const path = nativeArchivePathFor(book);
   if (!path) return Promise.reject(new Error('原生压缩包路径缺失'));
 
-  const openTask = openNativeDocument(archiveId, path);
+  const openTask = openNativeDocument(archiveId, path, {
+    scanDimensions: false,
+    includeEntries: false
+  });
   const task = openTask
     .then(() => true)
     .finally(() => {

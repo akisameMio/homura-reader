@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import JSZip from 'jszip';
 import {
+  createNativeMangaManifest,
   createNativeEpubArchive,
   createJsZipEpubArchive,
+  isNativeMangaManifestValid,
   parseEpubArchive,
   parseEpubFile,
   parseEpubNativeArchive
@@ -20,6 +22,41 @@ globalThis.NodeFilter = dom.window.NodeFilter;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+
+test('漫画 EPUB 页清单只保存原生条目索引与尺寸', () => {
+  const manifest = createNativeMangaManifest({
+    type: 'manga',
+    format: 'epub',
+    pageItems: [
+      { nativeIndex: 12, imageWidth: 1200, imageHeight: 1800, url: 'blob:page' },
+      { nativeIndex: 19, imageWidth: 960, imageHeight: 1280 }
+    ]
+  });
+
+  assert.deepEqual(manifest, {
+    version: 1,
+    pageCount: 2,
+    items: [
+      { index: 12, width: 1200, height: 1800 },
+      { index: 19, width: 960, height: 1280 }
+    ]
+  });
+  assert.equal(isNativeMangaManifestValid(manifest), true);
+  assert.equal(isNativeMangaManifestValid({
+    version: 1,
+    items: [{ index: -1, width: 1, height: 1 }]
+  }), false);
+  assert.equal(createNativeMangaManifest({
+    type: 'manga',
+    format: 'epub',
+    pageItems: [{ zipEntry: {}, url: 'blob:page' }]
+  }), null);
+  assert.equal(createNativeMangaManifest({
+    type: 'epub',
+    format: 'epub',
+    pageItems: [{ nativeIndex: 1 }]
+  }), null);
+});
 
 function escapeXml(value) {
   return String(value || '').replace(/[&<>"']/g, char => ({

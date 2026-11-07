@@ -50,6 +50,36 @@ export function epubTitleFromFileName(name) {
   return String(name || 'book.epub').replace(/(\.kepub)?\.epub$/i, '');
 }
 
+const NATIVE_MANGA_MANIFEST_VERSION = 1;
+
+// EPUB 漫画的页序与图片尺寸在导入时已经完整解析过，顺手存成轻量清单。
+// 首次打开只按 ZIP 条目索引取图，不再重新解析全书 XHTML、扫描图片头。
+export function createNativeMangaManifest(book) {
+  if (book?.type !== 'manga' || book?.format !== 'epub') return null;
+  const items = [];
+  for (const item of book.pageItems || []) {
+    if (!Number.isInteger(item?.nativeIndex)) return null;
+    items.push({
+      index: item.nativeIndex,
+      width: Math.max(0, Number(item.imageWidth) || 0),
+      height: Math.max(0, Number(item.imageHeight) || 0)
+    });
+  }
+  if (items.length === 0) return null;
+  return {
+    version: NATIVE_MANGA_MANIFEST_VERSION,
+    pageCount: items.length,
+    items
+  };
+}
+
+export function isNativeMangaManifestValid(manifest) {
+  return manifest?.version === NATIVE_MANGA_MANIFEST_VERSION
+    && Array.isArray(manifest.items)
+    && manifest.items.length > 0
+    && manifest.items.every(item => Number.isInteger(item?.index) && item.index >= 0);
+}
+
 async function readNativeTexts(archiveId, paths, entryIndexByPath) {
   const textByPath = new Map();
   const validPaths = paths.filter(path => entryIndexByPath.has(path));

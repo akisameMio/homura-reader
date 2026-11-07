@@ -178,6 +178,24 @@ export const HomuraStore = (() => {
     return run(STORE_SOURCES, 'readonly', store => store.get(id));
   }
 
+  function idbUpdateSourceManifest(id, nativePageManifest) {
+    if (disabled) return Promise.reject(new Error('本地存储不可用，书页清单未保存'));
+    return openDb().then(db => new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_SOURCES, 'readwrite');
+      const store = tx.objectStore(STORE_SOURCES);
+      let found = false;
+      const req = store.get(id);
+      req.onsuccess = () => {
+        if (!req.result) return;
+        found = true;
+        store.put({ ...req.result, nativePageManifest });
+      };
+      tx.oncomplete = () => found ? resolve() : reject(new Error('书目来源不存在'));
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    }));
+  }
+
   function idbUpdateBookFavorite(id, favorite) {
     if (disabled) return Promise.reject(new Error('本地存储不可用，收藏未保存'));
     return openDb().then(db => new Promise((resolve, reject) => {
@@ -435,6 +453,10 @@ export const HomuraStore = (() => {
     return idbGetSource(id);
   }
 
+  function updateSourceManifest(id, nativePageManifest) {
+    return idbUpdateSourceManifest(id, nativePageManifest);
+  }
+
   async function updateBookFavorite(id, favorite) {
     markNativeDirty();
     await idbUpdateBookFavorite(id, favorite);
@@ -570,6 +592,7 @@ export const HomuraStore = (() => {
     updateBookMeta,
     updateBookFavorite,
     getSource,
+    updateSourceManifest,
     listCollections,
     saveCollections,
     saveProgress,

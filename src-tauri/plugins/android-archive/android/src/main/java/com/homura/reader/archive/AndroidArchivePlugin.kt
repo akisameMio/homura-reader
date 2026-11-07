@@ -57,6 +57,8 @@ private val IMAGE_NAME = Regex(""".*\.(jpg|jpeg|png|webp|gif|avif|bmp)$""", Rege
 class OpenOptions {
   lateinit var archiveId: String
   lateinit var path: String
+  var scanDimensions: Boolean = true
+  var includeEntries: Boolean = true
 }
 
 @InvokeArg
@@ -146,22 +148,28 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
         if (entries.isEmpty()) throw IllegalStateException("压缩包内没有可读取的条目")
         if (entries.size > MAX_ENTRIES) throw IllegalStateException("压缩包条目数量过多")
 
-        val dimensions = readPageDimensions(zipFile, entries)
+        val dimensions = if (options.scanDimensions) {
+          readPageDimensions(zipFile, entries)
+        } else {
+          emptyList()
+        }
         val session = createSession(options.archiveId, zipFile, entries)
         replaceSession(session)
 
         JSObject().apply {
           put("archiveId", options.archiveId)
-          put("entries", JSArray().apply {
-            entries.forEachIndexed { index, entry ->
-              put(entryJson(entry, index, dimensions[index]))
-            }
-          })
-          put("images", JSArray().apply {
-            entries.forEachIndexed { index, entry ->
-              if (isImageEntry(entry)) put(entryJson(entry, index, dimensions[index]))
-            }
-          })
+          if (options.includeEntries) {
+            put("entries", JSArray().apply {
+              entries.forEachIndexed { index, entry ->
+                put(entryJson(entry, index, dimensions.getOrNull(index)))
+              }
+            })
+            put("images", JSArray().apply {
+              entries.forEachIndexed { index, entry ->
+                if (isImageEntry(entry)) put(entryJson(entry, index, dimensions.getOrNull(index)))
+              }
+            })
+          }
         }
       } catch (error: Throwable) {
         zipFile.close()

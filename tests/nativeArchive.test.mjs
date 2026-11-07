@@ -4,6 +4,11 @@ import assert from 'node:assert/strict';
 const calls = [];
 let sessionOpen = false;
 
+Object.defineProperty(globalThis, 'navigator', {
+  value: { userAgent: 'Mozilla/5.0 (Linux; Android 15; PJX110) AppleWebKit/537.36' },
+  configurable: true
+});
+
 globalThis.window = {
   __TAURI__: {
     core: {
@@ -58,6 +63,11 @@ test('关闭阅读器后按保存的路径懒重开 ZipFile 会话', async () =>
     calls.filter(call => call.args.archiveId === book.nativeArchiveId).map(call => call.name),
     ['openDocument', 'close', 'openDocument']
   );
+  const reopenCall = calls.filter(call => (
+    call.name === 'openDocument' && call.args.archiveId === book.nativeArchiveId
+  )).at(-1);
+  assert.equal(reopenCall.args.scanDimensions, false);
+  assert.equal(reopenCall.args.includeEntries, false);
 });
 
 test('快速切书时 close 与后续 openDocument 按压缩包串行执行', async () => {
