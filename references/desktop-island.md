@@ -130,7 +130,7 @@ z-index: 40;
 - `border-radius: 28px`
 - 背景：`surface-container`
 - 文字：`on-surface`
-- 阴影只使用 `var(--md-shadow-color)` 派生，不直接使用 `on-surface` / `on-surface-variant`
+- 阴影只使用 `var(--md-shadow-color-soft)` 派生，不直接使用 `on-surface` / `on-surface-variant`
 - 最大高度：
   - 普通 surface：`calc(100dvh - 112px)`
   - 更新 surface：`min(680px, calc(100dvh - 112px))`
@@ -545,7 +545,7 @@ const isTextEntry = active && (
   `aria-owns="homura-island-action"` 把外置按钮纳入对话框语义。
 - 更新圆钮：`aria-haspopup="dialog"`，标题明确“有新版本可用”或“更新已下载”。
 - 所有颜色必须来自 `--md-*`；禁止新增 hex / `rgb()` / 纯黑纯白。
-- 投影必须使用 `var(--md-shadow-color)`，否则夜间会泛白。
+- 投影必须使用 `var(--md-shadow-color-soft)`，否则夜间会泛白。
 - 新增图标必须有 `title` 或 `aria-label`。
 - 不新增 toast / `alert` / 全局消息条。
 

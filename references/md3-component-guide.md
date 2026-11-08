@@ -56,7 +56,7 @@
 约束：
 
 - 禁止新增 hex、`rgb()`、纯黑纯白。需要状态层时使用 `color-mix(in oklab, ...)`。
-- 阴影和遮罩只用 `--md-shadow-color`；不要用 `--md-on-surface` 当阴影色，夜间会泛白。
+- 投影用 `--md-shadow-color-soft`，遮罩用 `--md-shadow-color`；不要用 `--md-on-surface` 当阴影色，夜间会泛白。
 - Tailwind 不要写 `bg-[var(--md-surface)]/92`，改用 `color-mix`。
 - 一屏只有一个实心 `primary` 主行动。抽屉底部的「完成」与页面 FAB 不同时出现。
 - 需要透明度时优先叠在正确容器上，不要靠降低整个组件 `opacity` 来解决层级。
@@ -407,7 +407,7 @@
 - [ ] 先检查了现有共享组件和类，没有重复造按钮、开关、分段控件或 sheet。
 - [ ] 颜色全部来自 `--md-*`，容器与 `on-*` 成对。
 - [ ] 没有新增 hex、`rgb()`、纯黑纯白、`--brand-*` / `--bg-*` / `--fg-*`。
-- [ ] 阴影、遮罩全部使用 `--md-shadow-color`。
+- [ ] 投影使用 `--md-shadow-color-soft`、遮罩使用 `--md-shadow-color`。
 - [ ] 主行动只有一个；其余操作使用 tonal / text / icon。
 - [ ] 图标按钮有可访问名称；开关、选中项、抽屉展开状态有正确 ARIA。
 - [ ] 桌面 900px 与手机 390px 都能用；无横向溢出。

@@ -50,14 +50,18 @@
 | outline | #6B7280 | #8A7F68 | #8B95A3 |
 | outline-variant | #CBD5E1 | #D8CDB6 | #3A424C |
 | shadow-color | `on-surface` | `on-surface` | `surface` |
+| shadow-color-soft | shadow-color 52% + surface | shadow-color 52% + surface | 同 shadow-color（夜间不再变亮） |
 | manga-filter | none | sepia(.18) brightness(.97) contrast(.98) | brightness(.92) |
 
 ## 3.1 Elevation（`:root`）
 
 | token | 值 | 用途 |
 |---|---|---|
-| `--md-elevation-hover` | `0 6px 16px -10px color-mix(in oklab, var(--md-shadow-color) 52%, transparent)` | 筛选胶囊与侧栏导航项的鼠标悬浮投影 |
-| `--md-elevation-level1` | 双层 `--md-shadow-color` 低透明度投影 | 仅 elevated 卡型与需要 level 1 的容器 |
+| `--md-shadow-color-soft` | `color-mix(in oklab, var(--md-shadow-color) 52%, var(--md-surface))` | 所有投影的取色；把黑色阴影降为中性灰 |
+| `--md-elevation-hover` | `0 6px 16px -10px color-mix(in oklab, var(--md-shadow-color-soft) 52%, transparent)` | 筛选胶囊与侧栏导航项的鼠标悬浮投影 |
+| `--md-elevation-level1` | 双层 `--md-shadow-color-soft` 低透明度投影 | 仅 elevated 卡型与需要 level 1 的容器 |
+
+> 遮罩（scrim）继续用 `--md-shadow-color`，不受 `shadow-color-soft` 影响，保持原有压暗强度。
 
 ## 3.2 Spacing（`:root`）
 

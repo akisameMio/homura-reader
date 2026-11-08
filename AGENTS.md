@@ -29,7 +29,7 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 | 命令 | 作用 |
 | --- | --- |
 | `npm install` | 安装前端依赖；Tauri 命令找不到时先跑这个 |
-| `npm test` | `node --test tests/*.test.mjs`，当前 28 个测试文件、158 条用例全绿，约 1 秒 |
+| `npm test` | `node --test tests/*.test.mjs`，当前 29 个测试文件、162 条用例全绿，约 1 秒 |
 | `npm run dev:vite` | 只起 Vite 开发服务器，固定端口 **5173**（strictPort），带 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`（最常用的快速验证） |
 | `npm run check:dark-glow` | 扫描夜间白色泛光；`build:vite` 会自动执行 |
@@ -74,7 +74,7 @@ src/
   composables/             9 个：useImporter / useViewport / useShortcuts / useSheetDrag / useShelfDialogs /
                            useScrollBounce / useDuplicateImport / useReaderBackDismiss / useAndroidBackExit
   components/              41 个 SFC（视图与交互）
-tests/                     28 个 .test.mjs（node:test + assert/strict + jsdom）
+tests/                     29 个 .test.mjs（node:test + assert/strict + jsdom）
 scripts/                   4 个：check-dark-glow / generate-icons / release-notes / sync-android-icons
 references/                4 份规范：md3-component-guide / tokens / ui-component-spec / desktop-island
 public/vendor/             开发环境运行时 Tailwind；生产构建转静态 CSS 并从 dist 删除
@@ -130,7 +130,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 - 容器色必须成对使用 `on-*` 文字色；暗色模式靠这对 token 自动反转，不要写死白字/黑字。
 - **不要在新代码里用旧别名** `--brand-* / --bg-* / --fg-* / --border-line`。注意 `tokens.css` 末尾仍保留这组 legacy 别名到 `--md-*` 的映射，`DragOverlay.vue`、`WebtoonView.vue`、`NovelCard.vue`、`ReaderModal.vue`、`legacy.css` 等存量代码还在用；迁移一处删一处，但不要直接删映射，否则存量会瞬间失色。
 - Tailwind 在 CSS 变量上直接加透明度修饰（如 `bg-[var(--md-surface)]/92`）不可靠，会变成透明；需要透明度就用 `color-mix`。
-- 夜间阴影与遮罩统一用 `var(--md-shadow-color)`；不要在 `box-shadow` / `drop-shadow` / `text-shadow` / scrim 背景里使用 `--md-on-surface` 或 `--md-on-surface-variant`，它们在夜间会翻转成近白色并产生泛光。`npm run check:dark-glow` 会拦截这类写法。
+- 投影用 `var(--md-shadow-color-soft)`（shadow-color 与 surface 的 52% 混合，夜间不再变亮），遮罩（scrim）与描边环继续用 `var(--md-shadow-color)`；不要在 `box-shadow` / `drop-shadow` / `text-shadow` / scrim 背景里使用 `--md-on-surface` 或 `--md-on-surface-variant`，它们在夜间会翻转成近白色并产生泛光。`npm run check:dark-glow` 会拦截这类写法。
 - 一屏只保留一个 `primary` 实心主行动（书架只有「导入」FAB / 桌面灵动胶囊）。
 
 ### 5.2 主题与表面
@@ -214,7 +214,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 - 桌面 EPUB 原生通道异常时先确认导入文件已写进 `$APPDATA/homura-native-sources`，并检查 `openDocument` 是否注册；安全限制错误本来就不会回退 JSZip。
 - SQLite 书目异常时先查 `$APPDATA/homura-metadata/homura.sqlite3` 与控制台是否出现 `原生元数据不可用`；保留 `homura-native-metadata-dirty` 让下次启动重建，不要手工只清 SQLite 行。封面格式不支持时 Rust 返回 `NATIVE_UNSUPPORTED`，Canvas 会接管；`NATIVE_LIMIT_EXCEEDED` 不会回退。
 - Tailwind 对 CSS 变量加透明度修饰会失效，改用 `color-mix`。
-- 夜间出现白色泛光时，优先检查 `--md-on-surface` / `--md-on-surface-variant` 是否被当作阴影或遮罩色；投影统一改用 `--md-shadow-color`，并运行 `npm run check:dark-glow`。
+- 夜间出现白色泛光时，优先检查 `--md-on-surface` / `--md-on-surface-variant` 是否被当作阴影或遮罩色；投影统一改用 `--md-shadow-color-soft`（遮罩仍用 `--md-shadow-color`），并运行 `npm run check:dark-glow`。
 - 触屏上不要依赖 `:hover` 显示操作按钮；触屏常显，鼠标设备才 hover。
 - iOS Safari 不支持文件夹选择与 File System Access API；Android WebView 可能暴露 `showOpenFilePicker`，但 `content://` 句柄跨重启会失去权限，`platform.js` 已强制 Android 关闭 FSA。Android 系统选择器也选不到目录，不要绕开这些降级。
 - 本地与 `origin` 分叉时直接 push 会被拒；先 `git pull --rebase`，别强推。
@@ -247,7 +247,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 - [ ] 改更新链路：手动检查 `npm run build` 后下载与安装路径，不要只测检查更新。
 - [ ] 改 Tauri / 窗口：跑 `npm run dev`，确认启动不黑屏、标题栏随模式换色、全屏可进出。
 - [ ] 新代码里搜不到新增 hex / `rgb(`，没有引入图标库或组件库。
-- [ ] 新增投影 / 遮罩使用 `--md-shadow-color`，`npm run check:dark-glow` 通过。
+- [ ] 新增投影使用 `--md-shadow-color-soft`、遮罩使用 `--md-shadow-color`，`npm run check:dark-glow` 通过。
 - [ ] 没有提交任何构建产物。
 
 ## 10. 去哪里找上下文
