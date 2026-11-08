@@ -43,17 +43,20 @@
     <p class="md-reader-topbar-title" :title="bookTitle">{{ bookTitle }}</p>
 
     <div class="md-reader-topbar-side is-end">
-      <!-- Aa 直接开排版；外观与封面也在同一个抽屉里 -->
+      <!-- 可重排的正文用 Aa 开排版；漫画 / PDF 只开显示设置，用齿轮图标 -->
       <button
         type="button"
         class="md-reader-type-button md-icon-button"
         :class="{ 'is-active': ui.settingsOpen }"
-        title="排版与外观"
-        aria-label="排版与外观"
+        :title="isReflowable ? '排版与外观' : '阅读设置'"
+        :aria-label="isReflowable ? '排版与外观' : '阅读设置'"
         aria-controls="reader-settings-drawer"
         :aria-expanded="ui.settingsOpen"
         @click="ui.openSettings()"
-      >Aa</button>
+      >
+        <span v-if="isReflowable" class="md-reader-type-glyph" aria-hidden="true">Aa</span>
+        <MdIcon v-else name="settings" />
+      </button>
       <button
         type="button"
         class="md-icon-button"
@@ -110,6 +113,8 @@ const emit = defineEmits(['back']);
 const favoriteBusy = ref(false);
 const favoriteError = ref('');
 const isFavorite = computed(() => !!shelf.library.find(book => book.id === reader.currentBook?.id)?.favorite);
+// 漫画与 PDF 的页面是位图，没有字体 / 行距可调
+const isReflowable = computed(() => reader.currentBook?.type !== 'manga');
 const bookTitle = computed(() => reader.currentBook?.title || '');
 watch(() => reader.currentBook?.id, () => { favoriteError.value = ''; });
 
