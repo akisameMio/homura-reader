@@ -203,7 +203,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 17. **书库归属唯一**：每本书最多属于一个书库，`moveCollectionBooks` 负责搬移而不是复制；删除书库不能连带删书。
 18. **导入必须可取消可重试**：`useImporter` + `importProgress` store 支持取消、单本失败重试、同名确认、按批提交。并发与批量上限是实测过的（桌面 4 / Android 2，超 64MB 降到 3、超 256MB 降到 2、Android 超 32MB 降到 1），不要随手调高。
 19. **应用内更新只认官方仓库**：`updates.js` 的 `REPOSITORY_URL` 与 `external.js` 的白名单都锁死 `github.com/ningnanzhenshit-coder/HOMURA-reader`；下载只校验字节数与 `expected_size` 一致，没有签名/哈希校验，不要对外宣称更强保证。
-20. **Android 预见式返回**：`useReaderBackDismiss` 直接写 `--homura-back-*` CSS 变量驱动动画，**不能**改成响应式状态，否则返回手势会掉帧。
+20. **Android 预见式返回**：`useReaderBackDismiss` 直接写 `--homura-back-*` CSS 变量驱动动画，**不能**改成响应式状态，否则返回手势会掉帧。native 模式（API 34+）必须同时保留 `app.onBackButtonPress` 的 JS 兜底监听：框架在 `Checker` 校验不过时只打日志、静默丢弃原生回调，插件却照样 resolve，一旦撤掉 JS 监听，阅读器期间就没有任何返回消费者，返回会落到 Tauri `AppPlugin` 的 `activity.onBackPressed()` 直接 finish 并退回桌面。原生回调是 top 时 JS 收不到事件，两条通道不会重复触发，不要「优化」成单通道。
 
 ## 7. 常见坑
 

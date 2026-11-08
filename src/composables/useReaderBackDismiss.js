@@ -340,8 +340,12 @@ export function useReaderBackDismiss(reader, ui) {
     });
   }
 
+  // 预见式返回是否真的注册成功，前端拿不到可靠答案：框架在 Checker 校验不过时只打日志、静默丢弃回调，
+  // 而插件仍会 resolve。所以 native 模式下这条 button 事件监听同样保持启用——原生回调生效时它收不到事件，
+  // 一旦原生没接管上，它就是阅读器期间唯一的返回消费者，能挡住直接 finish 退到桌面。
   async function enableAndroidFallback() {
-    if (!isAndroid || androidBackMode !== 'fallback' || fallbackListener || !reader.currentBook) return;
+    if (!isAndroid || fallbackListener || !reader.currentBook) return;
+    if (androidBackMode !== 'fallback' && androidBackMode !== 'native') return;
     const app = window.__TAURI__ && window.__TAURI__.app;
     if (!app || typeof app.onBackButtonPress !== 'function') return;
 
@@ -415,8 +419,8 @@ export function useReaderBackDismiss(reader, ui) {
       if (result && result.supported) {
         androidBackMode = 'native';
         nativePredictiveBackSupported.value = true;
-        await disableAndroidFallback();
         await enableNativePredictiveBack();
+        await enableAndroidFallback();
       } else {
         androidBackMode = 'fallback';
         await enableAndroidFallback();
@@ -443,6 +447,7 @@ export function useReaderBackDismiss(reader, ui) {
         disableAndroidFallback();
       } else if (androidBackMode === 'native') {
         enableNativePredictiveBack();
+        enableAndroidFallback();
       } else if (androidBackMode === 'fallback') {
         enableAndroidFallback();
       }
