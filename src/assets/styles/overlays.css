@@ -165,6 +165,36 @@
     .md-reader-topbar-side.is-end {
       justify-content: flex-end;
     }
+    /* 字体浮层：贴 Aa 下方，走通用 .md-menu（8px 圆角 + elevation-2） */
+    .md-reader-font-menu {
+      position: absolute;
+      z-index: 40;
+      top: calc(100% + 8px);
+      right: 0;
+      width: 208px;
+    }
+    .md-reader-font-item {
+      gap: 10px;
+    }
+    .md-reader-font-sample {
+      flex: none;
+      width: 28px;
+      font-size: 20px;
+      line-height: 1;
+      text-align: center;
+      color: var(--md-on-surface);
+    }
+    .md-reader-font-name {
+      flex: 1 1 auto;
+      min-width: 0;
+      text-align: left;
+    }
+    .md-reader-font-menu-divider {
+      display: block;
+      height: 1px;
+      margin: 4px 8px;
+      background: color-mix(in oklab, var(--md-outline-variant) 72%, transparent);
+    }
     .md-reader-topbar-group {
       display: flex;
       align-items: center;
@@ -327,11 +357,9 @@
       border: 0;
       border-radius: 999px;
       font-size: 20px;
-      color: color-mix(in oklab, var(--md-reader-ink) 74%, transparent);
-      background: var(--md-surface-high);
-      box-shadow:
-        0 1px 2px 0 color-mix(in oklab, var(--md-shadow-color) 24%, transparent),
-        0 1px 3px 1px color-mix(in oklab, var(--md-shadow-color) 10%, transparent);
+      color: color-mix(in oklab, var(--md-reader-ink) 62%, transparent);
+      background: transparent;
+      box-shadow: none;
       opacity: 0;
       transform: translate3d(0, -50%, 0) scale(0.92);
       transition:
@@ -355,18 +383,12 @@
     .reader-stage-shell.is-obscured .reader-page-arrow {
       opacity: 0;
     }
+    /* 悬停才给一个无边框、无阴影的浅色胶囊；静止时只有箭头本身 */
     .reader-page-arrow:hover {
       color: var(--md-reader-ink);
-      background-color: var(--md-surface-high);
-      /* MD3 state layer：on-surface 8% 叠在容器色上，而不是再加一层半透明 */
-      background-image: linear-gradient(
-        color-mix(in oklab, var(--md-on-surface) 8%, transparent),
-        color-mix(in oklab, var(--md-on-surface) 8%, transparent)
-      );
-      transform: translate3d(0, -50%, 0) scale(1.04);
-      box-shadow:
-        0 2px 6px 2px color-mix(in oklab, var(--md-shadow-color) 16%, transparent),
-        0 1px 2px 0 color-mix(in oklab, var(--md-shadow-color) 24%, transparent);
+      background: var(--md-surface-high);
+      box-shadow: none;
+      transform: translate3d(0, -50%, 0) scale(1);
     }
     /* 到头的方向压暗并让出点击，避免“按了没反应”；仍只在悬停纸面时出现 */
     .reader-stage-shell:hover .reader-page-arrow.is-dim,

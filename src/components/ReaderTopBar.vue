@@ -43,20 +43,74 @@
     <p class="md-reader-topbar-title" :title="bookTitle">{{ bookTitle }}</p>
 
     <div class="md-reader-topbar-side is-end">
-      <!-- 可重排的正文用 Aa 开排版；漫画 / PDF 只开显示设置，用齿轮图标 -->
+      <!-- 可重排的正文用 Aa 开字体浮层；漫画 / PDF 没有字体可换，用齿轮开显示设置 -->
       <button
+        v-if="isReflowable"
+        ref="typeButton"
         type="button"
         class="md-reader-type-button md-icon-button"
+        :class="{ 'is-active': ui.fontMenuOpen }"
+        title="字体"
+        aria-label="字体"
+        aria-haspopup="menu"
+        aria-controls="reader-font-menu"
+        :aria-expanded="ui.fontMenuOpen"
+        @click="ui.toggleFontMenu()"
+      >
+        <span class="md-reader-type-glyph" aria-hidden="true">Aa</span>
+      </button>
+      <button
+        v-else
+        type="button"
+        class="md-icon-button"
         :class="{ 'is-active': ui.settingsOpen }"
-        :title="isReflowable ? '排版与外观' : '阅读设置'"
-        :aria-label="isReflowable ? '排版与外观' : '阅读设置'"
+        title="阅读设置"
+        aria-label="阅读设置"
         aria-controls="reader-settings-drawer"
         :aria-expanded="ui.settingsOpen"
         @click="ui.openSettings()"
       >
-        <span v-if="isReflowable" class="md-reader-type-glyph" aria-hidden="true">Aa</span>
-        <MdIcon v-else name="settings" />
+        <MdIcon name="settings" />
       </button>
+
+      <Transition
+        enter-active-class="md-fade-enter-active"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="md-fade-leave-active"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="isReflowable && ui.fontMenuOpen"
+          id="reader-font-menu"
+          ref="fontMenu"
+          class="md-menu md-reader-font-menu"
+          role="menu"
+          aria-label="正文字体"
+        >
+          <p class="md-menu-label">字体</p>
+          <button
+            v-for="option in fontOptions"
+            :key="option.value"
+            type="button"
+            role="menuitemradio"
+            :aria-checked="reader.layoutConfig.fontFamily === option.value"
+            class="md-menu-item md-reader-font-item"
+            @click="pickFont(option.value)"
+          >
+            <span class="md-reader-font-sample" :style="{ fontFamily: option.stack }" aria-hidden="true">永</span>
+            <span class="md-reader-font-name">{{ option.label }}</span>
+            <MdIcon v-if="reader.layoutConfig.fontFamily === option.value" name="check" class="md-menu-check" />
+          </button>
+          <span class="md-reader-font-menu-divider" role="separator"></span>
+          <button type="button" role="menuitem" class="md-menu-item" @click="openFullSettings">
+            <MdIcon name="settings" />
+            <span class="md-reader-font-name">更多排版设置</span>
+          </button>
+        </div>
+      </Transition>
+
       <button
         type="button"
         class="md-icon-button"
@@ -97,11 +151,12 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useReaderStore } from '../stores/reader.js';
 import { useShelfStore } from '../stores/shelf.js';
 import { useSettingsStore } from '../stores/settings.js';
 import { useUiStore } from '../stores/ui.js';
+import { READER_FONT_OPTIONS } from '../services/readerLayout.js';
 import MdIcon from './MdIcon.vue';
 
 const reader = useReaderStore();
@@ -116,7 +171,48 @@ const isFavorite = computed(() => !!shelf.library.find(book => book.id === reade
 // 漫画与 PDF 的页面是位图，没有字体 / 行距可调
 const isReflowable = computed(() => reader.currentBook?.type !== 'manga');
 const bookTitle = computed(() => reader.currentBook?.title || '');
-watch(() => reader.currentBook?.id, () => { favoriteError.value = ''; });
+const fontOptions = READER_FONT_OPTIONS;
+const typeButton = ref(null);
+const fontMenu = ref(null);
+
+watch(() => reader.currentBook?.id, () => {
+  favoriteError.value = '';
+  ui.closeFontMenu();
+});
+
+function onDocumentPointerDown(event) {
+  if (!ui.fontMenuOpen) return;
+  const target = event.target;
+  if (fontMenu.value?.contains(target) || typeButton.value?.contains(target)) return;
+  ui.closeFontMenu();
+}
+
+function onDocumentKeydown(event) {
+  if (!ui.fontMenuOpen || event.key !== 'Escape') return;
+  // 浮层优先吃掉 Esc，别让全局快捷键顺手关掉阅读器
+  event.preventDefault();
+  event.stopPropagation();
+  ui.closeFontMenu();
+  typeButton.value?.focus();
+}
+
+document.addEventListener('pointerdown', onDocumentPointerDown, true);
+document.addEventListener('keydown', onDocumentKeydown, true);
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocumentPointerDown, true);
+  document.removeEventListener('keydown', onDocumentKeydown, true);
+});
+
+function pickFont(value) {
+  reader.setFontFamily(value);
+  ui.closeFontMenu();
+  nextTick(() => typeButton.value?.focus());
+}
+
+function openFullSettings() {
+  ui.closeFontMenu();
+  ui.openSettings();
+}
 
 async function toggleFavorite() {
   const id = reader.currentBook?.id;

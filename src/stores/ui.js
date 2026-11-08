@@ -14,7 +14,9 @@ export const useUiStore = defineStore('ui', () => {
   const settingsOpen = ref(false);
   const tocOpen = ref(false);
   const collectionTocOpen = ref(false);
-  const readerDrawerOpen = computed(() => settingsOpen.value || tocOpen.value || collectionTocOpen.value);
+  // 字体浮层：贴顶栏的小菜单，打开期间等同抽屉，钉住工具栏并收起箭头
+  const fontMenuOpen = ref(false);
+  const readerDrawerOpen = computed(() => settingsOpen.value || tocOpen.value || collectionTocOpen.value || fontMenuOpen.value);
   const fullscreen = ref(false);
   let hideTimer = null;
   let fullscreenBusy = false;
@@ -49,6 +51,7 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   function openSettings() {
+    fontMenuOpen.value = false;
     collectionTocOpen.value = false;
     settingsOpen.value = true;
     tocOpen.value = false;
@@ -62,6 +65,7 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   function openToc() {
+    fontMenuOpen.value = false;
     collectionTocOpen.value = false;
     tocOpen.value = true;
     settingsOpen.value = false;
@@ -75,6 +79,7 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   function openCollectionToc() {
+    fontMenuOpen.value = false;
     collectionTocOpen.value = true;
     settingsOpen.value = false;
     tocOpen.value = false;
@@ -87,8 +92,26 @@ export const useUiStore = defineStore('ui', () => {
     showChrome();
   }
 
+  // 字体浮层：打开时钉住工具栏，关闭时重新计时
+  function openFontMenu() {
+    fontMenuOpen.value = true;
+    clearHideTimer();
+    readerChromeVisible.value = true;
+  }
+
+  function closeFontMenu() {
+    fontMenuOpen.value = false;
+    showChrome();
+  }
+
+  function toggleFontMenu() {
+    if (fontMenuOpen.value) closeFontMenu();
+    else openFontMenu();
+  }
+
   // 打开/关闭书籍时复位，避免抽屉状态残留到下一本
   function resetReaderUi() {
+    fontMenuOpen.value = false;
     collectionTocOpen.value = false;
     clearHideTimer();
     settingsOpen.value = false;
@@ -133,8 +156,12 @@ export const useUiStore = defineStore('ui', () => {
     tocOpen,
     collectionTocOpen,
     readerDrawerOpen,
+    fontMenuOpen,
     openCollectionToc,
     closeCollectionToc,
+    openFontMenu,
+    closeFontMenu,
+    toggleFontMenu,
     fullscreen,
     showChrome,
     hideChrome,
