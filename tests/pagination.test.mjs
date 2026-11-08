@@ -6,6 +6,7 @@ import {
   collectNovelBlocks,
   buildActivePages,
   createNovelPaginator,
+  getNovelPaginationKey,
   ensureBookImagesResolved,
   releaseDistantPageUrls,
   releaseBookPageUrls,
@@ -184,6 +185,17 @@ test('解码后的 EPUB 插图写入天然宽高，保证分页测量稳定', as
 
   assert.match(book.chapters[0].htmlContent, /width="800"/);
   assert.match(book.chapters[0].htmlContent, /height="1200"/);
+});
+
+test('排版变更会改变分页缓存键', () => {
+  const base = { direction: 'ltr', spread: 2, fontSize: 18, fontFamily: 'song', lineHeight: 'normal', pageMargin: 'normal' };
+  const key = layout => getNovelPaginationKey(layout);
+
+  assert.notEqual(key({ ...base, lineHeight: 'loose' }), key(base));
+  assert.notEqual(key({ ...base, fontFamily: 'kai' }), key(base));
+  assert.notEqual(key({ ...base, pageMargin: 'wide' }), key(base));
+  assert.notEqual(key({ ...base, fontSize: 20 }), key(base));
+  assert.equal(key({ ...base }), key({ ...base }));
 });
 
 test('增量测量分页保持段落顺序且不丢正文', () => {
