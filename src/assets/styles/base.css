@@ -17,14 +17,15 @@
       width: calc(100vw - var(--homura-reader-scrollbar-width, 0px));
     }
 
-    /* fixed 元素不受 body 宽度补偿影响，需同步补上滚动条偏移 */
+    /* 各 WebView 隐藏滚动条后的 gutter 宽度并不一致（WKWebView 会从
+       自定义 6px 回退到平台 17px），用实际布局宽度差补偿 fixed 按钮 */
     html.reader-scroll-reserved .md-fab-pos {
-      right: calc(28px + var(--homura-reader-scrollbar-width, 0px));
+      right: calc(28px + var(--homura-reader-fab-offset, 0px));
     }
 
     @media (max-width: 899px) {
       html.reader-scroll-reserved .md-fab-pos {
-        right: calc(18px + var(--homura-reader-scrollbar-width, 0px));
+        right: calc(18px + var(--homura-reader-fab-offset, 0px));
       }
     }
 

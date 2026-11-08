@@ -193,6 +193,10 @@ function pageScrollsVertically() {
 
 function measureScrollbarWidth() {
   // 用 fixed 探针直接量 fixed 元素实际可用的视口宽度；overlay 滚动条为 0
+  return Math.max(0, Math.round(window.innerWidth - measureFixedViewportWidth()));
+}
+
+function measureFixedViewportWidth() {
   const probe = document.createElement('div');
   probe.style.cssText = [
     'position:fixed',
@@ -204,9 +208,9 @@ function measureScrollbarWidth() {
     'pointer-events:none'
   ].join(';');
   document.body.appendChild(probe);
-  const width = window.innerWidth - probe.getBoundingClientRect().right;
+  const width = probe.getBoundingClientRect().right;
   probe.remove();
-  return Math.max(0, Math.round(width));
+  return width;
 }
 
 function setReaderScrollLock(locked) {
@@ -215,23 +219,30 @@ function setReaderScrollLock(locked) {
   if (locked === isLocked) return;
 
   if (locked) {
+    let scrollbarWidth = 0;
     if (pageScrollsVertically()) {
-      const scrollbarWidth = measureScrollbarWidth();
-      if (scrollbarWidth > 0) {
-        html.style.setProperty(
-          '--homura-reader-scrollbar-width',
-          `${scrollbarWidth}px`
-        );
-        html.classList.add('reader-scroll-reserved');
-      }
+      scrollbarWidth = measureScrollbarWidth();
+      html.style.setProperty(
+        '--homura-reader-scrollbar-width',
+        `${scrollbarWidth}px`
+      );
+      html.classList.add('reader-scroll-reserved');
     }
     html.classList.add('reader-scroll-locked');
+    // WKWebView 在滚动条隐藏后，scrollbar-gutter 可能与可见滚动条宽度不同。
+    // 按锁定后的真实可用宽度修正 fixed 按钮，避免退出阅读器时横向跳动。
+    const contentWidth = window.innerWidth - scrollbarWidth;
+    html.style.setProperty(
+      '--homura-reader-fab-offset',
+      `${measureFixedViewportWidth() - contentWidth}px`
+    );
     return;
   }
 
   html.classList.remove('reader-scroll-locked');
   html.classList.remove('reader-scroll-reserved');
   html.style.removeProperty('--homura-reader-scrollbar-width');
+  html.style.removeProperty('--homura-reader-fab-offset');
 }
 
 // 阅读器是全屏遮罩，锁住底层书架页的滚动，避免右侧多出无用的长滚动条
