@@ -310,6 +310,38 @@
     }
 
     /* ==========================================================================
+       2.1 Reader Paper — 阅读器纸面、墨色、书眉与发丝线
+       --------------------------------------------------------------------------
+       阅读正文不套卡片：整块画布就是纸面，顶栏/底栏浮在纸上。
+       纸面与墨色仍由三种表面派生，不引入新色值；夜间墨色略压暗一档，
+       避免大面积高亮文字泛光。
+       ========================================================================== */
+    [data-mode="light"] {
+      --md-reader-paper: var(--md-surface);
+      --md-reader-chrome: color-mix(in oklab, var(--md-surface) 82%, transparent);
+      --md-reader-ink: var(--md-on-surface);
+      --md-reader-ink-soft: var(--md-on-surface-variant);
+      --md-reader-ink-faint: color-mix(in oklab, var(--md-on-surface) 40%, var(--md-surface));
+      --md-reader-rule: var(--md-outline-variant);
+    }
+    [data-mode="warm"] {
+      --md-reader-paper: var(--md-surface);
+      --md-reader-chrome: color-mix(in oklab, var(--md-surface) 84%, transparent);
+      --md-reader-ink: var(--md-on-surface);
+      --md-reader-ink-soft: var(--md-on-surface-variant);
+      --md-reader-ink-faint: color-mix(in oklab, var(--md-on-surface) 42%, var(--md-surface));
+      --md-reader-rule: var(--md-outline-variant);
+    }
+    [data-mode="dark"] {
+      --md-reader-paper: var(--md-surface);
+      --md-reader-chrome: color-mix(in oklab, var(--md-surface-low) 80%, transparent);
+      --md-reader-ink: color-mix(in oklab, var(--md-on-surface) 94%, var(--md-surface));
+      --md-reader-ink-soft: var(--md-on-surface-variant);
+      --md-reader-ink-faint: color-mix(in oklab, var(--md-on-surface) 42%, var(--md-surface));
+      --md-reader-rule: var(--md-outline-variant);
+    }
+
+    /* ==========================================================================
        3. MD3 Motion Tokens — 非线性缓动曲线与时长
        --------------------------------------------------------------------------
        MD3 的曲线都是「慢起步 → 中段加速 → 缓停」的非线性曲线；

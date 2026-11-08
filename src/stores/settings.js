@@ -15,13 +15,19 @@ const DEBUG_AUTO_UPDATE_CHECK_KEY = 'homura_debug_auto_update_check';
 const IMPORT_COLLECTION_PROMPT_KEY = 'homura_import_collection_prompt';
 const DIRECTIONS = ['ltr', 'rtl', 'vertical'];
 const WEBTOON_FITS = ['screen', 'medium', 'wide'];
+const FONT_FAMILIES = ['song', 'hei', 'kai'];
+const LINE_HEIGHTS = ['tight', 'normal', 'loose'];
+const PAGE_MARGINS = ['narrow', 'normal', 'wide'];
 
 export const DEFAULT_READER_SETTINGS = Object.freeze({
   direction: 'ltr',
   spread: 2,
   coverOffset: true,
   fontSize: 18,
-  webtoonFit: 'screen'
+  webtoonFit: 'screen',
+  fontFamily: 'song',
+  lineHeight: 'normal',
+  pageMargin: 'normal'
 });
 
 function normalizeReaderDefaults(value) {
@@ -42,7 +48,16 @@ function normalizeReaderDefaults(value) {
     fontSize,
     webtoonFit: WEBTOON_FITS.includes(source.webtoonFit)
       ? source.webtoonFit
-      : DEFAULT_READER_SETTINGS.webtoonFit
+      : DEFAULT_READER_SETTINGS.webtoonFit,
+    fontFamily: FONT_FAMILIES.includes(source.fontFamily)
+      ? source.fontFamily
+      : DEFAULT_READER_SETTINGS.fontFamily,
+    lineHeight: LINE_HEIGHTS.includes(source.lineHeight)
+      ? source.lineHeight
+      : DEFAULT_READER_SETTINGS.lineHeight,
+    pageMargin: PAGE_MARGINS.includes(source.pageMargin)
+      ? source.pageMargin
+      : DEFAULT_READER_SETTINGS.pageMargin
   };
 }
 

@@ -36,7 +36,7 @@
     class="no-scrollbar w-full h-full overflow-y-auto overscroll-contain touch-pan-y py-4 px-3 sm:px-2"
     style="scroll-padding-top: calc(3.5rem + env(safe-area-inset-top)); scroll-padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));"
   >
-    <div ref="novelContent" :style="{ fontSize: reader.layoutConfig.fontSize + 'px' }" class="max-w-[660px] mx-auto bg-[var(--md-surface-low)] border-[0.5px] border-[var(--md-outline-variant)] rounded-[16px] p-5 sm:p-12 space-y-8">
+    <div ref="novelContent" :style="novelProseStyle" class="max-w-[660px] mx-auto bg-[var(--md-surface-low)] border-[0.5px] border-[var(--md-outline-variant)] rounded-[16px] p-5 sm:p-12 space-y-8">
       <section
         v-for="p in reader.activePages"
         :key="p.pageNumber"
@@ -49,7 +49,7 @@
           <i class="block w-[0.5px] h-3 shrink-0 bg-current opacity-30"></i>
           <span class="shrink-0">第 {{ p.pageNumber }} 章</span>
         </div>
-        <div class="epub-content font-sans leading-relaxed" v-html="p.html"></div>
+        <div class="epub-content md-reader-prose" v-html="p.html"></div>
       </section>
     </div>
     <div class="shrink-0" style="height: calc(4.5rem + env(safe-area-inset-bottom));" aria-hidden="true"></div>
@@ -67,6 +67,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useReaderStore } from '../stores/reader.js';
 import { decodePageImage, releaseDistantPageUrls } from '../services/pagination.js';
+import { resolveProseStyle } from '../services/readerLayout.js';
 
 const MANGA_DECODE_CONCURRENCY = 2;
 const MANGA_VISIBLE_MARGIN = 2;
@@ -101,6 +102,7 @@ let novelContentObserver = null;
 let lastMangaImage = null;
 const mangaHasStableLayout = !!(mountedBook?.pageItems || []).every(hasPageSize);
 
+const novelProseStyle = computed(() => resolveProseStyle(reader.layoutConfig));
 const isManga = computed(() => reader.currentBook && reader.currentBook.type === 'manga');
 
 function hasPageSize(page) {

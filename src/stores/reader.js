@@ -15,6 +15,7 @@ import { useShelfStore } from './shelf.js';
 import { useSettingsStore } from './settings.js';
 import { hydrateBook } from '../services/restore.js';
 import { buildActivePages, createNovelPaginator, getNovelPaginationKey, ensureBookImagesResolved, releaseBookPageUrls } from '../services/pagination.js';
+import { READER_FONT_OPTIONS, READER_LINE_HEIGHT_OPTIONS, READER_MARGIN_OPTIONS } from '../services/readerLayout.js';
 import { applyRestoredProgress, scheduleProgressSave, flushProgress } from '../services/progress.js';
 import { collectionReadingOrder, adjacentCollectionBook, spreadBounds } from '../services/collectionReading.js';
 import { hasArchiveSource } from '../services/archiveAccess.js';
@@ -22,6 +23,9 @@ import { ensureNativeArchiveSession, releaseNativeArchiveSession } from '../serv
 
 const LAYOUT_DIRECTIONS = ['ltr', 'rtl', 'vertical'];
 const WEBTOON_FITS = ['screen', 'medium', 'wide'];
+const FONT_FAMILIES = READER_FONT_OPTIONS.map(option => option.value);
+const LINE_HEIGHTS = READER_LINE_HEIGHT_OPTIONS.map(option => option.value);
+const PAGE_MARGINS = READER_MARGIN_OPTIONS.map(option => option.value);
 export const WEBTOON_FIT_LABELS = { screen: '完整单张', medium: '适中宽幅', wide: '超宽满屏' };
 export const NOVEL_FONT_MIN = 12;
 export const NOVEL_FONT_MAX = 28;
@@ -175,6 +179,9 @@ export const useReaderStore = defineStore('reader', () => {
     if (typeof saved.coverOffset === 'boolean') next.coverOffset = saved.coverOffset;
     if (Number.isFinite(saved.fontSize)) next.fontSize = Math.min(NOVEL_FONT_MAX, Math.max(NOVEL_FONT_MIN, saved.fontSize));
     if (WEBTOON_FITS.includes(saved.webtoonFit)) next.webtoonFit = saved.webtoonFit;
+    if (FONT_FAMILIES.includes(saved.fontFamily)) next.fontFamily = saved.fontFamily;
+    if (LINE_HEIGHTS.includes(saved.lineHeight)) next.lineHeight = saved.lineHeight;
+    if (PAGE_MARGINS.includes(saved.pageMargin)) next.pageMargin = saved.pageMargin;
     // 旧版把 comic MOBI 当小说读过，ltr 只是当时的默认值；转成漫画后按书里的方向来。
     if (book.type === 'manga' && book.readingDirection === 'rtl' && next.direction === 'ltr' && rec.type !== 'manga') {
       next.direction = 'rtl';
@@ -613,6 +620,37 @@ export const useReaderStore = defineStore('reader', () => {
     setFontSize(layoutConfig.fontSize + delta);
   }
 
+  // 字体 / 行距 / 页边距都会改写每行字数，必须整本重排；漫画与条漫只刷新视图。
+  function updateNovelTypography(patch) {
+    let changed = false;
+    for (const [key, value] of Object.entries(patch)) {
+      if (layoutConfig[key] === value) continue;
+      layoutConfig[key] = value;
+      changed = true;
+    }
+    if (!changed) return;
+    if (currentBook.value && currentBook.value.type !== 'manga' && layoutConfig.direction !== 'vertical') {
+      recalculateNovelPaginationAndRender();
+    } else {
+      requestRender('fade');
+    }
+  }
+
+  function setFontFamily(value) {
+    if (!FONT_FAMILIES.includes(value)) return;
+    updateNovelTypography({ fontFamily: value });
+  }
+
+  function setLineHeight(value) {
+    if (!LINE_HEIGHTS.includes(value)) return;
+    updateNovelTypography({ lineHeight: value });
+  }
+
+  function setPageMargin(value) {
+    if (!PAGE_MARGINS.includes(value)) return;
+    updateNovelTypography({ pageMargin: value });
+  }
+
   async function setCustomCover(file) {
     const id = currentBook.value?.id;
     if (!id) return;
@@ -738,6 +776,9 @@ export const useReaderStore = defineStore('reader', () => {
     setWebtoonFit,
     changeFontSize,
     setFontSize,
+    setFontFamily,
+    setLineHeight,
+    setPageMargin,
     setCustomCover,
     goNextPage,
     goPrevPage,

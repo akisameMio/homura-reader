@@ -114,7 +114,7 @@
   <ShelfDialog v-if="isCompact" />
 
   <!-- Offscreen Measurer for Smart Novel Screen-Fit Pagination -->
-  <div ref="measurerRef" id="novelPaginationMeasurer" class="fixed -left-[9999px] top-0 pointer-events-none invisible z-[-1] epub-content font-sans leading-relaxed"></div>
+  <div ref="measurerRef" id="novelPaginationMeasurer" class="fixed -left-[9999px] top-0 pointer-events-none invisible z-[-1] epub-content md-reader-prose"></div>
 </template>
 
 <script setup>

@@ -181,3 +181,68 @@
     .rtl-slider {
       direction: rtl;
     }
+
+    /* ==========================================================================
+       2.1 阅读纸面正文（小说 / 纯文本）
+       --------------------------------------------------------------------------
+       与 #novelPaginationMeasurer 共用同一套排版：字体、字号、行高、段距全部
+       由舞台下发的 CSS 变量决定，测量与渲染必须逐字一致，否则末行会被裁掉。
+       ========================================================================== */
+    .md-reader-prose {
+      font-family: var(--reader-font-family, serif);
+      font-size: var(--reader-font-size, 18px);
+      line-height: var(--reader-line-height, 1.9);
+      letter-spacing: 0.01em;
+      color: var(--md-reader-ink, var(--md-on-surface));
+      text-align: justify;
+      text-justify: inter-ideograph;
+      hanging-punctuation: allow-end;
+    }
+    /* 覆盖 .epub-content p 的 1.75 行高与 0.75em 段距，保证与测量器同源 */
+    .md-reader-prose p {
+      margin: 0 0 var(--reader-para-gap, 7px);
+      text-indent: 2em;
+      line-height: inherit;
+    }
+    .md-reader-prose p:last-child {
+      margin-bottom: 0;
+    }
+    .md-reader-prose > :first-child {
+      margin-top: 0;
+    }
+    .md-reader-prose a {
+      color: var(--md-primary);
+    }
+
+    /* 章首页：标题、发丝线、章序号作为一整块参与分页测量 */
+    .md-reader-prose .reader-chapter {
+      margin: 0 0 calc(var(--reader-para-gap, 7px) * 4);
+      text-align: center;
+      text-indent: 0;
+    }
+    .md-reader-prose .reader-chapter-title {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      font-family: var(--reader-font-family, serif);
+      font-size: calc(var(--reader-font-size, 18px) * 1.22);
+      font-weight: 600;
+      line-height: 1.5;
+      letter-spacing: 0.015em;
+      text-indent: 0;
+      color: var(--md-reader-ink, var(--md-on-surface));
+      text-wrap: balance;
+    }
+    .md-reader-prose .reader-chapter-rule {
+      height: 0.5px;
+      margin: 20px 0 14px;
+      background: var(--md-reader-rule, var(--md-outline-variant));
+    }
+    .md-reader-prose .reader-chapter-num {
+      display: block;
+      font-family: var(--font-mono, ui-monospace, monospace);
+      font-size: 11px;
+      letter-spacing: 0.3em;
+      text-indent: 0.3em;
+      color: var(--md-reader-ink-faint, var(--md-on-surface-variant));
+    }

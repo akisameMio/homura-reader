@@ -46,6 +46,30 @@
         :style="{ overflowY: hasOverflow ? 'auto' : 'hidden' }"
       >
         <div ref="contentRef" class="pb-2">
+        <!-- 字体：衬线 / 无衬线 / 楷体三档，示例字用各字体自身渲染 -->
+        <section v-if="!isManga" class="md-drawer-section">
+          <div class="md-drawer-group-head">
+            <span class="md-drawer-group-label">字体</span>
+            <b class="md-drawer-group-value">{{ fontLabel }}</b>
+          </div>
+          <div class="reader-font-grid" role="radiogroup" aria-label="正文字体">
+            <button
+              v-for="option in fontOptions"
+              :key="option.value"
+              type="button"
+              role="radio"
+              :aria-checked="config.fontFamily === option.value"
+              class="reader-font-card"
+              :class="{ 'is-active': config.fontFamily === option.value }"
+              :title="`正文字体：${option.label}`"
+              @click="reader.setFontFamily(option.value)"
+            >
+              <span class="reader-font-sample" :style="{ fontFamily: option.stack }">永</span>
+              <span class="reader-font-label">{{ option.label }}</span>
+            </button>
+          </div>
+        </section>
+
         <!-- 阅读方向 -->
         <section class="md-drawer-section">
           <div class="md-drawer-group-head">
@@ -151,6 +175,36 @@
           <p class="mt-2 text-[11px] leading-relaxed text-[var(--md-on-surface-variant)]">{{ NOVEL_FONT_MIN }}–{{ NOVEL_FONT_MAX }} px · 每页行数随字号和窗口自动调整，按书记忆。</p>
         </section>
 
+        <!-- 行距 -->
+        <section v-if="!isManga" class="md-drawer-section">
+          <div class="md-drawer-group-head">
+            <span class="md-drawer-group-label">行距</span>
+            <b class="md-drawer-group-value">{{ lineHeightLabel }}</b>
+          </div>
+          <MdSegmentedControl
+            class="w-full"
+            :model-value="config.lineHeight"
+            :options="lineHeightOptions"
+            aria-label="行距"
+            @update:model-value="reader.setLineHeight"
+          />
+        </section>
+
+        <!-- 页边距：只影响分页排版，条漫长卷保持卡片宽度 -->
+        <section v-if="!isManga && !isVertical" class="md-drawer-section">
+          <div class="md-drawer-group-head">
+            <span class="md-drawer-group-label">页边距</span>
+            <b class="md-drawer-group-value">{{ pageMarginLabel }}</b>
+          </div>
+          <MdSegmentedControl
+            class="w-full"
+            :model-value="config.pageMargin"
+            :options="pageMarginOptions"
+            aria-label="页边距"
+            @update:model-value="reader.setPageMargin"
+          />
+        </section>
+
         <!-- 外观 -->
         <section class="md-drawer-section">
           <div class="md-drawer-group-head">
@@ -217,6 +271,7 @@
 <script setup>
 import { computed, ref, shallowRef, watch, nextTick } from 'vue';
 import { useReaderStore, WEBTOON_FIT_LABELS, NOVEL_FONT_MIN, NOVEL_FONT_MAX } from '../stores/reader.js';
+import { READER_FONT_OPTIONS, READER_LINE_HEIGHT_OPTIONS, READER_MARGIN_OPTIONS } from '../services/readerLayout.js';
 import { useShelfStore } from '../stores/shelf.js';
 import {
   SURFACE_MODE_OPTIONS,
@@ -285,6 +340,12 @@ const theme = useThemeStore();
 const ui = useUiStore();
 const { isPhone, isCompact } = useViewport();
 const config = reader.layoutConfig;
+const fontOptions = READER_FONT_OPTIONS;
+const lineHeightOptions = READER_LINE_HEIGHT_OPTIONS.map(option => ({ value: option.value, label: option.label }));
+const pageMarginOptions = READER_MARGIN_OPTIONS.map(option => ({ value: option.value, label: option.label }));
+const fontLabel = computed(() => (READER_FONT_OPTIONS.find(option => option.value === config.fontFamily) || READER_FONT_OPTIONS[0]).label);
+const lineHeightLabel = computed(() => (READER_LINE_HEIGHT_OPTIONS.find(option => option.value === config.lineHeight) || READER_LINE_HEIGHT_OPTIONS[1]).label);
+const pageMarginLabel = computed(() => (READER_MARGIN_OPTIONS.find(option => option.value === config.pageMargin) || READER_MARGIN_OPTIONS[1]).label);
 const settingsOpen = computed(() => ui.settingsOpen);
 const {
   sheetRef: settingsSheetRef,
@@ -332,10 +393,55 @@ function resetDefaults() {
   if (!reader.layoutConfig.coverOffset) reader.toggleCoverOffset();
   reader.setWebtoonFit('screen');
   reader.setFontSize(18);
+  reader.setFontFamily('song');
+  reader.setLineHeight('normal');
+  reader.setPageMargin('normal');
 }
 </script>
 
 <style scoped>
+.reader-font-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.reader-font-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 6px 10px;
+  border-radius: 14px;
+  cursor: pointer;
+  background: var(--md-surface-low);
+  color: var(--md-on-surface-variant);
+  box-shadow: inset 0 0 0 1px var(--md-outline-variant);
+  transition:
+    background-color var(--md-duration-short) var(--md-ease-emphasized),
+    color var(--md-duration-short) var(--md-ease-emphasized),
+    box-shadow var(--md-duration-short) var(--md-ease-emphasized);
+}
+.reader-font-card:hover {
+  background: var(--md-surface-container);
+}
+.reader-font-card.is-active {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--md-primary) 40%, transparent);
+}
+.reader-font-card:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.reader-font-sample {
+  font-size: 26px;
+  line-height: 1.2;
+}
+.reader-font-label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
 .reader-settings-scroll { scrollbar-gutter: auto; }
 .reader-settings-scroll:not(.has-overflow) { scrollbar-width: none; }
 .reader-settings-scroll:not(.has-overflow)::-webkit-scrollbar { display: none; }

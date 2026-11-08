@@ -38,7 +38,10 @@ function makeRecord(reader) {
       spread: reader.layoutConfig.spread,
       coverOffset: reader.layoutConfig.coverOffset,
       fontSize: reader.layoutConfig.fontSize,
-      webtoonFit: reader.layoutConfig.webtoonFit
+      webtoonFit: reader.layoutConfig.webtoonFit,
+      fontFamily: reader.layoutConfig.fontFamily,
+      lineHeight: reader.layoutConfig.lineHeight,
+      pageMargin: reader.layoutConfig.pageMargin
     },
     updatedAt: Date.now()
   };

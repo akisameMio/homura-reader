@@ -6,6 +6,7 @@
    ========================================================================== */
 
 import { escapeHtml } from './utils.js';
+import { resolveProseStyle, resolveReaderMetrics } from './readerLayout.js';
 import { hasArchiveSource, readArchiveBlobByPath, readArchivePageBlob } from './archiveAccess.js';
 import { ensureNativePageAsset } from './nativeArchive.js';
 
@@ -512,26 +513,72 @@ export function collectNovelBlocks(html) {
   return blocks;
 }
 
-// 分页尺寸只依赖窗口、字号与单双页；抽出来给同步分页和增量分页共用。
+// 分页尺寸只依赖窗口、字号、字体、行距与单双页；抽出来给同步分页和增量分页共用。
 function computeNovelMetrics(layoutConfig) {
   const vw = window.innerWidth || 1024;
   // 用布局视口高度：移动端 window.innerHeight 含地址栏，滚动时会抖动导致重复分页
   const vh = document.documentElement.clientHeight || window.innerHeight || 768;
-  const compact = vw < 768;
+  const stage = document.querySelector('[data-reader-stage]');
+  const metrics = resolveReaderMetrics({
+    width: stage?.clientWidth || vw,
+    height: stage?.clientHeight || vh,
+    layout: layoutConfig,
+    compact: vw < 900
+  });
+  const contentWidth = metrics.textWidth;
+  const availableTextHeight = metrics.textHeight;
+  const cacheKey = [
+    contentWidth,
+    availableTextHeight,
+    layoutConfig.fontSize,
+    layoutConfig.spread,
+    layoutConfig.fontFamily || 'song',
+    layoutConfig.lineHeight || 'normal',
+    layoutConfig.pageMargin || 'normal'
+  ].join('|');
+  return { contentWidth, availableTextHeight, cacheKey, metrics };
+}
 
-  const isDouble = layoutConfig.spread === 2 && !compact;
-  const stageWidth = document.querySelector('[data-reader-stage]')?.clientWidth || vw;
-  const outerPadding = vw >= 640 ? 32 : 16;
-  const cardOuterWidth = isDouble
-    ? (Math.min(1152, stageWidth) - outerPadding - 12) / 2
-    : Math.min(660, stageWidth - outerPadding);
-  const cardHorizontalPadding = vw >= 640 ? 80 : 48;
-  const contentWidth = Math.max(80, cardOuterWidth - cardHorizontalPadding - 2);
-  // 工具栏（顶 56 + 底 48）与卡片内外边距之和：桌面沿用既有实测值，移动端按紧凑布局
-  const chromeHeight = compact ? 236 : 267;
-  const availableTextHeight = Math.max(160, vh - chromeHeight);
-  const cacheKey = [contentWidth, availableTextHeight, layoutConfig.fontSize, layoutConfig.spread].join('|');
-  return { contentWidth, availableTextHeight, cacheKey };
+// 章首页：一块整体参与测量，保证标题不会单独溢出到上一页。
+const CHINESE_DIGITS = { 零: 0, 〇: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+
+// 章序号优先取标题里的「第 X 章」，标题没有编号时才退回章节在书里的次序，
+// 避免「序章 + 第一章」这类结构里书眉写着第一章、下面却标 2。
+function parseChineseNumber(text) {
+  if (/^[0-9]+$/.test(text)) return Number(text);
+  let total = 0;
+  let current = 0;
+  let seen = false;
+  for (const char of text) {
+    if (char === '百') {
+      total += (current || 1) * 100;
+      current = 0;
+      seen = true;
+    } else if (char === '十') {
+      total += (current || 1) * 10;
+      current = 0;
+      seen = true;
+    } else if (char in CHINESE_DIGITS) {
+      current = CHINESE_DIGITS[char];
+      seen = true;
+    }
+  }
+  return seen ? total + current : null;
+}
+
+function chapterNumberFromTitle(title, chapterIndex) {
+  const match = String(title || '').match(/第\s*([0-9零〇一二两三四五六七八九十百]+)\s*[章回节篇]/);
+  const parsed = match ? parseChineseNumber(match[1]) : null;
+  return parsed && parsed > 0 ? parsed : chapterIndex + 1;
+}
+
+function buildChapterOpener(title, chapterIndex) {
+  const number = String(chapterNumberFromTitle(title, chapterIndex));
+  return `<div class="reader-chapter">`
+    + `<h2 class="reader-chapter-title">${escapeHtml(title)}</h2>`
+    + `<div class="reader-chapter-rule" aria-hidden="true"></div>`
+    + `<span class="reader-chapter-num" aria-hidden="true">${number}</span>`
+    + `</div>`;
 }
 
 export function getNovelPaginationKey(layoutConfig) {
@@ -553,8 +600,10 @@ function paginateNovelChapter(chap, chapterIndex, measurer, availableTextHeight)
     return chapterPages;
   }
 
-  let currentPageParts = [];
-  measurer.innerHTML = '';
+  // 章首页作为整章第一块参与测量：标题、分隔线、章序号都被算进页高。
+  const openerHtml = buildChapterOpener(title, chapterIndex);
+  let currentPageParts = [openerHtml];
+  measurer.innerHTML = openerHtml;
 
   const flushCurrentPage = () => {
     const currentPageHtml = currentPageParts.join('');
@@ -625,6 +674,11 @@ export function createNovelPaginator(book, layoutConfig, measurer) {
 
   measurer.style.width = metrics.contentWidth + 'px';
   measurer.style.fontSize = layoutConfig.fontSize + 'px';
+  const proseStyle = resolveProseStyle(layoutConfig, metrics.metrics);
+  measurer.style.fontFamily = proseStyle['--reader-font-family'];
+  measurer.style.lineHeight = proseStyle['--reader-line-height'];
+  measurer.style.letterSpacing = '0.01em';
+  measurer.style.setProperty('--reader-para-gap', proseStyle['--reader-para-gap']);
   measurer.innerHTML = '';
 
   const chapterPages = new Array(chapters.length);
@@ -653,10 +707,11 @@ export function createNovelPaginator(book, layoutConfig, measurer) {
         }
       } else if (provisional) {
         const chap = chapters[cIdx] || {};
+        const chapterTitle = chap.title || `第 ${cIdx + 1} 章`;
         list.push({
           pageNumber: list.length + 1,
-          title: chap.title || `第 ${cIdx + 1} 章`,
-          html: chap.htmlContent || '<p>（本章无正文内容）</p>',
+          title: chapterTitle,
+          html: buildChapterOpener(chapterTitle, cIdx) + (chap.htmlContent || '<p>（本章无正文内容）</p>'),
           chapterIndex: cIdx,
           provisional: true
         });
