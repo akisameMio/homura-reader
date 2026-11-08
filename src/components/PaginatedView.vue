@@ -42,31 +42,14 @@
         </div>
       </template>
 
-      <!-- Novel: 1P Single -->
+      <!-- Novel: 纸面排版（单页 / 双页共用同一套几何，变量由舞台下发） -->
       <template v-else>
-        <div
-          class="w-full h-full items-center justify-center p-2 sm:p-4 overflow-hidden"
-          :class="slotVMs[slot] && slotVMs[slot].mode === 'single' ? 'flex' : 'hidden'"
-          :style="paperSafeAreaStyle"
-        >
-          <NovelCard
-            v-if="slotVMs[slot] && slotVMs[slot].single"
-            :page="slotVMs[slot].single"
-            :side-label="slotVMs[slot].singleLabel"
-            :total="slotVMs[slot].total"
-            :font-size="reader.layoutConfig.fontSize"
-          />
-        </div>
-        <!-- Novel: 2P Double -->
-        <div
-          class="w-full h-full max-w-6xl mx-auto flex-col md:flex-row items-stretch justify-center gap-3 p-2 sm:p-4 relative z-0 overflow-hidden"
-          :class="slotVMs[slot] && slotVMs[slot].mode === 'double' ? 'flex' : 'hidden'"
-          :style="paperSafeAreaStyle"
-        >
+        <div class="reader-spread" :class="{ 'is-single': slotVMs[slot] && slotVMs[slot].mode === 'single' }">
           <template v-if="slotVMs[slot] && slotVMs[slot].mode === 'double'">
-            <NovelCard :page="slotVMs[slot].left" :side-label="slotVMs[slot].leftLabel" :total="slotVMs[slot].total" :font-size="reader.layoutConfig.fontSize" />
-            <NovelCard :page="slotVMs[slot].right" :side-label="slotVMs[slot].rightLabel" :total="slotVMs[slot].total" :font-size="reader.layoutConfig.fontSize" />
+            <NovelCard :page="slotVMs[slot].left" />
+            <NovelCard :page="slotVMs[slot].right" />
           </template>
+          <NovelCard v-else-if="slotVMs[slot] && slotVMs[slot].single" :page="slotVMs[slot].single" />
         </div>
       </template>
     </div>
@@ -83,13 +66,14 @@
    避免 Vue 重渲染打断进行中的动画。
    ========================================================================== */
 
-import { shallowRef, computed, onMounted, onBeforeUnmount, nextTick, ref } from 'vue';
+import { shallowRef, computed, onMounted, onBeforeUnmount, nextTick, ref, watch } from 'vue';
 import { useReaderStore } from '../stores/reader.js';
 import { useThemeStore } from '../stores/theme.js';
 import { useUiStore } from '../stores/ui.js';
 import { useViewport } from '../composables/useViewport.js';
 import { isAndroid } from '../services/platform.js';
 import { ensurePageUrlLoaded, decodePageImage, releaseDistantPageUrls } from '../services/pagination.js';
+import { resolveProseStyle, resolveReaderMetrics } from '../services/readerLayout.js';
 import { classifyReaderGesture } from '../services/readerGestures.js';
 import NovelCard from './NovelCard.vue';
 
@@ -102,14 +86,29 @@ const pageStage = shallowRef(null);
 let stageResizeObserver = null;
 
 const isManga = computed(() => reader.currentBook && reader.currentBook.type === 'manga');
-const paperSafeAreaStyle = computed(() => (
-  isCompact.value
-    ? {
-        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)',
-        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)'
-      }
-    : null
-));
+
+// 纸面几何：变量挂在舞台上，两个 buffer 槽位与纸页共同继承。
+// 不经过响应式 :style 绑定，避免翻页动画进行中被重渲染改写 transform。
+function applyReaderGeometry() {
+  const el = pageStage.value;
+  if (!el || isManga.value) return;
+  const metrics = resolveReaderMetrics({
+    width: el.clientWidth,
+    height: el.clientHeight,
+    layout: reader.layoutConfig,
+    compact: isCompact.value
+  });
+  el.style.setProperty('--reader-pad-x', metrics.padX + 'px');
+  el.style.setProperty('--reader-pad-top', metrics.padTop + 'px');
+  el.style.setProperty('--reader-pad-bottom', metrics.padBottom + 'px');
+  el.style.setProperty('--reader-gutter', metrics.gutter + 'px');
+  el.style.setProperty('--reader-page-width', metrics.textWidth + 'px');
+  // 双页几何下的单页（章首页 / 封面单排）靠 CSS 占位补出另一栏，保持与苹果图书一致的右栏起始
+  el.dataset.readerSpread = metrics.isDouble ? 'double' : 'single';
+  el.dataset.readerDirection = reader.layoutConfig.direction;
+  const proseStyle = resolveProseStyle(reader.layoutConfig, metrics);
+  for (const [name, value] of Object.entries(proseStyle)) el.style.setProperty(name, value);
+}
 
 // 每个槽位的视图模型：single / double 模式 + 页面 + 阅读顺序标签
 const slotVMs = shallowRef([null, null]);
@@ -445,11 +444,23 @@ function onPointerCancel(event) {
 
 onMounted(() => {
   stageResizeObserver = new ResizeObserver(() => {
+    applyReaderGeometry();
     if (!isManga.value) reader.handleViewportChange();
   });
   if (pageStage.value) stageResizeObserver.observe(pageStage.value);
   window.addEventListener('blur', onPointerCancel);
   reader.renderFn = renderReaderViewport;
+  watch(
+    () => [
+      reader.layoutConfig.spread,
+      reader.layoutConfig.pageMargin,
+      reader.layoutConfig.fontSize,
+      reader.layoutConfig.fontFamily,
+      reader.layoutConfig.lineHeight
+    ],
+    applyReaderGeometry
+  );
+  applyReaderGeometry();
   // store 动作可能在组件挂载前就已完成分页，这里自检后直接首渲染
   if (reader.activePages.length > 0) {
     renderReaderViewport('none');

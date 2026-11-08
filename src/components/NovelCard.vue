@@ -1,26 +1,13 @@
 <template>
-  <article
-    class="flex-1 h-full max-w-[660px] bg-[var(--md-surface-low)] text-[var(--md-on-surface)] rounded-[16px] shadow-sm border-[0.5px] border-[var(--md-outline-variant)] px-6 py-5 sm:px-10 sm:py-7 flex flex-col justify-between overflow-hidden"
-    :style="{ fontSize: fontSize + 'px' }"
-  >
-    <div class="flex-1 overflow-hidden flex flex-col">
-      <div class="flex items-center justify-between border-b-[0.5px] border-[var(--border-line)] pb-2.5 mb-4 text-xs font-sans text-[var(--brand-primary)] font-bold shrink-0">
-        <span class="truncate">{{ page ? page.title : '章节' }}</span>
-        <span class="font-mono shrink-0 ml-2">{{ page ? `${sideLabel} ${page.pageNumber} / ${total}` : '' }}</span>
-      </div>
-      <div class="epub-content font-sans leading-relaxed flex-1 overflow-hidden" v-html="page ? page.html : ''"></div>
-    </div>
-    <div class="pt-3 text-center text-[12px] font-mono text-[var(--fg-muted)] shrink-0">
-      {{ page ? `— 第 ${page.pageNumber} 页 —` : '' }}
-    </div>
+  <!-- 纸页：整块画布是纸，正文栏按舞台下发的宽度排版，页脚单独占 24px -->
+  <article class="reader-page">
+    <div class="reader-page-flow md-reader-prose" v-html="page.html"></div>
+    <footer class="reader-page-folio" aria-hidden="true">{{ page.pageNumber }}</footer>
   </article>
 </template>
 
 <script setup>
 defineProps({
-  page: { type: Object, default: null },
-  sideLabel: { type: String, default: '' },
-  total: { type: Number, default: 1 },
-  fontSize: { type: Number, default: 18 }
+  page: { type: Object, required: true }
 });
 </script>

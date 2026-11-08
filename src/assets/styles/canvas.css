@@ -119,3 +119,56 @@
     /* 隐藏滚动条但保留可滚动能力（窄窗口下的阅读器工具栏） */
     .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
     .no-scrollbar::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+    /* ==========================================================================
+       阅读纸面：整块画布即纸，正文按栏排布，页脚页码单独一行
+       --------------------------------------------------------------------------
+       几何变量由 PaginatedView 写在 [data-reader-stage] 上：
+       --reader-pad-x / --reader-pad-top / --reader-pad-bottom /
+       --reader-gutter / --reader-page-width。
+       ========================================================================== */
+    .reader-spread {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      gap: var(--reader-gutter, 0px);
+      width: 100%;
+      height: 100%;
+      padding: var(--reader-pad-top, 96px) var(--reader-pad-x, 96px) var(--reader-pad-bottom, 96px);
+      background: var(--md-reader-paper, var(--md-surface));
+      overflow: hidden;
+    }
+    .reader-page {
+      display: flex;
+      flex-direction: column;
+      flex: 0 0 var(--reader-page-width, 540px);
+      width: var(--reader-page-width, 540px);
+      min-width: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+    /* 双页档位下的单页（章首页、首页单排）：补一栏空白，让正文从右页起排 */
+    [data-reader-spread='double'] .reader-spread.is-single::before {
+      content: '';
+      flex: 0 0 var(--reader-page-width, 540px);
+      height: 100%;
+    }
+    [data-reader-spread='double'][data-reader-direction='rtl'] .reader-spread.is-single::before {
+      order: 1;
+    }
+    .reader-page-flow {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .reader-page-folio {
+      flex: 0 0 24px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      font-family: var(--font-mono, ui-monospace, monospace);
+      font-size: 10.5px;
+      letter-spacing: 0.16em;
+      color: var(--md-reader-ink-faint, var(--md-on-surface-variant));
+      user-select: none;
+    }

@@ -1,6 +1,6 @@
 <template>
   <!-- Reader Fullscreen Modal · 沉浸式：工具栏浮在画布上，默认自动隐藏 -->
-  <div v-show="!!reader.currentBook" class="reader-dismiss-layer fixed inset-0 bg-[var(--bg-reader)] z-50 flex flex-col transition-colors duration-200">
+  <div v-show="!!reader.currentBook" class="reader-dismiss-layer fixed inset-0 bg-[var(--md-reader-paper)] z-50 flex flex-col transition-colors duration-200">
     <div
       v-if="isCompact && !!reader.currentBook && !nativePredictiveBackSupported"
       class="reader-back-edge"
@@ -22,8 +22,8 @@
       @lostpointercapture="cancelVerticalGesture"
     >
       <template v-if="reader.currentBook">
-        <!-- 桌面打开设置侧栏时为正文留出 372px，避免被 sheet 遮挡 -->
-        <div class="w-full h-full transition-[padding] duration-200" :style="columnReserveStyle">
+        <!-- 纸面铺满整块画布：设置抽屉浮在纸面上，不再挤压正文重排 -->
+        <div class="w-full h-full">
           <WebtoonView
             v-if="reader.layoutConfig.direction === 'vertical'"
             :key="'webtoon-' + reader.currentBook.id"
@@ -96,7 +96,7 @@
    设置与目录改为左右抽屉，不再占用顶栏。
    ========================================================================== */
 
-import { shallowRef, watch, computed, onBeforeUnmount } from 'vue';
+import { shallowRef, watch, onBeforeUnmount } from 'vue';
 import { classifyReaderGesture } from '../services/readerGestures.js';
 import { useReaderStore } from '../stores/reader.js';
 import { useUiStore } from '../stores/ui.js';
@@ -124,11 +124,6 @@ const {
   dismissWithPredictiveBack,
   nativePredictiveBackSupported
 } = useReaderBackDismiss(reader, ui);
-
-// 桌面设置侧栏宽度 372px：开启时为正文列预留空间
-const columnReserveStyle = computed(() =>
-  ui.settingsOpen && !isCompact.value ? { paddingRight: '372px' } : null
-);
 
 // 桌面：鼠标贴近上下边缘唤出工具栏；工具栏可见时，移动鼠标会重新计时
 function onMouseMove(e) {
