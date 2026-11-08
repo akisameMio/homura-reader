@@ -23,15 +23,35 @@
     >
       <template v-if="reader.currentBook">
         <!-- 纸面铺满整块画布：设置抽屉浮在纸面上，不再挤压正文重排 -->
-        <div class="w-full h-full">
+        <div class="reader-stage-shell" :class="{ 'is-obscured': ui.readerDrawerOpen }">
           <WebtoonView
             v-if="reader.layoutConfig.direction === 'vertical'"
             :key="'webtoon-' + reader.currentBook.id"
           />
-          <PaginatedView
-            v-else
-            :key="'paginated-' + reader.currentBook.type + '-' + reader.currentBook.id"
-          />
+          <template v-else>
+            <PaginatedView :key="'paginated-' + reader.currentBook.type + '-' + reader.currentBook.id" />
+            <!-- 左右翻页箭头：跟手翻页之外给鼠标用户一个落点，悬停纸面时浮现 -->
+            <button
+              type="button"
+              class="reader-page-arrow is-prev"
+              :class="{ 'is-dim': reader.atFirstPage && !reader.currentCollection }"
+              title="上一页 (←)"
+              aria-label="上一页"
+              @click="reader.onLeftButtonClick()"
+            >
+              <MdIcon name="chevron_left" />
+            </button>
+            <button
+              type="button"
+              class="reader-page-arrow is-next"
+              :class="{ 'is-dim': reader.atLastPage && !reader.currentCollection }"
+              title="下一页 (→)"
+              aria-label="下一页"
+              @click="reader.onRightButtonClick()"
+            >
+              <MdIcon name="chevron_right" />
+            </button>
+          </template>
         </div>
       </template>
 
@@ -103,6 +123,7 @@ import { useUiStore } from '../stores/ui.js';
 import { useViewport } from '../composables/useViewport.js';
 import { useShortcuts } from '../composables/useShortcuts.js';
 import { useReaderBackDismiss } from '../composables/useReaderBackDismiss.js';
+import MdIcon from './MdIcon.vue';
 import ReaderTopBar from './ReaderTopBar.vue';
 import ReaderBottomBar from './ReaderBottomBar.vue';
 import ReaderTocDrawer from './ReaderTocDrawer.vue';

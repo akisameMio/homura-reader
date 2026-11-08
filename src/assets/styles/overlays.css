@@ -310,6 +310,78 @@
       border-radius: 50%;
       background: var(--md-primary);
     }
+    /* 左右翻页箭头：鼠标落在纸面上时浮现，离开淡出；触屏保留手势，不占画面 */
+    .reader-stage-shell {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    .reader-page-arrow {
+      position: absolute;
+      top: 50%;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 76px;
+      padding: 0;
+      border: 0;
+      border-radius: 999px;
+      font-size: 20px;
+      color: color-mix(in oklab, var(--md-reader-ink) 74%, transparent);
+      background: color-mix(in oklab, var(--md-surface-container) 88%, transparent);
+      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(14px);
+      box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--md-reader-rule) 64%, transparent);
+      opacity: 0;
+      transform: translate3d(0, -50%, 0) scale(0.92);
+      transition:
+        opacity 180ms var(--md-ease-emphasized),
+        transform 180ms var(--md-ease-emphasized),
+        background-color 180ms var(--md-ease-emphasized),
+        color 180ms var(--md-ease-emphasized);
+      cursor: pointer;
+    }
+    .reader-page-arrow.is-prev {
+      left: max(14px, env(safe-area-inset-left, 0px));
+    }
+    .reader-page-arrow.is-next {
+      right: max(14px, env(safe-area-inset-right, 0px));
+    }
+    .reader-stage-shell:hover .reader-page-arrow,
+    .reader-page-arrow:focus-visible {
+      opacity: 1;
+      transform: translate3d(0, -50%, 0) scale(1);
+    }
+    .reader-stage-shell.is-obscured .reader-page-arrow {
+      opacity: 0;
+    }
+    .reader-page-arrow:hover {
+      color: var(--md-reader-ink);
+      background: color-mix(in oklab, var(--md-surface-container-highest) 94%, transparent);
+      transform: translate3d(0, -50%, 0) scale(1.06);
+      box-shadow:
+        inset 0 0 0 0.5px color-mix(in oklab, var(--md-reader-rule) 90%, transparent),
+        0 16px 30px -24px color-mix(in oklab, var(--md-shadow-color) 55%, transparent);
+    }
+    /* 到头的方向压暗并让出点击，避免“按了没反应”；仍只在悬停纸面时出现 */
+    .reader-stage-shell:hover .reader-page-arrow.is-dim,
+    .reader-page-arrow.is-dim:focus-visible {
+      opacity: 0.35;
+      pointer-events: none;
+    }
+    @media (hover: none) {
+      .reader-page-arrow {
+        display: none;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .reader-page-arrow {
+        transition: none;
+      }
+    }
+
     @media (max-width: 899px) {
       .md-reader-topbar {
         min-height: 44px;
