@@ -29,7 +29,7 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 | 命令 | 作用 |
 | --- | --- |
 | `npm install` | 安装前端依赖；Tauri 命令找不到时先跑这个 |
-| `npm test` | `node --test tests/*.test.mjs`，当前 29 个测试文件、162 条用例全绿，约 1 秒 |
+| `npm test` | `node --test tests/*.test.mjs`，当前 31 个测试文件、218 条用例全绿，约 1 秒 |
 | `npm run dev:vite` | 只起 Vite 开发服务器，固定端口 **5173**（strictPort），带 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`（最常用的快速验证） |
 | `npm run check:dark-glow` | 扫描夜间白色泛光；`build:vite` 会自动执行 |
@@ -51,7 +51,7 @@ CI **不跑** `npm test`，只 `npm ci` + 构建；所以本地跑测试是唯�
 ## 3. 目录与职责
 
 ```text
-index.html                 Vite 入口；首帧前同步恢复主题/阅读模式的内联脚本 + 启动图（z-index 10000）
+index.html                 Vite 入口；首帧前同步加载 public/homura-boot.js 恢复主题/阅读模式 + 启动图（z-index 10000）
 vite.config.js             Vue 插件 + 相对路径 base + pdf.js 资源同步 + 生产 Tailwind 预编译
 tailwind.config.js         构建期 Tailwind 配置（开发环境仍读 public/vendor/tailwind-config.js）
 src/
@@ -74,9 +74,10 @@ src/
   composables/             9 个：useImporter / useViewport / useShortcuts / useSheetDrag / useShelfDialogs /
                            useScrollBounce / useDuplicateImport / useReaderBackDismiss / useAndroidBackExit
   components/              41 个 SFC（视图与交互）
-tests/                     29 个 .test.mjs（node:test + assert/strict + jsdom）
+tests/                     31 个 .test.mjs（node:test + assert/strict + jsdom）
 scripts/                   4 个：check-dark-glow / generate-icons / release-notes / sync-android-icons
 references/                4 份规范：md3-component-guide / tokens / ui-component-spec / desktop-island
+public/homura-boot.js      首帧前的同步引导脚本（CSP 禁止内联脚本，不能挪回 index.html）
 public/vendor/             开发环境运行时 Tailwind；生产构建转静态 CSS 并从 dist 删除
 public/pdfjs/              pdf.js 运行时资源，由 vite 插件生成，已 gitignore
 src-tauri/src/             lib.rs 命令注册 + desktop_archive / native_import / metadata_store /
@@ -137,7 +138,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 
 - 根节点靠 `data-theme`（green/mint/cyan/blue/violet/orchid/sakura/red/amber/olive）+ `data-mode`（light/warm/dark）切换。组件不得自行切主题，统一调 `theme.setThemeColor()` / `theme.setSurfaceMode()`。
 - 新增主题必须同步：`styles/tokens.css` 的明色块与暗色块；`theme.js` 的 `THEME_OPTIONS`（名称与三阶 `tones` 预览色）。两处入口共用 `ThemeSwatchGrid.vue`，不要再复制色板数组。
-- 三种表面的画布底色是硬编码常量，改主题时要一起看：`{ light: '#F8FAFC', warm: '#FAF6EE', dark: '#0F1115' }`，同时出现在 `index.html` 的内联恢复脚本与 `theme.js`。
+- 三种表面的画布底色是硬编码常量，改主题时要一起看：`{ light: '#F8FAFC', warm: '#FAF6EE', dark: '#0F1115' }`，同时出现在 `public/homura-boot.js` 与 `theme.js`。
 - 外观面板宽 **280px**，10 个主题色块固定为 **5 列 × 2 行**（`ThemeSwatchGrid` 的 `columns` 默认 5）；单个色块保持约 44px 的触控尺寸。
 
 ### 5.3 布局与断点
@@ -185,7 +186,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 这些是已经踩过坑、且用户明确要求保留的行为：
 
 1. **启动不许黑屏**：`tauri.conf.json` 里主窗口 `visible: false`，`src-tauri/src/lib.rs` 在 `PageLoadEvent::Finished` 后才 `show()`；前端另有 `#homura-splash`（`SPLASH_MIN_DURATION = 720`）接棒。不要改成启动即显示。
-2. **首帧不许闪主题**：`index.html` 的内联脚本在首帧前同步读 `homura_theme_color` / `homura_surface_mode` 并写 `data-theme` / `data-mode` / `dark`，同时改 theme-color meta。不要挪进 Vue 里异步恢复。
+2. **首帧不许闪主题**：`public/homura-boot.js` 在 `<head>` 里以普通脚本同步加载，首帧前读 `homura_theme_color` / `homura_surface_mode` 并写 `data-theme` / `data-mode` / `dark`，同时改 theme-color meta。不要挪进 Vue 里异步恢复，也不要退回 `index.html` 内联写法（CSP 的 `script-src` 不含 `'unsafe-inline'`）。
 3. **标题栏跟内容一起换色**：模式切换时，原生窗口 `setTheme` / `setBackgroundColor` 必须在动画**开始时**调用，不能等动画结束。逻辑在 `theme.js` 的 `setSurfaceMode`。
 4. **模式切换动画**：从被点击的「白昼 / 护眼 / 夜间」按钮中心圆形展开新配色。`theme.js` 用旧表面色遮罩与透明遮罩孔实现，`SURFACE_REVEAL_DURATION = 720`；按钮坐标由 `MdSegmentedControl` 通过 `update:modelValue` 的第二个参数传入。WebKit 下 View Transitions API 不可靠，不要换回去。切换期间 `html.surface-switching` 会抑制全局过渡，别加冲突的全局 transition。
 5. **工具栏自动隐藏 2.2 秒**：`ui.js` 的 `AUTO_HIDE_DELAY = 2200`；点击阅读画布 / 轻点可唤出。抽屉打开时不自动隐藏。
@@ -204,6 +205,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 18. **导入必须可取消可重试**：`useImporter` + `importProgress` store 支持取消、单本失败重试、同名确认、按批提交。并发与批量上限是实测过的（桌面 4 / Android 2，超 64MB 降到 3、超 256MB 降到 2、Android 超 32MB 降到 1），不要随手调高。
 19. **应用内更新只认官方仓库**：`updates.js` 的 `REPOSITORY_URL` 与 `external.js` 的白名单都锁死 `github.com/ningnanzhenshit-coder/HOMURA-reader`；下载只校验字节数与 `expected_size` 一致，没有签名/哈希校验，不要对外宣称更强保证。
 20. **Android 预见式返回**：`useReaderBackDismiss` 直接写 `--homura-back-*` CSS 变量驱动动画，**不能**改成响应式状态，否则返回手势会掉帧。native 模式（API 34+）必须同时保留 `app.onBackButtonPress` 的 JS 兜底监听：框架在 `Checker` 校验不过时只打日志、静默丢弃原生回调，插件却照样 resolve，一旦撤掉 JS 监听，阅读器期间就没有任何返回消费者，返回会落到 Tauri `AppPlugin` 的 `activity.onBackPressed()` 直接 finish 并退回桌面。原生回调是 top 时 JS 收不到事件，两条通道不会重复触发，不要「优化」成单通道。
+21. **CSP 严格白名单**：`tauri.conf.json` 的 `app.security.csp` 已启用，`script-src` 不含 `'unsafe-inline'`，注入的 `<script>` 与 `on*` 事件处理器会被浏览器直接拦掉；`'unsafe-eval'` 是 vendor Tailwind 运行时与 pdf.js wasm 必需的，别删。漫画页走 asset 协议，`img-src` / `media-src` 必须保留 `asset:` 与 `http://asset.localhost`（Windows / Android 用 `http://asset.localhost`，macOS / Linux / iOS 用 `asset://localhost`），删掉会整本漫画白屏。新增站外请求域名要同步登记进 `connect-src`；启动引导只能放 `public/homura-boot.js`。
 
 ## 7. 常见坑
 
