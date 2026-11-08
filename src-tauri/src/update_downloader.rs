@@ -104,7 +104,7 @@ fn validate_file_name(file_name: &str) -> Result<(), DownloadCommandError> {
 fn validate_asset_url(value: &str) -> Result<Url, DownloadCommandError> {
     let url =
         Url::parse(value).map_err(|_| command_error("INVALID_URL", "Release 安装包地址无效。"))?;
-    let repository_prefix = "/ningnanzhenshit-coder/HOMURA-reader/releases/download/";
+    let repository_prefix = "/Leon-Ning-san/HOMURA-reader/releases/download/";
     let valid = url.scheme() == "https"
         && url.host_str() == Some("github.com")
         && url.path().starts_with(repository_prefix);

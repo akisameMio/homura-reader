@@ -8,8 +8,8 @@ HOMURA是一个**本地优先**的阅读器：漫画、轻小说、PDF 和图集
 
 - 当前版本：**2.2.1**
 - 技术栈：Vue 3 + Pinia + Vite 6 + Tauri 2（纯 JavaScript）
-- 仓库：[ningnanzhenshit-coder/homura-reader](https://github.com/ningnanzhenshit-coder/homura-reader)
-- 下载：[GitHub Releases](https://github.com/ningnanzhenshit-coder/homura-reader/releases)
+- 仓库：[Leon-Ning-san/HOMURA-reader](https://github.com/Leon-Ning-san/HOMURA-reader)
+- 下载：[GitHub Releases](https://github.com/Leon-Ning-san/HOMURA-reader/releases)
 
 ## 项目现状
 
@@ -98,7 +98,7 @@ Markdown 输出会经过安全处理：原始 HTML 只作为文本显示，链�
 
 ## 下载与安装
 
-到 [GitHub Releases](https://github.com/ningnanzhenshit-coder/homura-reader/releases) 下载对应安装包：
+到 [GitHub Releases](https://github.com/Leon-Ning-san/HOMURA-reader/releases) 下载对应安装包：
 
 | 平台 | 发布产物 |
 | --- | --- |
@@ -241,7 +241,7 @@ CI 只在推送 `v*` 标签或手动触发 `workflow_dispatch` 时运行，不�
 
 ## 反馈
 
-发现 bug、格式兼容问题或有功能建议，请到 [Issues](https://github.com/ningnanzhenshit-coder/homura-reader/issues) 提交。反馈解析问题时可附上格式、复现步骤和必要的脱敏样本，别把带版权或隐私的原书直接扔进公开仓库。
+发现 bug、格式兼容问题或有功能建议，请到 [Issues](https://github.com/Leon-Ning-san/HOMURA-reader/issues) 提交。反馈解析问题时可附上格式、复现步骤和必要的脱敏样本，别把带版权或隐私的原书直接扔进公开仓库。
 
 ## 许可
 

@@ -19,10 +19,10 @@
       "identifier": "opener:allow-open-url",
       "allow": [
         {
-          "url": "https://github.com/ningnanzhenshit-coder/HOMURA-reader"
+          "url": "https://github.com/Leon-Ning-san/HOMURA-reader"
         },
         {
-          "url": "https://github.com/ningnanzhenshit-coder/HOMURA-reader/*"
+          "url": "https://github.com/Leon-Ning-san/HOMURA-reader/*"
         }
       ]
     },

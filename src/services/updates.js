@@ -8,10 +8,10 @@
 
 import { isAndroid } from './platform.js';
 
-export const REPOSITORY_URL = 'https://github.com/ningnanzhenshit-coder/HOMURA-reader';
+export const REPOSITORY_URL = 'https://github.com/Leon-Ning-san/HOMURA-reader';
 export const RELEASES_PAGE_URL = `${REPOSITORY_URL}/releases`;
 
-const RELEASES_API_URL = 'https://api.github.com/repos/ningnanzhenshit-coder/HOMURA-reader/releases?per_page=10';
+const RELEASES_API_URL = 'https://api.github.com/repos/Leon-Ning-san/HOMURA-reader/releases?per_page=10';
 const REQUEST_TIMEOUT = 12000;
 const CACHE_TTL = 5 * 60 * 1000;
 
@@ -172,7 +172,7 @@ export function formatReleaseDate(value) {
 function isAllowedReleaseUrl(value) {
   try {
     const url = new URL(value);
-    const repositoryPath = '/ningnanzhenshit-coder/HOMURA-reader';
+    const repositoryPath = '/Leon-Ning-san/HOMURA-reader';
     return url.protocol === 'https:'
       && url.hostname === 'github.com'
       && (url.pathname === repositoryPath || url.pathname.startsWith(`${repositoryPath}/`));
