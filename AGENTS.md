@@ -29,7 +29,7 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 | 命令 | 作用 |
 | --- | --- |
 | `npm install` | 安装前端依赖；Tauri 命令找不到时先跑这个 |
-| `npm test` | `node --test tests/*.test.mjs`，当前 26 个测试文件、149 条用例全绿，约 1 秒 |
+| `npm test` | `node --test tests/*.test.mjs`，当前 28 个测试文件、157 条用例全绿，约 1 秒 |
 | `npm run dev:vite` | 只起 Vite 开发服务器，固定端口 **5173**（strictPort），带 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`（最常用的快速验证） |
 | `npm run check:dark-glow` | 扫描夜间白色泛光；`build:vite` 会自动执行 |
@@ -74,7 +74,7 @@ src/
   composables/             9 个：useImporter / useViewport / useShortcuts / useSheetDrag / useShelfDialogs /
                            useScrollBounce / useDuplicateImport / useReaderBackDismiss / useAndroidBackExit
   components/              41 个 SFC（视图与交互）
-tests/                     26 个 .test.mjs（node:test + assert/strict + jsdom）
+tests/                     28 个 .test.mjs（node:test + assert/strict + jsdom）
 scripts/                   4 个：check-dark-glow / generate-icons / release-notes / sync-android-icons
 references/                4 份规范：md3-component-guide / tokens / ui-component-spec / desktop-island
 public/vendor/             开发环境运行时 Tailwind；生产构建转静态 CSS 并从 dist 删除
