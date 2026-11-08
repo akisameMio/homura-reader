@@ -84,8 +84,9 @@ export function resolveReaderMetrics({ width, height, layout = {}, compact = fal
   const padBottom = compact ? BOTTOM_CHROME.compact : BOTTOM_CHROME.desktop;
 
   const innerWidth = Math.max(120, safeWidth - padX * 2);
-  // 与 DOUBLE_SPREAD_MIN_WIDTH 一致：窄于 768 一律单页。
-  const wantsDouble = Number(layout.spread) === 2 && safeWidth >= 768;
+  // 与 DOUBLE_SPREAD_MIN_WIDTH 一致：窄于 768 或走手机布局（compact）一律单页，
+  // 否则分页器按双栏算宽度、视图却只渲染一页，单页会被挤到右栏。
+  const wantsDouble = Number(layout.spread) === 2 && !compact && safeWidth >= 768;
   const doubleWidth = (innerWidth - gutter) / 2;
   // 双页在窄窗口会挤成细条，低于 300px 一栏就退回单页。
   const isDouble = wantsDouble && doubleWidth >= 300;
