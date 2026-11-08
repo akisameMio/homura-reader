@@ -9,21 +9,41 @@
 /** 正文字体：只暴露有稳定 CJK 覆盖的系统字体栈，不引入网络字体。 */
 export const READER_FONT_OPTIONS = [
   {
+    value: 'system',
+    label: '原始',
+    stack: '"Inter", "PingFang SC", "Hiragino Sans GB", system-ui, -apple-system, sans-serif'
+  },
+  {
+    value: 'square',
+    label: '方体',
+    stack: '"PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif'
+  },
+  {
     value: 'song',
     label: '宋体',
     stack: '"Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", serif'
   },
   {
-    value: 'hei',
-    label: '黑体',
-    stack: '"PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif'
-  },
-  {
     value: 'kai',
     label: '楷体',
     stack: '"Kaiti SC", "STKaiti", "KaiTi", serif'
+  },
+  {
+    value: 'round',
+    label: '圆体',
+    stack: '"Yuanti SC", "Hiragino Maru Gothic ProN", "Quicksand", "PingFang SC", sans-serif'
   }
 ];
+
+// 早期版本只存了 song / hei / kai，旧值在这里归一，避免老读者书掉回默认。
+const FONT_ALIASES = { hei: 'square', default: 'system' };
+
+export function resolveFontValue(value) {
+  const normalized = FONT_ALIASES[value] || value;
+  return READER_FONT_OPTIONS.some((option) => option.value === normalized)
+    ? normalized
+    : 'song';
+}
 
 /** 行距档位：中文长行需要比西文更松，标准档取 1.9。 */
 export const READER_LINE_HEIGHT_OPTIONS = [
@@ -51,8 +71,8 @@ const SINGLE_PAGE_MAX = 640;
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 export function resolveFontStack(value) {
-  const match = READER_FONT_OPTIONS.find((option) => option.value === value);
-  return (match || READER_FONT_OPTIONS[0]).stack;
+  const match = READER_FONT_OPTIONS.find((option) => option.value === resolveFontValue(value));
+  return (match || READER_FONT_OPTIONS.find((option) => option.value === 'song')).stack;
 }
 
 export function resolveLineHeight(value) {

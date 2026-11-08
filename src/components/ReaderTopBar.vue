@@ -60,12 +60,11 @@
         <span class="md-reader-type-glyph" aria-hidden="true">Aa</span>
       </button>
       <button
-        v-else
         type="button"
         class="md-icon-button"
         :class="{ 'is-active': ui.settingsOpen }"
-        title="阅读设置"
-        aria-label="阅读设置"
+        :title="isReflowable ? '排版与外观' : '阅读设置'"
+        :aria-label="isReflowable ? '排版与外观' : '阅读设置'"
         aria-controls="reader-settings-drawer"
         :aria-expanded="ui.settingsOpen"
         @click="ui.openSettings()"
@@ -102,11 +101,6 @@
             <span class="md-reader-font-sample" :style="{ fontFamily: option.stack }" aria-hidden="true">永</span>
             <span class="md-reader-font-name">{{ option.label }}</span>
             <MdIcon v-if="reader.layoutConfig.fontFamily === option.value" name="check" class="md-menu-check" />
-          </button>
-          <span class="md-reader-font-menu-divider" role="separator"></span>
-          <button type="button" role="menuitem" class="md-menu-item" @click="openFullSettings">
-            <MdIcon name="settings" />
-            <span class="md-reader-font-name">更多排版设置</span>
           </button>
         </div>
       </Transition>
@@ -207,11 +201,6 @@ function pickFont(value) {
   reader.setFontFamily(value);
   ui.closeFontMenu();
   nextTick(() => typeButton.value?.focus());
-}
-
-function openFullSettings() {
-  ui.closeFontMenu();
-  ui.openSettings();
 }
 
 async function toggleFavorite() {

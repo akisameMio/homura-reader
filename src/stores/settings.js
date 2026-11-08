@@ -8,6 +8,7 @@
 import { defineStore } from 'pinia';
 import { computed, reactive, ref } from 'vue';
 import { isWindows } from '../services/platform.js';
+import { resolveFontValue } from '../services/readerLayout.js';
 
 const READER_DEFAULTS_KEY = 'homura_reader_defaults';
 const DEBUG_FORCE_FULLSCREEN_KEY = 'homura_debug_force_fullscreen';
@@ -15,7 +16,6 @@ const DEBUG_AUTO_UPDATE_CHECK_KEY = 'homura_debug_auto_update_check';
 const IMPORT_COLLECTION_PROMPT_KEY = 'homura_import_collection_prompt';
 const DIRECTIONS = ['ltr', 'rtl', 'vertical'];
 const WEBTOON_FITS = ['screen', 'medium', 'wide'];
-const FONT_FAMILIES = ['song', 'hei', 'kai'];
 const LINE_HEIGHTS = ['tight', 'normal', 'loose'];
 const PAGE_MARGINS = ['narrow', 'normal', 'wide'];
 
@@ -49,9 +49,7 @@ function normalizeReaderDefaults(value) {
     webtoonFit: WEBTOON_FITS.includes(source.webtoonFit)
       ? source.webtoonFit
       : DEFAULT_READER_SETTINGS.webtoonFit,
-    fontFamily: FONT_FAMILIES.includes(source.fontFamily)
-      ? source.fontFamily
-      : DEFAULT_READER_SETTINGS.fontFamily,
+    fontFamily: resolveFontValue(source.fontFamily),
     lineHeight: LINE_HEIGHTS.includes(source.lineHeight)
       ? source.lineHeight
       : DEFAULT_READER_SETTINGS.lineHeight,
