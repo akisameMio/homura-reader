@@ -1,7 +1,7 @@
-<img width="250" height="335" alt="file_0000000020288206bc9f25798fbe92ef" src="https://github.com/user-attachments/assets/0aa7731d-4d55-4e32-a157-2968a01eafb7" />
-
-
-<img width="400" height="400" alt="Untitled-1 - 02-11-2026 19-19-50" src="https://github.com/user-attachments/assets/818e7aba-f12a-49e1-8640-8852cb852b8b" />
+<div align="center">
+<img width="280" alt="file_8000000020288206bc9f25798fbe92ef" src="https://github.com/user-attachments/assets/0aa7731d-4d55-4e32-a157-2968a01eafb7" />
+<img width="280" alt="untitled - 02-11-2026 19-19-50" src="https://github.com/user-attachments/assets/818e7aba-f12a-49e1-8640-8852cb852b8b" />
+</div>
 
 欢迎star，提出issue
 # HOMURA — 本地漫画与轻小说阅读器
