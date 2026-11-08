@@ -102,6 +102,7 @@ z-index: 40;
 | --- | --- | --- | --- | --- |
 | 导入胶囊 | `104 × 56px` | `28px` | `primary-container` | 图标 `20px` + “导入” |
 | 导入进度环 | `56 × 56px` | `999px` | `primary-container` | 42px 左右的 SVG 环与数字 |
+| 导入完成胶囊 | `104 × 56px` | `28px` | `primary-container` | `check / warning` + “完成 / 有失败” |
 | 更新圆钮 | `56 × 56px` | `50%` | `secondary-container` | 更新中；完成下载后可切 `primary-container` |
 | 两枚控件间距 | `14px` | - | - | 更新圆钮 + 导入椭圆并排时 |
 
@@ -109,6 +110,8 @@ z-index: 40;
 
 - 更新圆钮右上角通知点 `7 × 7px`，`1.5px` 描边使用圆钮当前背景色，避免“贴纸感”。
 - 导入进度环的 SVG 使用 `stroke-width: 3`，在 `56 × 56` 圆钮内 inset `6px`。
+- 只有进行中 / 已停止使用 `56 × 56` 进度环；完成态回到 `104 × 56` 完成胶囊，
+  这样完成卡和导入菜单卡共用同一个展开 / 收起种子。
 - 更新圆钮在下载已完成时显示 `check`，不再显示通知点。
 - 所有图标走 `MdIcon.vue`；不要引入 Material Icons 字体或图标库。
 
@@ -117,7 +120,7 @@ z-index: 40;
 | surface | 宽度 | 内容 |
 | --- | --- | --- |
 | 导入菜单 | `348px` | 文件 / 文件夹 / 新建书库 |
-| 导入进度 | `432px` | `ImportProgressPanel` |
+| 导入进度 / 完成 | `348px` | `ImportProgressPanel`，完成态沿用导入菜单的行式摘要 |
 | 同名确认 | `432px` | `DuplicateImportContent` |
 | 删除 / 建库 / 命名 / 移动 | `432px` | `ShelfDialogContent` |
 | 更新 | `448px` | `UpdateIslandPanel` |
@@ -161,10 +164,11 @@ surface 宽度由 `surfaceWidth` 决定，并写入 CSS 变量：
 `position: absolute`：surface 锚定 `right: 0; bottom: 0`，按钮关闭时锚定
 `right: 0; bottom: 0`、展开时锚定 `right: 20px; bottom: 20px`。
 surface 的缩放原点固定为 `100% 100%`，按钮宽度变化和更新圆钮进出都不会推动 surface。
-`triggerWidth` 为空闲态 `104px`、导入进行中 `56px`，用于**收起时的目标控制**。
+`triggerWidth` 为空闲态 / 完成态 `104px`、进行中 / 已停止 `56px`，用于**收起时的目标控制**。
 入场种子另用 `enterSeed`：在 `surfaceKey` 从空变为某个 surface 时同步读取按钮当时的
 `offsetWidth`，此时按钮在锚点 `right: 0; bottom: 0`。这样从空闲胶囊直接开始导入时
-仍从 `104 × 56` 长出来，而从进度环重新展开时则从 `56 × 56` 长出来。
+仍从 `104 × 56` 长出来；完成卡从完成胶囊展开，也与导入菜单卡使用同一颗
+`104 × 56` 种子。只有从进行中 / 已停止的进度环重新展开时才从 `56 × 56` 长出来。
 
 非空 surface 之间切换时按钮仍停在卡片动作位，入场种子改用按钮当前宽度并带上
 `right: 20px; bottom: 20px`，保证新卡片也精确从这颗动作按钮长出来，而不是从卡片
@@ -240,7 +244,7 @@ import
 
 ### 4.4 胶囊收起
 
-- 触发行只保留一个与导入胶囊同宽的 spacer（idle `104px`、导入进行中 `56px`）和更新圆钮；
+- 触发行只保留一个与导入胶囊同宽的 spacer（空闲 / 完成 `104px`、进行中 / 已停止 `56px`）和更新圆钮；
   surface 打开时 spacer 收成零宽，真实按钮是 `position: absolute`，不会推动 surface。
 - 打开任意 surface 时，真实按钮不隐藏、不 `inert`、不复制；它直接移动到卡片右下角，
   切换成当前 surface 的 `primaryAction`，并承担卡片主行动。
@@ -296,7 +300,10 @@ const showUpdateOrb = computed(() => (
   `right / bottom / width`，否则收起时按钮会短暂越过锚点
 - 轻微的 `scale` 回弹使用 `--island-spring: cubic-bezier(0.34, 1.56, 0.64, 1)`
 - `--island-morph-duration: 480ms`
-- 按钮宽度 / 位置使用 `420ms`，位置延迟 `50ms`，与卡片外框同步收放
+- 展开时按钮宽度 / 位置使用 `420ms`，位置延迟 `50ms`，与卡片外框同步展开
+- 收起时按钮先用 `180ms` 归位到锚点，卡片再开始收缩；不要让按钮和裁切同时
+  从卡片内边距位滑向锚点，否则裁切右 / 下边缘会永远钉在锚点，而按钮还差 `20px`，
+  中途会露出卡片圆角
 - 更新圆钮仍使用 `var(--md-duration-medium)` / `var(--md-ease-emphasized)`
 
 内容透明度：
@@ -315,8 +322,8 @@ surface 进入：
 - `clip-path` 使用 `--island-morph-duration` 与 `--island-morph-ease`
 - `transform` 使用同一时长与 `--island-spring`，只负责很轻的整体回弹
 - surface 绝对定位在根节点右下角，`transform-origin: 100% 100%`
-- 起点是导入按钮**入场前**的真实矩形：空闲胶囊为 `104 × 56 / 28px`，
-  进度环或已完成环为 `56 × 56 / 28px`
+- 起点是导入按钮**入场前**的真实矩形：空闲胶囊 / 完成胶囊为 `104 × 56 / 28px`，
+  只有进行中 / 已停止的进度环为 `56 × 56 / 28px`
 - `clip-path` 从
   `inset(calc(100% - var(--enter-seed-bottom) - 56px) var(--enter-seed-right) var(--enter-seed-bottom) calc(100% - var(--enter-seed-right) - var(--enter-seed-width)) round 28px)`
   展开到完整卡片，不再把整张卡片压扁成长条
@@ -328,10 +335,18 @@ surface 进入：
 
 surface 离开：
 
-- `clip-path` 430ms，延迟 60ms，使用不回弹的 `--island-morph-ease`
-- 起点是比 surface 外扩 `80px` 的裁切框，保留正常投影；终点收成右下角
-  `104 × 56`（导入进行中为 `56 × 56`），圆角固定 `28px`；收起目标跟随当前状态，
+- `clip-path` 360ms，延迟 180ms，使用不回弹的 `--island-morph-ease`；
+  前 180ms 留给按钮从卡片操作位 `right: 20px; bottom: 20px` 归位到
+  `right: 0; bottom: 0`，等按钮到达锚点后卡片再收进同一个矩形，末帧才能精确重合
+- 起点是比 surface 外扩 `80px` 的裁切框，保留正常投影后快速淡出；终点收成右下角
+  `104 × 56`（进行中 / 已停止为 `56 × 56`），圆角固定 `28px`；收起目标跟随当前状态，
   不沿用入场时的种子
+- 离场元素已经不在 Vue 的渲染树里，`--trigger-width` 不会随新状态自动 patch。
+  进入 leave 前必须把当前 `triggerWidth` 直接写到 surface 的 style 上；否则完成卡
+  从 `done` 回到 `idle` 时，卡片仍收向 `56 × 56`，而按钮已经是 `104 × 56`，
+  末帧会多出 `48px` 的“凸起”
+- 收起时卡片投影在 `220ms` 内淡出（延迟 `180ms`），不要保留到裁切末帧；否则
+  浅色书架背景上会在按钮右缘外留下 `4–5px` 的灰色光晕，看起来仍像一块凸起
 - 外壳不做整体透明度淡出，最终裁切矩形与真实按钮重合，由按钮接管视觉
 - 内容层不参与缩放：文字保持原尺寸，由裁切框从右下角向左上收走
 - 内容层 140ms 后开始淡出，并在 220ms 内轻微 `scale(0.97)` / `blur(3px)`
@@ -414,6 +429,10 @@ surface 离开：
 - 有失败：保留面板，展示失败汇总与“重试失败项”。
 - 用户停止：保留“已停止”状态。
 - 面板打开时不自动收起用户正在操作的 surface。
+- 桌面完成态以“导入作品”卡片为模板：同样的 `348px` 宽度、简介文字、图标行与
+  底部悬浮行动位；不要再给完成态单独放大宽度，否则状态切换会横向跳动。
+- 完成后卡片收起时回到 `104 × 56` 的“完成 / 有失败”胶囊，再次点击从这颗胶囊
+  展开结果；不要让它收进 `56 × 56` 进度环，否则展开 / 收起会和导入菜单卡不同。
 
 手机 `ImportProgressSheet` 复用同一内容组件：进行中与完成后都使用 bottom sheet，
 关闭进行中的 sheet 只收起内容，不取消导入任务；取消任务仍由“停止导入”按钮完成。

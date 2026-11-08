@@ -147,13 +147,14 @@
       type="button"
       class="island-import-trigger"
       :class="{
-        'is-ring': importProgress.status !== 'idle' && !actionFaceShown,
+        'is-ring': showProgressRing && !actionFaceShown,
         'is-failed': importProgress.status !== 'idle' && importProgress.hasFailures && !actionFaceShown,
         'is-card-position': !!surface && !surfaceSwapping,
         'is-card-primary': actionFaceShown && heldAction?.variant === 'primary',
         'is-card-tonal': actionFaceShown && heldAction?.variant === 'tonal',
         'is-card-danger': actionFaceShown && heldAction?.variant === 'danger',
-        'is-returning': surfaceLeaving || surfaceSwapping
+        'is-returning': surfaceLeaving || surfaceSwapping,
+        'is-docking': surfaceLeaving
       }"
       :style="{ width: `${buttonWidth}px` }"
       :title="buttonTitle"
@@ -182,7 +183,7 @@
       </span>
       <span
         class="island-import-layer"
-        :class="{ 'is-hidden': importProgress.status === 'idle' || actionFaceShown }"
+        :class="{ 'is-hidden': !showProgressRing || actionFaceShown }"
         aria-hidden="true"
       >
         <svg class="island-ring" viewBox="0 0 44 44">
@@ -196,13 +197,20 @@
             :stroke-dashoffset="ringOffset"
           ></circle>
         </svg>
-        <MdIcon v-if="importProgress.status === 'done' && !importProgress.hasFailures" name="check" class="island-ring-icon" />
         <MdIcon
-          v-else-if="importProgress.status === 'done' || importProgress.status === 'cancelled'"
-          :name="importProgress.status === 'cancelled' ? 'close' : 'warning'"
+          v-if="importProgress.status === 'cancelled'"
+          name="close"
           class="island-ring-icon"
         />
         <span v-else class="island-ring-number">{{ importProgress.done }}</span>
+      </span>
+      <span
+        class="island-import-layer"
+        :class="{ 'is-hidden': importProgress.status !== 'done' || actionFaceShown }"
+        aria-hidden="true"
+      >
+        <MdIcon :name="importProgress.hasFailures ? 'warning' : 'check'" />
+        <span>{{ importProgress.hasFailures ? '有失败' : '完成' }}</span>
       </span>
     </button>
   </div>
@@ -295,7 +303,7 @@ const surfaceKey = computed(() => {
 });
 const surfaceWidth = computed(() => {
   if (surface.value === 'menu') return 348;
-  if (surface.value === 'import') return 432;
+  if (surface.value === 'import') return 348;
   if (surface.value === 'duplicate') return 432;
   if (surface.value === 'shelf') {
     return 432;
@@ -310,7 +318,10 @@ const surfaceClass = computed(() => ({
   'is-shelf': surface.value === 'shelf',
   'is-update': surface.value === 'update'
 }));
-const triggerWidth = computed(() => (importProgress.status === 'idle' ? 104 : 56));
+const showProgressRing = computed(() => (
+  importProgress.status === 'running' || importProgress.status === 'cancelled'
+));
+const triggerWidth = computed(() => (showProgressRing.value ? 56 : 104));
 const showUpdateOrb = computed(() => (
   updatePending.value
   && !surface.value
@@ -357,7 +368,7 @@ const activeAction = computed(() => {
 });
 const buttonWidth = computed(() => {
   if (!surface.value || surfaceSwapping.value || !actionFaceShown.value || !heldAction.value) {
-    return importProgress.status === 'idle' ? 104 : 56;
+    return showProgressRing.value ? 56 : 104;
   }
   // 当前字号下中文字宽约 13.2px，用估算宽度让胶囊到卡片动作的尺寸过渡连续。
   const labelLength = [...String(heldAction.value.label || '')].length;
@@ -751,6 +762,7 @@ watch(surfaceKey, (key, previous) => {
     return;
   }
   if (!previous) return;
+  surfaceRef.value?.style.setProperty('--trigger-width', `${triggerWidth.value}px`);
   surfaceSwapping.value = false;
   surfaceLeaving.value = true;
   scheduleActionFaceRelease();
@@ -879,6 +891,21 @@ onBeforeUnmount(() => {
 .island-import-trigger.is-returning {
   transition-delay: 0s;
   pointer-events: none;
+}
+
+/* 真正关闭卡片时先快速归位到锚点，再让卡片裁切收进这颗按钮；
+   卡片之间切换不套用这段更快的位移，避免按钮在切换首帧抖一下。 */
+.island-import-trigger.is-docking {
+  transition:
+    right 180ms var(--island-morph-ease),
+    bottom 180ms var(--island-morph-ease),
+    width 180ms var(--island-morph-ease),
+    border-radius 180ms var(--island-morph-ease),
+    background-color var(--md-duration-short) var(--md-ease-emphasized),
+    color var(--md-duration-short) var(--md-ease-emphasized),
+    opacity var(--md-duration-short) var(--md-ease-emphasized),
+    transform 180ms var(--md-ease-emphasized),
+    box-shadow 180ms var(--md-ease-emphasized);
 }
 
 .island-import-trigger.is-ring {
@@ -1197,9 +1224,11 @@ onBeforeUnmount(() => {
 
 .island-surface-leave-active {
   transition:
-    clip-path 430ms var(--island-morph-ease) 60ms,
+    /* 先让按钮归位到右下角锚点，卡片再收进同一个矩形，避免错开 20px 露出角。 */
+    clip-path 360ms var(--island-morph-ease) 180ms,
+    box-shadow 220ms var(--md-ease-emphasized) 180ms,
     transform 240ms var(--md-ease-emphasized),
-    filter 200ms ease 70ms;
+    filter 200ms ease 180ms;
   pointer-events: none;
   will-change: clip-path, filter;
 }
@@ -1234,6 +1263,7 @@ onBeforeUnmount(() => {
 
 .island-surface-leave-to {
   border-radius: 28px;
+  box-shadow: none;
   clip-path: inset(
     calc(100% - 56px)
     0

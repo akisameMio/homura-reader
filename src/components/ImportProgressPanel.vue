@@ -2,6 +2,10 @@
   <section
     ref="panelRef"
     class="import-progress-panel"
+    :class="{
+      'is-summary': store.status !== 'running',
+      'is-host-action': hostPrimaryAction
+    }"
     role="group"
     aria-labelledby="import-progress-title"
     tabindex="-1"
@@ -14,72 +18,107 @@
       <p class="md-surface-subtitle">{{ panelSubtitle }}</p>
     </header>
 
-    <div class="import-overview">
-      <div class="import-count">
-        <b>{{ store.done }}<span> / {{ store.total }}</span></b>
-        <small>本作品已处理</small>
+    <template v-if="store.status === 'running'">
+      <div class="import-overview">
+        <div class="import-count">
+          <b>{{ store.done }}<span> / {{ store.total }}</span></b>
+          <small>本作品已处理</small>
+        </div>
+        <div class="import-percent">
+          <b>{{ store.percent }}%</b>
+          <span>{{ statusMeta }}</span>
+        </div>
       </div>
-      <div class="import-percent">
-        <b>{{ store.percent }}%</b>
-        <span>{{ statusMeta }}</span>
+
+      <div
+        class="import-track"
+        role="progressbar"
+        aria-label="导入进度"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-valuenow="store.percent"
+      >
+        <i :style="{ transform: `scaleX(${store.percent / 100})` }"></i>
       </div>
-    </div>
 
-    <div
-      class="import-track"
-      role="progressbar"
-      aria-label="导入进度"
-      aria-valuemin="0"
-      aria-valuemax="100"
-      :aria-valuenow="store.percent"
-    >
-      <i :style="{ transform: `scaleX(${store.percent / 100})` }"></i>
-    </div>
+      <div class="import-steps" aria-hidden="true">
+        <template v-for="(step, index) in steps" :key="step.key">
+          <span
+            class="import-step"
+            :class="{
+              'is-done': stepState(step.key) === 'complete',
+              'is-active': stepState(step.key) === 'active'
+            }"
+          >
+            <MdIcon
+              v-if="stepState(step.key) === 'complete'"
+              name="check"
+            />
+            {{ step.label }}
+          </span>
+          <span v-if="index < steps.length - 1" class="import-step-line"></span>
+        </template>
+      </div>
 
-    <div class="import-steps" aria-hidden="true">
-      <template v-for="(step, index) in steps" :key="step.key">
-        <span
-          class="import-step"
-          :class="{
-            'is-done': stepState(step.key) === 'complete',
-            'is-active': stepState(step.key) === 'active'
-          }"
-        >
-          <MdIcon
-            v-if="stepState(step.key) === 'complete'"
-            name="check"
-          />
-          {{ step.label }}
+      <div class="import-current">
+        <MdIcon name="upload_file" />
+        <span>当前文件</span>
+        <b>{{ store.currentName || '准备下一本…' }}</b>
+      </div>
+
+      <div class="import-target">
+        <MdIcon name="folder_open" />
+        <span>导入到：{{ store.targetLabel }}</span>
+        <code>{{ bytesLabel }}</code>
+      </div>
+    </template>
+
+    <div v-else class="import-summary-list">
+      <div class="import-summary-row is-accent">
+        <span class="import-summary-icon"><MdIcon name="check" /></span>
+        <span class="import-summary-copy">
+          <b>已添加</b>
+          <small>{{ savedNote }}</small>
         </span>
-        <span v-if="index < steps.length - 1" class="import-step-line"></span>
-      </template>
-    </div>
+        <span class="import-summary-value">{{ store.saved }} 本</span>
+      </div>
 
-    <div v-if="store.status === 'running'" class="import-current">
-      <MdIcon name="upload_file" />
-      <span>当前文件</span>
-      <b>{{ store.currentName || '准备下一本…' }}</b>
-    </div>
+      <div v-if="store.skipped > 0" class="import-summary-row">
+        <span class="import-summary-icon is-plain"><MdIcon name="remove" /></span>
+        <span class="import-summary-copy">
+          <b>跳过</b>
+          <small>同名或重复内容没有导入</small>
+        </span>
+        <span class="import-summary-value">{{ store.skipped }} 本</span>
+      </div>
 
-    <div class="import-target">
-      <MdIcon name="folder" />
-      <span>导入到：{{ store.targetLabel }}</span>
-      <code>{{ bytesLabel }}</code>
-    </div>
-
-    <div v-if="store.hasFailures" class="import-failures">
-      <p><MdIcon name="warning" />未能导入</p>
-      <ul>
-        <li v-for="(failure, index) in visibleFailures" :key="`${failure.name}-${failure.reason}-${index}`">
-          <span>
+      <template v-if="store.hasFailures">
+        <div class="import-summary-divider" aria-hidden="true"></div>
+        <div
+          v-for="(failure, index) in visibleFailures"
+          :key="`${failure.name}-${failure.reason}-${index}`"
+          class="import-summary-row is-error"
+        >
+          <span class="import-summary-icon is-error"><MdIcon name="warning" /></span>
+          <span class="import-summary-copy">
             <b>{{ failure.name }}</b>
             <small>{{ failure.reason }}</small>
           </span>
-        </li>
-      </ul>
-      <p v-if="store.failures.length > visibleFailures.length" class="import-failure-more">
-        等 {{ store.failures.length }} 本
-      </p>
+        </div>
+        <p v-if="store.failures.length > visibleFailures.length" class="import-summary-more">
+          还有 {{ store.failures.length - visibleFailures.length }} 本未导入
+        </p>
+      </template>
+
+      <div class="import-summary-divider" aria-hidden="true"></div>
+      <div class="import-summary-row">
+        <span class="import-summary-icon is-plain"><MdIcon name="folder_open" /></span>
+        <span class="import-summary-copy">
+          <b>导入到</b>
+          <small>{{ store.targetLabel }}</small>
+        </span>
+        <span class="import-summary-value">{{ bytesLabel }}</span>
+      </div>
     </div>
 
     <div class="md-surface-actionbar">
@@ -150,6 +189,9 @@ const steps = [
 ];
 const phaseLabel = computed(() => importPhaseLabel(store.phase));
 const visibleFailures = computed(() => store.failures.slice(0, 3));
+const savedNote = computed(() => (
+  store.saved > 0 ? '作品已保存到本地书架' : '本次没有新增作品'
+));
 const bytesLabel = computed(() => (
   store.bytesTotal > 0
     ? `${formatImportBytes(store.bytesDone)} / ${formatImportBytes(store.bytesTotal)}`
@@ -468,53 +510,116 @@ defineExpose({ focusInitial, primaryAction, runPrimaryAction });
   font-size: 10px;
 }
 
-.import-failures {
-  margin-top: 14px;
-  padding: 12px 14px;
-  border-radius: 16px;
+.import-summary-list {
+  display: grid;
+  gap: 4px;
+  margin-top: 18px;
+}
+
+.import-summary-row {
+  display: flex;
+  min-height: 68px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 10px;
+  border-radius: 18px;
+}
+
+.import-summary-row.is-accent {
+  background: color-mix(in oklab, var(--md-primary-container) 48%, var(--md-surface-low));
+}
+
+.import-summary-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+
+.import-summary-icon.is-plain {
+  background: var(--md-surface-high);
+  color: var(--md-on-surface);
+}
+
+.import-summary-icon.is-error {
   background: var(--md-error-container);
   color: var(--md-on-error-container);
 }
 
-.import-failures > p {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  font-size: 11px;
-  font-weight: 650;
+.import-summary-icon :deep(svg) {
+  width: 21px;
+  height: 21px;
 }
 
-.import-failures ul {
-  display: grid;
-  gap: 7px;
-  margin: 9px 0 0;
-  padding: 0;
-  list-style: none;
+.import-summary-copy {
+  min-width: 0;
+  flex: 1;
 }
 
-.import-failures li b,
-.import-failures li small {
+.import-summary-copy b,
+.import-summary-copy small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.import-failures li b {
-  font-size: 12px;
+.import-summary-copy b {
+  font-size: 13px;
   font-weight: 650;
 }
 
-.import-failures li small {
-  margin-top: 2px;
-  font-size: 10px;
-  opacity: 0.82;
+.import-summary-copy small {
+  margin-top: 3px;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
 }
 
-.import-failure-more {
-  margin-top: 7px !important;
-  opacity: 0.8;
+.import-summary-row.is-error small {
+  color: color-mix(in oklab, var(--md-error) 76%, var(--md-on-surface-variant));
+}
+
+.import-summary-value {
+  flex: none;
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.import-summary-row.is-accent .import-summary-value {
+  color: var(--md-primary);
+}
+
+.import-summary-divider {
+  height: 0.5px;
+  margin: 7px 12px;
+  background: color-mix(in oklab, var(--md-outline-variant) 75%, transparent);
+}
+
+.import-summary-more {
+  margin: 2px 0 0 62px;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+}
+
+.import-progress-panel.is-summary.is-host-action :deep(.md-surface-actionbar) {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  left: 20px;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.import-progress-panel.is-summary.is-host-action {
+  position: relative;
+  padding-bottom: 92px;
 }
 
 @media (max-width: 899px) {
