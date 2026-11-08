@@ -3,7 +3,7 @@
 <img width="280" alt="untitled - 02-11-2026 19-19-50" src="https://github.com/user-attachments/assets/818e7aba-f12a-49e1-8640-8852cb852b8b" />
 </div>
 
-欢迎star，提出issue
+           欢迎star，提出issue
 # HOMURA — 本地漫画与轻小说阅读器
 
 > 本鱼只负责把书塞进你的本地书架；上传云端那种事，想都别想。🐋
