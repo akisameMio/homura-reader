@@ -229,16 +229,7 @@ onBeforeUnmount(() => {
   z-index: 70;
   display: flex;
   justify-content: flex-end;
-  background: color-mix(in oklab, var(--md-shadow-color) 34%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-@media (max-width: 899px) {
-  .changelog-layer {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
+  background: color-mix(in oklab, var(--md-shadow-color) 38%, transparent);
 }
 
 .changelog-panel {
