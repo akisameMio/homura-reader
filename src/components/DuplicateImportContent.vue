@@ -41,14 +41,29 @@
 
     <div class="md-surface-actionbar">
       <div class="md-surface-aux">
-        <button ref="skipButtonRef" type="button" class="md-surface-text-button" @click="emit('resolve')">
+        <button
+          ref="skipButtonRef"
+          type="button"
+          class="md-surface-text-button"
+          :disabled="pending.busy"
+          @click="emit('resolve')"
+        >
           {{ pending.batch ? '跳过这批' : '跳过此书' }}
+        </button>
+        <button
+          type="button"
+          class="md-surface-text-button"
+          :disabled="pending.busy"
+          @click="emit('resolve', DUPLICATE_SKIP_ALL)"
+        >
+          全部跳过
         </button>
       </div>
       <button
         v-if="!hostPrimaryAction"
         type="button"
         class="md-surface-action is-primary"
+        :disabled="pending.busy"
         @click="emit('resolve', true)"
       >
         <MdIcon name="upload_file" />
@@ -60,6 +75,7 @@
 
 <script setup>
 import { computed, nextTick, shallowRef } from 'vue';
+import { DUPLICATE_SKIP_ALL } from '../composables/useDuplicateImport.js';
 import MdIcon from './MdIcon.vue';
 
 const props = defineProps({
@@ -79,7 +95,7 @@ const primaryAction = computed(() => ({
   label: '仍然导入',
   icon: 'upload_file',
   variant: 'primary',
-  disabled: false
+  disabled: !!props.pending?.busy
 }));
 
 async function focusInitial() {
@@ -226,6 +242,19 @@ defineExpose({ focusInitial, primaryAction, runPrimaryAction });
   .duplicate-import-content {
     min-height: 0;
     padding: 0;
+  }
+
+  .duplicate-import-content .md-surface-text-button {
+    flex: none;
+    padding: 0 12px;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 379px) {
+  .duplicate-import-content .md-surface-action {
+    min-width: 0;
+    padding: 0 12px;
   }
 }
 </style>

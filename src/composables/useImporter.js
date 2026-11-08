@@ -237,7 +237,7 @@ export function useImporter() {
   const shelf = useShelfStore();
   const settings = useSettingsStore();
   const importProgress = useImportProgressStore();
-  const { confirmDuplicate, confirmDuplicates } = useDuplicateImport();
+  const { createDuplicateSession } = useDuplicateImport();
   const { askShelfDialog } = useShelfDialogs();
 
   function taskFiles(task) {
@@ -324,7 +324,7 @@ export function useImporter() {
   }
 
   // 导入前只按文件名快速识别可能的同名书，避免重复文件也走完整解析。
-  async function preflightDuplicateTasks(tasks) {
+  async function preflightDuplicateTasks(tasks, duplicateSession) {
     if (!tasks.length || !shelf.library.length) {
       return { tasks, skipped: 0 };
     }
@@ -350,11 +350,12 @@ export function useImporter() {
     if (!groups.size) return { tasks, skipped: 0 };
 
     const list = [...groups.values()];
-    const keep = await confirmDuplicates(list.map(group => ({
+    const keep = await duplicateSession.confirmDuplicates(list.map(group => ({
       title: group.title,
       existingTitle: group.existingTitle,
       count: group.tasks.length
     })));
+    duplicateSession.hide();
     if (keep) {
       // 只对参与预检的任务免掉后续同名弹窗；其它格式的真实书名仍要单独判断。
       for (const group of list) {
@@ -684,37 +685,41 @@ export function useImporter() {
   }
 
   // 同一批内也要按顺序判重，前一本确认保留后，后一本必须继续询问。
-  async function confirmPreparedDuplicates(preparedList, taskList, metrics) {
+  async function confirmPreparedDuplicates(preparedList, taskList, metrics, duplicateSession) {
     const accepted = [];
     const knownInBatch = new Map();
-    for (let index = 0; index < preparedList.length; index++) {
-      const prepared = preparedList[index];
-      if (!prepared) continue;
-      const task = taskList[index];
-      const { book } = prepared;
-      const titleKey = normalizeBookTitle(book.title);
-      const existingBook = (titleKey && knownInBatch.get(titleKey)) || findSameTitleBook(shelf.library, book.title);
-      if (existingBook && task?.duplicateApprovedTitleKey !== titleKey) {
-        importProgress.setPhase('confirm');
-        importProgress.setCurrentName(book.title);
-        const keep = await confirmDuplicate(book, existingBook);
-        importProgress.setPhase('save');
-        if (!keep) {
-          metrics.skipped++;
-          importProgress.addSkipped(1);
-          await discardParsedBook(book);
-          continue;
+    try {
+      for (let index = 0; index < preparedList.length; index++) {
+        const prepared = preparedList[index];
+        if (!prepared) continue;
+        const task = taskList[index];
+        const { book } = prepared;
+        const titleKey = normalizeBookTitle(book.title);
+        const existingBook = (titleKey && knownInBatch.get(titleKey)) || findSameTitleBook(shelf.library, book.title);
+        if (existingBook && task?.duplicateApprovedTitleKey !== titleKey) {
+          importProgress.setPhase('confirm');
+          importProgress.setCurrentName(book.title);
+          const keep = await duplicateSession.confirmDuplicate(book, existingBook);
+          importProgress.setPhase('save');
+          if (!keep) {
+            metrics.skipped++;
+            importProgress.addSkipped(1);
+            await discardParsedBook(book);
+            continue;
+          }
         }
+        if (titleKey && !knownInBatch.has(titleKey)) knownInBatch.set(titleKey, book);
+        accepted.push(prepared);
       }
-      if (titleKey && !knownInBatch.has(titleKey)) knownInBatch.set(titleKey, book);
-      accepted.push(prepared);
+    } finally {
+      duplicateSession.hide();
     }
     return accepted;
   }
 
-  async function commitPreparedBatch(preparedList, taskList, savedBooks, metrics) {
+  async function commitPreparedBatch(preparedList, taskList, savedBooks, metrics, duplicateSession) {
     importProgress.setPhase('save');
-    const accepted = await confirmPreparedDuplicates(preparedList, taskList, metrics);
+    const accepted = await confirmPreparedDuplicates(preparedList, taskList, metrics, duplicateSession);
     if (!accepted.length) return;
 
     metrics.commitBatches++;
@@ -810,83 +815,88 @@ export function useImporter() {
       return [];
     }
 
-    const preflight = await preflightDuplicateTasks(tasks);
-    const importTasks = preflight.tasks;
-    metrics.skipped += preflight.skipped;
-    metrics.importTasks = importTasks.length;
-    if (!importTasks.length) {
-      importProgress.dismiss();
-      logImportMetrics(metrics, 0);
-      return [];
-    }
-    const targetCollection = shelf.collections.find(item => item.id === targetId);
-    importProgress.begin({
-      total: importTasks.length,
-      bytesTotal: importTasks.reduce((sum, task) => sum + (task.size || 0), 0),
-      skipped: preflight.skipped,
-      targetId,
-      targetLabel: targetLabel || targetCollection?.title || '全部作品'
-    });
-
-    const savedBooks = [];
-    metrics.concurrency = chooseImportConcurrency(importTasks);
-    const commitBatchSize = chooseCommitBatchSize(importTasks);
-    metrics.commitBatchSize = commitBatchSize;
+    const duplicateSession = createDuplicateSession();
     try {
-      for (let start = 0; start < importTasks.length; start += commitBatchSize) {
-        const batchTasks = importTasks.slice(start, start + commitBatchSize);
-        const prepared = await runPool(
-          batchTasks,
-          metrics.concurrency,
-          async task => {
-            importProgress.taskStarted(task, task.title);
-            try {
-              const result = await prepareImportTask(task, metrics);
-              if (!result) {
-                markTaskFailure(task, new Error('无法解析或读取这个文件'));
-                recordTaskFailure(task, new Error(task.failureReason));
-              }
-              return result;
-            } finally {
-              importProgress.taskSettled(task, task.size);
-            }
-          },
-          (err, task) => {
-            metrics.parseFailed++;
-            markTaskFailure(task, err);
-            recordTaskFailure(task, err);
-          },
-          () => importProgress.cancelRequested
-        );
-        await commitPreparedBatch(prepared, batchTasks, savedBooks, metrics);
-        if (importProgress.cancelRequested) break;
+      const preflight = await preflightDuplicateTasks(tasks, duplicateSession);
+      const importTasks = preflight.tasks;
+      metrics.skipped += preflight.skipped;
+      metrics.importTasks = importTasks.length;
+      if (!importTasks.length) {
+        importProgress.dismiss();
+        logImportMetrics(metrics, 0);
+        return [];
       }
-    } catch (err) {
-      if (err?.nativeImportFallback) {
-        await discardPreparedResults(err.partialResults);
-        delete err.partialResults;
-        // 已提交的书不能因为剩余文件失败而让用户重选整批，否则会重复询问同名书。
-        err.nativeSavedCount = savedBooks.length;
-        logImportMetrics(metrics, savedBooks.length);
-      }
-      importProgress.recordFailure({
-        name: '导入批次',
-        reason: importFailureReason(err),
-        kind: 'batch'
+      const targetCollection = shelf.collections.find(item => item.id === targetId);
+      importProgress.begin({
+        total: importTasks.length,
+        bytesTotal: importTasks.reduce((sum, task) => sum + (task.size || 0), 0),
+        skipped: preflight.skipped,
+        targetId,
+        targetLabel: targetLabel || targetCollection?.title || '全部作品'
       });
-      throw err;
-    } finally {
-      importProgress.finish();
-    }
 
-    if (metrics.failed > 0) {
-      console.warn(`[HOMURA] ${metrics.failed} 部作品未能保存到本地存档`);
-    } else if (savedBooks.length === 0 && metrics.skipped === 0) {
-      console.warn('[HOMURA] 未找到支持的漫画或小说格式');
+      const savedBooks = [];
+      metrics.concurrency = chooseImportConcurrency(importTasks);
+      const commitBatchSize = chooseCommitBatchSize(importTasks);
+      metrics.commitBatchSize = commitBatchSize;
+      try {
+        for (let start = 0; start < importTasks.length; start += commitBatchSize) {
+          const batchTasks = importTasks.slice(start, start + commitBatchSize);
+          const prepared = await runPool(
+            batchTasks,
+            metrics.concurrency,
+            async task => {
+              importProgress.taskStarted(task, task.title);
+              try {
+                const result = await prepareImportTask(task, metrics);
+                if (!result) {
+                  markTaskFailure(task, new Error('无法解析或读取这个文件'));
+                  recordTaskFailure(task, new Error(task.failureReason));
+                }
+                return result;
+              } finally {
+                importProgress.taskSettled(task, task.size);
+              }
+            },
+            (err, task) => {
+              metrics.parseFailed++;
+              markTaskFailure(task, err);
+              recordTaskFailure(task, err);
+            },
+            () => importProgress.cancelRequested
+          );
+          await commitPreparedBatch(prepared, batchTasks, savedBooks, metrics, duplicateSession);
+          if (importProgress.cancelRequested) break;
+        }
+      } catch (err) {
+        if (err?.nativeImportFallback) {
+          await discardPreparedResults(err.partialResults);
+          delete err.partialResults;
+          // 已提交的书不能因为剩余文件失败而让用户重选整批，否则会重复询问同名书。
+          err.nativeSavedCount = savedBooks.length;
+          logImportMetrics(metrics, savedBooks.length);
+        }
+        importProgress.recordFailure({
+          name: '导入批次',
+          reason: importFailureReason(err),
+          kind: 'batch'
+        });
+        throw err;
+      } finally {
+        importProgress.finish();
+      }
+
+      if (metrics.failed > 0) {
+        console.warn(`[HOMURA] ${metrics.failed} 部作品未能保存到本地存档`);
+      } else if (savedBooks.length === 0 && metrics.skipped === 0) {
+        console.warn('[HOMURA] 未找到支持的漫画或小说格式');
+      }
+      if (savedBooks.length > 0) await warnIfStorageTight();
+      logImportMetrics(metrics, savedBooks.length);
+      return savedBooks.map(book => book.id);
+    } finally {
+      duplicateSession.close();
     }
-    if (savedBooks.length > 0) await warnIfStorageTight();
-    logImportMetrics(metrics, savedBooks.length);
-    return savedBooks.map(book => book.id);
   }
 
   // ---- 拖拽：递归遍历 webkitGetAsEntry 目录树 ----
