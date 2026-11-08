@@ -29,7 +29,7 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 | 命令 | 作用 |
 | --- | --- |
 | `npm install` | 安装前端依赖；Tauri 命令找不到时先跑这个 |
-| `npm test` | `node --test tests/*.test.mjs`，当前 28 个测试文件、157 条用例全绿，约 1 秒 |
+| `npm test` | `node --test tests/*.test.mjs`，当前 28 个测试文件、158 条用例全绿，约 1 秒 |
 | `npm run dev:vite` | 只起 Vite 开发服务器，固定端口 **5173**（strictPort），带 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`（最常用的快速验证） |
 | `npm run check:dark-glow` | 扫描夜间白色泛光；`build:vite` 会自动执行 |
@@ -70,7 +70,7 @@ src/
       theme-picker.css     主题色板
       content.css          阅读内容排版（小说正文 / 章节 / Markdown）
   stores/                  7 个 setup store：theme / shelf / reader / ui / settings / importProgress / updates
-  services/                34 个：解析、存储、平台、原生桥接、更新（不依赖 Vue / Pinia）
+  services/                35 个：解析、存储、平台、原生桥接、更新（不依赖 Vue / Pinia）
   composables/             9 个：useImporter / useViewport / useShortcuts / useSheetDrag / useShelfDialogs /
                            useScrollBounce / useDuplicateImport / useReaderBackDismiss / useAndroidBackExit
   components/              41 个 SFC（视图与交互）
@@ -87,9 +87,9 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 .github/workflows/         三平台 + Android 自动打包
 ```
 
-`src/services/` 的关键分工（34 个文件，别只看名字猜）：
+`src/services/` 的关键分工（35 个文件，别只看名字猜）：
 
-- **解析**：`parsers.js`（总入口与调度）、`epubParser.js`、`epubType.js`（漫画/小说判定）、`pdf.js`、`mobi.js`、`markdown.js`、`pagination.js`（小说智能分页、章节/图片页构建）、`textEncoding.js`
+- **解析**：`parsers.js`（总入口与调度）、`epubParser.js`、`epubType.js`（漫画/小说判定）、`pdf.js`、`mobi.js`、`markdown.js`、`pagination.js`（小说智能分页、章节/图片页构建）、`readerLayout.js`（页宽 / 行高 / 页边距度量）、`textEncoding.js`
 - **存储**：`storage.js`（IndexedDB 完整存档 + SQLite 镜像）、`nativeMetadata.js`、`nativeStorage.js`、`opfs.js`、`restore.js`、`progress.js`、`mutationQueue.js`（串行写队列）
 - **原生桥**：`nativeRuntime.js`（错误码与能力探测）、`nativeArchive.js`（桌面 EPUB 会话）、`nativeImport.js`、`coverThumb.js`、`androidSystemBars.js`、`updateDownload.js`
 - **书库/书架**：`collections.js`（书库归属与目录建库规划）、`collectionReading.js`（书库内连读顺序）、`bookTitles.js`（拼音排序）、`shelfSections.js`（小说/漫画/其他分段）、`bookCover.js`
@@ -196,7 +196,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 10. **PDF 资源必须随包分发**：`vite.config.js` 的 `pdfjsAssets` 插件会把 `cmaps / standard_fonts / wasm / iccs` 同步到 `public/pdfjs`。删掉插件会导致 PDF 白屏。`public/pdfjs` 已 gitignore，不要提交。
 11. **PDF 渲染约束**：按页懒加载，`MAX_CACHED_PAGES = 24`；首次打开默认单页（`applyLayoutForBook` 里 `if (book.format === 'pdf') next.spread = 1`）；不支持字号调整与重排。
 12. **Markdown 安全**：输出会进 `v-html`，原始 HTML 必须经 `sanitize.js` 的 `ALLOWED_TAGS` 白名单校验，链接/图片只放行 `http/https/mailto/tel` 与相对路径。章节按一级/二级标题切分，并排除代码块内的标题标记。
-13. **进度与排版记忆**：翻页、滚轮、条漫滚动、拖进度条都要按书保存，包含方向 / 单双页 / 首页单排 / 字号（12–28）/ 条漫尺寸。目录展开状态与书签目前**没有**持久化，书签功能尚未实现，这是已知限制，不要假装已支持。
+13. **进度与排版记忆**：翻页、滚轮、条漫滚动、拖进度条都要按书保存，包含方向 / 单双页 / 首页单排 / 字号（12–28）/ 字体（宋 / 黑 / 楷）/ 行距 / 页边距 / 条漫尺寸。目录展开状态与书签目前**没有**持久化，书签功能尚未实现，这是已知限制，不要假装已支持。
 14. **重对象不进响应式深度代理**：见第 4 节。`PaginatedView` 的双缓冲动画对象尤其不能变成 `ref` 深层代理。
 15. **桌面原生压缩包会话**：EPUB 只从 `homura-native-sources` 读取，Rust 按 ZIP 中央目录随机读取条目到 AppCache；路径越界、条目过多、解压超限必须直接失败。JSZip 只对不可用、暂不支持或普通解析失败回退，不能吞掉 `NATIVE_SECURITY_LIMIT` / `NATIVE_LIMIT_EXCEEDED`。
 16. **封面与元数据原生兜底**：封面缩略图优先走 Rust `create_cover_thumbnail` / `create_cover_thumbnail_from_archive`，格式不支持、命令不可用或没有 Tauri 时才回退 Canvas；原生像素 / 输入大小上限不得继续交给 JS 重试。SQLite 元数据失败时回退 IndexedDB，但 `dirty` 标记与删除顺序不能删，否则旧镜像可能复活已删除书本。
