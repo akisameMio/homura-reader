@@ -70,71 +70,7 @@
           </div>
         </section>
 
-        <!-- 阅读方向 -->
-        <section class="md-drawer-section">
-          <div class="md-drawer-group-head">
-            <span class="md-drawer-group-label">阅读方向</span>
-            <b class="md-drawer-group-value">{{ directionLabel }}</b>
-          </div>
-          <MdSegmentedControl
-            class="w-full"
-            :model-value="config.direction"
-            :options="directions"
-            aria-label="阅读方向"
-            @update:model-value="reader.setDirection"
-          />
-
-          <MdSwitch
-            v-if="config.direction === 'rtl'"
-            class="mt-3.5"
-            :model-value="config.rtlInvertButtons"
-            title="反转 RTL 模式下左右翻页按钮的方向"
-            @update:model-value="reader.toggleRtlTapInvert()"
-          >
-            <span class="text-[13px] font-medium">左右翻页按钮反转</span>
-          </MdSwitch>
-        </section>
-
-        <!-- 翻页布局 -->
-        <section v-if="!isVertical || isManga" class="md-drawer-section">
-          <div class="md-drawer-group-head">
-            <span class="md-drawer-group-label">{{ isVertical ? '条漫尺寸' : '翻页布局' }}</span>
-            <b class="md-drawer-group-value">{{ spreadLabel }}</b>
-          </div>
-          <MdSegmentedControl
-            v-if="!isVertical && !isPhone"
-            class="w-full"
-            :model-value="config.spread"
-            :options="spreadOptions"
-            aria-label="翻页布局"
-            @update:model-value="value => reader.setSpreadCount(Number(value))"
-          />
-
-          <p v-if="!isVertical && isPhone" class="mt-3 text-[13px] leading-relaxed text-[var(--md-on-surface-variant)]">
-            当前屏幕按单页显示，窗口变宽后可选择双页。
-          </p>
-
-          <MdSwitch
-            v-if="!isVertical && !isPhone && config.spread === 2"
-            class="mt-3.5"
-            :model-value="config.coverOffset"
-            title="双页模式下首页单独显示，确保后续跨页大图对齐"
-            @update:model-value="reader.toggleCoverOffset()"
-          >
-            <span class="text-[13px] font-medium">首页单排</span>
-          </MdSwitch>
-
-          <MdSegmentedControl
-            v-if="isVertical && isManga"
-            class="w-full mt-3.5"
-            :model-value="config.webtoonFit"
-            :options="webtoonFits"
-            aria-label="条漫尺寸"
-            @update:model-value="reader.setWebtoonFit"
-          />
-        </section>
-
-        <!-- 排版 -->
+        <!-- 字号 -->
         <section v-if="!isManga" class="md-drawer-section">
           <div class="md-drawer-group-head">
             <span class="md-drawer-group-label">字号</span>
@@ -202,6 +138,70 @@
             :options="pageMarginOptions"
             aria-label="页边距"
             @update:model-value="reader.setPageMargin"
+          />
+        </section>
+
+        <!-- 阅读方向 -->
+        <section class="md-drawer-section">
+          <div class="md-drawer-group-head">
+            <span class="md-drawer-group-label">阅读方向</span>
+            <b class="md-drawer-group-value">{{ directionLabel }}</b>
+          </div>
+          <MdSegmentedControl
+            class="w-full"
+            :model-value="config.direction"
+            :options="directions"
+            aria-label="阅读方向"
+            @update:model-value="reader.setDirection"
+          />
+
+          <MdSwitch
+            v-if="config.direction === 'rtl'"
+            class="mt-3.5"
+            :model-value="config.rtlInvertButtons"
+            title="反转 RTL 模式下左右翻页按钮的方向"
+            @update:model-value="reader.toggleRtlTapInvert()"
+          >
+            <span class="text-[13px] font-medium">左右翻页按钮反转</span>
+          </MdSwitch>
+        </section>
+
+        <!-- 翻页布局 -->
+        <section v-if="!isVertical || isManga" class="md-drawer-section">
+          <div class="md-drawer-group-head">
+            <span class="md-drawer-group-label">{{ isVertical ? '条漫尺寸' : '翻页布局' }}</span>
+            <b class="md-drawer-group-value">{{ spreadLabel }}</b>
+          </div>
+          <MdSegmentedControl
+            v-if="!isVertical && !isPhone"
+            class="w-full"
+            :model-value="config.spread"
+            :options="spreadOptions"
+            aria-label="翻页布局"
+            @update:model-value="value => reader.setSpreadCount(Number(value))"
+          />
+
+          <p v-if="!isVertical && isPhone" class="mt-3 text-[13px] leading-relaxed text-[var(--md-on-surface-variant)]">
+            当前屏幕按单页显示，窗口变宽后可选择双页。
+          </p>
+
+          <MdSwitch
+            v-if="!isVertical && !isPhone && config.spread === 2"
+            class="mt-3.5"
+            :model-value="config.coverOffset"
+            title="双页模式下首页单独显示，确保后续跨页大图对齐"
+            @update:model-value="reader.toggleCoverOffset()"
+          >
+            <span class="text-[13px] font-medium">首页单排</span>
+          </MdSwitch>
+
+          <MdSegmentedControl
+            v-if="isVertical && isManga"
+            class="w-full mt-3.5"
+            :model-value="config.webtoonFit"
+            :options="webtoonFits"
+            aria-label="条漫尺寸"
+            @update:model-value="reader.setWebtoonFit"
           />
         </section>
 
