@@ -240,7 +240,7 @@ onBeforeUnmount(() => {
   color: var(--md-on-surface);
   display: flex;
   flex-direction: column;
-  box-shadow: -24px 0 70px -34px color-mix(in oklab, var(--md-shadow-color) 52%, transparent);
+  box-shadow: -24px 0 70px -34px color-mix(in oklab, var(--md-shadow-color-soft) 52%, transparent);
 }
 
 .changelog-drag-zone {
@@ -615,7 +615,7 @@ onBeforeUnmount(() => {
     height: auto;
     max-height: 78dvh;
     border-radius: 28px 28px 0 0;
-    box-shadow: 0 -24px 70px -34px color-mix(in oklab, var(--md-shadow-color) 52%, transparent);
+    box-shadow: 0 -24px 70px -34px color-mix(in oklab, var(--md-shadow-color-soft) 52%, transparent);
   }
 
   .changelog-panel.is-compact .changelog-drag-zone {

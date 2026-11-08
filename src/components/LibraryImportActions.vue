@@ -105,8 +105,8 @@ function onFabClick() {
   font-size: 13px;
   font-weight: 600;
   box-shadow:
-    0 2px 4px -2px color-mix(in oklab, var(--md-shadow-color) 28%, transparent),
-    0 6px 16px -8px color-mix(in oklab, var(--md-shadow-color) 38%, transparent);
+    0 2px 4px -2px color-mix(in oklab, var(--md-shadow-color-soft) 28%, transparent),
+    0 6px 16px -8px color-mix(in oklab, var(--md-shadow-color-soft) 38%, transparent);
   transition:
     border-radius var(--md-duration-medium) var(--md-ease-emphasized),
     background-color var(--md-duration-short) var(--md-ease-emphasized),
@@ -116,8 +116,8 @@ function onFabClick() {
 .import-fab.is-open {
   background: color-mix(in oklab, var(--md-primary-container) 92%, var(--md-on-primary-container));
   box-shadow:
-    0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color) 30%, transparent),
-    0 10px 24px -10px color-mix(in oklab, var(--md-shadow-color) 42%, transparent);
+    0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color-soft) 30%, transparent),
+    0 10px 24px -10px color-mix(in oklab, var(--md-shadow-color-soft) 42%, transparent);
 }
 
 .import-fab.is-circle {
@@ -258,8 +258,8 @@ function onFabClick() {
   .import-fab:hover {
     background: color-mix(in oklab, var(--md-primary-container) 92%, var(--md-on-primary-container));
     box-shadow:
-      0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color) 30%, transparent),
-      0 10px 24px -10px color-mix(in oklab, var(--md-shadow-color) 42%, transparent);
+      0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color-soft) 30%, transparent),
+      0 10px 24px -10px color-mix(in oklab, var(--md-shadow-color-soft) 42%, transparent);
   }
 
   .import-fab.is-compact:hover {

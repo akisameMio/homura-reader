@@ -94,7 +94,7 @@ const subInfo = computed(() =>
 .book-remove-button {
   background: var(--md-surface-container);
   color: var(--md-on-surface);
-  box-shadow: 0 1px 3px color-mix(in oklab, var(--md-shadow-color) 24%, transparent);
+  box-shadow: 0 1px 3px color-mix(in oklab, var(--md-shadow-color-soft) 24%, transparent);
 }
 
 @media (hover: hover) and (pointer: fine) {

@@ -43,7 +43,7 @@
       border-radius: 9999px;
       background: var(--md-surface-container);
       color: var(--md-on-surface);
-      box-shadow: 0 1px 4px color-mix(in oklab, var(--md-shadow-color) 18%, transparent);
+      box-shadow: 0 1px 4px color-mix(in oklab, var(--md-shadow-color-soft) 18%, transparent);
     }
     .theme-swatch-check svg {
       width: 10px;

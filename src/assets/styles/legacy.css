@@ -70,6 +70,6 @@
       .editorial-card:hover {
         border-color: var(--brand-primary);
         transform: translateY(-3px);
-        box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.14);
+        box-shadow: 0 12px 24px -10px color-mix(in oklab, var(--md-shadow-color-soft) 24%, transparent);
       }
     }

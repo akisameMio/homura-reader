@@ -824,8 +824,8 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border: 0;
   box-shadow:
-    0 2px 4px -2px color-mix(in oklab, var(--md-shadow-color) 28%, transparent),
-    0 6px 16px -8px color-mix(in oklab, var(--md-shadow-color) 38%, transparent);
+    0 2px 4px -2px color-mix(in oklab, var(--md-shadow-color-soft) 28%, transparent),
+    0 6px 16px -8px color-mix(in oklab, var(--md-shadow-color-soft) 38%, transparent);
   transition:
     width 420ms var(--island-morph-ease),
     right 420ms var(--island-morph-ease) 50ms,
@@ -1067,8 +1067,8 @@ onBeforeUnmount(() => {
   background: var(--md-surface-container);
   color: var(--md-on-surface);
   box-shadow:
-    0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color) 28%, transparent),
-    0 18px 48px -18px color-mix(in oklab, var(--md-shadow-color) 48%, transparent);
+    0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color-soft) 28%, transparent),
+    0 18px 48px -18px color-mix(in oklab, var(--md-shadow-color-soft) 48%, transparent);
   transform-origin: 100% 100%;
 }
 
@@ -1299,8 +1299,8 @@ onBeforeUnmount(() => {
   .island-import-trigger:not(.is-card-primary):not(.is-card-tonal):not(.is-card-danger):hover,
   .island-update-orb:hover {
     box-shadow:
-      0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color) 30%, transparent),
-      0 10px 24px -10px color-mix(in oklab, var(--md-shadow-color) 42%, transparent);
+      0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color-soft) 30%, transparent),
+      0 10px 24px -10px color-mix(in oklab, var(--md-shadow-color-soft) 42%, transparent);
   }
 
   .island-import-trigger:not(.is-failed):not(.is-card-primary):not(.is-card-tonal):not(.is-card-danger):hover {

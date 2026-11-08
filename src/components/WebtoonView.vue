@@ -18,7 +18,7 @@
         :data-lazy-index="idx"
         :width="p.imageWidth || undefined"
         :height="p.imageHeight || undefined"
-        class="manga-page-img bg-[var(--bg-card)] shadow-sm rounded-sm select-none"
+        class="manga-page-img bg-[var(--bg-card)] shadow-[0_1px_3px_color-mix(in_oklab,var(--md-shadow-color-soft)_24%,transparent)] rounded-sm select-none"
         :class="webtoonImageClass(p)"
         :alt="'第 ' + p.pageNumber + ' 页'"
         decoding="async"

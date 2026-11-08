@@ -81,8 +81,8 @@
       background: var(--md-surface-container);
       color: var(--md-on-surface);
       box-shadow:
-        0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color) 24%, transparent),
-        0 8px 24px -12px color-mix(in oklab, var(--md-shadow-color) 36%, transparent);
+        0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color-soft) 24%, transparent),
+        0 8px 24px -12px color-mix(in oklab, var(--md-shadow-color-soft) 36%, transparent);
     }
     .md-menu-label {
       padding: 8px 12px 4px;
@@ -321,8 +321,8 @@
       line-height: 1.2;
       white-space: nowrap;
       box-shadow:
-        0 2px 4px -2px color-mix(in oklab, var(--md-shadow-color) 28%, transparent),
-        0 6px 16px -8px color-mix(in oklab, var(--md-shadow-color) 38%, transparent);
+        0 2px 4px -2px color-mix(in oklab, var(--md-shadow-color-soft) 28%, transparent),
+        0 6px 16px -8px color-mix(in oklab, var(--md-shadow-color-soft) 38%, transparent);
       transition:
         background-color var(--md-duration-short) var(--md-ease-emphasized),
         color var(--md-duration-short) var(--md-ease-emphasized),
@@ -479,7 +479,7 @@
       background: var(--md-surface-high);
       color: var(--md-on-surface);
       box-shadow:
-        0 18px 40px -18px color-mix(in oklab, var(--md-shadow-color) 46%, transparent),
+        0 18px 40px -18px color-mix(in oklab, var(--md-shadow-color-soft) 46%, transparent),
         0 0 0 0.5px color-mix(in oklab, var(--md-outline-variant) 70%, transparent);
       pointer-events: none;
       will-change: transform;

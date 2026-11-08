@@ -364,12 +364,16 @@
 
     /* ==========================================================================
        3.1 Elevation — 筛选胶囊的 hover 投影与 MD3 level 1 容器投影
+       --md-shadow-color-soft 只用于投影：把 shadow-color 与当前表面色各掺一半，
+       黑色阴影从近黑降为中性灰；夜间 shadow-color 本身就是表面色，掺完不变，
+       因此不会产生泛光。遮罩仍用 --md-shadow-color 保持原有压暗强度。
        ========================================================================== */
     :root {
-      --md-elevation-hover: 0 6px 16px -10px color-mix(in oklab, var(--md-shadow-color) 52%, transparent);
+      --md-shadow-color-soft: color-mix(in oklab, var(--md-shadow-color) 52%, var(--md-surface));
+      --md-elevation-hover: 0 6px 16px -10px color-mix(in oklab, var(--md-shadow-color-soft) 52%, transparent);
       --md-elevation-level1:
-        0 1px 2px 0 color-mix(in oklab, var(--md-shadow-color) 30%, transparent),
-        0 1px 3px 1px color-mix(in oklab, var(--md-shadow-color) 15%, transparent);
+        0 1px 2px 0 color-mix(in oklab, var(--md-shadow-color-soft) 30%, transparent),
+        0 1px 3px 1px color-mix(in oklab, var(--md-shadow-color-soft) 15%, transparent);
     }
 
     /* ==========================================================================

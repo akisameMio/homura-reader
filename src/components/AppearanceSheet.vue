@@ -27,7 +27,7 @@
     <div
       v-if="open"
       ref="sheetRef"
-      class="fixed z-50 bg-[var(--md-surface-container)] shadow-2xl"
+      class="fixed z-50 bg-[var(--md-surface-container)] shadow-[0_24px_64px_-34px_color-mix(in_oklab,var(--md-shadow-color-soft)_50%,transparent)]"
       :class="isCompact
         ? 'inset-x-0 bottom-0 max-h-[78dvh] overflow-y-auto overscroll-contain rounded-t-[28px] px-5 pt-2.5'
         : 'right-[28px] top-[68px] w-[280px] max-h-[calc(100dvh-92px)] overflow-y-auto overscroll-contain rounded-[20px] p-4'"
