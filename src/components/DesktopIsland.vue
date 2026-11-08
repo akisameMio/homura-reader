@@ -3,25 +3,25 @@
     ref="rootRef"
     class="desktop-island md-fab-pos"
   >
+    <!-- 非空 surface 切换时让新旧卡片同时过渡，避免 out-in 收成按钮后出现空白间隔。 -->
     <Transition
       name="island-surface"
-      mode="out-in"
       @enter="onSurfaceEnter"
-      @before-leave="onSurfaceBeforeLeave"
       @after-leave="onSurfaceAfterLeave"
       @leave-cancelled="onSurfaceLeaveCancelled"
     >
       <div
         v-if="surfaceKey"
         :key="surfaceKey"
-        ref="surfaceRef"
+        :ref="setSurfaceRef"
         class="desktop-island-surface"
         :class="surfaceClass"
         :style="{
           '--island-width': `${surfaceWidth}px`,
-          '--seed-x': seedScale.x,
-          '--seed-y': seedScale.y,
-          '--seed-radius': seedScale.radius
+          '--trigger-width': `${triggerWidth}px`,
+          '--enter-seed-width': `${enterSeed.width}px`,
+          '--enter-seed-right': `${enterSeed.right}px`,
+          '--enter-seed-bottom': `${enterSeed.bottom}px`
         }"
         :role="surface === 'shelf'
           ? (pendingShelfDialog?.kind === 'confirm' ? 'alertdialog' : 'dialog')
@@ -135,7 +135,7 @@
       <span
         class="island-trigger-spacer"
         :class="{ 'is-collapsed': !!surfaceKey }"
-        :style="{ '--trigger-slot-width': `${importProgress.status === 'idle' ? 104 : 56}px` }"
+        :style="{ '--trigger-slot-width': `${triggerWidth}px` }"
         aria-hidden="true"
       ></span>
     </div>
@@ -255,9 +255,21 @@ const heldAction = shallowRef(null);
 const actionFaceShown = ref(false);
 const surfaceSwapping = ref(false);
 const surfaceLeaving = ref(false);
+const enterSeed = ref({ width: 104, right: 0, bottom: 0 });
 const returnFocus = ref('import');
 let autoDismissTimer = 0;
 let actionFaceTimer = 0;
+
+function setSurfaceRef(element) {
+  // 两张卡片同时在 DOM 中时只跟随最新挂载的那张，旧卡片卸载不能清空引用。
+  if (element) {
+    surfaceRef.value = element;
+    return;
+  }
+  if (surfaceRef.value && !surfaceRef.value.isConnected) {
+    surfaceRef.value = null;
+  }
+}
 
 const updatePending = computed(() => (
   updates.hasNewRelease
@@ -298,15 +310,7 @@ const surfaceClass = computed(() => ({
   'is-shelf': surface.value === 'shelf',
   'is-update': surface.value === 'update'
 }));
-const seedScale = computed(() => {
-  const triggerWidth = importProgress.status === 'idle' ? 104 : 56;
-  const width = surfaceWidth.value || triggerWidth;
-  return {
-    x: (triggerWidth / width).toFixed(4),
-    y: '0.14',
-    radius: importProgress.status === 'idle' ? '28px' : '999px'
-  };
-});
+const triggerWidth = computed(() => (importProgress.status === 'idle' ? 104 : 56));
 const showUpdateOrb = computed(() => (
   updatePending.value
   && !surface.value
@@ -466,15 +470,20 @@ function onSurfaceLeaveCancelled() {
   syncActiveAction();
 }
 
-function onSurfaceEnter(element) {
-  syncSurfaceSeed(element);
+function onSurfaceEnter() {
   if (!surfaceSwapping.value) return;
   surfaceSwapping.value = false;
   syncActiveAction();
 }
 
-function onSurfaceBeforeLeave(element) {
-  syncSurfaceSeed(element);
+function captureEnterSeed() {
+  const button = importButtonRef.value;
+  const width = button?.isConnected ? Math.round(button.offsetWidth) : triggerWidth.value;
+  enterSeed.value = {
+    width: width || triggerWidth.value,
+    right: 0,
+    bottom: 0
+  };
 }
 
 function onSurfaceAfterLeave() {
@@ -484,16 +493,6 @@ function onSurfaceAfterLeave() {
   surfaceSwapping.value = false;
   releaseActionFace();
   focusSurface(null);
-}
-
-function syncSurfaceSeed(element) {
-  if (!element?.isConnected) return;
-  const width = element.offsetWidth;
-  const height = element.offsetHeight;
-  if (!width || !height) return;
-  const triggerWidth = importProgress.status === 'idle' ? 104 : 56;
-  element.style.setProperty('--seed-x', (triggerWidth / width).toFixed(4));
-  element.style.setProperty('--seed-y', (56 / height).toFixed(4));
 }
 
 function focusImportWhenReady(remaining = 5) {
@@ -739,7 +738,16 @@ watch(surfaceKey, (key, previous) => {
   if (key) {
     clearActionFaceTimer();
     surfaceLeaving.value = false;
-    if (previous && previous !== key) beginSurfaceSwap();
+    if (previous && previous !== key) {
+      beginSurfaceSwap();
+      enterSeed.value = {
+        width: importButtonRef.value?.offsetWidth || triggerWidth.value,
+        right: 20,
+        bottom: 20
+      };
+    } else {
+      captureEnterSeed();
+    }
     return;
   }
   if (!previous) return;
@@ -763,6 +771,9 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .desktop-island {
+  --island-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --island-morph-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --island-morph-duration: 480ms;
   display: flex;
   align-items: flex-end;
   min-height: 56px;
@@ -804,15 +815,15 @@ onBeforeUnmount(() => {
     0 2px 4px -2px color-mix(in oklab, var(--md-shadow-color) 28%, transparent),
     0 6px 16px -8px color-mix(in oklab, var(--md-shadow-color) 38%, transparent);
   transition:
-    width var(--md-duration-medium) var(--md-ease-emphasized),
-    right var(--md-duration-medium) var(--md-ease-emphasized),
-    bottom var(--md-duration-medium) var(--md-ease-emphasized),
-    border-radius var(--md-duration-medium) var(--md-ease-emphasized),
+    width 420ms var(--island-morph-ease),
+    right 420ms var(--island-morph-ease) 50ms,
+    bottom 420ms var(--island-morph-ease) 50ms,
+    border-radius 380ms var(--island-morph-ease),
     background-color var(--md-duration-short) var(--md-ease-emphasized),
     color var(--md-duration-short) var(--md-ease-emphasized),
     opacity var(--md-duration-short) var(--md-ease-emphasized),
-    transform var(--md-duration-medium) var(--md-ease-emphasized),
-    box-shadow var(--md-duration-short) var(--md-ease-emphasized);
+    transform 180ms var(--md-ease-emphasized),
+    box-shadow 220ms var(--md-ease-emphasized);
 }
 
 .island-update-orb {
@@ -857,13 +868,12 @@ onBeforeUnmount(() => {
   border-radius: 28px;
   background: var(--md-primary-container);
   color: var(--md-on-primary-container);
-  transform-origin: 100% 50%;
+  transform-origin: center;
 }
 
 .island-import-trigger.is-card-position {
   right: 20px;
   bottom: 20px;
-  transition-delay: 60ms;
 }
 
 .island-import-trigger.is-returning {
@@ -902,6 +912,10 @@ onBeforeUnmount(() => {
 .island-import-trigger:disabled {
   opacity: 0.38;
   cursor: default;
+}
+
+.island-import-trigger:not(:disabled):active {
+  transform: scale(0.96);
 }
 
 .island-action-face {
@@ -1169,48 +1183,65 @@ onBeforeUnmount(() => {
 }
 
 .island-surface-enter-active {
+  z-index: 2;
   transition:
-    transform 320ms var(--md-ease-emphasized),
-    border-radius 320ms var(--md-ease-emphasized),
-    opacity 160ms linear;
-  will-change: transform, opacity;
+    clip-path var(--island-morph-duration) var(--island-morph-ease),
+    transform var(--island-morph-duration) var(--island-spring),
+    filter 220ms ease;
+  will-change: clip-path, transform, filter;
 }
 
 .island-surface-enter-active > * {
-  animation: island-content-in 180ms var(--md-ease-emphasized) 80ms both;
+  animation: island-content-in 420ms var(--island-spring) 50ms both;
 }
 
 .island-surface-leave-active {
   transition:
-    clip-path 280ms var(--md-ease-emphasized) 80ms,
-    transform 160ms var(--md-ease-emphasized),
-    border-radius 280ms var(--md-ease-emphasized) 80ms,
-    opacity 100ms linear 260ms;
+    clip-path 430ms var(--island-morph-ease) 60ms,
+    transform 240ms var(--md-ease-emphasized),
+    filter 200ms ease 70ms;
   pointer-events: none;
-  will-change: clip-path, opacity;
+  will-change: clip-path, filter;
 }
 
 .island-surface-leave-active > * {
   opacity: 0;
-  transition: opacity 140ms linear 160ms;
+  transform: scale(0.97);
+  filter: blur(3px);
+  transition:
+    opacity 150ms linear 140ms,
+    transform 220ms var(--md-ease-emphasized),
+    filter 180ms ease;
 }
 
 .island-surface-enter-from {
-  border-radius: var(--seed-radius, 28px);
-  opacity: 0.72;
-  transform: scale(var(--seed-x, 0.24), var(--seed-y, 0.14));
+  /* 56 × 56 种子在 28px 圆角下已经是圆，不要过渡到 999px 把整张卡变成白球。 */
+  border-radius: 28px;
+  clip-path: inset(
+    calc(100% - var(--enter-seed-bottom, 0px) - 56px)
+    var(--enter-seed-right, 0px)
+    var(--enter-seed-bottom, 0px)
+    calc(
+      100%
+      - var(--enter-seed-right, 0px)
+      - var(--enter-seed-width, var(--trigger-width, 104px))
+    )
+    round 28px
+  );
+  filter: blur(0.6px);
+  transform: scale(0.985);
 }
 
 .island-surface-leave-to {
-  border-radius: var(--seed-radius, 28px);
+  border-radius: 28px;
   clip-path: inset(
     calc(100% - 56px)
     0
     0
-    calc(100% - 104px)
-    round var(--seed-radius, 28px)
+    calc(100% - var(--trigger-width, 104px))
+    round 28px
   );
-  opacity: 0.62;
+  filter: blur(0.35px);
 }
 
 .island-orb-enter-active,
@@ -1258,11 +1289,13 @@ onBeforeUnmount(() => {
 @keyframes island-content-in {
   from {
     opacity: 0;
-    transform: translateY(9px);
+    filter: blur(5px);
+    transform: translateY(6px) scale(0.93);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    filter: blur(0);
+    transform: translateY(0) scale(1);
   }
 }
 

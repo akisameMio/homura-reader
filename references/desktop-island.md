@@ -150,9 +150,10 @@ surface 宽度由 `surfaceWidth` 决定，并写入 CSS 变量：
 ```html
 :style="{
   '--island-width': `${surfaceWidth}px`,
-  '--seed-x': seedScale.x,
-  '--seed-y': seedScale.y,
-  '--seed-radius': seedScale.radius
+  '--trigger-width': `${triggerWidth}px`,
+  '--enter-seed-width': `${enterSeed.width}px`,
+  '--enter-seed-right': `${enterSeed.right}px`,
+  '--enter-seed-bottom': `${enterSeed.bottom}px`
 }"
 ```
 
@@ -160,6 +161,19 @@ surface 宽度由 `surfaceWidth` 决定，并写入 CSS 变量：
 `position: absolute`：surface 锚定 `right: 0; bottom: 0`，按钮关闭时锚定
 `right: 0; bottom: 0`、展开时锚定 `right: 20px; bottom: 20px`。
 surface 的缩放原点固定为 `100% 100%`，按钮宽度变化和更新圆钮进出都不会推动 surface。
+`triggerWidth` 为空闲态 `104px`、导入进行中 `56px`，用于**收起时的目标控制**。
+入场种子另用 `enterSeed`：在 `surfaceKey` 从空变为某个 surface 时同步读取按钮当时的
+`offsetWidth`，此时按钮在锚点 `right: 0; bottom: 0`。这样从空闲胶囊直接开始导入时
+仍从 `104 × 56` 长出来，而从进度环重新展开时则从 `56 × 56` 长出来。
+
+非空 surface 之间切换时按钮仍停在卡片动作位，入场种子改用按钮当前宽度并带上
+`right: 20px; bottom: 20px`，保证新卡片也精确从这颗动作按钮长出来，而不是从卡片
+外框的右下角另起一颗小圆。surface 不再按 `seed-x / seed-y` 压扁，而是用 `clip-path`
+从按钮的真实矩形长出来。
+
+surface 自身的 `border-radius` 始终是 `28px`。不要把它过渡到 `999px`：`104 × 56` 与
+`56 × 56` 的种子在 `28px` 圆角下本来就是胶囊 / 圆形，而把整张 `432 × 400` 的卡片
+动画到 `999px` 会先变成一颗大白球，正是之前“卡片收缩出现巨大白块”的原因。
 
 新增 surface 时先在这里补宽度，不要给内容组件单独写一个会破坏锚点的 `position: fixed`。
 
@@ -276,8 +290,14 @@ const showUpdateOrb = computed(() => (
 
 空间位移和宽度：
 
-- `var(--md-duration-medium)`，当前为 `280ms`
-- `var(--md-ease-emphasized)`
+- 卡片裁切使用 `--island-morph-ease: cubic-bezier(0.22, 1, 0.36, 1)`，不回弹，
+  避免 `clip-path` 先缩过头再弹回
+- 按钮自身的位置 / 宽度同样使用 `--island-morph-ease`，不要用带过冲的弹簧驱动
+  `right / bottom / width`，否则收起时按钮会短暂越过锚点
+- 轻微的 `scale` 回弹使用 `--island-spring: cubic-bezier(0.34, 1.56, 0.64, 1)`
+- `--island-morph-duration: 480ms`
+- 按钮宽度 / 位置使用 `420ms`，位置延迟 `50ms`，与卡片外框同步收放
+- 更新圆钮仍使用 `var(--md-duration-medium)` / `var(--md-ease-emphasized)`
 
 内容透明度：
 
@@ -292,33 +312,45 @@ const showUpdateOrb = computed(() => (
 
 surface 进入：
 
-- `transform` / `border-radius` 320ms `--md-ease-emphasized`
-- `opacity` 160ms linear
+- `clip-path` 使用 `--island-morph-duration` 与 `--island-morph-ease`
+- `transform` 使用同一时长与 `--island-spring`，只负责很轻的整体回弹
 - surface 绝对定位在根节点右下角，`transform-origin: 100% 100%`
-- 起点缩放使用导入控件的真实宽度：idle 为 `104 × 56 / 28px` 圆角，导入进行中为 `56 × 56 / 999px`
-- `--seed-x` 为 `triggerWidth / surfaceWidth`；`--seed-y` 在 `enter` / `before-leave` 时按当前 surface 高度实测为 `56 / offsetHeight`
-- 内容层 180ms、延迟 80ms 进入，让文字和主行动按钮跟着外壳一起长出来，而不是先出现一张空卡
+- 起点是导入按钮**入场前**的真实矩形：空闲胶囊为 `104 × 56 / 28px`，
+  进度环或已完成环为 `56 × 56 / 28px`
+- `clip-path` 从
+  `inset(calc(100% - var(--enter-seed-bottom) - 56px) var(--enter-seed-right) var(--enter-seed-bottom) calc(100% - var(--enter-seed-right) - var(--enter-seed-width)) round 28px)`
+  展开到完整卡片，不再把整张卡片压扁成长条
+- `transform` 只从 `scale(0.985)` 轻微回弹到 `1`，避免内容跟着按钮尺寸失真
+- 外壳保持实色，不做整卡 opacity 淡入；否则会像 modal 幽灵浮现，而不是胶囊本体变大
+- 形变期间给 surface 轻微 `filter: blur(0.6px)`，220ms 内衰减到 0，模拟运动模糊
+- 内容层 420ms、延迟 50ms 进入：`opacity 0 → 1`、`blur(5px) → 0`、
+  `translateY(6px) scale(0.93) → translateY(0) scale(1)`
 
 surface 离开：
 
-- `clip-path` / `border-radius` 280ms，延迟 80ms
+- `clip-path` 430ms，延迟 60ms，使用不回弹的 `--island-morph-ease`
 - 起点是比 surface 外扩 `80px` 的裁切框，保留正常投影；终点收成右下角
-  `104 × 56`（导入进行中为 `56 × 56`），圆角使用 `var(--seed-radius)`
-- 整体透明度 100ms，延迟 260ms，只在最后收成胶囊时淡出
+  `104 × 56`（导入进行中为 `56 × 56`），圆角固定 `28px`；收起目标跟随当前状态，
+  不沿用入场时的种子
+- 外壳不做整体透明度淡出，最终裁切矩形与真实按钮重合，由按钮接管视觉
 - 内容层不参与缩放：文字保持原尺寸，由裁切框从右下角向左上收走
-- 内容层 160ms 后开始淡出
+- 内容层 140ms 后开始淡出，并在 220ms 内轻微 `scale(0.97)` / `blur(3px)`
 - 同一颗真实按钮从卡片操作位 `right: 20px; bottom: 20px` 回到触发锚点
-  `right: 0; bottom: 0`；位置、宽度、圆角、底色、文字色与阴影在同一段 280ms 内完成
+  `right: 0; bottom: 0`；位置、宽度、圆角、底色、文字色与阴影在同一段过渡内完成
 - 动作文案先保留约 140ms，再与导入文案交叉淡入淡出；不允许出现克隆节点
 - 收起期间 `surfaceLeaving` 为真，按钮关闭指针事件，避免动画中途重复触发动作
-- 非空 surface 之间切换（例如更新 `available → downloading`）时 Transition 是
-  `out-in`；`surfaceSwapping` 让按钮先回到导入胶囊位，新卡片进入时再展开，
-  避免卡片离场期间出现一颗悬空按钮
+- 非空 surface 之间切换（例如同名确认 `duplicate → import`、更新
+  `available → downloading`）时 Transition **不再使用 `out-in`**：旧卡片离场与
+  新卡片入场同时进行，新卡片叠在旧卡片上方。这样卡片始终存在，不会在旧卡收成
+  按钮后留下几百毫秒“只剩进度环”的空档。`surfaceSwapping` 只负责动作文案交接，
+  按钮继续停在卡片右下角，不再先缩回进度环
+- 同时过渡时给 `.island-surface-enter-active` 显式 `z-index: 2`，保证入场卡片
+  盖住离场卡片；否则两张卡片的文字会短暂叠在一起
 - `prefers-reduced-motion` 下跳过位移与文案延迟，直接恢复到导入胶囊
 
-进入仍使用 `transform` 从真实导入控件尺寸放大；离开改用 `clip-path`，避免内容
-跟着整张卡片一起缩小。实现只过渡 `clip-path` / `border-radius` / `opacity`，
-不过渡 surface 宽高。按钮自己只过渡位置、宽度、圆角、颜色与阴影。
+进入与离开都以 `clip-path` 为主，让卡片从右下角按钮矩形里长出来 / 收回去；
+`transform` 只负责很轻的整体回弹。实现不过渡 surface 宽高，内容不跟着卡片缩放。
+按钮自己只过渡位置、宽度、圆角、颜色与阴影。
 
 改这里时先用 1440×900 实测：展开首帧按钮应在导入胶囊原矩形内，展开末帧右下角
 应精确落在 `x = surfaceRight - 20 - buttonWidth`、
@@ -327,11 +359,18 @@ surface 离开：
 同时确认展开 / 收起前后 `document.querySelector('.island-import-trigger')`
 仍是同一个节点，且页面中不存在 `.island-action-handoff`。
 
-### 5.2 为什么不用弹簧
+### 5.2 为什么裁切不用弹簧
 
-胶囊是系统级浮层，分裂 / 合并需要看起来“稳定地吸附”在锚点上。
-不要给整颗胶囊使用明显 overshoot。项目里 `--md-ease-spring` 留给开关滑块等短行程控件；
-灵动胶囊优先使用 emphasized easing。
+形变的主体是 `clip-path`。它一旦带回弹，收起时会先缩到比按钮更小再弹回，
+露出“卡片已经没了、按钮还在原地”的空档；展开时也会先冲过卡片边界再收回来。
+所以裁切和按钮几何统一使用不回弹的 `cubic-bezier(0.22, 1, 0.36, 1)`。
+
+`cubic-bezier(0.34, 1.56, 0.64, 1)` 只保留给 surface 的轻微 `scale(0.985 → 1)`，
+让整体有一点呼吸感，但不能拿它驱动裁切、宽度或锚点位置。两个曲线都只定义在
+`DesktopIsland` 内部，不替换项目通用的 `--md-ease-spring`。
+
+如果后续调整参数量级，先确认两件事：起点仍精确覆盖导入按钮，终点仍准确落在
+`right: 20px; bottom: 20px` 的卡片动作位。
 
 ### 5.3 Reduced motion
 
@@ -385,7 +424,8 @@ surface 离开：
 `DuplicateImportDialog` 与 `ShelfDialog` 的 bottom sheet 外壳。两边共享内容与 Promise 队列：
 
 ```js
-const keep = await confirmDuplicates([{ title, existingTitle }]);
+const duplicateSession = createDuplicateSession();
+const keep = await duplicateSession.confirmDuplicates([{ title, existingTitle }]);
 const title = await askShelfDialog({ kind: 'name', ... });
 ```
 
@@ -394,6 +434,10 @@ const title = await askShelfDialog({ kind: 'name', ... });
 内容规则：
 
 - `pendingDuplicate`：先于书库确认处理；默认焦点落在“跳过”，明确选择后才继续导入。
+- 一次导入共用 `createDuplicateSession()`：连续跳过同名书时保持当前卡片，
+  下一本只替换 `pendingDuplicate` 内容，不再先清空 pending 让卡片收缩重开。
+- 卡片底部提供“跳过此书 / 全部跳过”；“全部跳过”会立即关闭确认卡，并让本次导入
+  后续所有同名检测直接返回跳过，不再逐本弹出。“仍然导入”保持原有独立书本语义。
 - `kind: 'confirm'`：删除书本 / 删除书库 / 取消收藏。
 - `kind: 'folder'`：为导入内容创建书库。
 - `kind: 'name'`：新建 / 重命名 / 创建导入书库。
