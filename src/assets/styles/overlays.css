@@ -374,7 +374,8 @@
       opacity: 0.35;
       pointer-events: none;
     }
-    @media (hover: none) {
+    /* 触屏没有悬停语义；窄窗口是手机布局，箭头会压到正文，也一并收起 */
+    @media (hover: none), (max-width: 899px) {
       .reader-page-arrow {
         display: none;
       }
