@@ -10,8 +10,7 @@
     "allowJs": true,
     "checkJs": false,
 
-    // 迁移期先用宽松模式，避免报错风暴；稳定后再逐项打开
-    "strict": false,
+    "strict": true,
     "noImplicitAny": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
