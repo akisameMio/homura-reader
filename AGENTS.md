@@ -9,7 +9,8 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 
 - 当前版本 `2.2.1`
 - 技术栈：Vue 3 + Pinia + Vite 6 + Tauri 2（Rust）
-- 纯 JavaScript，没有 TypeScript、没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
+- **渐进式 TypeScript**：`src/services/`（35 个）、`src/stores/`（7 个）、`src/composables/`（9 个）三层的逻辑代码已全部迁移为 `.ts`；`components/`（41 个 `.vue`）的 `<script setup>` 已全部升级为 `lang="ts"`（保留原有运行时 `defineProps({...})` / `defineEmits([...])` 写法，未改写成泛型语法）；`main.js` 尚未迁移。`tsconfig.json` 开 `allowJs: true` 允许 JS/TS 混存，`strict: false`（迁移期宽松，后续逐项收紧）。`npm run typecheck`（`vue-tsc --noEmit`）已清零 0 报错，可作为门槛使用。没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
+- 新增 / 迁移文件时，指向已迁移 `.ts` 文件（services / stores / composables）的 import 必须写 `.ts` 后缀（Node `--experimental-strip-types` 不会把 `./x.js` 解析到 `x.ts`，只有 Vite / tsc 会）
 - 数据存本机 IndexedDB（`homura_shelf`，v3，4 个 store：`books` / `sources` / `progress` / `collections`）；Tauri 环境额外把书目 / 书库 / 进度镜像到 `$APPDATA/homura-metadata/homura.sqlite3`；原文件按平台写 `$APPDATA/homura-native-sources`、OPFS（`homura-sources`）或 IndexedDB Blob；主题与设置偏好写 localStorage
 
 支持的格式：
@@ -29,7 +30,8 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 | 命令 | 作用 |
 | --- | --- |
 | `npm install` | 安装前端依赖；Tauri 命令找不到时先跑这个 |
-| `npm test` | `node --test tests/*.test.mjs`，当前 31 个测试文件、218 条用例全绿，约 1 秒 |
+| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 31 个测试文件、218 条用例全绿，约 1 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
+| `npm run typecheck` | `vue-tsc --noEmit`，类型检查 |
 | `npm run dev:vite` | 只起 Vite 开发服务器，固定端口 **5173**（strictPort），带 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`（最常用的快速验证） |
 | `npm run check:dark-glow` | 扫描夜间白色泛光；`build:vite` 会自动执行 |
@@ -120,23 +122,23 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 - 注释用中文；复杂模块顶部保留现有的 banner 注释风格。只在逻辑不直观处写注释，不要给没改动的代码补注释。
 - 全局 Toast 已移除：不要重新引入 toast / alert；可恢复错误记录到 console。唯一例外是 Android 原生返回提示（`plugin:android-toast|show`，文案「再按一次退出」）。
 
-## 5. UI 规则（强约束）
+## 5. UI 规则（弱约束 / 倾向性指引）
 
-界面已全量 Material Design 3 化：**10 套主题 × 白昼/护眼/夜间 3 种表面**。新增或修改 UI 时必须遵守以下规则。
+界面已全量 Material Design 3 化：**10 套主题 × 白昼/护眼/夜间 3 种表面**。以下规则是**推荐约定**，帮助新 UI 与既有界面保持一致；一般情况下优先遵循，如果确有必要、且经过权衡（或在 PR / 说明里写明理由）可以偏离，不算违规。真正的硬边界（启动不黑屏、CSP、存储降级等）见第 6 节。
 
 ### 5.1 颜色
 
 - 所有颜色走 CSS 变量 `--md-*`，Tailwind 写任意值类，例如 `bg-[var(--md-surface-container)]`、`text-[var(--md-on-surface-variant)]`。
-- **禁止新增 hex / rgb / 纯黑纯白**。需要派生色用 `color-mix(in oklab, var(--md-x) NN%, ...)`；阴影、渐变里的透明色除外。
-- 容器色必须成对使用 `on-*` 文字色；暗色模式靠这对 token 自动反转，不要写死白字/黑字。
-- **不要在新代码里用旧别名** `--brand-* / --bg-* / --fg-* / --border-line`。注意 `tokens.css` 末尾仍保留这组 legacy 别名到 `--md-*` 的映射，`DragOverlay.vue`、`WebtoonView.vue`、`NovelCard.vue`、`ReaderModal.vue`、`legacy.css` 等存量代码还在用；迁移一处删一处，但不要直接删映射，否则存量会瞬间失色。
+- 推荐用 CSS 变量而不是新增 hex / rgb / 纯黑纯白；需要派生色用 `color-mix(in oklab, var(--md-x) NN%, ...)`；阴影、渐变里的透明色除外。
+- 容器色建议成对使用 `on-*` 文字色；暗色模式靠这对 token 自动反转，尽量避免写死白字/黑字。
+- 新代码尽量别用旧别名 `--brand-* / --bg-* / --fg-* / --border-line`。注意 `tokens.css` 末尾仍保留这组 legacy 别名到 `--md-*` 的映射，`DragOverlay.vue`、`WebtoonView.vue`、`NovelCard.vue`、`ReaderModal.vue`、`legacy.css` 等存量代码还在用；迁移一处删一处，但不要直接删映射，否则存量会瞬间失色。
 - Tailwind 在 CSS 变量上直接加透明度修饰（如 `bg-[var(--md-surface)]/92`）不可靠，会变成透明；需要透明度就用 `color-mix`。
 - 投影用 `var(--md-shadow-color-soft)`（shadow-color 与 surface 的 52% 混合，夜间不再变亮），遮罩（scrim）与描边环继续用 `var(--md-shadow-color)`；不要在 `box-shadow` / `drop-shadow` / `text-shadow` / scrim 背景里使用 `--md-on-surface` 或 `--md-on-surface-variant`，它们在夜间会翻转成近白色并产生泛光。`npm run check:dark-glow` 会拦截这类写法。
 - 一屏只保留一个 `primary` 实心主行动（书架只有「导入」FAB / 桌面灵动胶囊）。
 
 ### 5.2 主题与表面
 
-- 根节点靠 `data-theme`（green/mint/cyan/blue/violet/orchid/sakura/red/amber/olive）+ `data-mode`（light/warm/dark）切换。组件不得自行切主题，统一调 `theme.setThemeColor()` / `theme.setSurfaceMode()`。
+- 根节点靠 `data-theme`（green/mint/cyan/blue/violet/orchid/sakura/red/amber/olive）+ `data-mode`（light/warm/dark）切换。组件应统一调 `theme.setThemeColor()` / `theme.setSurfaceMode()` 切主题，不要自行改 `data-theme` / `data-mode`。
 - 新增主题必须同步：`styles/tokens.css` 的明色块与暗色块；`theme.js` 的 `THEME_OPTIONS`（名称与三阶 `tones` 预览色）。两处入口共用 `ThemeSwatchGrid.vue`，不要再复制色板数组。
 - 三种表面的画布底色是硬编码常量，改主题时要一起看：`{ light: '#F8FAFC', warm: '#FAF6EE', dark: '#0F1115' }`，同时出现在 `public/homura-boot.js` 与 `theme.js`。
 - 外观面板宽 **280px**，10 个主题色块固定为 **5 列 × 2 行**（`ThemeSwatchGrid` 的 `columns` 默认 5）；单个色块保持约 44px 的触控尺寸。
@@ -150,7 +152,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 - 侧栏展开/折叠使用 `280ms` 宽度与内部位置过渡；`prefers-reduced-motion: reduce` 时直接切换。
 - 展开侧栏在 `900–1079px` 时，书架顶栏搜索框独占一行；`>=1080px` 才嵌入顶栏中段，避免压住标题和右侧按钮。
 - 手机底部导航是悬浮胶囊（`SideNav.vue` 的 `.mobile-nav`）：`left/right 14px`、`height 76px`、`border-radius 38px`、`max-width 560px`、`bottom: calc(14px + env(safe-area-inset-bottom))`；内容区必须挂 `.md-bottom-nav-space`（`6.5rem + safe-area`）。
-- 网格只用 `.md-shelf-grid`，跨列用 `.md-featured-cell`；FAB 与桌面灵动胶囊都用 `.md-fab-pos`。不要在组件里另写 `grid-cols-*`。
+- 网格建议只用 `.md-shelf-grid`，跨列用 `.md-featured-cell`；FAB 与桌面灵动胶囊都用 `.md-fab-pos`，尽量避免在组件里另写 `grid-cols-*`。
 - 抽屉：桌面右侧 `w-[372px]`；手机底部 `max-h-[78dvh] rounded-t-[28px]` + 拖拽条 + 安全区 padding。遮罩用 `.md-scrim`，进出场用 `md-sheet-enter-active` / `md-sheet-leave-active`。
 - **z-index 阶梯**（新增层先沿用现有层级，别随手写大数）：
 
@@ -169,9 +171,9 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 ### 5.4 文字与动效
 
 - 字体：`font-sans` 正文（Inter/PingFang），`font-display` 书封标题，`font-mono` 元信息，竖排书封用宋体 / Instrument Serif。
-- 字号沿用现有档位：正文/输入 13、次要 12、分组标签与元信息 11 / 10 / 10.5、页面标题 21–22、sheet 标题 17、极小徽标 8–9.5。不要随手插 14 / 15 / 16。
+- 字号建议沿用现有档位：正文/输入 13、次要 12、分组标签与元信息 11 / 10 / 10.5、页面标题 21–22、sheet 标题 17、极小徽标 8–9.5。3 个连续的小字号（如 14 / 15 / 16）容易让层次糊掉，能避开就避开。
 - 动效统一 200ms `cubic-bezier(0.2, 0, 0, 1)`；卡片 hover 可用 280ms `cubic-bezier(0.16, 1, 0.3, 1)`。只过渡颜色/位移/阴影，不给布局属性加 transition；侧栏展开/折叠、桌面灵动胶囊分裂/合并的宽度与内部重排过渡是仅有的例外。
-- 尊重 `prefers-reduced-motion`。图标按钮必须有 `title` 或 `aria-label`；开关用 `role="switch"`；禁止 `<div @click>` 当按钮。
+- 尊重 `prefers-reduced-motion`。图标按钮建议带 `title` 或 `aria-label`；开关用 `role="switch"`；用 `<div @click>` 当按钮的可访问性与键盘支持较差，优先用原生 `<button>`。
 - 触控命中区：小图标按钮挂 `.md-hit-target`（命中区补到 `max(100%, 44px)`）；手机菜单条目挂 `.md-mobile-menu-item`（`min-height: 44px`）。
 
 ### 5.5 参考
