@@ -9,7 +9,7 @@ import {
   normalizeNativeError,
   resetNativeRuntimeState,
   runNativeWithFallback
-} from '../src/services/nativeRuntime.js';
+} from '../src/services/nativeRuntime.ts';
 
 const silentLogger = { warn() {} };
 

@@ -50,9 +50,9 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
-import { useImportProgressStore } from '../stores/importProgress.js';
+import { useImportProgressStore } from '../stores/importProgress.ts';
 import MdIcon from './MdIcon.vue';
 
 const props = defineProps({

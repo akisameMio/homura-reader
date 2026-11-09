@@ -5,7 +5,7 @@ import {
   readArchiveBlobByPath,
   readArchivePageBlob,
   readArchiveText
-} from '../src/services/archiveAccess.js';
+} from '../src/services/archiveAccess.ts';
 
 function zipBook() {
   const entries = new Map([

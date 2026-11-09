@@ -14,9 +14,9 @@
   </dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, shallowRef, watch } from 'vue';
-import { useImportProgressStore } from '../stores/importProgress.js';
+import { useImportProgressStore } from '../stores/importProgress.ts';
 import ImportProgressPanel from './ImportProgressPanel.vue';
 
 defineEmits(['retry']);

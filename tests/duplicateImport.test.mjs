@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   DUPLICATE_SKIP_ALL,
   useDuplicateImport
-} from '../src/composables/useDuplicateImport.js';
+} from '../src/composables/useDuplicateImport.ts';
 
 test('跳过同名书后保持卡片 pending，下一本只替换内容', async () => {
   const { pendingDuplicate, createDuplicateSession, resolveImport } = useDuplicateImport();

@@ -44,9 +44,9 @@
   </footer>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
-import { useReaderStore } from '../stores/reader.js';
+import { useReaderStore } from '../stores/reader.ts';
 import MdIcon from './MdIcon.vue';
 import MdRange from './MdRange.vue';
 

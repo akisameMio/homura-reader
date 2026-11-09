@@ -156,7 +156,7 @@
   </form>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, ref, shallowRef, watch } from 'vue';
 import MdIcon from './MdIcon.vue';
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { shouldReadEpubAsManga } from '../src/services/epubType.js';
+import { shouldReadEpubAsManga } from '../src/services/epubType.ts';
 
 test('带封面与多页彩插的轻小说仍按小说解析', () => {
   // 《药师少女的独语》第一卷：35 个 spine，33 章正文，封面 + 6 张彩插。

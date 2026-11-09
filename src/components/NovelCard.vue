@@ -6,7 +6,7 @@
   </article>
 </template>
 
-<script setup>
+<script setup lang="ts">
 defineProps({
   page: { type: Object, required: true }
 });

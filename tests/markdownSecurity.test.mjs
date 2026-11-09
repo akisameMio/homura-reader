@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderMarkdown } from '../src/services/markdown.js';
+import { renderMarkdown } from '../src/services/markdown.ts';
 
 // 回归测试：Markdown 链接文本曾是未转义拼进 <a> 的 HTML 注入点（存储型 XSS）
 test('链接文本中的 img onerror 会被转义', () => {

@@ -12,7 +12,7 @@ import {
   releaseBookPageUrls,
   ensurePageUrlLoaded,
   decodeImgIntoElement
-} from '../src/services/pagination.js';
+} from '../src/services/pagination.ts';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 globalThis.window = dom.window;

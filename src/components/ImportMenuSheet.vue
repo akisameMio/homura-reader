@@ -45,9 +45,9 @@
   </dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { nextTick, shallowRef, watch } from 'vue';
-import { canPickFolder } from '../services/platform.js';
+import { canPickFolder } from '../services/platform.ts';
 import MdIcon from './MdIcon.vue';
 
 const props = defineProps({

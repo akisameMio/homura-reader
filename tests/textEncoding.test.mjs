@@ -1,6 +1,6 @@
 import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { decodeTxtBytes, decodeTxtBytesAsync } from '../src/services/textEncoding.js';
+import { decodeTxtBytes, decodeTxtBytesAsync } from '../src/services/textEncoding.ts';
 
 afterEach(() => {
   delete globalThis.window;

@@ -25,7 +25,7 @@
   </dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { nextTick, shallowRef, watch } from 'vue';
 import UpdateIslandPanel from './UpdateIslandPanel.vue';
 

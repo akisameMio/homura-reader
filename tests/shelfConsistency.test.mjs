@@ -16,9 +16,9 @@ registerHooks({
 
 globalThis.window = { indexedDB: null };
 const { createPinia, setActivePinia } = await import('pinia');
-const { HomuraStore } = await import('../src/services/storage.js');
-const { useShelfStore } = await import('../src/stores/shelf.js');
-const { useImporter } = await import('../src/composables/useImporter.js');
+const { HomuraStore } = await import('../src/services/storage.ts');
+const { useShelfStore } = await import('../src/stores/shelf.ts');
+const { useImporter } = await import('../src/composables/useImporter.ts');
 
 function makeStore() {
   setActivePinia(createPinia());

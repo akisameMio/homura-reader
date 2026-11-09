@@ -37,8 +37,8 @@
   </div>
 </template>
 
-<script setup>
-import { SURFACE_MODE_OPTIONS, useThemeStore } from '../stores/theme.js';
+<script setup lang="ts">
+import { SURFACE_MODE_OPTIONS, useThemeStore } from '../stores/theme.ts';
 import MdIcon from './MdIcon.vue';
 
 const theme = useThemeStore();

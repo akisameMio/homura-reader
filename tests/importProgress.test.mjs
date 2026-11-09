@@ -9,7 +9,7 @@ import {
   importPercent,
   importPhaseLabel,
   useImportProgressStore
-} from '../src/stores/importProgress.js';
+} from '../src/stores/importProgress.ts';
 
 function createStore() {
   setActivePinia(createPinia());

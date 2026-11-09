@@ -24,7 +24,7 @@ const {
   canUseNativeImport,
   isAndroidContentUri,
   pickNativeImportPaths
-} = await import('../src/services/nativeImport.js');
+} = await import('../src/services/nativeImport.ts');
 
 test('桌面保持 dialog open 路径并携带原有格式过滤器', async () => {
   assert.equal(canUseNativeImport(), true);

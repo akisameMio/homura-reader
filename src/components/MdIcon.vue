@@ -13,7 +13,7 @@
   </svg>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 
 // Material Symbols：24dp 画布、20dp live area，描边与实心共用同一套几何。

@@ -165,13 +165,13 @@
   </section>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, ref, shallowRef, watch } from 'vue';
 import {
   useImportProgressStore,
   importPhaseLabel,
   formatImportBytes
-} from '../stores/importProgress.js';
+} from '../stores/importProgress.ts';
 import MdIcon from './MdIcon.vue';
 
 const props = defineProps({
@@ -286,8 +286,8 @@ async function focusInitial() {
 }
 
 watch(
-  () => [store.status, store.done],
-  ([status, done]) => {
+  () => [store.status, store.done] as [string, number],
+  ([status, done]: [string, number]) => {
     const current = Date.now();
     if (status === 'running') {
       if (done - lastLiveDone < 5 && current - lastLiveAt < 2000) return;

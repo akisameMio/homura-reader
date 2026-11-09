@@ -29,10 +29,10 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue';
-import { sortShelfBooks } from '../services/bookTitles.js';
-import { useShelfStore } from '../stores/shelf.js';
+import { sortShelfBooks } from '../services/bookTitles.ts';
+import { useShelfStore } from '../stores/shelf.ts';
 import MdIcon from './MdIcon.vue';
 
 const props = defineProps({ collection: { type: Object, required: true }, books: { type: Array, default: () => [] }, sortKey: { type: String, default: 'title' }, touchOver: { type: Boolean, default: false }, selecting: { type: Boolean, default: false }, selected: { type: Boolean, default: false } });

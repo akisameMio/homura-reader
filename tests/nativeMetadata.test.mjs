@@ -5,11 +5,11 @@ import {
   replaceNativeMetadata,
   upsertNativeBook,
   upsertNativeBooks
-} from '../src/services/nativeMetadata.js';
+} from '../src/services/nativeMetadata.ts';
 import {
   bytesToBase64,
   resetNativeRuntimeState
-} from '../src/services/nativeRuntime.js';
+} from '../src/services/nativeRuntime.ts';
 
 const originalWindow = globalThis.window;
 const originalIndexedDB = globalThis.indexedDB;
@@ -253,7 +253,7 @@ test('原生初始化读取不会触发 IndexedDB 全量扫描', async () => {
     };
   });
 
-  const { HomuraStore } = await import('../src/services/storage.js?native-first');
+  const { HomuraStore } = await import('../src/services/storage.ts?native-first');
   assert.deepEqual((await HomuraStore.listBooks()).map(book => book.id), ['native-book']);
   assert.deepEqual(await HomuraStore.listCollections(), []);
   assert.deepEqual(await HomuraStore.listProgress(), []);
@@ -291,7 +291,7 @@ test('首次启用 SQLite 时从 IndexedDB 原子迁移书目与进度', async (
     throw new Error(`未模拟命令：${command}`);
   });
 
-  const { HomuraStore } = await import('../src/services/storage.js?native-migration');
+  const { HomuraStore } = await import('../src/services/storage.ts?native-migration');
   const books = await HomuraStore.listBooks();
   assert.deepEqual(books.map(book => book.id), ['book-1']);
   assert.equal(replacePayload.books[0].title, '旧书');
@@ -341,7 +341,7 @@ test('dirty 标记会跳过原生读取并从 IndexedDB 重建镜像', async () 
     throw new Error(`dirty 恢复不应调用：${command}`);
   });
 
-  const { HomuraStore } = await import('../src/services/storage.js?native-dirty');
+  const { HomuraStore } = await import('../src/services/storage.ts?native-dirty');
   const books = await HomuraStore.listBooks();
   assert.deepEqual(books.map(book => book.id), ['recovered-book']);
   assert.deepEqual(commands, ['metadata_replace_all']);
@@ -369,7 +369,7 @@ test('删除先提交 IndexedDB 事务，再删 SQLite 镜像', async () => {
     throw new Error(`未模拟命令：${command}`);
   });
 
-  const { HomuraStore } = await import('../src/services/storage.js?native-delete');
+  const { HomuraStore } = await import('../src/services/storage.ts?native-delete');
   await HomuraStore.deleteBook('book-1');
   assert.equal(metadataVersion, 1);
   assert.equal(nativeDeleteVersion, 1);

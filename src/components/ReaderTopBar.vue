@@ -144,13 +144,13 @@
   </header>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { useReaderStore } from '../stores/reader.js';
-import { useShelfStore } from '../stores/shelf.js';
-import { useSettingsStore } from '../stores/settings.js';
-import { useUiStore } from '../stores/ui.js';
-import { READER_FONT_OPTIONS } from '../services/readerLayout.js';
+import { useReaderStore } from '../stores/reader.ts';
+import { useShelfStore } from '../stores/shelf.ts';
+import { useSettingsStore } from '../stores/settings.ts';
+import { useUiStore } from '../stores/ui.ts';
+import { READER_FONT_OPTIONS } from '../services/readerLayout.ts';
 import MdIcon from './MdIcon.vue';
 
 const reader = useReaderStore();

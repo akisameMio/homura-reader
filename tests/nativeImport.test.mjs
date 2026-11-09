@@ -28,7 +28,7 @@ const {
   scanNativeImportPaths,
   shouldFallbackNativeImport,
   stageNativeImportPath
-} = await import('../src/services/nativeImport.js');
+} = await import('../src/services/nativeImport.ts');
 
 test('桌面文件选择器请求多选并对文件夹开启递归授权', async () => {
   dialogResult = ['/Users/demo/Downloads/manga'];

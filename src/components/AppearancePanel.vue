@@ -19,9 +19,9 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
-import { SURFACE_MODE_OPTIONS, THEME_OPTIONS, useThemeStore } from '../stores/theme.js';
+import { SURFACE_MODE_OPTIONS, THEME_OPTIONS, useThemeStore } from '../stores/theme.ts';
 import SurfaceModePreview from './SurfaceModePreview.vue';
 import ThemeSwatchGrid from './ThemeSwatchGrid.vue';
 

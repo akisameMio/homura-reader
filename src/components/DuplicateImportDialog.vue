@@ -17,9 +17,9 @@
   </dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { shallowRef, watch, nextTick } from 'vue';
-import { useDuplicateImport } from '../composables/useDuplicateImport.js';
+import { useDuplicateImport } from '../composables/useDuplicateImport.ts';
 import DuplicateImportContent from './DuplicateImportContent.vue';
 
 const dialogRef = shallowRef(null);

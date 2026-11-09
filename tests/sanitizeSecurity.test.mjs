@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { parseMobiBuffer } from '../src/services/mobi.js';
-import { sanitizeEpubHtml } from '../src/services/sanitize.js';
+import { parseMobiBuffer } from '../src/services/mobi.ts';
+import { sanitizeEpubHtml } from '../src/services/sanitize.ts';
 
 const { window } = new JSDOM('');
 globalThis.DOMParser = window.DOMParser;

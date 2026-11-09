@@ -43,7 +43,7 @@ const {
   openNativeDocument,
   readNativeTextBatch,
   releaseNativeArchiveSession
-} = await import('../src/services/nativeArchive.js');
+} = await import('../src/services/nativeArchive.ts');
 
 test('关闭阅读器后按保存的路径懒重开 ZipFile 会话', async () => {
   const book = {

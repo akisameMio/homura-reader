@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareBookTitles, findSameTitleBook, normalizeBookTitle } from '../src/services/bookTitles.js';
+import { compareBookTitles, findSameTitleBook, normalizeBookTitle } from '../src/services/bookTitles.ts';
 
 const sortedTitles = titles => titles.map(title => ({ title })).sort(compareBookTitles).map(book => book.title);
 

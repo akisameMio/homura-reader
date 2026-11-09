@@ -82,20 +82,20 @@
   </Teleport>
 </template>
 
-<script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import { useShelfStore } from '../stores/shelf.js';
-import { useShelfDialogs } from '../composables/useShelfDialogs.js';
-import { useViewport } from '../composables/useViewport.js';
-import { compareBookTitles, normalizeBookTitle } from '../services/bookTitles.js';
-import { groupShelfBooks } from '../services/shelfSections.js';
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type PropType } from 'vue';
+import { useShelfStore } from '../stores/shelf.ts';
+import { useShelfDialogs } from '../composables/useShelfDialogs.ts';
+import { useViewport } from '../composables/useViewport.ts';
+import { compareBookTitles, normalizeBookTitle } from '../services/bookTitles.ts';
+import { groupShelfBooks } from '../services/shelfSections.ts';
 import BookCard from './BookCard.vue';
 import ContinueReading from './ContinueReading.vue';
 import CollectionCard from './CollectionCard.vue';
 import MdIcon from './MdIcon.vue';
 import ShelfBatchBar from './ShelfBatchBar.vue';
 
-const props = defineProps({ books: { type: Array, default: () => [] }, sortKey: { type: String, default: 'title' }, query: { type: String, default: '' }, hasFilter: { type: Boolean, default: false }, homeRequest: { type: Number, default: 0 }, favoritesOnly: { type: Boolean, default: false } });
+const props = defineProps({ books: { type: Array as PropType<any[]>, default: () => [] }, sortKey: { type: String, default: 'title' }, query: { type: String, default: '' }, hasFilter: { type: Boolean, default: false }, homeRequest: { type: Number, default: 0 }, favoritesOnly: { type: Boolean, default: false } });
 const emit = defineEmits(['open', 'browse']);
 const shelf = useShelfStore();
 const { askShelfDialog } = useShelfDialogs();

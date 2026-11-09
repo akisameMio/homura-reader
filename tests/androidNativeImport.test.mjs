@@ -37,7 +37,7 @@ const {
   pickNativeUriImportFiles,
   shouldFallbackNativeImport,
   stageNativeImportUri
-} = await import('../src/services/nativeImport.js');
+} = await import('../src/services/nativeImport.ts');
 
 test('Android URI 选择器返回 MOBI/EPUB，并把 inspect 结果变成轻量文件', async () => {
   calls.length = 0;

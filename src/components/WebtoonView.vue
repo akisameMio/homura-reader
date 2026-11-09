@@ -56,7 +56,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 /* ============================================================================
    HOMURA · 纵向条漫 / 长卷滚动视图
    ----------------------------------------------------------------------------
@@ -65,26 +65,26 @@
    ========================================================================== */
 
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
-import { useReaderStore } from '../stores/reader.js';
-import { decodePageImage, releaseDistantPageUrls } from '../services/pagination.js';
-import { resolveProseStyle } from '../services/readerLayout.js';
+import { useReaderStore } from '../stores/reader.ts';
+import { decodePageImage, releaseDistantPageUrls } from '../services/pagination.ts';
+import { resolveProseStyle } from '../services/readerLayout.ts';
 
 const MANGA_DECODE_CONCURRENCY = 2;
 const MANGA_VISIBLE_MARGIN = 2;
 const MANGA_QUEUE_WINDOW = 18;
 
 const reader = useReaderStore();
-const scrollRoot = ref(null);
+const scrollRoot = ref<HTMLElement | null>(null);
 const novelContent = ref(null);
 let scrollFrame = 0;
 let novelOffsetFrame = 0;
 let mangaOffsetFrame = 0;
 let novelOffsets = [];
-let mangaPageOffsets = [];
-let mangaImages = [];
+let mangaPageOffsets: number[] = [];
+let mangaImages: HTMLImageElement[] = [];
 const mangaDecodeQueue = new Map();
 const mangaDecoding = new Map();
-const mangaLoadedIndexes = new Set();
+const mangaLoadedIndexes = new Set<number>();
 let mangaDecodeActive = 0;
 let mangaDecodeSeq = 0;
 let mangaDecodeToken = 0;
@@ -313,7 +313,7 @@ function measureMangaOffsets() {
   }
   const pages = root.querySelectorAll('.webtoon-page');
   const rootOffsetParent = root.offsetParent;
-  mangaPageOffsets = Array.from(pages, page => {
+  mangaPageOffsets = Array.from(pages, (page: HTMLElement) => {
     if (page.offsetParent === root) return page.offsetTop;
     if (rootOffsetParent && page.offsetParent === rootOffsetParent) {
       return page.offsetTop - root.offsetTop;
@@ -336,7 +336,7 @@ function ensureMangaOffsets() {
   if (mangaPageOffsets.length !== reader.activePages.length) measureMangaOffsets();
 }
 
-function findMangaPageIndex(probe) {
+function findMangaPageIndex(probe: number): number {
   let low = 0;
   let high = mangaPageOffsets.length - 1;
   let result = 0;
@@ -505,7 +505,7 @@ function onContentLoad() {
   }
 }
 
-function scrollToSection(index, behavior = 'auto') {
+function scrollToSection(index: number, behavior: ScrollBehavior = 'auto') {
   const root = scrollRoot.value;
   if (!root) return;
   if (isManga.value) {

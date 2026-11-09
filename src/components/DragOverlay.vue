@@ -23,10 +23,10 @@
   </transition>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
-import { useImporter } from '../composables/useImporter.js';
-import { canDragImport } from '../services/platform.js';
+import { useImporter } from '../composables/useImporter.ts';
+import { canDragImport } from '../services/platform.ts';
 const logoUrl = import.meta.env.BASE_URL + 'favicon.png';
 
 const importer = useImporter();

@@ -108,21 +108,21 @@
   </Teleport>
 </template>
 
-<script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { useSheetDrag } from '../composables/useSheetDrag.js';
-import { openGitHubUrl } from '../services/external.js';
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, ref, watch, type PropType } from 'vue';
+import { useSheetDrag } from '../composables/useSheetDrag.ts';
+import { openGitHubUrl } from '../services/external.ts';
 import MdIcon from './MdIcon.vue';
 import {
   getUpdateErrorMessage,
   RELEASES_PAGE_URL
-} from '../services/updates.js';
+} from '../services/updates.ts';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
   compact: { type: Boolean, default: false },
   status: { type: String, default: 'idle' },
-  releases: { type: Array, default: () => [] },
+  releases: { type: Array as PropType<any[]>, default: () => [] },
   currentVersion: { type: String, required: true },
   error: { type: Object, default: null }
 });
@@ -168,11 +168,11 @@ async function openReleasesPage() {
   }
 }
 
-function focusableElements() {
+function focusableElements(): HTMLElement[] {
   if (!sheetRef.value) return [];
   return Array.from(
     sheetRef.value.querySelectorAll('button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])')
-  );
+  ) as HTMLElement[];
 }
 
 function onPanelKeydown(event) {

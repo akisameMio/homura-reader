@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { HomuraStore } from '../src/services/storage.js';
+import { HomuraStore } from '../src/services/storage.ts';
 
 test('删除与清空先提交 IndexedDB，再回收 OPFS 原始文件', async t => {
   const originalWindow = globalThis.window;

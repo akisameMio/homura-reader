@@ -59,10 +59,10 @@
   </Transition>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
-import { useViewport } from '../composables/useViewport.js';
-import { useSheetDrag } from '../composables/useSheetDrag.js';
+import { useViewport } from '../composables/useViewport.ts';
+import { useSheetDrag } from '../composables/useSheetDrag.ts';
 import AppearancePanel from './AppearancePanel.vue';
 import MdIcon from './MdIcon.vue';
 

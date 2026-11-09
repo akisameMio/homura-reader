@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyReaderGesture, readerTapZone } from '../src/services/readerGestures.js';
+import { classifyReaderGesture, readerTapZone } from '../src/services/readerGestures.ts';
 
 const gesture = overrides => classifyReaderGesture({ dx: 0, dy: 0, maxDistance: 0, duration: 120, width: 1000, x: 500, ...overrides });
 

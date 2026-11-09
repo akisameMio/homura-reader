@@ -91,8 +91,8 @@
         <MdIcon name="search" class="w-6 h-6 shrink-0 text-[var(--md-on-surface-variant)]" />
         <input
           :value="query"
-          @input="$emit('update:query', $event.target.value)"
-          @keydown.enter.prevent="$event.target.blur()"
+          @input="$emit('update:query', ($event.target as HTMLInputElement).value)"
+          @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
           type="search"
           inputmode="search"
           enterkeyhint="search"
@@ -176,11 +176,11 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, shallowRef, onBeforeUnmount } from 'vue';
-import { useSettingsStore } from '../stores/settings.js';
-import { useUiStore } from '../stores/ui.js';
-import { useViewport } from '../composables/useViewport.js';
+import { useSettingsStore } from '../stores/settings.ts';
+import { useUiStore } from '../stores/ui.ts';
+import { useViewport } from '../composables/useViewport.ts';
 import MdIcon from './MdIcon.vue';
 
 const props = defineProps({

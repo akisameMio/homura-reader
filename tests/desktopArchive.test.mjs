@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { shouldFallbackNativeArchive } from '../src/services/nativeArchive.js';
-import { nativeFilePath } from '../src/services/nativeStorage.js';
+import { shouldFallbackNativeArchive } from '../src/services/nativeArchive.ts';
+import { nativeFilePath } from '../src/services/nativeStorage.ts';
 
 test('原生归档兜底白名单不包含安全限制和超限错误', () => {
   assert.equal(

@@ -244,21 +244,21 @@
   </Transition>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, shallowRef, watch, nextTick } from 'vue';
-import { useReaderStore, WEBTOON_FIT_LABELS, NOVEL_FONT_MIN, NOVEL_FONT_MAX } from '../stores/reader.js';
-import { READER_LINE_HEIGHT_OPTIONS, READER_MARGIN_OPTIONS } from '../services/readerLayout.js';
-import { useShelfStore } from '../stores/shelf.js';
+import { useReaderStore, WEBTOON_FIT_LABELS, NOVEL_FONT_MIN, NOVEL_FONT_MAX } from '../stores/reader.ts';
+import { READER_LINE_HEIGHT_OPTIONS, READER_MARGIN_OPTIONS } from '../services/readerLayout.ts';
+import { useShelfStore } from '../stores/shelf.ts';
 import {
   SURFACE_MODE_OPTIONS,
   THEME_OPTIONS,
   TRANSITION_LABELS,
   TRANSITION_OPTIONS,
   useThemeStore
-} from '../stores/theme.js';
-import { useUiStore } from '../stores/ui.js';
-import { useViewport } from '../composables/useViewport.js';
-import { useSheetDrag } from '../composables/useSheetDrag.js';
+} from '../stores/theme.ts';
+import { useUiStore } from '../stores/ui.ts';
+import { useViewport } from '../composables/useViewport.ts';
+import { useSheetDrag } from '../composables/useSheetDrag.ts';
 import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
 import MdIcon from './MdIcon.vue';
 import MdRange from './MdRange.vue';

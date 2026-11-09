@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { collectionReadingOrder, adjacentCollectionBook, spreadBounds } from '../src/services/collectionReading.js';
-import { bookShelfCategory, groupShelfBooks } from '../src/services/shelfSections.js';
+import { collectionReadingOrder, adjacentCollectionBook, spreadBounds } from '../src/services/collectionReading.ts';
+import { bookShelfCategory, groupShelfBooks } from '../src/services/shelfSections.ts';
 
 test('类别筛选兼容旧书，PDF 与未知类型归其他，图像类 EPUB 仍归漫画', () => {
   const books = [

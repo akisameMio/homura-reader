@@ -5,7 +5,7 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
-import { isAndroid } from './services/platform.js';
+import { isAndroid } from './services/platform.ts';
 import './assets/homura.css';
 
 // 平台标记只用于渲染性能降级，不参与业务判断

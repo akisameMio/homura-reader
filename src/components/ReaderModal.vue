@@ -106,7 +106,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 /* ============================================================================
    HOMURA · 阅读器整屏遮罩
    ----------------------------------------------------------------------------
@@ -117,12 +117,12 @@
    ========================================================================== */
 
 import { shallowRef, watch, onBeforeUnmount } from 'vue';
-import { classifyReaderGesture } from '../services/readerGestures.js';
-import { useReaderStore } from '../stores/reader.js';
-import { useUiStore } from '../stores/ui.js';
-import { useViewport } from '../composables/useViewport.js';
-import { useShortcuts } from '../composables/useShortcuts.js';
-import { useReaderBackDismiss } from '../composables/useReaderBackDismiss.js';
+import { classifyReaderGesture } from '../services/readerGestures.ts';
+import { useReaderStore } from '../stores/reader.ts';
+import { useUiStore } from '../stores/ui.ts';
+import { useViewport } from '../composables/useViewport.ts';
+import { useShortcuts } from '../composables/useShortcuts.ts';
+import { useReaderBackDismiss } from '../composables/useReaderBackDismiss.ts';
 import MdIcon from './MdIcon.vue';
 import ReaderTopBar from './ReaderTopBar.vue';
 import ReaderBottomBar from './ReaderBottomBar.vue';

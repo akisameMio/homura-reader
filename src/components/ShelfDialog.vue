@@ -11,9 +11,9 @@
   </dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { shallowRef, watch, nextTick } from 'vue';
-import { useShelfDialogs } from '../composables/useShelfDialogs.js';
+import { useShelfDialogs } from '../composables/useShelfDialogs.ts';
 import ShelfDialogContent from './ShelfDialogContent.vue';
 
 const { pendingShelfDialog, resolveShelfDialog } = useShelfDialogs();

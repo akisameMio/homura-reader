@@ -1,7 +1,7 @@
 import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { createCoverThumbnail } from '../src/services/coverThumb.js';
-import { bytesToBase64, resetNativeRuntimeState } from '../src/services/nativeRuntime.js';
+import { createCoverThumbnail } from '../src/services/coverThumb.ts';
+import { bytesToBase64, resetNativeRuntimeState } from '../src/services/nativeRuntime.ts';
 
 const originalWindow = globalThis.window;
 const originalCreateImageBitmap = globalThis.createImageBitmap;

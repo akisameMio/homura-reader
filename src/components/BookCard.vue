@@ -58,9 +58,9 @@
   </article>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
-import { resolveBookFormat } from '../services/utils.js';
+import { resolveBookFormat } from '../services/utils.ts';
 import MdIcon from './MdIcon.vue';
 
 const props = defineProps({

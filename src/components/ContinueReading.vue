@@ -67,10 +67,10 @@
   </button>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
-import { useShelfStore } from '../stores/shelf.js';
-import { resolveBookFormat } from '../services/utils.js';
+import { useShelfStore } from '../stores/shelf.ts';
+import { resolveBookFormat } from '../services/utils.ts';
 import MdIcon from './MdIcon.vue';
 
 defineEmits(['open']);

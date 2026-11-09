@@ -56,7 +56,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 /* ============================================================================
    HOMURA · 双缓冲翻页引擎（原 renderer.js 的 Vue 化）
    ----------------------------------------------------------------------------
@@ -67,14 +67,14 @@
    ========================================================================== */
 
 import { shallowRef, computed, onMounted, onBeforeUnmount, nextTick, ref, watch } from 'vue';
-import { useReaderStore } from '../stores/reader.js';
-import { useThemeStore } from '../stores/theme.js';
-import { useUiStore } from '../stores/ui.js';
-import { useViewport } from '../composables/useViewport.js';
-import { isAndroid } from '../services/platform.js';
-import { ensurePageUrlLoaded, decodePageImage, releaseDistantPageUrls } from '../services/pagination.js';
-import { resolveProseStyle, resolveReaderMetrics } from '../services/readerLayout.js';
-import { classifyReaderGesture } from '../services/readerGestures.js';
+import { useReaderStore } from '../stores/reader.ts';
+import { useThemeStore } from '../stores/theme.ts';
+import { useUiStore } from '../stores/ui.ts';
+import { useViewport } from '../composables/useViewport.ts';
+import { isAndroid } from '../services/platform.ts';
+import { ensurePageUrlLoaded, decodePageImage, releaseDistantPageUrls } from '../services/pagination.ts';
+import { resolveProseStyle, resolveReaderMetrics } from '../services/readerLayout.ts';
+import { classifyReaderGesture } from '../services/readerGestures.ts';
 import NovelCard from './NovelCard.vue';
 
 const reader = useReaderStore();
@@ -360,7 +360,7 @@ function resetStageTransform() {
 
 function onPointerDown(e) {
   if (!reader.currentBook || reader.openingBook || ui.readerDrawerOpen || document.querySelector('dialog[open]')) return;
-  if (e.isPrimary === false) { onPointerCancel(); return; }
+  if (e.isPrimary === false) { onPointerCancel(undefined); return; }
   if (drag.active || (e.pointerType === 'mouse' && e.button !== 0)) return;
   // 打断进行中的翻页动画，避免手势与动画争抢同一层的 transform
   reader.activeTransitionAnims.forEach(anim => {

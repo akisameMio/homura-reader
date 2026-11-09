@@ -487,28 +487,28 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import packageInfo from '../../package.json';
-import { createDemoManga, createDemoNovel } from '../services/demo.js';
-import { HomuraStore } from '../services/storage.js';
-import { formatBytes, isWindows } from '../services/platform.js';
-import { openGitHubUrl } from '../services/external.js';
-import { REPOSITORY_URL } from '../services/updates.js';
-import { scrollAppToTop } from '../services/utils.js';
-import { useShelfStore } from '../stores/shelf.js';
-import { useSettingsStore } from '../stores/settings.js';
+import { createDemoManga, createDemoNovel } from '../services/demo.ts';
+import { HomuraStore } from '../services/storage.ts';
+import { formatBytes, isWindows } from '../services/platform.ts';
+import { openGitHubUrl } from '../services/external.ts';
+import { REPOSITORY_URL } from '../services/updates.ts';
+import { scrollAppToTop } from '../services/utils.ts';
+import { useShelfStore } from '../stores/shelf.ts';
+import { useSettingsStore } from '../stores/settings.ts';
 import {
   SURFACE_MODE_OPTIONS,
   THEME_OPTIONS,
   TRANSITION_LABELS,
   TRANSITION_OPTIONS,
   useThemeStore
-} from '../stores/theme.js';
-import { WEBTOON_FIT_LABELS } from '../stores/reader.js';
-import { useUpdateStore } from '../stores/updates.js';
-import { useViewport } from '../composables/useViewport.js';
+} from '../stores/theme.ts';
+import { WEBTOON_FIT_LABELS } from '../stores/reader.ts';
+import { useUpdateStore } from '../stores/updates.ts';
+import { useViewport } from '../composables/useViewport.ts';
 import MdIcon from './MdIcon.vue';
 import MdRange from './MdRange.vue';
 import MdSegmentedControl from './MdSegmentedControl.vue';

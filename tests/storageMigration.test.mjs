@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { HomuraStore } from '../src/services/storage.js';
+import { HomuraStore } from '../src/services/storage.ts';
 
 test('IndexedDB 升级被占用时等待旧连接关闭，而不是永久禁用存储', async t => {
   const originalWindow = globalThis.window;

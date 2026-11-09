@@ -192,12 +192,12 @@
   </section>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, ref, shallowRef } from 'vue';
-import { openGitHubUrl } from '../services/external.js';
-import { formatBytes } from '../services/platform.js';
-import { getUpdateErrorMessage } from '../services/updates.js';
-import { getDownloadErrorMessage } from '../services/updateDownload.js';
+import { openGitHubUrl } from '../services/external.ts';
+import { formatBytes } from '../services/platform.ts';
+import { getUpdateErrorMessage } from '../services/updates.ts';
+import { getDownloadErrorMessage } from '../services/updateDownload.ts';
 import MdIcon from './MdIcon.vue';
 
 const props = defineProps({

@@ -35,9 +35,9 @@ globalThis.window = {
 };
 
 const { createPinia, setActivePinia } = await import('pinia');
-const { useShelfStore } = await import('../src/stores/shelf.js');
-const { useImporter } = await import('../src/composables/useImporter.js');
-const { HomuraStore } = await import('../src/services/storage.js');
+const { useShelfStore } = await import('../src/stores/shelf.ts');
+const { useImporter } = await import('../src/composables/useImporter.ts');
+const { HomuraStore } = await import('../src/services/storage.ts');
 
 // 落盘层换成内存桩，避免测试依赖真实 IndexedDB。
 function stubStore(t) {

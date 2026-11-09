@@ -25,8 +25,8 @@
   </div>
 </template>
 
-<script setup>
-import { THEME_OPTIONS, useThemeStore } from '../stores/theme.js';
+<script setup lang="ts">
+import { THEME_OPTIONS, useThemeStore } from '../stores/theme.ts';
 import MdIcon from './MdIcon.vue';
 
 defineProps({

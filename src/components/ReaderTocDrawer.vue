@@ -79,12 +79,12 @@
   </Transition>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
-import { useReaderStore } from '../stores/reader.js';
-import { useUiStore } from '../stores/ui.js';
-import { useViewport } from '../composables/useViewport.js';
-import { useSheetDrag } from '../composables/useSheetDrag.js';
+import { useReaderStore } from '../stores/reader.ts';
+import { useUiStore } from '../stores/ui.ts';
+import { useViewport } from '../composables/useViewport.ts';
+import { useSheetDrag } from '../composables/useSheetDrag.ts';
 import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
 
 const reader = useReaderStore();

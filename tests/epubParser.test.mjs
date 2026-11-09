@@ -10,8 +10,8 @@ import {
   parseEpubArchive,
   parseEpubFile,
   parseEpubNativeArchive
-} from '../src/services/epubParser.js';
-import { closeNativeArchive, isNativeArchiveSessionOpen } from '../src/services/nativeArchive.js';
+} from '../src/services/epubParser.ts';
+import { closeNativeArchive, isNativeArchiveSessionOpen } from '../src/services/nativeArchive.ts';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 globalThis.window = dom.window;

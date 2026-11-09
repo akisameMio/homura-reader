@@ -216,7 +216,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import {
   computed,
   nextTick,
@@ -226,11 +226,11 @@ import {
   shallowRef,
   watch
 } from 'vue';
-import { canPickFolder } from '../services/platform.js';
-import { useImportProgressStore } from '../stores/importProgress.js';
-import { useUpdateStore } from '../stores/updates.js';
-import { useShelfDialogs } from '../composables/useShelfDialogs.js';
-import { useDuplicateImport } from '../composables/useDuplicateImport.js';
+import { canPickFolder } from '../services/platform.ts';
+import { useImportProgressStore } from '../stores/importProgress.ts';
+import { useUpdateStore } from '../stores/updates.ts';
+import { useShelfDialogs } from '../composables/useShelfDialogs.ts';
+import { useDuplicateImport } from '../composables/useDuplicateImport.ts';
 import DuplicateImportContent from './DuplicateImportContent.vue';
 import ShelfDialogContent from './ShelfDialogContent.vue';
 import ImportProgressPanel from './ImportProgressPanel.vue';
@@ -560,7 +560,7 @@ async function focusSurface(key) {
     const active = document.activeElement;
     const isTextEntry = active && (
       ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)
-      || active.isContentEditable
+      || (active as HTMLElement).isContentEditable
     );
     if (isTextEntry && !rootRef.value?.contains(active)) return;
     if (actionFaceShown.value && !heldAction.value?.disabled) {
@@ -583,11 +583,11 @@ async function focusSurface(key) {
   }
 }
 
-function focusableElements() {
+function focusableElements(): HTMLElement[] {
   if (!surfaceRef.value) return [];
   const elements = Array.from(surfaceRef.value.querySelectorAll(
     'button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])'
-  ));
+  )) as HTMLElement[];
   if (
     surface.value
     && !surfaceSwapping.value

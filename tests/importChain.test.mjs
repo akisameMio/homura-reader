@@ -15,7 +15,7 @@ registerHooks({
   }
 });
 
-const { buildImageFolderBooks, isJunkImagePath } = await import('../src/services/parsers.js');
+const { buildImageFolderBooks, isJunkImagePath } = await import('../src/services/parsers.ts');
 
 function imageFile(name, size = 10) {
   return new File([new Uint8Array(size)], name);

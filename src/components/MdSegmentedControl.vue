@@ -23,12 +23,12 @@
   </div>
 </template>
 
-<script setup>
-import { computed } from 'vue';
+<script setup lang="ts">
+import { computed, type PropType } from 'vue';
 
 const props = defineProps({
   modelValue: { type: [String, Number], required: true },
-  options: { type: Array, required: true },
+  options: { type: Array as PropType<ReadonlyArray<{ value: string | number; label: string; title?: string }>>, required: true },
   ariaLabel: { type: String, default: '' }
 });
 

@@ -4,11 +4,11 @@ import { JSDOM } from 'jsdom';
 import {
   parseMobiBuffer,
   parseMobiFileData
-} from '../src/services/mobi.js';
+} from '../src/services/mobi.ts';
 import {
   NativeErrorCode,
   resetNativeRuntimeState
-} from '../src/services/nativeRuntime.js';
+} from '../src/services/nativeRuntime.ts';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 globalThis.DOMParser = dom.window.DOMParser;

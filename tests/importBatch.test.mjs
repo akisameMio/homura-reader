@@ -53,7 +53,7 @@ const fakeIndexedDB = {
 globalThis.window = { indexedDB: fakeIndexedDB };
 globalThis.indexedDB = fakeIndexedDB;
 
-const { HomuraStore } = await import('../src/services/storage.js');
+const { HomuraStore } = await import('../src/services/storage.ts');
 
 function entry(id) {
   return {

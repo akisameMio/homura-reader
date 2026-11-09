@@ -80,13 +80,13 @@
   <span class="sr-only" aria-live="polite">{{ liveMessage }}</span>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import {
   useImportProgressStore,
   importPhaseLabel,
   formatImportBytes
-} from '../stores/importProgress.js';
+} from '../stores/importProgress.ts';
 import MdIcon from './MdIcon.vue';
 
 defineEmits(['retry']);
@@ -123,8 +123,8 @@ function clearDismissTimer() {
 }
 
 watch(
-  () => [store.status, store.done],
-  ([status, done]) => {
+  () => [store.status, store.done] as [string, number],
+  ([status, done]: [string, number]) => {
     const current = Date.now();
     if (status === 'running') {
       if (done - lastLiveDone < 5 && current - lastLiveAt < 2000) return;

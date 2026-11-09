@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { parseMobiBuffer } from '../src/services/mobi.js';
-import { ensurePageUrlLoaded, releaseBookPageUrls } from '../src/services/pagination.js';
+import { parseMobiBuffer } from '../src/services/mobi.ts';
+import { ensurePageUrlLoaded, releaseBookPageUrls } from '../src/services/pagination.ts';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 globalThis.DOMParser = dom.window.DOMParser;

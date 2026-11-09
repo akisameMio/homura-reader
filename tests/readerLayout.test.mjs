@@ -5,7 +5,7 @@ import {
   resolveFontValue,
   resolveFontStack,
   resolveReaderMetrics
-} from '../src/services/readerLayout.js';
+} from '../src/services/readerLayout.ts';
 
 const values = READER_FONT_OPTIONS.map(option => option.value);
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { moveCollectionBooks, restoreCollections, planFolderCollections, collectionNameError } from '../src/services/collections.js';
+import { moveCollectionBooks, restoreCollections, planFolderCollections, collectionNameError } from '../src/services/collections.ts';
 
 test('批量移动只保留一个归属，移回主页不删除书本', () => {
   const original = [{ id: 'a', title: '甲', bookIds: ['1', '2'] }, { id: 'b', title: '乙', bookIds: ['3'] }];

@@ -30,8 +30,8 @@
   </section>
 </template>
 
-<script setup>
-import { useViewport } from '../composables/useViewport.js';
+<script setup lang="ts">
+import { useViewport } from '../composables/useViewport.ts';
 
 const logoUrl = import.meta.env.BASE_URL + 'favicon.png';
 

@@ -79,9 +79,9 @@
   </Teleport>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
-import { useViewport } from '../composables/useViewport.js';
+import { useViewport } from '../composables/useViewport.ts';
 import MdIcon from './MdIcon.vue';
 
 const SIDEBAR_STORAGE_KEY = 'homura_sidenav_collapsed';
