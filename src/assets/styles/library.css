@@ -560,13 +560,13 @@
       .md-fab-pos {
         position: absolute;
         right: 18px;
-        bottom: calc(6.5rem + env(safe-area-inset-bottom));
+        bottom: calc(5rem + env(safe-area-inset-bottom));
       }
     }
 
-    /* 手机悬浮胶囊底栏预留高度（14px 外边距 + 76px 栏高 + 14px 余量） */
+    /* 手机悬浮胶囊底栏预留高度（64px 栏高 + 24px 呼吸位） */
     .md-bottom-nav-space {
-      padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+      padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
     }
 
     .md-scrim {

@@ -181,7 +181,7 @@ HOMURA 是一个本地优先、内容优先的 ACGN 阅读器。界面首先服�
 | 紧凑关闭按钮 | 视觉 40px，命中区至少 44px |
 | 手机顶栏 | 56px 高 |
 | 桌面顶栏 | 64px 高 |
-| 手机底部导航 | 悬浮胶囊 76px 高，距底部 `14px + safe-area` |
+| 手机底部导航 | 悬浮胶囊 64px 高，左右 24px，贴安全区底边 |
 | 桌面浮动侧栏 | 展开 220px / 折叠 104px |
 | 阅读器底栏 | 手机 72px / 桌面 80px |
 | 桌面设置 side sheet | 372px 宽 |
@@ -589,13 +589,13 @@ Hover 规则：
 
 ### 8.2 手机底部导航
 
-- 悬浮胶囊：左右各 14px、高 76px、`border-radius: 38px`、`bottom: calc(14px + env(safe-area-inset-bottom))`。
+- 悬浮胶囊：左右各 24px、高 64px、`border-radius: 32px`、`bottom: env(safe-area-inset-bottom)`。
 - 底色使用 `primary-container` 22% 混入 `surface-container`，带柔和投影，不使用贴边直角底栏。
 - 每项 `60px × 56px`、18px 圆角，图标 22px + 11px 标签。
 - 选中项整块使用 `primary`，图标与标签使用 `on-primary`。
 - 选中底色由 `.mobile-nav-indicator` 承载，尺寸与导航项一致（60×56、18px 圆角），切换时横向滑动 300ms。
 - 标签 10.5–12px / 600。
-- 内容页必须通过 `.md-bottom-nav-space`（`6.5rem + safe-area`）预留高度。
+- 内容页必须通过 `.md-bottom-nav-space`（`5.5rem + safe-area`）预留高度。
 - 底部导航不得被转场容器、`overflow` 或 WebView 视口变化带出屏幕。
 
 ### 8.3 书架顶栏

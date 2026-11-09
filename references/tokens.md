@@ -92,8 +92,8 @@
 | `.md-card` / `.md-card--filled` | 12px 圆角 + surface-highest；默认无边框无阴影；hover 8% / focus-pressed 10% 状态层，不抬升 |
 | `.md-card--outlined` / `.md-card--elevated` | outlined = surface + 1px outline-variant；elevated = surface-low + level 1 投影 |
 | `.md-shelf-card` / `.md-collection-card` | 书架与书库内容卡，继承 `.md-card--filled` 的几何与状态层 |
-| `.md-fab-pos` | FAB 定位：桌面 right28/bottom26；手机 right18/bottom `calc(6.5rem + env(safe-area-inset-bottom))` |
-| `.md-bottom-nav-space` | 手机底部导航留白 `calc(6.5rem + env(safe-area-inset-bottom))` |
+| `.md-fab-pos` | FAB 定位：桌面 right28/bottom26；手机 right18/bottom `calc(5rem + env(safe-area-inset-bottom))` |
+| `.md-bottom-nav-space` | 手机底部导航留白 `calc(5.5rem + env(safe-area-inset-bottom))` |
 | `.md-scrim` / `.md-scrim-soft` | 遮罩：shadow-color 32% / 30% |
 | `.md-sheet-enter-active` 等 | sheet/浮层动效：0.2s cubic-bezier(.2,0,0,1)，含 fade 版 `.md-fade-*` |
 | `.md-range` | 滑条：4px 轨道、14px 拇指（触屏 18px）、3px 表面色光环 |

@@ -55,11 +55,16 @@
 
   <!-- 手机：悬浮胶囊底栏 -->
   <Teleport v-else to="#homura-mobile-nav-root">
-    <nav ref="mobileNavRef" class="mobile-nav" aria-label="主导航">
+    <nav
+      ref="mobileNavRef"
+      class="mobile-nav"
+      aria-label="主导航"
+      @pointerdown="onMobilePointerDown"
+    >
       <span
         class="mobile-nav-indicator"
-        :class="{ 'is-ready': mobileReady }"
-        :style="{ transform: `translate3d(${mobileIndicator.x}px, ${mobileIndicator.y}px, 0)` }"
+        :class="{ 'is-ready': mobileReady, 'is-dragging': indicatorDragging }"
+        :style="{ transform: mobileIndicatorTransform }"
         aria-hidden="true"
       ></span>
       <button
@@ -111,9 +116,230 @@ const mobileNavRef = ref<HTMLElement | null>(null);
 const desktopReady = ref(false);
 const mobileReady = ref(false);
 const desktopIndicatorY = ref(0);
-const mobileIndicator = ref({ x: 0, y: 0 });
+const indicatorDragging = ref(false);
+const mobileIndicatorTransform = ref('translate3d(0, 4px, 0)');
 
 let measureFrame = 0;
+
+// ---------------- 手机底栏：Q 弹欠阻尼弹簧引擎 ----------------
+// 半隐式欧拉积分：a = -k·x - c·v，c = 2ζ√k。ζ=1（临界阻尼，无过冲，最快回正）。
+const MOBILE_DAMPING = 1.0; // ζ
+const MOBILE_STIFF = 46; // 基础刚度 k
+const NAV_SCALE = 1.04; // 交互态导航栏放大倍数（与 .is-interacting 的 transform 一致）
+const MOBILE_PILL_W = 82; // 指示器胶囊宽度
+
+const springs = {
+  x: { pos: 0, vel: 0, target: 0, stiffness: 90 },
+  sx: { pos: 1, vel: 0, target: 1, stiffness: 42 },
+  sy: { pos: 1, vel: 0, target: 1, stiffness: 42 }
+};
+
+let metrics = { tabCenters: [] as number[], minX: 0, maxX: 0, step: 1 };
+let mobileActiveIndex = 0;
+let springRaf = 0;
+let springLastT = 0;
+
+function measureMobileMetrics() {
+  const nav = mobileNavRef.value;
+  if (!nav) return;
+  const items = Array.from(nav.querySelectorAll<HTMLElement>('.mobile-nav-item'));
+  if (!items.length) return;
+  const centers = items.map((it) => it.offsetLeft + (it.offsetWidth - MOBILE_PILL_W) / 2);
+  metrics = {
+    tabCenters: centers,
+    minX: centers[0],
+    maxX: centers[centers.length - 1],
+    step: centers.length > 1 ? centers[1] - centers[0] : 1
+  };
+}
+
+function springStep(s: { pos: number; vel: number; target: number; stiffness: number }, dt: number) {
+  const k = s.stiffness;
+  const c = 2 * MOBILE_DAMPING * Math.sqrt(k);
+  const h = dt * 0.5;
+  for (let i = 0; i < 2; i++) {
+    const disp = s.pos - s.target;
+    const acc = -k * disp - c * s.vel;
+    s.vel += acc * h;
+    s.pos += s.vel * h;
+  }
+}
+
+function renderMobileIndicator() {
+  const x = springs.x.pos;
+  const scaleX = springs.sx.pos;
+  const scaleY = springs.sy.pos;
+  const speed = Math.min(Math.abs(springs.x.vel) / 300, 1);
+  const stretchX = scaleX + speed * 0.3;
+  const squashY = scaleY - speed * 0.16;
+  // 拖拽态：气泡随挤压量上浮，探出导航栏上沿
+  const rise = indicatorDragging.value ? -Math.max(0, squashY - 1) * 52 : 0;
+  mobileIndicatorTransform.value =
+    `translate3d(${x.toFixed(2)}px, ${(4 + rise).toFixed(2)}px, 0) scale(${stretchX.toFixed(4)}, ${squashY.toFixed(4)})`;
+}
+
+function startSpringLoop() {
+  if (springRaf) return;
+  springLastT = performance.now();
+  const tick = (now: number) => {
+    const dt = Math.min((now - springLastT) / 1000, 0.032);
+    springLastT = now;
+    springStep(springs.x, dt);
+    springStep(springs.sx, dt);
+    springStep(springs.sy, dt);
+    renderMobileIndicator();
+    const settled =
+      Math.abs(springs.x.vel) < 0.5 && Math.abs(springs.x.pos - springs.x.target) < 0.1 &&
+      Math.abs(springs.sx.vel) < 0.01 && Math.abs(springs.sx.pos - springs.sx.target) < 0.002 &&
+      Math.abs(springs.sy.vel) < 0.01 && Math.abs(springs.sy.pos - springs.sy.target) < 0.002;
+    if (settled) {
+      springs.x.pos = springs.x.target; springs.x.vel = 0;
+      springs.sx.pos = springs.sx.target; springs.sx.vel = 0;
+      springs.sy.pos = springs.sy.target; springs.sy.vel = 0;
+      renderMobileIndicator();
+      springRaf = 0;
+    } else {
+      springRaf = requestAnimationFrame(tick);
+    }
+  };
+  springRaf = requestAnimationFrame(tick);
+}
+
+function vibrateMobile(ms: number) {
+  try {
+    if (navigator.vibrate) navigator.vibrate(ms);
+  } catch (e) {}
+}
+
+function mobileNearestIndexAt(x: number) {
+  let best = 0;
+  let bd = Infinity;
+  metrics.tabCenters.forEach((c, i) => {
+    const d = Math.abs(c - x);
+    if (d < bd) { bd = d; best = i; }
+  });
+  return best;
+}
+
+function mobileSnapTo(i: number, mode: 'snap' | 'click') {
+  mobileActiveIndex = i;
+  springs.x.stiffness = Math.max(70, MOBILE_STIFF * 2.1);
+  springs.sx.stiffness = MOBILE_STIFF;
+  springs.sy.stiffness = MOBILE_STIFF;
+  if (mode === 'snap') {
+    springs.x.vel += mobileDrag.vx * 380; // 惯性吸附
+    springs.sx.vel -= 1.0; springs.sy.vel -= 1.0;
+  } else {
+    springs.sx.vel += 1.6; springs.sy.vel += 1.6;
+  }
+  springs.x.target = metrics.tabCenters[i];
+  springs.sx.target = 1.0; springs.sy.target = 1.0;
+  startSpringLoop();
+}
+
+const mobileDrag = {
+  down: false, dragging: false, pid: -1,
+  startX: 0, startIndicatorX: 0, lastX: 0, lastT: 0, vx: 0
+};
+let mobileHoldTimer: ReturnType<typeof setTimeout> | null = null;
+
+function onMobilePointerDown(e: PointerEvent) {
+  if (e.button !== undefined && e.button !== 0) return;
+  measureMobileMetrics();
+  if (!metrics.tabCenters.length) return;
+  mobileDrag.down = true;
+  mobileDrag.dragging = false;
+  mobileDrag.pid = e.pointerId;
+  mobileDrag.startX = e.clientX;
+  mobileDrag.lastX = e.clientX;
+  mobileDrag.lastT = performance.now();
+  mobileDrag.vx = 0;
+  mobileDrag.startIndicatorX = springs.x.pos;
+  mobileNavRef.value?.classList.add('is-interacting');
+  // 按下蓄力：轻微压扁
+  springs.sx.stiffness = 90; springs.sy.stiffness = 90;
+  springs.sx.target = 1.03; springs.sy.target = 0.95;
+  springs.sy.vel -= 1.2; springs.sx.vel += 1.2;
+  if (mobileHoldTimer) clearTimeout(mobileHoldTimer);
+  mobileHoldTimer = setTimeout(() => {
+    if (!mobileDrag.down || mobileDrag.dragging) return;
+    springs.sx.stiffness = 40; springs.sy.stiffness = 40;
+    springs.sx.target = 1.12; springs.sy.target = 1.28;
+    springs.sx.vel += 1.0; springs.sy.vel += 2.0;
+  }, 90);
+  try { mobileNavRef.value?.setPointerCapture(e.pointerId); } catch (err) {}
+  window.addEventListener('pointermove', onMobilePointerMove);
+  window.addEventListener('pointerup', onMobilePointerUp);
+  window.addEventListener('pointercancel', onMobilePointerUp);
+  startSpringLoop();
+}
+
+function onMobilePointerMove(e: PointerEvent) {
+  if (!mobileDrag.down || e.pointerId !== mobileDrag.pid) return;
+  const dx = e.clientX - mobileDrag.startX;
+  const now = performance.now();
+  const dt = now - mobileDrag.lastT;
+  if (!mobileDrag.dragging && Math.abs(dx) > 4) {
+    mobileDrag.dragging = true;
+    indicatorDragging.value = true; // 进入拖拽：切中性玻璃、去掉主题色
+    if (mobileHoldTimer) { clearTimeout(mobileHoldTimer); mobileHoldTimer = null; }
+    springs.x.stiffness = 160;
+    springs.sx.stiffness = 46;
+    springs.sy.stiffness = 46;
+  }
+  if (!mobileDrag.dragging) return;
+  if (dt > 0) {
+    const iv = (e.clientX - mobileDrag.lastX) / dt;
+    mobileDrag.vx = mobileDrag.vx * 0.65 + iv * 0.35;
+    mobileDrag.lastX = e.clientX;
+    mobileDrag.lastT = now;
+  }
+  const rawX = mobileDrag.startIndicatorX + dx / NAV_SCALE;
+  const clampedX = Math.max(metrics.minX, Math.min(metrics.maxX, rawX));
+  springs.x.target = clampedX;
+  // 槽位之间：横向鼓起
+  const progress = (clampedX - metrics.minX) / metrics.step;
+  const dist = Math.abs(progress - Math.round(progress));
+  const bulge = Math.sin(dist * Math.PI);
+  springs.sx.target = 1.08 + bulge * 0.1;
+  springs.sy.target = 1.26 - bulge * 0.06;
+  // 拖过槽位震动
+  const nearest = mobileNearestIndexAt(clampedX);
+  if (nearest !== mobileActiveIndex) {
+    vibrateMobile(5);
+    mobileActiveIndex = nearest;
+  }
+  startSpringLoop();
+}
+
+function onMobilePointerUp(e: PointerEvent) {
+  if (!mobileDrag.down || e.pointerId !== mobileDrag.pid) return;
+  mobileDrag.down = false;
+  indicatorDragging.value = false; // 松手恢复主题色
+  if (mobileHoldTimer) { clearTimeout(mobileHoldTimer); mobileHoldTimer = null; }
+  const nav = mobileNavRef.value;
+  try { if (nav?.hasPointerCapture(e.pointerId)) nav.releasePointerCapture(e.pointerId); } catch (err) {}
+  window.removeEventListener('pointermove', onMobilePointerMove);
+  window.removeEventListener('pointerup', onMobilePointerUp);
+  window.removeEventListener('pointercancel', onMobilePointerUp);
+  if (!mobileDrag.dragging) {
+    // 轻点：按点击位置落槽
+    const navRect = nav?.getBoundingClientRect();
+    if (navRect) {
+      const ratio = (e.clientX - navRect.left) / navRect.width;
+      const idx = Math.max(0, Math.min(metrics.tabCenters.length - 1, Math.floor(ratio * metrics.tabCenters.length)));
+      mobileSnapTo(idx, 'click');
+    }
+  } else {
+    const projected = springs.x.pos + mobileDrag.vx * 105;
+    mobileSnapTo(
+      mobileNearestIndexAt(Math.max(metrics.minX, Math.min(metrics.maxX, projected))),
+      'snap'
+    );
+  }
+  mobileDrag.dragging = false;
+  setTimeout(() => nav?.classList.remove('is-interacting'), 120);
+}
 
 function measureIndicators() {
   const desktopActive = desktopNavRef.value?.querySelector<HTMLElement>('.sidenav-item.is-active');
@@ -126,13 +352,22 @@ function measureIndicators() {
     }
   }
 
-  const mobileActive = mobileNavRef.value?.querySelector<HTMLElement>('.mobile-nav-item.is-active');
-  if (mobileActive) {
-    mobileIndicator.value = { x: mobileActive.offsetLeft, y: mobileActive.offsetTop + 4 };
+  // 手机：量槽位并让指示器弹簧对准当前激活项
+  measureMobileMetrics();
+  if (metrics.tabCenters.length) {
+    const activeKey = props.active;
+    const idx = Math.max(0, navItems.findIndex((it) => it.key === activeKey));
+    const target = metrics.tabCenters[idx];
     if (!mobileReady.value) {
+      springs.x.pos = springs.x.target = target;
+      mobileActiveIndex = idx;
+      renderMobileIndicator();
       requestAnimationFrame(() => {
         mobileReady.value = true;
       });
+    } else if (!mobileDrag.dragging) {
+      springs.x.target = target;
+      startSpringLoop();
     }
   }
 }
@@ -172,6 +407,12 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', scheduleMeasure);
   cancelAnimationFrame(measureFrame);
+  cancelAnimationFrame(springRaf);
+  springRaf = 0;
+  if (mobileHoldTimer) clearTimeout(mobileHoldTimer);
+  window.removeEventListener('pointermove', onMobilePointerMove);
+  window.removeEventListener('pointerup', onMobilePointerUp);
+  window.removeEventListener('pointercancel', onMobilePointerUp);
 });
 </script>
 
@@ -399,50 +640,111 @@ onBeforeUnmount(() => {
   /* ---------------- 手机：悬浮胶囊底栏 ---------------- */
   .mobile-nav {
     position: absolute;
-    left: 14px;
-    right: 14px;
-    bottom: calc(14px + env(safe-area-inset-bottom));
+    left: 24px;
+    right: 24px;
+    bottom: env(safe-area-inset-bottom);
     z-index: 40;
-    height: 76px;
+    height: 64px;
     max-width: 560px;
     margin-inline: auto;
-    padding: 0 10px;
+    padding: 0 8px;
     display: flex;
     align-items: center;
     justify-content: space-around;
-    border-radius: 38px;
-    background: var(--md-surface-container);
+    border-radius: 32px;
+    /* 内部浅填充（比页面略淡）+ 外圈淡描边 */
+    background: color-mix(in oklab, var(--md-surface-container) 70%, var(--md-outline-variant) 30%);
     box-shadow:
-      0 0 0 1px color-mix(in oklab, var(--md-outline-variant) 56%, transparent),
+      0 0 0 1px color-mix(in oklab, var(--md-outline-variant) 45%, transparent),
+      inset 0 0 0 1px color-mix(in oklab, var(--md-surface) 40%, transparent),
       0 18px 36px -16px color-mix(in oklab, var(--md-shadow-color-soft) 55%, transparent);
+    transform-origin: center center;
+    transition:
+      transform 400ms cubic-bezier(0.25, 1, 0.5, 1),
+      box-shadow 400ms cubic-bezier(0.25, 1, 0.5, 1);
+    will-change: transform;
+    /* 允许拖拽时气泡溢出上沿 */
+    overflow: visible;
   }
 
+  .mobile-nav.is-interacting {
+    transform: scale(1.04);
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--md-outline-variant) 56%, transparent),
+      0 26px 48px -18px color-mix(in oklab, var(--md-shadow-color-soft) 78%, transparent);
+  }
+
+  /* 果冻指示器：静止态纯色无边框胶囊；拖拽态切中性玻璃并上浮溢出 */
   .mobile-nav-indicator {
     position: absolute;
     top: 0;
     left: 0;
     z-index: 0;
-    width: 60px;
-    height: 32px;
-    border-radius: 16px;
+    width: 82px;
+    height: 56px;
+    border-radius: 28px;
     background: var(--md-secondary-container);
-    opacity: 0;
+    border: none;
+    box-shadow: none;
     pointer-events: none;
+    opacity: 0;
+    transform-origin: center center;
+    will-change: transform, width, border-radius;
+    transition: background 220ms ease, box-shadow 200ms ease;
+  }
+
+  .mobile-nav-indicator::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 16%;
+    right: 16%;
+    height: 40%;
+    border-radius: 28px 28px 60% 60%;
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, #fff 68%, transparent) 0%,
+      color-mix(in oklab, #fff 0%, transparent) 100%
+    );
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 200ms ease;
+  }
+
+  /* 拖拽中：去主题色，切换为中性玻璃质感 */
+  .mobile-nav-indicator.is-dragging {
+    background:
+      radial-gradient(
+        125% 82% at 50% 10%,
+        color-mix(in oklab, #fff 66%, transparent) 0%,
+        color-mix(in oklab, #fff 30%, transparent) 42%,
+        color-mix(in oklab, #cfd6de 20%, transparent) 100%
+      ),
+      color-mix(in oklab, #eef1f5 16%, transparent);
+    backdrop-filter: blur(9px) saturate(165%) contrast(1.02) brightness(1.02);
+    -webkit-backdrop-filter: blur(9px) saturate(165%) contrast(1.02) brightness(1.02);
+    border: 1px solid color-mix(in oklab, #ffffff 82%, transparent);
+    box-shadow:
+      inset 0 2px 3px color-mix(in oklab, var(--md-surface) 96%, transparent),
+      inset 0 -2.5px 4px color-mix(in oklab, var(--md-shadow-color) 30%, transparent),
+      0 14px 30px -8px color-mix(in oklab, var(--md-shadow-color) 22%, transparent);
+  }
+
+  .mobile-nav-indicator.is-dragging::after {
+    opacity: 1;
   }
 
   .mobile-nav-indicator.is-ready {
     opacity: 1;
-    transition:
-      transform 300ms cubic-bezier(0.2, 0, 0, 1),
-      opacity 120ms cubic-bezier(0.2, 0, 0, 1);
   }
 
   .mobile-nav-item {
     position: relative;
     z-index: 1;
-    width: 60px;
-    height: 56px;
-    border-radius: 18px;
+    width: 58px;
+    height: 64px;
+    border-radius: 32px;
+    border: none;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -453,8 +755,8 @@ onBeforeUnmount(() => {
     background: transparent;
     color: var(--md-on-surface-variant);
     transition:
-      background-color 200ms cubic-bezier(0.2, 0, 0, 1),
-      color 200ms cubic-bezier(0.2, 0, 0, 1);
+      color 260ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .mobile-nav-item svg {
@@ -464,11 +766,14 @@ onBeforeUnmount(() => {
 
   .mobile-nav-item.is-active {
     background: transparent;
-    color: var(--md-on-secondary-container);
+    color: var(--md-primary);
+    transform: translateY(-1px) scale(1.03);
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .mobile-nav-indicator.is-ready,
+    .mobile-nav,
+    .mobile-nav-indicator,
+    .mobile-nav-indicator::after,
     .mobile-nav-item {
       transition: none;
     }
