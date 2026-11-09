@@ -119,30 +119,30 @@
 
 <script setup>
 import { ref, shallowRef, computed, onMounted, onBeforeUnmount, watch } from 'vue';
-import { useThemeStore } from './stores/theme.js';
-import { useShelfStore } from './stores/shelf.js';
-import { useReaderStore } from './stores/reader.js';
-import { useSettingsStore } from './stores/settings.js';
-import { useUiStore } from './stores/ui.js';
-import { useUpdateStore } from './stores/updates.js';
-import { useImportProgressStore } from './stores/importProgress.js';
-import { fileAccept, canPickFolder, hasFileSystemAccess } from './services/platform.js';
+import { useThemeStore } from './stores/theme.ts';
+import { useShelfStore } from './stores/shelf.ts';
+import { useReaderStore } from './stores/reader.ts';
+import { useSettingsStore } from './stores/settings.ts';
+import { useUiStore } from './stores/ui.ts';
+import { useUpdateStore } from './stores/updates.ts';
+import { useImportProgressStore } from './stores/importProgress.ts';
+import { fileAccept, canPickFolder, hasFileSystemAccess } from './services/platform.ts';
 import {
   canUseNativeImport,
   isNativeImportCancelled,
   shouldFallbackNativeImport
-} from './services/nativeImport.js';
-import { resolveBookFormat, scrollAppToTop } from './services/utils.js';
-import { sortShelfBooks } from './services/bookTitles.js';
-import { bookShelfCategory } from './services/shelfSections.js';
-import { installProgressFlushHooks } from './services/progress.js';
-import { useImporter } from './composables/useImporter.js';
-import { useDuplicateImport } from './composables/useDuplicateImport.js';
-import { useShelfDialogs } from './composables/useShelfDialogs.js';
-import { collectionNameError, availableCollectionName } from './services/collections.js';
-import { useViewport } from './composables/useViewport.js';
-import { useAndroidBackExit } from './composables/useAndroidBackExit.js';
-import { useScrollBounce } from './composables/useScrollBounce.js';
+} from './services/nativeImport.ts';
+import { resolveBookFormat, scrollAppToTop } from './services/utils.ts';
+import { sortShelfBooks } from './services/bookTitles.ts';
+import { bookShelfCategory } from './services/shelfSections.ts';
+import { installProgressFlushHooks } from './services/progress.ts';
+import { useImporter } from './composables/useImporter.ts';
+import { useDuplicateImport } from './composables/useDuplicateImport.ts';
+import { useShelfDialogs } from './composables/useShelfDialogs.ts';
+import { collectionNameError, availableCollectionName } from './services/collections.ts';
+import { useViewport } from './composables/useViewport.ts';
+import { useAndroidBackExit } from './composables/useAndroidBackExit.ts';
+import { useScrollBounce } from './composables/useScrollBounce.ts';
 import SideNav from './components/SideNav.vue';
 import LibraryHeader from './components/LibraryHeader.vue';
 import LibraryImportActions from './components/LibraryImportActions.vue';
