@@ -87,7 +87,7 @@
               </div>
               <MdSegmentedControl
                 class="w-full"
-                :model-value="theme.transitionStyle"
+                :model-value="(theme.transitionStyle as any)"
                 :options="transitionOptions"
                 aria-label="翻页过渡"
                 @update:model-value="theme.setTransitionStyle"
@@ -552,7 +552,7 @@ const sections = [
 ];
 const activeSection = ref('appearance');
 
-const sectionNavRef = ref(null);
+const sectionNavRef = ref<HTMLElement | null>(null);
 const sectionIndicatorReady = ref(false);
 const sectionIndicator = ref({ x: 0, y: 0, width: 0, height: 0 });
 const sectionIndicatorStyle = computed(() => ({
@@ -564,7 +564,7 @@ const sectionIndicatorStyle = computed(() => ({
 let sectionMeasureFrame = 0;
 
 function measureSectionIndicator() {
-  const nav = sectionNavRef.value;
+  const nav = sectionNavRef.value!;
   const active = nav?.querySelector('.settings-section-link.is-active');
   if (!active) return;
   const navRect = nav.getBoundingClientRect();
@@ -595,7 +595,7 @@ const surfaceLabel = computed(() => {
   const option = SURFACE_MODE_OPTIONS.find(item => item.value === theme.surfaceMode);
   return option ? option.label : theme.surfaceMode;
 });
-const transitionLabel = computed(() => TRANSITION_LABELS[theme.transitionStyle] || '');
+const transitionLabel = computed(() => TRANSITION_LABELS[(theme.transitionStyle as any)] || '');
 const directionLabel = computed(() => {
   const option = directionOptions.find(item => item.value === readerDefaults.direction);
   return option ? option.label : '';
@@ -613,14 +613,14 @@ const previewCopyStyle = computed(() => ({
   lineHeight: readerDefaults.direction === 'vertical' ? 1.9 : 2.12
 }));
 
-const storageInfo = ref(null);
+const storageInfo = ref<{ usage: number; quota: number; ratio: number } | null>(null);
 const storageLoading = ref(true);
 const actionNote = ref('');
 const pendingAction = ref(null);
 const actionBusy = ref(false);
-const cancelButtonRef = ref(null);
-const confirmButtonRef = ref(null);
-let dialogTrigger = null;
+const cancelButtonRef = ref<HTMLButtonElement | null>(null);
+const confirmButtonRef = ref<HTMLButtonElement | null>(null);
+let dialogTrigger: any = null;
 const modalLayerOpen = computed(() => !!pendingAction.value);
 let previousModalBodyOverflow = '';
 let modalLayerLocked = false;
@@ -637,7 +637,7 @@ const storageQuotaText = computed(() => {
   return `可用 ${formatBytes(free)}`;
 });
 const storagePercent = computed(() => {
-  const ratio = storageInfo.value && storageInfo.value.ratio;
+  const ratio = (storageInfo.value && storageInfo.value.ratio) || 0;
   return Number.isFinite(ratio) ? Math.min(100, Math.max(0, Math.round(ratio * 100))) : 0;
 });
 const progressCount = computed(() => Object.keys(shelf.progressMap || {}).length);
@@ -728,7 +728,7 @@ async function confirmDataAction() {
       actionNote.value = '阅读进度已清空';
     }
   } catch (err) {
-    actionNote.value = err.message || '清空失败，请重试';
+    actionNote.value = (err as any).message || '清空失败，请重试';
     console.warn('[HOMURA] 清空数据失败', err);
   } finally {
     await refreshStorage();
@@ -745,7 +745,7 @@ function onDialogKeydown(event) {
     return;
   }
   if (event.key !== 'Tab') return;
-  const focusable = [cancelButtonRef.value, confirmButtonRef.value].filter(Boolean);
+  const focusable = ([cancelButtonRef.value, confirmButtonRef.value].filter(Boolean)) as HTMLElement[];
   if (focusable.length === 0) return;
   const first = focusable[0];
   const last = focusable[focusable.length - 1];

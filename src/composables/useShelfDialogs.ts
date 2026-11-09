@@ -1,7 +1,7 @@
 import { shallowRef } from 'vue';
 
 const pendingShelfDialog = shallowRef(null);
-let resolvePending = null;
+let resolvePending: ((value: any) => void) | null = null;
 let queue = Promise.resolve();
 
 export function useShelfDialogs() {

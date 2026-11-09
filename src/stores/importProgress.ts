@@ -85,14 +85,14 @@ export const useImportProgressStore = defineStore('importProgress', () => {
   const saved = ref(0);
   const skipped = ref(0);
   const failed = ref(0);
-  const failures = ref([]);
+  const failures = ref<any[]>([]);
   const targetLabel = ref('全部作品');
   const targetId = ref('');
   const startedAt = ref(0);
   const finishedAt = ref(0);
   const expanded = ref(false);
   const cancelRequested = ref(false);
-  const retryFiles = shallowRef([]);
+  const retryFiles = shallowRef<any[]>([]);
 
   const isRunning = computed(() => status.value === 'running');
   const percent = computed(() => importPercent({

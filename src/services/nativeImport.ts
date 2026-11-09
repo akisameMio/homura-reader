@@ -202,7 +202,7 @@ export async function pickNativeUriImportFiles({ multiple = true } = {}) {
     if (isNativeImportCancelled(error)) return null;
     throw error;
   }
-  if (!paths || paths.length === 0) return null;
+  if (!paths || (paths as string[]).length === 0) return null;
   const entries = await inspectNativeImportUris(paths);
   return entries.map(makeNativeImportFile);
 }

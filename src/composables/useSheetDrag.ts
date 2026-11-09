@@ -15,9 +15,9 @@ function prefersReducedMotion() {
 }
 
 export function useSheetDrag({ isCompact, isOpen, onClose }) {
-  const sheetRef = shallowRef(null);
-  let drag = null;
-  let motionTimer = null;
+  const sheetRef = shallowRef<any>(null);
+  let drag: any = null;
+  let motionTimer: any = null;
   let closeAfterDrag = false;
 
   function clearMotionTimer() {

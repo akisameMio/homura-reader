@@ -22,8 +22,8 @@ import { shallowRef, watch, nextTick } from 'vue';
 import { useDuplicateImport } from '../composables/useDuplicateImport.ts';
 import DuplicateImportContent from './DuplicateImportContent.vue';
 
-const dialogRef = shallowRef(null);
-const contentRef = shallowRef(null);
+const dialogRef = shallowRef<HTMLDialogElement | null>(null);
+const contentRef = shallowRef<any>(null);
 const { pendingDuplicate, resolveImport } = useDuplicateImport();
 
 watch(pendingDuplicate, async pending => {
@@ -33,11 +33,13 @@ watch(pendingDuplicate, async pending => {
   }
   await nextTick();
   if (!pendingDuplicate.value) return;
+  if (!dialogRef.value) return;
   if (!dialogRef.value.open) dialogRef.value.showModal();
   contentRef.value?.focusInitial();
 }, { immediate: true });
 
 function onBackdropClick(event) {
+  if (!dialogRef.value) return;
   if (event.target !== dialogRef.value) return;
   const bounds = dialogRef.value.getBoundingClientRect();
   if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) {
@@ -47,6 +49,7 @@ function onBackdropClick(event) {
 
 function onKeydown(event) {
   if (event.key !== 'Tab') return;
+  if (!dialogRef.value) return;
   const buttons = dialogRef.value.querySelectorAll('button');
   const first = buttons[0];
   const last = buttons[buttons.length - 1];

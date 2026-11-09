@@ -24,7 +24,7 @@ function clamp(value, min, max) {
 }
 
 export function useReaderBackDismiss(reader, ui) {
-  let gesture = null;
+  let gesture: any = null;
   let settling = false;
   let closing = false;
   let settleToken = 0;
@@ -32,11 +32,11 @@ export function useReaderBackDismiss(reader, ui) {
   let pendingProgress = 0;
   let pendingDirection = 1;
   let activeDirection = 1;
-  let nativeMode = null;
-  let nativeChannel = null;
+  let nativeMode: any = null;
+  let nativeChannel: any = null;
   let nativeEnableToken = 0;
   let androidBackMode = 'pending';
-  let fallbackListener = null;
+  let fallbackListener: any = null;
   let fallbackToken = 0;
   const nativePredictiveBackSupported = ref(false);
 

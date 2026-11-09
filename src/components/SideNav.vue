@@ -106,8 +106,8 @@ function readCollapsed() {
 
 const collapsed = ref(readCollapsed());
 
-const desktopNavRef = ref(null);
-const mobileNavRef = ref(null);
+const desktopNavRef = ref<HTMLElement | null>(null);
+const mobileNavRef = ref<HTMLElement | null>(null);
 const desktopReady = ref(false);
 const mobileReady = ref(false);
 const desktopIndicatorY = ref(0);
@@ -116,7 +116,7 @@ const mobileIndicator = ref({ x: 0, y: 0 });
 let measureFrame = 0;
 
 function measureIndicators() {
-  const desktopActive = desktopNavRef.value?.querySelector('.sidenav-item.is-active');
+  const desktopActive = desktopNavRef.value?.querySelector<HTMLElement>('.sidenav-item.is-active');
   if (desktopActive) {
     desktopIndicatorY.value = desktopActive.offsetTop;
     if (!desktopReady.value) {
@@ -126,7 +126,7 @@ function measureIndicators() {
     }
   }
 
-  const mobileActive = mobileNavRef.value?.querySelector('.mobile-nav-item.is-active');
+  const mobileActive = mobileNavRef.value?.querySelector<HTMLElement>('.mobile-nav-item.is-active');
   if (mobileActive) {
     mobileIndicator.value = { x: mobileActive.offsetLeft, y: mobileActive.offsetTop + 4 };
     if (!mobileReady.value) {

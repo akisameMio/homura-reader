@@ -8,7 +8,7 @@
     style="scroll-padding-top: calc(3.5rem + env(safe-area-inset-top)); scroll-padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));"
   >
     <div
-      v-for="(p, idx) in reader.activePages"
+      v-for="(p, idx) in (reader.activePages as any[])"
       :key="idx"
       :id="'webtoon-page-' + idx"
       class="webtoon-page w-full flex flex-col items-center justify-center shrink-0"
@@ -38,7 +38,7 @@
   >
     <div ref="novelContent" :style="novelProseStyle" class="max-w-[660px] mx-auto bg-[var(--md-surface-low)] border-[0.5px] border-[var(--md-outline-variant)] rounded-[16px] p-5 sm:p-12 space-y-8">
       <section
-        v-for="p in reader.activePages"
+        v-for="p in (reader.activePages as any[])"
         :key="p.pageNumber"
         :id="'webtoon-page-' + (p.pageNumber - 1)"
         data-novel-section
@@ -79,11 +79,11 @@ const novelContent = ref(null);
 let scrollFrame = 0;
 let novelOffsetFrame = 0;
 let mangaOffsetFrame = 0;
-let novelOffsets = [];
+let novelOffsets: number[] = [];
 let mangaPageOffsets: number[] = [];
 let mangaImages: HTMLImageElement[] = [];
-const mangaDecodeQueue = new Map();
-const mangaDecoding = new Map();
+const mangaDecodeQueue = new Map<number, any>();
+const mangaDecoding = new Map<number, any>();
 const mangaLoadedIndexes = new Set<number>();
 let mangaDecodeActive = 0;
 let mangaDecodeSeq = 0;
@@ -92,18 +92,18 @@ let lastMangaDirection = 1;
 let lastScrollTop = 0;
 let lastScrollAt = 0;
 let mangaScrollVelocity = 0;
-const mountedBookId = reader.currentBook?.id;
-const mountedBook = reader.currentBook;
-const initialMangaIndex = reader.currentBook?.type === 'manga' ? reader.currentIndex : 0;
+const mountedBookId = (reader.currentBook as any)?.id;
+const mountedBook = reader.currentBook as any;
+const initialMangaIndex = (reader.currentBook as any)?.type === 'manga' ? reader.currentIndex : 0;
 let restoringMangaProgress = initialMangaIndex > 0;
 let disposed = false;
-let boundsObserver = null;
-let novelContentObserver = null;
-let lastMangaImage = null;
+let boundsObserver: ResizeObserver | null = null;
+let novelContentObserver: ResizeObserver | null = null;
+let lastMangaImage: HTMLImageElement | null = null;
 const mangaHasStableLayout = !!(mountedBook?.pageItems || []).every(hasPageSize);
 
 const novelProseStyle = computed(() => resolveProseStyle(reader.layoutConfig));
-const isManga = computed(() => reader.currentBook && reader.currentBook.type === 'manga');
+const isManga = computed(() => reader.currentBook && (reader.currentBook as any).type === 'manga');
 
 function hasPageSize(page) {
   return Number(page?.imageWidth) > 0 && Number(page?.imageHeight) > 0;
@@ -223,7 +223,7 @@ function pumpMangaDecodeQueue() {
     }
   }
   while (mangaDecodeActive < MANGA_DECODE_CONCURRENCY && mangaDecodeQueue.size > 0) {
-    let best = null;
+    let best: any = null;
     let bestScore = Infinity;
     for (const task of mangaDecodeQueue.values()) {
       const score = mangaDecodeScore(task.index, visible, current);
@@ -239,7 +239,7 @@ function pumpMangaDecodeQueue() {
     mangaDecodeActive++;
     decodePageImage(best.imgEl, best.pageData.itemRef, { preserveSrcOnEmpty: true })
       .then(ok => {
-        if (disposed || reader.currentBook?.id !== mountedBookId) return;
+        if (disposed || (reader.currentBook as any)?.id !== mountedBookId) return;
         if (mangaDecoding.get(best.index) !== token) return;
         if (ok) {
           mangaLoadedIndexes.add(best.index);
@@ -313,7 +313,7 @@ function measureMangaOffsets() {
   }
   const pages = root.querySelectorAll('.webtoon-page');
   const rootOffsetParent = root.offsetParent;
-  mangaPageOffsets = Array.from(pages, (page: HTMLElement) => {
+  mangaPageOffsets = Array.from(pages as unknown as HTMLElement[], (page: HTMLElement) => {
     if (page.offsetParent === root) return page.offsetTop;
     if (rootOffsetParent && page.offsetParent === rootOffsetParent) {
       return page.offsetTop - root.offsetTop;
@@ -361,7 +361,7 @@ function mangaPrefetchAhead() {
 }
 
 function syncMangaScrollPosition() {
-  if (disposed || !isManga.value || reader.currentBook?.id !== mountedBookId) return;
+  if (disposed || !isManga.value || (reader.currentBook as any)?.id !== mountedBookId) return;
   const root = scrollRoot.value;
   if (!root || reader.activePages.length === 0) return;
   // 恢复旧进度时先不要用滚动容器的初始 top 覆盖 currentIndex。
@@ -443,7 +443,7 @@ function findNovelSectionIndex(probe) {
 }
 
 function syncNovelScrollPosition() {
-  if (disposed || reader.currentBook?.id !== mountedBookId) return;
+  if (disposed || (reader.currentBook as any)?.id !== mountedBookId) return;
   const root = scrollRoot.value;
   if (!root || isManga.value || reader.activePages.length === 0) return;
 
@@ -484,7 +484,7 @@ function onScroll() {
 
 function syncScrollBounds() {
   const root = scrollRoot.value;
-  if (!root || disposed || reader.currentBook?.id !== mountedBookId) return;
+  if (!root || disposed || (reader.currentBook as any)?.id !== mountedBookId) return;
   if (isManga.value && (!lastMangaImage || !lastMangaImage.isConnected)) {
     lastMangaImage = root.querySelector(`img[data-lazy-index="${reader.activePages.length - 1}"]`);
   }
@@ -525,14 +525,14 @@ onMounted(() => {
   const total = reader.activePages.length;
   reader.pageIndicator = `${reader.currentIndex + 1} / ${total}`;
   reader.sliderValue = reader.currentIndex;
-  scrollRoot.value.addEventListener('scroll', onScroll, { passive: true });
-  scrollRoot.value.addEventListener('load', onContentLoad, true);
+  scrollRoot.value!.addEventListener('scroll', onScroll, { passive: true });
+  scrollRoot.value!.addEventListener('load', onContentLoad, true);
   boundsObserver = new ResizeObserver(() => {
     syncScrollBounds();
     if (isManga.value) scheduleMangaOffsetMeasure();
     else scheduleNovelOffsetMeasure();
   });
-  boundsObserver.observe(scrollRoot.value);
+  boundsObserver.observe(scrollRoot.value!);
   if (!isManga.value && novelContent.value) {
     novelContentObserver = new ResizeObserver(scheduleNovelOffsetMeasure);
     novelContentObserver.observe(novelContent.value);
@@ -548,20 +548,20 @@ onMounted(() => {
   if (isManga.value) {
     // 条漫恢复进度时先把容器滚到目标页，再建立观察器，避免启动时抢解第一页。
     if (initialMangaIndex > 0) scrollToSection(initialMangaIndex, 'auto');
-    mangaImages = Array.from(scrollRoot.value.querySelectorAll('img[data-lazy-index]'));
+    mangaImages = Array.from(scrollRoot.value!.querySelectorAll('img[data-lazy-index]'));
     reader.webtoonObserver = new IntersectionObserver(entries => {
       entries.forEach(entry => {
-        if (disposed || reader.currentBook?.id !== mountedBookId) return;
-        const lazyIndex = parseInt(entry.target.getAttribute('data-lazy-index'), 10);
+        if (disposed || (reader.currentBook as any)?.id !== mountedBookId) return;
+        const lazyIndex = parseInt(entry.target.getAttribute('data-lazy-index') as string, 10);
         if (!Number.isInteger(lazyIndex)) return;
         if (!entry.isIntersecting) return;
         enqueueMangaDecode(lazyIndex);
       });
     }, { root: scrollRoot.value, rootMargin: '1600px 0px', threshold: 0.01 });
 
-    scrollRoot.value.querySelectorAll('img[data-lazy-index]').forEach(img => reader.webtoonObserver.observe(img));
-    lastMangaImage = scrollRoot.value.querySelector(`img[data-lazy-index="${total - 1}"]`);
-    lastScrollTop = scrollRoot.value.scrollTop;
+    scrollRoot.value!.querySelectorAll('img[data-lazy-index]').forEach(img => (reader.webtoonObserver as any).observe(img));
+    lastMangaImage = scrollRoot.value!.querySelector(`img[data-lazy-index="${total - 1}"]`);
+    lastScrollTop = scrollRoot.value!.scrollTop;
     lastScrollAt = performance.now();
     measureMangaOffsets();
     if (!restoringMangaProgress) syncMangaScrollPosition();

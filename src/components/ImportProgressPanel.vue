@@ -180,8 +180,8 @@ const props = defineProps({
 const emit = defineEmits(['retry', 'close']);
 
 const store = useImportProgressStore();
-const panelRef = shallowRef(null);
-const primaryActionRef = shallowRef(null);
+const panelRef = shallowRef<HTMLElement | null>(null);
+const primaryActionRef = shallowRef<HTMLElement | null>(null);
 const steps = [
   { key: 'read', label: '读取' },
   { key: 'parse', label: '解析' },

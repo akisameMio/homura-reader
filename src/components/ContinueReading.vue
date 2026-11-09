@@ -43,7 +43,7 @@
 
       <span class="meta">
         <span class="position">
-          <template v-if="started">第 {{ featured.progress.index + 1 }} / {{ totalPages }} 页</template>
+          <template v-if="started">第 {{ (featured.progress as any).index + 1 }} / {{ totalPages }} 页</template>
           <template v-else>{{ totalPages }} {{ countUnit }}</template>
         </span>
         <span class="status">{{ remainingText }}</span>
@@ -79,22 +79,22 @@ const props = defineProps({ books: { type: Array, default: null } });
 const shelf = useShelfStore();
 
 const items = computed(() =>
-  (props.books || shelf.library)
+  ((props.books || shelf.library) as any[])
     .map(book => {
       const record = shelf.progressMap[book.id];
       const progress = shelf.progressInfoFor(book.id) || (record ? { percent: 0, index: record.index || 0, total: record.total || 0, updatedAt: record.updatedAt || 0 } : null);
       return { book, progress };
     })
     .filter(item => item.progress)
-    .sort((a, b) => (b.progress.updatedAt || 0) - (a.progress.updatedAt || 0))
+    .sort((a, b) => ((b.progress as any).updatedAt || 0) - ((a.progress as any).updatedAt || 0))
 );
 
 // 没有阅读记录时，用最近添加的一部作品作为「开始阅读」入口，保证特色卡始终在网格首位
 const featured = computed(() => {
   if (items.value.length) return items.value[0];
-  const book = (props.books || shelf.library)[0];
+  const book = ((props.books || shelf.library) as any[])[0];
   if (!book) return null;
-  const total = book.pageCount || (book.pageItems && book.pageItems.length) || (book.chapters && book.chapters.length) || 0;
+  const total = (book as any).pageCount || ((book as any).pageItems && (book as any).pageItems.length) || ((book as any).chapters && (book as any).chapters.length) || 0;
   return { book, progress: { index: 0, total, percent: 0, updatedAt: 0 } };
 });
 
@@ -106,29 +106,29 @@ const typeLabel = computed(() => {
   if (format === 'mobi') return 'MOBI';
   if (format === 'markdown') return 'MD';
   if (format === 'txt') return 'TXT';
-  return book.type === 'manga' ? '漫画' : (book.type === 'epub' ? 'EPUB' : '轻小说');
+  return (book as any).type === 'manga' ? '漫画' : ((book as any).type === 'epub' ? 'EPUB' : '轻小说');
 });
 
 const totalPages = computed(() => {
   const item = featured.value;
   if (!item) return 0;
-  if (item.progress.total) return item.progress.total;
-  const book = item.book;
+  if ((item.progress as any).total) return (item.progress as any).total;
+  const book = item.book as any;
   if (book.pageCount) return book.pageCount;
   if (book.pageItems) return book.pageItems.length;
   return book.chapters ? book.chapters.length : 0;
 });
 
-const started = computed(() => !!featured.value && featured.value.progress.updatedAt > 0);
+const started = computed(() => !!featured.value && (featured.value.progress as any).updatedAt > 0);
 
 // 未开始阅读的小说显示章节数，漫画 / PDF 才是页数；读起来之后一律用实际分页。
-const countUnit = computed(() => (featured.value?.book?.type === 'manga' ? '页' : '章'));
+const countUnit = computed(() => ((featured.value?.book as any)?.type === 'manga' ? '页' : '章'));
 
 // 上次阅读时间：当天只显示时刻，跨天显示日期
 const clockText = computed(() => {
   const item = featured.value;
-  if (!item || !item.progress.updatedAt) return '';
-  const date = new Date(item.progress.updatedAt);
+  if (!item || !(item.progress as any).updatedAt) return '';
+  const date = new Date((item.progress as any).updatedAt);
   const now = new Date();
   const sameDay = date.toDateString() === now.toDateString();
   if (sameDay) {
@@ -145,12 +145,12 @@ const lastReadLabel = computed(() => {
 const remainingText = computed(() => {
   const item = featured.value;
   if (!item || !started.value) return '尚未开始';
-  const rest = Math.max(0, totalPages.value - item.progress.index - 1);
+  const rest = Math.max(0, totalPages.value - (item.progress as any).index - 1);
   return `剩 ${rest} 页`;
 });
 
 const progressPercent = computed(() => {
-  const percent = featured.value ? Number(featured.value.progress.percent) : 0;
+  const percent = featured.value ? Number((featured.value.progress as any).percent) : 0;
   return Math.min(100, Math.max(0, Number.isFinite(percent) ? percent : 0));
 });
 </script>

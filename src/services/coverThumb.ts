@@ -71,7 +71,7 @@ async function createWithNative(blob, maxEdge) {
 
 // 原生压缩包已经在 AppData 里，直接按条目路径读取封面，避免大图从 Blob
 // 转成 Base64 再走一遍 IPC。输出仍用 Base64 返回，缩略图只有几十 KB。
-async function createWithNativeArchive(blob, maxEdge, nativeCover) {
+async function createWithNativeArchive(blob, maxEdge, nativeCover: any) {
   if (
     !canUseNativeBridge()
     || !nativeCover?.archivePath
@@ -102,7 +102,7 @@ export async function createCoverThumbnailWithCanvas(blob, maxEdge = COVER_MAX_E
   if (!blob || typeof blob.size !== 'number' || (blob.type && !String(blob.type).startsWith('image/'))) return null;
   if (typeof createImageBitmap !== 'function') return null;
 
-  let bitmap = null;
+  let bitmap: ImageBitmap | null = null;
   try {
     bitmap = await createImageBitmap(blob);
     const width = bitmap.width || 0;
@@ -136,7 +136,7 @@ export async function createCoverThumbnailWithCanvas(blob, maxEdge = COVER_MAX_E
   }
 }
 
-export async function createCoverThumbnail(blob, maxEdge = COVER_MAX_EDGE, nativeCover = null) {
+export async function createCoverThumbnail(blob, maxEdge = COVER_MAX_EDGE, nativeCover: any = null) {
   const validBlob = !!blob
     && typeof blob.size === 'number'
     && (!blob.type || String(blob.type).startsWith('image/'));

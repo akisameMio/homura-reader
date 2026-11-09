@@ -16,7 +16,7 @@ export async function prepareBookCover(file) {
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
     canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-    canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+    canvas.getContext('2d')!.drawImage(image, 0, 0, canvas.width, canvas.height);
     return await new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('无法处理这张图片')), 'image/webp', 0.9));
   } catch (err) {
     throw new Error('无法读取这张图片，请换一张有效的图片');

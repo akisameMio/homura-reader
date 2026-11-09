@@ -19,10 +19,10 @@ import { createCoverThumbnail } from '../services/coverThumb.ts';
 import { runShelfMutation } from '../services/mutationQueue.ts';
 
 export const useShelfStore = defineStore('shelf', () => {
-  const library = shallowRef([]);
-  const progressMap = shallowRef({});
-  const collections = shallowRef([]);
-  const activeCollectionId = ref(null);
+  const library = shallowRef<any[]>([]);
+  const progressMap = shallowRef<Record<string, any>>({});
+  const collections = shallowRef<any[]>([]);
+  const activeCollectionId = ref<string | null>(null);
   const sortKey = ref('title');
   const error = ref('');
   let collectionQueue = Promise.resolve();
@@ -73,7 +73,7 @@ export const useShelfStore = defineStore('shelf', () => {
     if (activeCollectionId.value === id) activeCollectionId.value = null;
   }
 
-  function moveBooks(ids, targetId = null) {
+  function moveBooks(ids, targetId: any = null) {
     const existing = new Set(library.value.map(book => book.id));
     return updateCollections(current => moveCollectionBooks(current, ids.filter(id => existing.has(id)), targetId));
   }
@@ -132,7 +132,7 @@ export const useShelfStore = defineStore('shelf', () => {
     try {
       await HomuraStore.deleteBook(id);
     } catch (err) {
-      error.value = err.message || '移除书本失败，请重试';
+      error.value = (err as any).message || '移除书本失败，请重试';
       console.error('[HOMURA] 移除书本失败', err);
       throw err;
     }

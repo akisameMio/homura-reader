@@ -161,15 +161,15 @@ const emit = defineEmits(['back']);
 
 const favoriteBusy = ref(false);
 const favoriteError = ref('');
-const isFavorite = computed(() => !!shelf.library.find(book => book.id === reader.currentBook?.id)?.favorite);
+const isFavorite = computed(() => !!((shelf.library as any[]).find(book => book.id === (reader.currentBook as any)?.id))?.favorite);
 // 漫画与 PDF 的页面是位图，没有字体 / 行距可调
-const isReflowable = computed(() => reader.currentBook?.type !== 'manga');
-const bookTitle = computed(() => reader.currentBook?.title || '');
+const isReflowable = computed(() => (reader.currentBook as any)?.type !== 'manga');
+const bookTitle = computed(() => (reader.currentBook as any)?.title || '');
 const fontOptions = READER_FONT_OPTIONS;
-const typeButton = ref(null);
-const fontMenu = ref(null);
+const typeButton = ref<HTMLElement | null>(null);
+const fontMenu = ref<HTMLElement | null>(null);
 
-watch(() => reader.currentBook?.id, () => {
+watch(() => (reader.currentBook as any)?.id, () => {
   favoriteError.value = '';
   ui.closeFontMenu();
 });
@@ -204,14 +204,14 @@ function pickFont(value) {
 }
 
 async function toggleFavorite() {
-  const id = reader.currentBook?.id;
+  const id = (reader.currentBook as any)?.id;
   if (!id || favoriteBusy.value) return;
   favoriteBusy.value = true;
   favoriteError.value = '';
   try {
     await shelf.toggleFavorite(id);
   } catch (err) {
-    if (reader.currentBook?.id === id) favoriteError.value = err.message || '收藏保存失败，请重试';
+    if ((reader.currentBook as any)?.id === id) favoriteError.value = (err as any).message || '收藏保存失败，请重试';
     console.warn('[HOMURA] 收藏保存失败', err);
   } finally {
     favoriteBusy.value = false;

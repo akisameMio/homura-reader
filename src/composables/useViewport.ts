@@ -20,8 +20,8 @@ export function useViewport() {
   const width = ref(typeof window !== 'undefined' ? window.innerWidth || 1280 : 1280);
   const isTouch = ref(false);
 
-  let resizeTimer = null;
-  let coarseQuery = null;
+  let resizeTimer: any = null;
+  let coarseQuery: MediaQueryList | null = null;
 
   function syncWidth() {
     width.value = window.innerWidth || 1280;

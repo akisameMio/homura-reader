@@ -238,7 +238,7 @@ export async function ensureChapterImagesResolved(chap, book) {
   wrapper.innerHTML = chap.htmlContent;
   const pendingImgs = wrapper.querySelectorAll('[data-zip-path]');
   const urlCache = book.epubImageUrls instanceof Map ? book.epubImageUrls : (book.epubImageUrls = new Map());
-  const decodedImages = [];
+  const decodedImages: Array<{ img: Element; decodeTask: any }> = [];
   for (const img of pendingImgs) {
     const zipPath = img.getAttribute('data-zip-path');
     let cached = urlCache.get(zipPath);
@@ -318,7 +318,7 @@ function splitPlainTextParagraph(text, measurer, maxHeight) {
   const lineHeight = parseFloat(getComputedStyle(paragraph).lineHeight);
   if (!Number.isFinite(lineHeight) || lineHeight <= 0) return null;
 
-  const parts = [];
+  const parts: string[] = [];
   let start = 0;
   while (start < text.length) {
     const remaining = text.length - start;
@@ -381,7 +381,7 @@ export function splitLongParagraph(html, measurer, maxHeight) {
   }
 
   // <br> 没有文本，但换行本身占高度；把它当作一个虚拟字符参与 Range 定位。
-  const atoms = [];
+  const atoms: Array<{ type: string; node: any; start: number; end: number }> = [];
   let length = 0;
   function collect(node) {
     for (const child of node.childNodes) {
@@ -402,7 +402,7 @@ export function splitLongParagraph(html, measurer, maxHeight) {
   collect(source);
   if (!length) return [html];
 
-  const offsets = [0];
+  const offsets: number[] = [0];
   for (const atom of atoms) {
     if (atom.type === 'break') {
       offsets.push(atom.end);
@@ -441,11 +441,11 @@ export function splitLongParagraph(html, measurer, maxHeight) {
     if (to.type === 'text') range.setEnd(to.node, to.offset);
     else if (to.type === 'before') range.setEndBefore(to.node);
     else range.setEndAfter(to.node);
-    const paragraph = source.cloneNode(false) as Element;
+    const paragraph = source!.cloneNode(false) as Element;
     paragraph.append(range.cloneContents());
     return paragraph.outerHTML;
   }
-  const parts = [];
+  const parts: string[] = [];
   let start = 0;
   while (start < offsets.length - 1) {
     let low = start + 1;
@@ -484,11 +484,11 @@ function measureBlockHeight(measurer) {
 export function collectNovelBlocks(html) {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = html || '';
-  const blocks = [];
+  const blocks: Array<{ type: string; text?: string; html: string }> = [];
 
   function hasDirectText(node: Node) {
     return Array.from(node.childNodes).some(child => (
-      child.nodeType === Node.TEXT_NODE && child.textContent.trim()
+      child.nodeType === Node.TEXT_NODE && child.textContent!.trim()
     ));
   }
 
@@ -589,7 +589,7 @@ export function getNovelPaginationKey(layoutConfig) {
 function paginateNovelChapter(chap, chapterIndex, measurer, availableTextHeight) {
   const title = chap.title || `第 ${chapterIndex + 1} 章`;
   const blocks = collectNovelBlocks(chap.htmlContent);
-  const chapterPages = [];
+  const chapterPages: Array<{ title: any; html: string; chapterIndex: any }> = [];
 
   if (blocks.length === 0) {
     chapterPages.push({
@@ -692,8 +692,8 @@ export function createNovelPaginator(book, layoutConfig, measurer) {
     return pages;
   }
 
-  function buildPages({ provisional = false } = {}) {
-    const list = [];
+  function buildPages({ provisional = false }: { provisional?: boolean } = {}) {
+    const list: Array<{ pageNumber: number; title: any; html: any; chapterIndex: any; provisional?: boolean }> = [];
     for (let cIdx = 0; cIdx < chapters.length; cIdx++) {
       const chapterPageList = chapterPages[cIdx];
       if (chapterPageList) {

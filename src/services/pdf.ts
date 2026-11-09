@@ -18,7 +18,7 @@ const MAX_UPSCALE = 2.5;
 // 缓存上限按页数算，约等于 20~50MB 位图，够翻几个来回了
 const MAX_CACHED_PAGES = 24;
 
-let pdfjsPromise = null;
+let pdfjsPromise: Promise<any> | null = null;
 
 function loadPdfjs() {
   if (!pdfjsPromise) {
@@ -35,12 +35,12 @@ function loadPdfjs() {
 
 // ---- 渲染位图缓存：超出上限时释放最久未用过的页 ----
 
-const renderedUrls = [];
+const renderedUrls: { pageItem: any; url: string }[] = [];
 
 function rememberRenderedUrl(pageItem, url) {
   renderedUrls.push({ pageItem, url });
   while (renderedUrls.length > MAX_CACHED_PAGES) {
-    const evicted = renderedUrls.shift();
+    const evicted = renderedUrls.shift()!;
     URL.revokeObjectURL(evicted.url);
     // pageItem 上的 url 也要清掉，否则下次会拿到已失效的 blob URL
     if (evicted.pageItem.url === evicted.url) evicted.pageItem.url = '';
@@ -56,7 +56,7 @@ async function renderPageBlob(pdfDoc, pageIndex, targetWidth) {
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.floor(viewport.width));
   canvas.height = Math.max(1, Math.floor(viewport.height));
-  const ctx = canvas.getContext('2d', { alpha: false });
+  const ctx = canvas.getContext('2d', { alpha: false })!;
   // 深色主题下 PDF 也保持纸面白底，与真实版面一致
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -73,7 +73,7 @@ async function renderPageBlob(pdfDoc, pageIndex, targetWidth) {
 
 // 打开 PDF：只做文档装载，页数等信息由调用方读取
 export async function openPdfDocument(file) {
-  const pdfjs = await loadPdfjs();
+  const pdfjs = (await loadPdfjs())!;
   const data = await file.arrayBuffer();
   // CMap / 标准字体 / wasm 解码器由 vite-static-copy 放在 dist/pdfjs 下：
   // 缺了它们，CJK 非嵌入字体和 JPX/JBIG2 扫描页都会渲染成空白
@@ -92,7 +92,7 @@ export async function openPdfDocument(file) {
 
 // 生成漫画管道可用的 pageItems：每项自带 render()，首次显示时才真正渲染
 export function createPdfPageItems(pdfDoc, pageCount) {
-  const items = [];
+  const items: any[] = [];
   for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
     const item: any = { pdfPageIndex: pageIndex };
     item.render = async () => {

@@ -8,7 +8,7 @@
 import { isAndroid } from './platform.ts';
 
 const SET_APPEARANCE_COMMAND = 'plugin:android-system-bars|setAppearance';
-let lastDark = null;
+let lastDark: boolean | null = null;
 
 export function applyAndroidSystemBars(dark) {
   if (!isAndroid) return;

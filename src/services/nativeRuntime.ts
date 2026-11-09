@@ -189,7 +189,7 @@ export async function invokeNativeCommand(plugin: string | null, command: string
 
   const fullCommand = plugin ? `plugin:${plugin}|${command}` : command;
   try {
-    return await window.__TAURI__.core.invoke(fullCommand, args);
+    return await window.__TAURI__!.core!.invoke(fullCommand, args);
   } catch (error) {
     throw normalizeNativeError(error, {
       ...options,
@@ -205,7 +205,7 @@ export async function invokeNativeCommand(plugin: string | null, command: string
 interface RunNativeWithFallbackOptions {
   feature?: string;
   plugin?: string | null;
-  command?: string;
+  command?: string | null;
   args?: Record<string, unknown>;
   fallback?: (error: NativeBridgeError) => unknown;
   fallbackOn?: Set<string> | string[];
@@ -250,7 +250,7 @@ export async function runNativeWithFallback({
   }
 
   try {
-    return await invokeNativeCommand(plugin, command, args, { feature });
+    return await invokeNativeCommand(plugin ?? null, command ?? null, args, { feature });
   } catch (rawError) {
     const error = normalizeNativeError(rawError, { feature, plugin, command });
     const allowed = !NEVER_FALLBACK_CODES.has(error.code)

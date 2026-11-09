@@ -15,11 +15,11 @@ const RELEASES_API_URL = 'https://api.github.com/repos/Leon-Ning-san/HOMURA-read
 const REQUEST_TIMEOUT = 12000;
 const CACHE_TTL = 5 * 60 * 1000;
 
-let cachedReleases = [];
+let cachedReleases: any[] = [];
 let cachedAt = 0;
-let pendingRequest = null;
+let pendingRequest: Promise<any> | null = null;
 
-const GROUP_LABELS = [
+const GROUP_LABELS: [RegExp, string][] = [
   [/新功能|新增|features?/i, '新增'],
   [/问题修复|修复|bug|fixes?/i, '修复'],
   [/改进|优化|improve/i, '改进'],
@@ -53,7 +53,7 @@ function cleanHeading(value) {
 
 function normalizeGroupTitle(value) {
   const title = cleanHeading(value);
-  const match = GROUP_LABELS.find(([pattern]: [RegExp, string]) => pattern.test(title));
+  const match = GROUP_LABELS.find(([pattern]) => pattern.test(title));
   return match ? match[1] : title || '更新';
 }
 
@@ -74,9 +74,9 @@ export function parseReleaseNotes(body) {
     }
   }
 
-  const groups = [];
-  const introLines = [];
-  let currentGroup = null;
+  const groups: { title: string; items: string[] }[] = [];
+  const introLines: string[] = [];
+  let currentGroup: { title: string; items: string[] } | null = null;
 
   for (const rawLine of lines.slice(start + 1, end)) {
     const line = rawLine.trim();
@@ -84,13 +84,16 @@ export function parseReleaseNotes(body) {
 
     const heading = line.match(/^###\s+(.+)$/);
     if (heading) {
-      currentGroup = {
+      const proposed = {
         title: normalizeGroupTitle(heading[1]),
-        items: []
+        items: [] as string[]
       };
-      const existing = groups.find(group => group.title === currentGroup.title);
+      const existing = groups.find(group => group.title === proposed.title);
       if (existing) currentGroup = existing;
-      else groups.push(currentGroup);
+      else {
+        groups.push(proposed);
+        currentGroup = proposed;
+      }
       continue;
     }
 
@@ -141,7 +144,7 @@ export function normalizeVersion(value) {
   return parsed.core.join('.') + (parsed.prerelease ? `-${parsed.prerelease}` : '');
 }
 
-export function compareVersions(left, right) {
+export function compareVersions(left: string, right: string) {
   const a = parseVersion(left);
   const b = parseVersion(right);
   if (!a || !b) return 0;
@@ -216,7 +219,7 @@ export function normalizeReleases(payload) {
       };
     })
     .filter(Boolean)
-    .sort((left, right) => compareVersions(right.version, left.version));
+    .sort((left: any, right: any) => compareVersions(right.version, left.version));
 }
 
 export function detectUpdatePlatform() {

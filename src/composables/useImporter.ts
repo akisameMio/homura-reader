@@ -40,7 +40,7 @@ import { runShelfMutation } from '../services/mutationQueue.ts';
 import { NativeErrorCode } from '../services/nativeRuntime.ts';
 
 let quotaWarned = false;
-let activeImportBatch = null;
+let activeImportBatch: any = null;
 const IMPORT_TIMING_ENABLED = !!import.meta.env?.DEV;
 const LARGE_FILE_BYTES = 64 * 1024 * 1024;
 const VERY_LARGE_FILE_BYTES = 256 * 1024 * 1024;
@@ -120,7 +120,7 @@ function logImportMetrics(metrics, savedCount) {
 }
 
 function buildImportTasks(files) {
-  const tasks = [];
+  const tasks: any[] = [];
   const addFileTasks = (list, kind, titleIsReliable = true) => {
     for (const file of list) {
       tasks.push({
@@ -190,15 +190,15 @@ function chooseCommitBatchSize(tasks) {
 // 有界滚动并发池：同一批任务按原始 index 回填结果，提交顺序不随完成先后变化。
 // 原生导入失败需要整批交给用户重选，必须等已在跑的任务收尾，避免后台继续写盘。
 async function runPool(items, concurrency, worker, onError, shouldStop = () => false) {
-  const results = new Array(items.length);
+  const results: any[] = new Array(items.length);
   let next = 0;
-  let fatalError = null;
+  let fatalError: any = null;
   async function lane() {
     while (!fatalError && !shouldStop() && next < items.length) {
       const index = next++;
       try {
         results[index] = await worker(items[index], index);
-      } catch (err) {
+      } catch (err: any) {
         if (err?.nativeImportFallback) {
           fatalError = fatalError || err;
           return;
@@ -285,7 +285,7 @@ export function useImporter() {
     return handleFiles(files, { targetId: importProgress.targetId });
   }
 
-  async function importBatch(files, targetId, offerCollection) {
+  async function importBatch(files, targetId: any = null, offerCollection) {
     const targetLabel = targetId
       ? (shelf.collections.find(item => item.id === targetId)?.title || '全部作品')
       : '全部作品';
@@ -306,7 +306,7 @@ export function useImporter() {
     if (create === null) return [];
     if (!create) return importIntoCurrent();
     const reserved = [...shelf.collections];
-    const groups = [];
+    const groups: any[] = [];
     // 所有名称确认后才导入；中途取消不会留下半批书库。
     for (const group of plan.groups) {
       const message = group.path ? `目录：${group.path} · ${group.bookCount} 本作品` : `${group.bookCount} 本作品`;
@@ -315,7 +315,7 @@ export function useImporter() {
       reserved.push({ title });
       groups.push({ ...group, title });
     }
-    const savedIds = [];
+    const savedIds: any[] = [];
     for (const group of groups) {
       const ids = await importFiles(group.files, {
         targetId: '',
@@ -335,13 +335,13 @@ export function useImporter() {
     if (!tasks.length || !shelf.library.length) {
       return { tasks, skipped: 0 };
     }
-    const knownByTitle = new Map();
+    const knownByTitle = new Map<string, any>();
     for (const book of shelf.library) {
       const key = normalizeBookTitle(book.title);
       if (key && !knownByTitle.has(key)) knownByTitle.set(key, book);
     }
 
-    const groups = new Map();
+    const groups = new Map<string, any>();
     for (const task of tasks) {
       if (!task.titleIsReliable) continue;
       const key = normalizeBookTitle(task.title);
@@ -413,7 +413,7 @@ export function useImporter() {
         // 交给系统文件输入重选；安全与超限错误仍由上面的分支终止。
         if (isAndroidContentUri(file.nativePath)) {
           await removeNativeBookDir(bookId).catch(() => {});
-          err.nativeImportFallback = true;
+          (err as any).nativeImportFallback = true;
           throw err;
         }
         console.warn('[HOMURA] 原生 EPUB 预存失败，沿用 JSZip', err);
@@ -437,7 +437,7 @@ export function useImporter() {
     }
 
     const parseStarted = now();
-    let book = null;
+    let book: any = null;
     const parseOptions = {
       id: bookId,
       name: file.name,
@@ -448,20 +448,20 @@ export function useImporter() {
     };
     const parseFullEpub = () => parseEpubFile(file, parseOptions);
     importProgress.setPhase('parse');
-    let parseFailure = null;
+    let parseFailure: any = null;
     try {
-      let metadataError = null;
+      let metadataError: any = null;
       try {
         book = await parseEpubFile(file, { ...parseOptions, metadataOnly: true });
       } catch (err) {
-        metadataError = err;
-        parseFailure = err;
+        metadataError = err as any;
+        parseFailure = err as any;
       }
 
       if (metadataError) {
-        const canRetryFull = metadataError.code !== NativeErrorCode.SECURITY_LIMIT
-          && metadataError.code !== NativeErrorCode.LIMIT_EXCEEDED
-          && metadataError.code !== NativeErrorCode.CANCELLED;
+        const canRetryFull = (metadataError as any).code !== NativeErrorCode.SECURITY_LIMIT
+          && (metadataError as any).code !== NativeErrorCode.LIMIT_EXCEEDED
+          && (metadataError as any).code !== NativeErrorCode.CANCELLED;
         if (!canRetryFull) {
           console.warn('[HOMURA] EPUB 被安全或限额规则拒绝，不再回退', metadataError);
         } else {
@@ -504,9 +504,9 @@ export function useImporter() {
   async function prepareParsedTask(task, parser, metrics, label) {
     const started = now();
     let file = task.file;
-    let book = null;
+    let book: any = null;
     let stagedBookId = '';
-    let stagedSource = null;
+    let stagedSource: any = null;
     importProgress.setPhase('read');
     try {
       if (isNativeImportFile(file)) {
@@ -515,7 +515,7 @@ export function useImporter() {
           const stageStarted = now();
           try {
             stagedSource = await stageNativePathSource(stagedBookId, file);
-          } catch (err) {
+          } catch (err: any) {
             if (shouldFallbackNativeImport(err)) err.nativeImportFallback = true;
             throw err;
           } finally {
@@ -538,7 +538,7 @@ export function useImporter() {
       }
       importProgress.setPhase('parse');
       book = await parser(file);
-    } catch (err) {
+    } catch (err: any) {
       if (err?.nativeImportFallback) {
         if (stagedBookId) await removeNativeBookDir(stagedBookId).catch(() => {});
         throw err;
@@ -561,7 +561,7 @@ export function useImporter() {
   }
 
   async function prepareImportTask(task, metrics) {
-    let prepared = null;
+    let prepared: any = null;
     if (task.kind === 'epub') prepared = await prepareEpubTask(task, metrics);
     else if (task.kind === 'pdf') prepared = await prepareParsedTask(task, parsePdfFileLazy, metrics, 'PDF');
     else if (task.kind === 'mobi') prepared = await prepareParsedTask(task, parseMobiFileLazy, metrics, 'MOBI');
@@ -581,7 +581,7 @@ export function useImporter() {
               let staged;
               try {
                 staged = await stageNativePathSource(group.book.id, file);
-              } catch (err) {
+              } catch (err: any) {
                 if (shouldFallbackNativeImport(err)) err.nativeImportFallback = true;
                 throw err;
               }
@@ -616,7 +616,7 @@ export function useImporter() {
               }
             };
           }
-        } catch (err) {
+        } catch (err: any) {
           console.warn('[HOMURA] 读取原生图片目录失败', err);
           if (group?.files?.some(file => isAndroidContentUri(file.nativePath))) {
             await removeNativeBookDir(group.book.id).catch(() => {});
@@ -696,8 +696,8 @@ export function useImporter() {
 
   // 同一批内也要按顺序判重，前一本确认保留后，后一本必须继续询问。
   async function confirmPreparedDuplicates(preparedList, taskList, metrics, duplicateSession) {
-    const accepted = [];
-    const knownInBatch = new Map();
+    const accepted: any[] = [];
+    const knownInBatch = new Map<string, any>();
     try {
       for (let index = 0; index < preparedList.length; index++) {
         const prepared = preparedList[index];
@@ -736,7 +736,7 @@ export function useImporter() {
     const coverThumbs = new Map(accepted.map(prepared => [prepared.book.id, prepared.coverThumb]));
     const preparedById = new Map(accepted.map(prepared => [prepared.book.id, prepared]));
     const acceptedIds = new Set(accepted.map(prepared => prepared.book.id));
-    const taskByBookId = new Map();
+    const taskByBookId = new Map<any, any>();
     for (let index = 0; index < preparedList.length; index++) {
       const prepared = preparedList[index];
       if (prepared && acceptedIds.has(prepared.book.id)) {
@@ -749,7 +749,7 @@ export function useImporter() {
     );
     const started = now();
     try {
-      const result = await shelf.addBooks(
+      const result: any = await shelf.addBooks(
         accepted.map(prepared => ({
           book: prepared.book,
           source: prepared.source,
@@ -815,7 +815,7 @@ export function useImporter() {
     }
   }
 
-  async function importFiles(files, { targetId = shelf.activeCollectionId, targetLabel = '' } = {}) {
+  async function importFiles(files, { targetId = shelf.activeCollectionId, targetLabel = '' }: any = {}) {
     const tasks = buildImportTasks(files);
     const metrics = createImportMetrics(files, tasks);
     if (!tasks.length) {
@@ -845,7 +845,7 @@ export function useImporter() {
         targetLabel: targetLabel || targetCollection?.title || '全部作品'
       });
 
-      const savedBooks = [];
+      const savedBooks: any[] = [];
       metrics.concurrency = chooseImportConcurrency(importTasks);
       const commitBatchSize = chooseCommitBatchSize(importTasks);
       metrics.commitBatchSize = commitBatchSize;
@@ -878,7 +878,7 @@ export function useImporter() {
           await commitPreparedBatch(prepared, batchTasks, savedBooks, metrics, duplicateSession);
           if (importProgress.cancelRequested) break;
         }
-      } catch (err) {
+      } catch (err: any) {
         if (err?.nativeImportFallback) {
           await discardPreparedResults(err.partialResults);
           delete err.partialResults;
@@ -957,8 +957,8 @@ export function useImporter() {
 
   async function handleDrop(e) {
     if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
-      const collectedFiles = [];
-      const entries = [];
+      const collectedFiles: any[] = [];
+      const entries: any[] = [];
       for (let i = 0; i < e.dataTransfer.items.length; i++) {
         const item = e.dataTransfer.items[i];
         if (item.kind === 'file') {
@@ -989,13 +989,13 @@ export function useImporter() {
   // ---- File System Access：优先引用原文件句柄 ----
 
   async function pickFilesViaFSA(options) {
-    let handles = [];
+    let handles: any[] = [];
     try {
       handles = await window.showOpenFilePicker({ multiple: true });
     } catch (err) {
       return;
     }
-    const files = [];
+    const files: any[] = [];
     for (const handle of handles) {
       try {
         const file = await handle.getFile();
@@ -1041,13 +1041,13 @@ export function useImporter() {
   }
 
   async function pickFolderViaFSA() {
-    let dirHandle = null;
+    let dirHandle: any = null;
     try {
       dirHandle = await window.showDirectoryPicker({ mode: 'read' });
     } catch (err) {
       return;
     }
-    const files = [];
+    const files: any[] = [];
     await collectFilesFromDirHandle(dirHandle, dirHandle.name + '/', files);
     if (files.length > 0) await handleFiles(files);
     else console.warn('[HOMURA] 该文件夹内没有可导入的文件');

@@ -82,9 +82,9 @@ export async function parseTxtFile(txtFile) {
     const rawText = await decodeTxtBytesAsync(await txtFile.arrayBuffer());
     const lines = rawText.split(/\r\n?|\n/).map(l => l.trim()).filter(Boolean);
     const title = txtFile.name.replace(/\.[^.]+$/, '');
-    const chapters = [];
+    const chapters: { title: string; htmlContent: string }[] = [];
     let currentChapTitle = '开始';
-    let currentParagraphs = [];
+    let currentParagraphs: string[] = [];
     const chapterRegex = /^(第[0-9零一二三四五六七八九十百千万]+[章节卷回话]|Chapter\s*\d+|序[章言]?|楔子|终章|尾声)/i;
 
     for (const line of lines) {
@@ -130,8 +130,8 @@ function stripMarkdownTitle(line) {
 }
 
 function splitMarkdownChapters(text, fallbackTitle) {
-  const chapters = [];
-  let buffer = [];
+  const chapters: { title: string; htmlContent: string }[] = [];
+  let buffer: string[] = [];
   let fence = '';
   let currentTitle = null;
 
@@ -173,7 +173,7 @@ function splitMarkdownChapters(text, fallbackTitle) {
 export function parseMarkdownFile(mdFile) {
   return new Promise(resolve => {
     const reader = new FileReader();
-    reader.onload = e => {
+    reader.onload = (e: any) => {
       const rawText = String(e.target.result || '').replace(/\r\n?/g, '\n');
       const title = mdFile.name.replace(/\.[^.]+$/, '');
       const chapters = splitMarkdownChapters(rawText, title);

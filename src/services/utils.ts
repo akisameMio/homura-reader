@@ -3,9 +3,9 @@
    ========================================================================== */
 
 export function escapeHtml(str) {
-  return String(str || '').replace(/[&<>"']/g, m => ({
+  return String(str || '').replace(/[&<>"']/g, (m: string) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[m]));
+  } as Record<string, string>)[m]);
 }
 
 // 桌面用窗口滚动，手机书架改用内部滚动容器；统一按最近的滚动容器回到顶部。

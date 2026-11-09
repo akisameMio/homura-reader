@@ -24,8 +24,8 @@
           '--enter-seed-bottom': `${enterSeed.bottom}px`
         }"
         :role="surface === 'shelf'
-          ? (pendingShelfDialog?.kind === 'confirm' ? 'alertdialog' : 'dialog')
-          : ['duplicate', 'import', 'update'].includes(surface) ? 'dialog' : undefined"
+          ? ((pendingShelfDialog as any)?.kind === 'confirm' ? 'alertdialog' : 'dialog')
+          : ['duplicate', 'import', 'update'].includes(surface as string) ? 'dialog' : undefined"
         :aria-modal="surface === 'shelf' || surface === 'duplicate' ? 'true' : undefined"
         :aria-labelledby="surface === 'shelf'
           ? 'shelf-dialog-title'
@@ -86,7 +86,7 @@
           v-else-if="surface === 'shelf'"
           ref="shelfContentRef"
           host-primary-action
-          :request="pendingShelfDialog"
+          :request="(pendingShelfDialog as any)"
           @resolve="resolveShelfDialog"
         />
 
@@ -95,12 +95,12 @@
           ref="updatePanelRef"
           host-primary-action
           :status="updates.updateStatus"
-          :release="updates.latestRelease"
+          :release="(updates.latestRelease as any)"
           :current-version="updates.appVersion"
           :package-info="updates.updatePackage"
-          :error="updates.updateError"
+          :error="(updates.updateError as any)"
           :download="updates.downloadState"
-          :download-error="updates.downloadError"
+          :download-error="(updates.downloadError as any)"
           @close="updates.closeUpdateDialog"
           @retry="updates.checkForUpdates"
           @changelog="updates.openChangelog"
@@ -247,19 +247,19 @@ const updates = useUpdateStore();
 const { pendingShelfDialog, resolveShelfDialog } = useShelfDialogs();
 const { pendingDuplicate, resolveImport } = useDuplicateImport();
 
-const rootRef = shallowRef(null);
-const surfaceRef = shallowRef(null);
-const importPanelRef = shallowRef(null);
-const duplicateContentRef = shallowRef(null);
-const shelfContentRef = shallowRef(null);
-const updatePanelRef = shallowRef(null);
-const importButtonRef = shallowRef(null);
-const updateButtonRef = shallowRef(null);
+const rootRef = shallowRef<any>(null);
+const surfaceRef = shallowRef<any>(null);
+const importPanelRef = shallowRef<any>(null);
+const duplicateContentRef = shallowRef<any>(null);
+const shelfContentRef = shallowRef<any>(null);
+const updatePanelRef = shallowRef<any>(null);
+const importButtonRef = shallowRef<any>(null);
+const updateButtonRef = shallowRef<any>(null);
 
 const menuOpen = ref(false);
-const lastTrigger = shallowRef(null);
-const restoreFocusTarget = shallowRef(null);
-const heldAction = shallowRef(null);
+const lastTrigger = shallowRef<any>(null);
+const restoreFocusTarget = shallowRef<any>(null);
+const heldAction = shallowRef<any>(null);
 const actionFaceShown = ref(false);
 const surfaceSwapping = ref(false);
 const surfaceLeaving = ref(false);
@@ -297,7 +297,7 @@ const surface = computed(() => {
 });
 const surfaceKey = computed(() => {
   if (surface.value === 'duplicate') return 'duplicate';
-  if (surface.value === 'shelf') return `shelf-${pendingShelfDialog.value?.kind || 'dialog'}`;
+  if (surface.value === 'shelf') return `shelf-${(pendingShelfDialog.value as any)?.kind || 'dialog'}`;
   if (surface.value === 'update') return `update-${updates.updateStatus}`;
   return surface.value;
 });

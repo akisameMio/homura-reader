@@ -22,8 +22,8 @@ import ImportProgressPanel from './ImportProgressPanel.vue';
 defineEmits(['retry']);
 
 const store = useImportProgressStore();
-const dialogRef = shallowRef(null);
-const panelRef = shallowRef(null);
+const dialogRef = shallowRef<HTMLDialogElement | null>(null);
+const panelRef = shallowRef<any>(null);
 const open = computed(() => store.status !== 'idle' && store.expanded);
 
 watch(

@@ -41,12 +41,12 @@
 
       <nav class="md-drawer-body px-3 pb-4 pt-1" aria-label="本书库书本顺序">
         <ol class="flex flex-col gap-1">
-          <li v-for="(book, index) in reader.collectionBooks" :key="book.id">
+          <li v-for="(book, index) in (reader.collectionBooks as any[])" :key="book.id">
             <button
               type="button"
               class="md-drawer-list-item"
-              :class="{ 'is-active': book.id === reader.currentBook.id }"
-              :aria-current="book.id === reader.currentBook.id ? 'true' : undefined"
+              :class="{ 'is-active': book.id === (reader.currentBook as any).id }"
+              :aria-current="book.id === (reader.currentBook as any).id ? 'true' : undefined"
               :aria-label="`打开书库书本：${book.title}`"
               :disabled="reader.openingBook"
               :title="book.title"
@@ -54,7 +54,7 @@
             >
               <span class="md-drawer-item-index" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span>
               <span class="md-drawer-item-label break-words">{{ book.title }}</span>
-              <span v-if="book.id === reader.currentBook.id" class="md-drawer-item-meta">正在阅读</span>
+              <span v-if="book.id === (reader.currentBook as any).id" class="md-drawer-item-meta">正在阅读</span>
             </button>
           </li>
         </ol>
@@ -87,12 +87,12 @@ const {
 });
 const collectionSubtitle = computed(() => {
   if (!reader.currentCollection) return '';
-  return `${reader.currentCollection.title} · ${reader.collectionBooks.length} 本`;
+  return `${(reader.currentCollection as any).title} · ${reader.collectionBooks.length} 本`;
 });
 
 // 只滚抽屉自身：scrollIntoView 会连带滚动 overflow:hidden 的阅读器祖先，入场动画期间会把画面顶偏。
 function revealActiveBook() {
-  const body = sheetRef.value?.querySelector('.md-drawer-body');
+  const body = (sheetRef.value as any)?.querySelector('.md-drawer-body');
   const active = body?.querySelector('[aria-current="true"]');
   if (!body || !active) return;
   const bodyRect = body.getBoundingClientRect();
@@ -110,7 +110,7 @@ watch(() => ui.collectionTocOpen, async open => {
   revealActiveBook();
 });
 
-async function openBook(id) {
+async function openBook(id: string) {
   if (await reader.openCollectionBook(id)) ui.closeCollectionToc();
 }
 </script>

@@ -226,8 +226,8 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'retry', 'changelog', 'download', 'cancel-download', 'install']);
 
-const panelRef = shallowRef(null);
-const primaryActionRef = shallowRef(null);
+const panelRef = shallowRef<HTMLElement | null>(null);
+const primaryActionRef = shallowRef<HTMLElement | null>(null);
 const linkError = ref('');
 
 const title = computed(() => {

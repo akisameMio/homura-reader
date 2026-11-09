@@ -7,9 +7,9 @@
 
 import { shallowRef } from 'vue';
 
-const pendingDuplicate = shallowRef(null);
-let resolveDuplicate = null;
-let activeSession = null;
+const pendingDuplicate = shallowRef<any>(null);
+let resolveDuplicate: ((value: boolean) => void) | null = null;
+let activeSession: any = null;
 let sessionSerial = 0;
 
 export const DUPLICATE_SKIP_ALL = 'skip-all';

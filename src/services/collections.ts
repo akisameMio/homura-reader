@@ -25,13 +25,13 @@ export function moveCollectionBooks(collections, bookIds, targetId) {
 
 export function restoreCollections(records, books) {
   const valid = new Set(books.map(book => book.id));
-  const assigned = new Set();
-  const collectionIds = new Set();
-  const restored = [];
+  const assigned = new Set<string>();
+  const collectionIds = new Set<string>();
+  const restored: { id: string; title: string; createdAt: number; bookIds: string[] }[] = [];
   for (const item of records) {
     if (!item || typeof item.id !== 'string' || collectionIds.has(item.id)) continue;
     collectionIds.add(item.id);
-    const bookIds = [];
+    const bookIds: string[] = [];
     for (const id of Array.isArray(item.bookIds) ? item.bookIds : []) {
       if (!valid.has(id) || assigned.has(id)) continue;
       assigned.add(id);

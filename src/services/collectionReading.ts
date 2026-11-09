@@ -4,10 +4,10 @@
 
 export function collectionReadingOrder(books, frozenIds = []) {
   const remaining = new Map(books.map(book => [book.id, book]));
-  const ordered = [];
+  const ordered: any[] = [];
   for (const id of frozenIds) {
     if (!remaining.has(id)) continue;
-    ordered.push(remaining.get(id));
+    ordered.push(remaining.get(id)!);
     remaining.delete(id);
   }
   return [...ordered, ...remaining.values()];

@@ -48,16 +48,16 @@ function createDownloadId() {
 export const useUpdateStore = defineStore('updates', () => {
   const appVersion = packageInfo.version;
   const updatePlatform = detectUpdatePlatform();
-  const releases = ref([]);
-  const latestRelease = ref(null);
+  const releases = ref<any[]>([]);
+  const latestRelease = ref<any>(null);
   const updateDialogOpen = ref(false);
   const updateStatus = ref('idle');
-  const updateError = ref(null);
-  const downloadError = ref(null);
+  const updateError = ref<any>(null);
+  const downloadError = ref<any>(null);
   const changelogOpen = ref(false);
   const changelogStatus = ref('idle');
-  const changelogError = ref(null);
-  const downloadedUpdate = ref(restorePendingUpdate());
+  const changelogError = ref<any>(null);
+  const downloadedUpdate = ref<any>(restorePendingUpdate());
   const downloadState = ref(emptyDownloadState());
   let activeDownloadId = '';
   let updateRequestId = 0;
@@ -250,7 +250,7 @@ export const useUpdateStore = defineStore('updates', () => {
         downloadedBytes: result.size
       };
       updateStatus.value = 'downloaded';
-    } catch (error) {
+    } catch (error: any) {
       if (requestId !== downloadRequestId) return;
       if (error?.code === 'CANCELLED') {
         updateStatus.value = 'available';

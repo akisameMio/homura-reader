@@ -40,15 +40,15 @@ function wheelDistance(event) {
 }
 
 export function useScrollBounce(targetRef) {
-  let target = null;
-  let touchState = null;
+  let target: any = null;
+  let touchState: any = null;
   let rawPull = 0;
   let offset = 0;
   let wheelDirection = 0;
   let wheelActive = false;
-  let settleTimer = null;
-  let wheelTimer = null;
-  let clickTimer = null;
+  let settleTimer: any = null;
+  let wheelTimer: any = null;
+  let clickTimer: any = null;
   let suppressClick = false;
 
   function clearTimer(timer) {

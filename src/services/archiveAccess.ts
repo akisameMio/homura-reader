@@ -27,7 +27,7 @@ export async function readArchiveText(book, paths) {
   }
 
   if (book?.zipContent) {
-    const texts = [];
+    const texts: (string | null)[] = [];
     for (const path of requested) {
       const entry = book.zipContent.file(path);
       if (!entry) {

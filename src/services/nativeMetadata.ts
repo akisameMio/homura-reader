@@ -103,7 +103,7 @@ async function serializeBook(book) {
 }
 
 async function serializeSnapshot(snapshot) {
-  const books = [];
+  const books: any[] = [];
   for (const book of snapshot.books || []) {
     books.push(await serializeBook(book));
   }
@@ -146,7 +146,7 @@ export async function upsertNativeBook(book) {
 
 export async function upsertNativeBooks(books) {
   if (!Array.isArray(books) || books.length === 0) return;
-  const payload = [];
+  const payload: any[] = [];
   for (const book of books) {
     payload.push(await serializeBook(book));
   }

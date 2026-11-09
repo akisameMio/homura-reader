@@ -117,7 +117,7 @@ function unwrap(el) {
 export function sanitizeElement(root) {
   if (!root) return;
 
-  const elements = [];
+  const elements: Element[] = [];
   const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
   let node = walker.nextNode();
   while (node) {

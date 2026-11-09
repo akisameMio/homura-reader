@@ -166,8 +166,8 @@ const props = defineProps({
 });
 const emit = defineEmits(['resolve']);
 
-const formRef = shallowRef(null);
-const nameInput = shallowRef(null);
+const formRef = shallowRef<HTMLElement | null>(null);
+const nameInput = shallowRef<HTMLInputElement | null>(null);
 const name = ref('');
 const error = ref('');
 const isDestructive = computed(() => (

@@ -10,7 +10,7 @@ import { isAndroid } from './platform.ts';
 const PROGRESS_EVENT = 'update-download-progress';
 const PENDING_UPDATE_KEY = 'homura_pending_update_v1';
 
-function getTauriBridge() {
+function getTauriBridge(): any {
   if (typeof window === 'undefined') return null;
   const bridge = window.__TAURI__;
   if (!bridge || !bridge.core || typeof bridge.core.invoke !== 'function') return null;
@@ -101,10 +101,10 @@ export async function downloadUpdateAsset({
   expectedSize,
   onProgress
 }) {
-  const bridge = getTauriBridge();
+  const bridge: any = getTauriBridge();
   if (!bridge) throw new Error('当前环境不支持应用内下载。');
 
-  let unlisten = null;
+  let unlisten: any = null;
   if (bridge.event && typeof bridge.event.listen === 'function') {
     unlisten = await bridge.event.listen(PROGRESS_EVENT, event => {
       const payload = event && event.payload;

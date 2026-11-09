@@ -160,7 +160,7 @@ async function stageSource(bookId, source) {
   if (isAndroid && canUseNativeStorage()) {
     try {
       if (source.kind === 'folder') {
-        const entries = [];
+        const entries: any[] = [];
         const list = source.entries || [];
         for (let i = 0; i < list.length; i++) {
           const entry = list[i];
@@ -220,7 +220,7 @@ async function stageSource(bookId, source) {
   if (!canUseOPFS) return source;
   try {
     if (source.kind === 'folder') {
-      const entries = [];
+      const entries: any[] = [];
       const list = source.entries || [];
       for (let i = 0; i < list.length; i++) {
         const entry = list[i];
@@ -313,15 +313,15 @@ export async function persistBooks(items: any[], options: { timing?: PersistTimi
   const timing = options.timing || null;
   if (!items.length) return { persistence: null, saved: [], failed: [] };
 
-  let persistence = null;
+  let persistence: any = null;
   try {
     persistence = await HomuraStore.requestPersistence();
   } catch (err) {
     console.warn('[HOMURA] 无法申请持久存储', err);
   }
 
-  const entries = [];
-  const failed = [];
+  const entries: any[] = [];
+  const failed: any[] = [];
   for (const item of items) {
     const { book, source } = item;
     try {
@@ -375,7 +375,7 @@ export async function persistBooks(items: any[], options: { timing?: PersistTimi
 
 // 返回按添加时间倒序的书架数组；IndexedDB 不可用时返回 null
 export async function restoreLibrary() {
-  let metas = [];
+  let metas: any[] = [];
   try {
     metas = await HomuraStore.listBooks();
   } catch (err) {
@@ -439,7 +439,7 @@ function releaseParsedCover(parsed) {
 
 // 依次尝试原生 AppData、OPFS、原文件句柄、内嵌 Blob；前一层失效时继续用后一层。
 async function resolveStoredFile(source, displayName) {
-  const failures = [];
+  const failures: any[] = [];
   if (source.nativePath) {
     try {
       const stored = await getNativeFile(source.nativePath);
@@ -515,8 +515,8 @@ function isStoredFileFormatSupported(file) {
 }
 
 async function resolveFolderFiles(source) {
-  const files = [];
-  const failures = [];
+  const files: any[] = [];
+  const failures: any[] = [];
   for (const entry of source.entries || []) {
     const resolved = await resolveStoredFile(entry, basename(entry.path));
     const file = resolved.file;
@@ -586,8 +586,8 @@ function restoreNativeMangaManifest(book, source, manifest) {
 
 // 书架里只有元数据；第一次点开时才回到存档里取原始文件重新解析
 export async function hydrateBook(book) {
-  let source = null;
-  let sourceError = null;
+  let source: any = null;
+  let sourceError: any = null;
   try {
     source = await HomuraStore.getSource(book.id);
   } catch (err) {
@@ -602,7 +602,7 @@ export async function hydrateBook(book) {
     return false;
   }
 
-  let parsed = null;
+  let parsed: any = null;
   if (source.kind === 'folder') {
     const { files, failures } = await resolveFolderFiles(source);
     logSourceFailures(book.id, failures);

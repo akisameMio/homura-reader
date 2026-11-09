@@ -56,7 +56,7 @@ const NATIVE_MANGA_MANIFEST_VERSION = 1;
 // 首次打开只按 ZIP 条目索引取图，不再重新解析全书 XHTML、扫描图片头。
 export function createNativeMangaManifest(book) {
   if (book?.type !== 'manga' || book?.format !== 'epub') return null;
-  const items = [];
+  const items: { index: number; width: number; height: number }[] = [];
   for (const item of book.pageItems || []) {
     if (!Number.isInteger(item?.nativeIndex)) return null;
     items.push({
@@ -81,7 +81,7 @@ export function isNativeMangaManifestValid(manifest) {
 }
 
 async function readNativeTexts(archiveId, paths, entryIndexByPath) {
-  const textByPath = new Map();
+  const textByPath = new Map<string, any>();
   const validPaths = paths.filter(path => entryIndexByPath.has(path));
 
   const readBatch = async batch => {
@@ -102,7 +102,7 @@ async function readNativeTexts(archiveId, paths, entryIndexByPath) {
   for (let start = 0; start < validPaths.length; start += NATIVE_TEXT_BATCH_SIZE) {
     await readBatch(validPaths.slice(start, start + NATIVE_TEXT_BATCH_SIZE));
   }
-  return paths.map(path => textByPath.has(path) ? textByPath.get(path) : null);
+  return paths.map((path: string) => textByPath.has(path) ? textByPath.get(path) : null);
 }
 
 export async function createJsZipEpubArchive(file) {
@@ -119,7 +119,7 @@ export async function createJsZipEpubArchive(file) {
       return candidates.find(path => !!zipContent.file(path)) || null;
     },
     async readTexts(paths) {
-      const texts = [];
+      const texts: (string | null)[] = [];
       for (const path of paths) {
         const entry = zipContent.file(path);
         if (!entry) {
@@ -281,7 +281,7 @@ async function readEpubPackage(archive, fallbackTitle) {
   const parsedTitle = titleEl?.textContent?.trim();
   const bookTitle = parsedTitle || fallbackTitle;
 
-  const manifest = {};
+  const manifest: any = {};
   opfDoc.querySelectorAll('manifest > item').forEach(item => {
     manifest[item.getAttribute('id')] = {
       id: item.getAttribute('id'),
@@ -291,7 +291,7 @@ async function readEpubPackage(archive, fallbackTitle) {
     };
   });
 
-  const spine = [];
+  const spine: { id: any; href: any; path: any }[] = [];
   opfDoc.querySelectorAll('spine > itemref').forEach(ref => {
     const itemId = ref.getAttribute('idref');
     const item = manifest[itemId];
@@ -326,8 +326,8 @@ function isImageItem(item, path = '') {
 function extractPageImages(archive: any, parser: any, rawHtml: string, pagePath: string, options: EpubParseOptions = {}) {
   const htmlDoc = parser.parseFromString(rawHtml, 'text/html');
   const imgs = htmlDoc.querySelectorAll('img, image');
-  const imagePaths = [];
-  const seenInCurrentPage = new Set();
+  const imagePaths: string[] = [];
+  const seenInCurrentPage = new Set<string>();
 
   for (const img of imgs) {
     const srcAttr = img.getAttribute('src') || img.getAttribute('xlink:href') || img.getAttribute('href');
@@ -364,7 +364,7 @@ function selectSampleIndices(length, limit) {
 }
 
 async function readOpfCoverPath(archive: any, pkg: any) {
-  const candidates = [];
+  const candidates: any[] = [];
   const entries = Object.values(pkg.manifest) as Array<{ properties?: string } & Record<string, unknown>>;
   const coverImage = entries.find(item => (
     /(?:^|\s)cover-image(?:\s|$)/i.test(item.properties || '')
@@ -498,7 +498,7 @@ async function parseEpubMetadata(archive, pkg, id) {
   const estimatedMangaPages = Math.round(sampledImageRatio * pkg.spine.length);
 
   let coverPath = await readOpfCoverPath(archive, pkg);
-  let fallbackCoverPath = null;
+  let fallbackCoverPath: string | null = null;
   for (const index of coverIndices) {
     const rawHtml = rawByIndex.get(index);
     if (!rawHtml) continue;
@@ -510,7 +510,7 @@ async function parseEpubMetadata(archive, pkg, id) {
   }
   if (!coverPath) coverPath = fallbackCoverPath;
 
-  let coverFields = { cover: null, coverBlob: null, coverNative: null };
+  let coverFields: { cover: any; coverBlob: any; coverNative: any } = { cover: null, coverBlob: null, coverNative: null };
   if (coverPath) {
     try {
       coverFields = await readEpubCover(archive, coverPath);
@@ -545,9 +545,9 @@ async function parseEpubMetadata(archive, pkg, id) {
 async function parseEpubFull(archive, pkg, id) {
   const { parser, spine } = pkg;
   const rawHtmls = await archive.readTexts(spine.map(item => item.path));
-  const lazyMangaPaths = [];
+  const lazyMangaPaths: string[] = [];
   const seenGlobalPaths = new Set();
-  const chapters = [];
+  const chapters: { title: any; htmlContent: string }[] = [];
   let imageHeavyCount = 0;
   let textChapterCount = 0;
 

@@ -18,7 +18,7 @@ export const useUiStore = defineStore('ui', () => {
   const fontMenuOpen = ref(false);
   const readerDrawerOpen = computed(() => settingsOpen.value || tocOpen.value || collectionTocOpen.value || fontMenuOpen.value);
   const fullscreen = ref(false);
-  let hideTimer = null;
+  let hideTimer: ReturnType<typeof setTimeout> | null = null;
   let fullscreenBusy = false;
 
   function clearHideTimer() {

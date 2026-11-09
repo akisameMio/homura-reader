@@ -54,8 +54,8 @@ const props = defineProps({
 });
 const emit = defineEmits(['close', 'retry', 'changelog', 'download', 'cancel-download', 'install']);
 
-const dialogRef = shallowRef(null);
-const panelRef = shallowRef(null);
+const dialogRef = shallowRef<HTMLDialogElement | null>(null);
+const panelRef = shallowRef<any>(null);
 
 watch(
   () => props.open,

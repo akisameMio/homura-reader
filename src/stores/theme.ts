@@ -42,7 +42,7 @@ export const TRANSITION_LABELS = Object.fromEntries(
 function readTransitionStyle() {
   try {
     const saved = localStorage.getItem('homura_transition_style');
-    return TRANSITION_ORDER.includes(saved) ? saved : 'slide';
+    return saved !== null && TRANSITION_ORDER.includes(saved) ? saved : 'slide';
   } catch (err) {
     return 'slide';
   }
@@ -67,7 +67,7 @@ export const useThemeStore = defineStore('theme', () => {
   const transitionStyle = ref(readTransitionStyle());
   let surfaceModeToken = 0;
   let surfaceRevealFrame = 0;
-  let surfaceRevealEl = null;
+  let surfaceRevealEl: HTMLDivElement | null = null;
 
   function setThemeColor(colorName) {
     themeColor.value = colorName;
@@ -75,7 +75,7 @@ export const useThemeStore = defineStore('theme', () => {
     try { localStorage.setItem('homura_theme_color', colorName); } catch (e) {}
   }
 
-  function setSurfaceMode(modeName, silent = false, origin = null) {
+  function setSurfaceMode(modeName: string, silent = false, origin: { x: number; y: number } | null = null) {
     surfaceMode.value = modeName;
     const html = document.documentElement;
     const token = ++surfaceModeToken;
@@ -130,8 +130,8 @@ export const useThemeStore = defineStore('theme', () => {
     const oldCanvas = getComputedStyle(document.body).backgroundColor;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const centerX = Number.isFinite(origin?.x) ? origin.x : viewportWidth / 2;
-    const centerY = Number.isFinite(origin?.y) ? origin.y : viewportHeight / 2;
+    const centerX = origin && Number.isFinite(origin.x) ? origin.x : viewportWidth / 2;
+    const centerY = origin && Number.isFinite(origin.y) ? origin.y : viewportHeight / 2;
     const maxRadius = Math.hypot(
       Math.max(centerX, viewportWidth - centerX),
       Math.max(centerY, viewportHeight - centerY)
@@ -173,7 +173,7 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   function setTransitionStyle(style) {
-    if (!TRANSITION_ORDER.includes(style)) return;
+    if (style === null || !TRANSITION_ORDER.includes(style)) return;
     transitionStyle.value = style;
     try { localStorage.setItem('homura_transition_style', style); } catch (e) {}
   }

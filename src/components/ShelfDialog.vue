@@ -7,7 +7,7 @@
     @click="onBackdropClick"
     @keydown.stop="onKeydown"
   >
-    <ShelfDialogContent ref="contentRef" :request="pendingShelfDialog" @resolve="resolveShelfDialog" />
+    <ShelfDialogContent ref="contentRef" :request="(pendingShelfDialog as any)" @resolve="resolveShelfDialog" />
   </dialog>
 </template>
 
@@ -17,8 +17,8 @@ import { useShelfDialogs } from '../composables/useShelfDialogs.ts';
 import ShelfDialogContent from './ShelfDialogContent.vue';
 
 const { pendingShelfDialog, resolveShelfDialog } = useShelfDialogs();
-const dialogRef = shallowRef(null);
-const contentRef = shallowRef(null);
+const dialogRef = shallowRef<HTMLDialogElement | null>(null);
+const contentRef = shallowRef<any>(null);
 
 watch(pendingShelfDialog, async pending => {
   if (!pending) {
@@ -33,7 +33,8 @@ watch(pendingShelfDialog, async pending => {
 
 function onKeydown(event) {
   if (event.key !== 'Tab') return;
-  const elements = [...dialogRef.value.querySelectorAll('button, input')];
+  if (!dialogRef.value) return;
+  const elements = [...dialogRef.value.querySelectorAll('button, input')] as HTMLElement[];
   const first = elements[0];
   const last = elements[elements.length - 1];
   if (event.shiftKey && document.activeElement === first) {

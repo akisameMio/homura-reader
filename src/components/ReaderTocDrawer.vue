@@ -109,7 +109,7 @@ const isManga = computed(() => reader.currentBook && reader.currentBook.type ===
 const groups = computed(() => {
   if (!reader.currentBook || isManga.value) return [];
   const map = new Map();
-  reader.activePages.forEach((page, idx) => {
+  reader.activePages.forEach((page: any, idx) => {
     const key = page.chapterIndex != null ? page.chapterIndex : 0;
     if (!map.has(key)) {
       map.set(key, {

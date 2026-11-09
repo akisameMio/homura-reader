@@ -129,9 +129,9 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'retry']);
 
-const closeButtonRef = ref(null);
+const closeButtonRef = ref<HTMLElement | null>(null);
 const linkError = ref('');
-let sheetTrigger = null;
+let sheetTrigger: HTMLElement | null = null;
 
 const openModel = computed(() => props.open);
 const compactModel = computed(() => props.compact);
@@ -169,9 +169,10 @@ async function openReleasesPage() {
 }
 
 function focusableElements(): HTMLElement[] {
-  if (!sheetRef.value) return [];
+  const panel = sheetRef.value as HTMLElement | null;
+  if (!panel) return [];
   return Array.from(
-    sheetRef.value.querySelectorAll('button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])')
+    panel.querySelectorAll('button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])')
   ) as HTMLElement[];
 }
 
@@ -202,7 +203,7 @@ watch(
   async (open, previous) => {
     if (open) {
       linkError.value = '';
-      sheetTrigger = document.activeElement;
+      sheetTrigger = document.activeElement as HTMLElement | null;
       window.addEventListener('keydown', onPanelKeydown);
       await nextTick();
       closeButtonRef.value?.focus();

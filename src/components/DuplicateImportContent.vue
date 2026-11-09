@@ -84,7 +84,7 @@ const props = defineProps({
 });
 const emit = defineEmits(['resolve']);
 
-const skipButtonRef = shallowRef(null);
+const skipButtonRef = shallowRef<HTMLElement | null>(null);
 const incomingItems = computed(() => {
   const pending = props.pending;
   if (!pending) return [];

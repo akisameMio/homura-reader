@@ -281,7 +281,7 @@ export function parseMobiBuffer(arrayBuffer, fallbackTitle = 'MOBI') {
     : '';
 
   // 文本记录
-  const chunks = [];
+  const chunks: Uint8Array[] = [];
   let produced = 0;
   for (let r = 0; r < textRecordCount; r++) {
     const from = starts[r + 1];
@@ -301,7 +301,7 @@ export function parseMobiBuffer(arrayBuffer, fallbackTitle = 'MOBI') {
   if (!rawText) throw new MobiError('BAD_FILE', 'MOBI 正文解码失败');
 
   // 统一整理成图片记录表：原生路径直接给出文件区间，JS 路径从 PDB 记录表现扫。
-  const imageRecords = [];
+  const imageRecords: any[] = [];
   for (let recordIndex = firstImage; recordIndex + 1 < starts.length; recordIndex++) {
     const record = imageRecordAt(buf, starts, recordIndex);
     if (!record) continue;
@@ -312,7 +312,7 @@ export function parseMobiBuffer(arrayBuffer, fallbackTitle = 'MOBI') {
   }
 
   // 封面：优先 EXTH 201，失效时退回首张图片
-  const coverIndex = Number.isInteger(exth.coverOffset) ? firstImage + exth.coverOffset : firstImage;
+  const coverIndex = Number.isInteger(exth.coverOffset) ? firstImage + (exth.coverOffset as number) : firstImage;
   const coverRecord = imageRecordAt(buf, starts, coverIndex)
     || imageRecordAt(buf, starts, firstImage);
   const coverBlob = coverRecord
@@ -386,8 +386,8 @@ export function buildMobiBookData(container) {
   const isComic = shouldReadMobiAsManga(docs, cdeType);
   const comicPages = isComic ? collectMobiPages(docs) : [];
 
-  let chapters = [];
-  let pages = [];
+  let chapters: any[] = [];
+  let pages: any[] = [];
   if (comicPages.length > 0) {
     pages = comicPages.map(page => {
       const record = recordsByIndex.get(page.recindex);
@@ -550,7 +550,7 @@ function shouldReadMobiAsManga(docs, cdeType) {
 }
 
 function collectMobiPages(docs) {
-  const pages = [];
+  const pages: any[] = [];
   for (const doc of docs) {
     if (!doc.body) continue;
     for (const img of doc.body.querySelectorAll('img[recindex]')) {
@@ -566,7 +566,7 @@ function collectMobiPages(docs) {
 }
 
 function splitChapters(docs, cleaned, bookTitle, imageUrlFor) {
-  const chapters = [];
+  const chapters: any[] = [];
   let missingImages = 0;
   docs.forEach((doc, index) => {
     if (!doc.body) return;

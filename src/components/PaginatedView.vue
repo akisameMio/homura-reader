@@ -18,7 +18,7 @@
     <div
       v-for="slot in [0, 1]"
       :key="slot"
-      :ref="el => { if (el) stageEls[slot] = el; }"
+      :ref="el => { if (el) stageEls[slot] = el as any; }"
       class="stage-buffer-layer"
       :class="slot === 0 ? 'z-20' : 'z-10 pointer-events-none'"
       :style="slot === 0 ? 'opacity: 1; transform: translate3d(0,0,0);' : 'opacity: 0; transform: translate3d(0,0,0);'"
@@ -26,17 +26,17 @@
       <!-- Manga: 1P Single -->
       <template v-if="isManga">
         <div class="w-full h-full items-center justify-center overflow-hidden" :class="slotVMs[slot] && slotVMs[slot].mode === 'single' ? 'flex' : 'hidden'">
-          <img :ref="el => { if (el) imgEls[slot].single = el; }" class="manga-page-img h-full w-auto max-w-full object-contain select-none" />
+          <img :ref="el => { if (el) imgEls[slot].single = el as any; }" class="manga-page-img h-full w-auto max-w-full object-contain select-none" />
         </div>
         <!-- Manga: 2P Double -->
         <div class="w-full h-full items-center justify-center overflow-hidden" :class="slotVMs[slot] && slotVMs[slot].mode === 'double' ? 'flex' : 'hidden'">
           <div class="flex items-center justify-center w-full h-full relative">
             <div class="w-1/2 h-full flex items-center justify-end overflow-hidden">
-              <img :ref="el => { if (el) imgEls[slot].left = el; }" class="manga-page-img h-full max-h-full w-auto max-w-full object-contain object-right select-none" />
+              <img :ref="el => { if (el) imgEls[slot].left = el as any; }" class="manga-page-img h-full max-h-full w-auto max-w-full object-contain object-right select-none" />
             </div>
             <div class="w-2 h-full book-spine-shadow pointer-events-none z-10 shrink-0"></div>
             <div class="w-1/2 h-full flex items-center justify-start overflow-hidden">
-              <img :ref="el => { if (el) imgEls[slot].right = el; }" class="manga-page-img h-full max-h-full w-auto max-w-full object-contain object-left select-none" />
+              <img :ref="el => { if (el) imgEls[slot].right = el as any; }" class="manga-page-img h-full max-h-full w-auto max-w-full object-contain object-left select-none" />
             </div>
           </div>
         </div>
@@ -81,9 +81,9 @@ const reader = useReaderStore();
 const theme = useThemeStore();
 const ui = useUiStore();
 const { isCompact } = useViewport();
-const gestureEl = shallowRef(null);
-const pageStage = shallowRef(null);
-let stageResizeObserver = null;
+const gestureEl = shallowRef<HTMLElement | null>(null);
+const pageStage = shallowRef<HTMLElement | null>(null);
+let stageResizeObserver: ResizeObserver | null = null;
 
 const isManga = computed(() => reader.currentBook && reader.currentBook.type === 'manga');
 
@@ -111,11 +111,11 @@ function applyReaderGeometry() {
 }
 
 // 每个槽位的视图模型：single / double 模式 + 页面 + 阅读顺序标签
-const slotVMs = shallowRef([null, null]);
+const slotVMs = shallowRef<any[]>([null, null]);
 
 // 直操作 DOM 引用：stage 层与 manga img（不挂响应式）
-const stageEls = [null, null];
-const imgEls = [{ single: null, left: null, right: null }, { single: null, left: null, right: null }];
+const stageEls: (HTMLElement | null)[] = [null, null];
+const imgEls: { single: HTMLImageElement | null; left: HTMLImageElement | null; right: HTMLImageElement | null }[] = [{ single: null, left: null, right: null }, { single: null, left: null, right: null }];
 
 // 组件按 书 id+type key 重挂载，首次渲染只填槽位 0、无动画
 let initialized = false;
@@ -172,11 +172,11 @@ async function populateBufferSlot(slotIndex, pair, total) {
 
   if (isManga.value) {
     if (vm.mode === 'single') {
-      await decodePageImage(imgEls[slotIndex].single, vm.single.itemRef);
+      await decodePageImage(imgEls[slotIndex].single!, vm.single.itemRef);
     } else {
       await Promise.all([
-        decodePageImage(imgEls[slotIndex].left, vm.left.itemRef),
-        decodePageImage(imgEls[slotIndex].right, vm.right.itemRef)
+        decodePageImage(imgEls[slotIndex].left!, vm.left.itemRef),
+        decodePageImage(imgEls[slotIndex].right!, vm.right.itemRef)
       ]);
     }
   }
@@ -219,8 +219,8 @@ async function renderReaderViewport(transitionDir = 'fade') {
   });
   reader.activeTransitionAnims = [];
 
-  const outEl = stageEls[prevSlot];
-  const inEl = stageEls[nextSlot];
+  const outEl = stageEls[prevSlot]!;
+  const inEl = stageEls[nextSlot]!;
   reader.activeBufferSlot = nextSlot;
 
   inEl.style.zIndex = '20';
@@ -328,7 +328,7 @@ function scheduleIdlePreload() {
 }
 
 // ---- 统一指针手势：移动越过阈值后，即使回到原位也不再当成点击 ----
-const drag = {
+const drag: any = {
   active: false,
   pointerId: null,
   startX: 0,
@@ -410,7 +410,7 @@ function onPointerUp(e) {
   const dx = drag.dx;
   const dy = drag.dy;
   const dt = Math.max(1, Date.now() - drag.startTime);
-  const bounds = gestureEl.value.getBoundingClientRect();
+  const bounds = gestureEl.value!.getBoundingClientRect();
   const result = classifyReaderGesture({ dx, dy, duration: dt, maxDistance: drag.maxDistance, width: bounds.width, x: e.clientX - bounds.left });
   const el = activeStageEl();
 
@@ -447,7 +447,7 @@ onMounted(() => {
     applyReaderGeometry();
     if (!isManga.value) reader.handleViewportChange();
   });
-  if (pageStage.value) stageResizeObserver.observe(pageStage.value);
+  if (pageStage.value) stageResizeObserver!.observe(pageStage.value);
   window.addEventListener('blur', onPointerCancel);
   reader.renderFn = renderReaderViewport;
   watch(

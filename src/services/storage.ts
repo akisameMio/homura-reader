@@ -42,18 +42,18 @@ export const HomuraStore = (() => {
   const STORE_PROGRESS = 'progress';
   const STORE_COLLECTIONS = 'collections';
   const NATIVE_DIRTY_KEY = 'homura-native-metadata-dirty';
-  let dbPromise = null;
+  let dbPromise: Promise<IDBDatabase> | null = null;
   let disabled = false;
-  let nativeSnapshot = null;
-  let nativeSnapshotPromise = null;
+  let nativeSnapshot: any = null;
+  let nativeSnapshotPromise: Promise<any> | null = null;
   let nativeWriteQueue = Promise.resolve();
   let pendingNativeWrites = 0;
   let nativeDirtyMemory = false;
   let nativeMirrorFailed = false;
 
-  function openDb() {
+  function openDb(): Promise<IDBDatabase> {
     if (dbPromise) return dbPromise;
-    dbPromise = new Promise((resolve, reject) => {
+    dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
       if (!window.indexedDB) {
         reject(new Error('IndexedDB 不可用'));
         return;
@@ -85,7 +85,7 @@ export const HomuraStore = (() => {
       console.warn('[HomuraStore] ' + err.message);
       throw err;
     });
-    return dbPromise;
+    return dbPromise!;
   }
 
   function run(storeName, mode, action) {

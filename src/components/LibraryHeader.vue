@@ -200,9 +200,9 @@ const ui = useUiStore();
 const { isCompact } = useViewport();
 
 const menu = ref(null);
-const countBadgeRef = shallowRef(null);
-let previousBadgeLeft = null;
-let badgeAnimation = null;
+const countBadgeRef = shallowRef<HTMLElement | null>(null);
+let previousBadgeLeft: number | null = null;
+let badgeAnimation: Animation | null = null;
 
 // 标题变化前记录徽章位置；新标题进场时用 FLIP 补间，制造被文字推动的效果。
 watch(() => props.title, () => {

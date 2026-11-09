@@ -39,39 +39,39 @@ const NOVEL_PAGINATION_SLICE_MS = 6;
 
 export const useReaderStore = defineStore('reader', () => {
   const settings = useSettingsStore();
-  const currentBook = shallowRef(null);
+  const currentBook = shallowRef<any>(null);
   const shelf = useShelfStore();
   const openingBook = ref(false);
   const openError = ref('');
-  const readingCollectionId = ref(null);
-  const collectionOrderIds = shallowRef([]);
+  const readingCollectionId = ref<string | null>(null);
+  const collectionOrderIds = shallowRef<any[]>([]);
   const webtoonBounds = shallowRef({ atStart: true, atEnd: false });
   let openRequestToken = 0;
   const currentIndex = ref(0);
-  const activePages = shallowRef([]);
+  const activePages = shallowRef<any[]>([]);
   const renderToken = ref(0);
-  const webtoonObserver = shallowRef(null);
+  const webtoonObserver = shallowRef<any>(null);
   const lastWheelTurnTime = ref(0);
 
   // Double-Buffer State for 60fps / 120fps Hardware-Accelerated Page Turning
   const currentStageModeKey = ref('');
   const activeBufferSlot = ref(0); // 0 = Buffer A, 1 = Buffer B
-  const activeTransitionAnims = shallowRef([]);
-  const preloadTimer = ref(null);
-  const resizeTimer = ref(null);
+  const activeTransitionAnims = shallowRef<any[]>([]);
+  const preloadTimer = ref<any>(null);
+  const resizeTimer = ref<any>(null);
   let fontPaginationTimer: ReturnType<typeof setTimeout> | 0 = 0;
   // 长篇小说在后台按章节增量补页；补页期间不把当前页判定成全书末页。
   const paginationPending = ref(false);
-  let novelPaginationJob = null;
+  let novelPaginationJob: any = null;
   // 已测出的分页尺寸；阅读器刚挂载时的 ResizeObserver 不应重复跑同一套分页。
   let activeNovelPaginationKey = '';
   // App.vue 的 #novelPaginationMeasurer 隐藏 div，供智能分页实测 scrollHeight
-  const measurerEl = shallowRef(null);
+  const measurerEl = shallowRef<any>(null);
 
   // 组件挂载时注册的渲染 / 滚动入口（PaginatedView / WebtoonView）
-  const renderFn = shallowRef(null);
-  const webtoonScrollBy = shallowRef(null);
-  const webtoonScrollTo = shallowRef(null);
+  const renderFn = shallowRef<any>(null);
+  const webtoonScrollBy = shallowRef<any>(null);
+  const webtoonScrollTo = shallowRef<any>(null);
 
   // 底栏页码与滑条位置由渲染函数回写，BottomBar 响应式读取
   const pageIndicator = ref('1 / 1');
@@ -92,7 +92,7 @@ export const useReaderStore = defineStore('reader', () => {
     const collection = currentCollection.value;
     if (!collection) return [];
     const books = shelf.booksInCollection(collection.id);
-    return collectionReadingOrder(books, readingCollectionId.value === collection.id ? collectionOrderIds.value : []);
+    return collectionReadingOrder(books, (readingCollectionId.value === collection.id ? collectionOrderIds.value : []) as never[]);
   });
   const previousCollectionBook = computed(() => adjacentCollectionBook(collectionBooks.value, currentBook.value?.id, -1));
   const nextCollectionBook = computed(() => adjacentCollectionBook(collectionBooks.value, currentBook.value?.id, 1));
@@ -260,7 +260,7 @@ export const useReaderStore = defineStore('reader', () => {
 
   function findAnchorIndex(pages, anchor) {
     if (!anchor) return -1;
-    const indexes = [];
+    const indexes: any[] = [];
     for (let i = 0; i < pages.length; i++) {
       if (pages[i].chapterIndex !== anchor.chapterIndex) continue;
       if (!pages[i].provisional) indexes.push(i);
@@ -272,7 +272,7 @@ export const useReaderStore = defineStore('reader', () => {
     return indexes[Math.round(ratio * (indexes.length - 1))];
   }
 
-  function planNovelPages(book, layout, anchorOverride = undefined) {
+  function planNovelPages(book, layout, anchorOverride: any = undefined) {
     cancelNovelPagination();
     const key = getNovelPaginationKey(layout);
     if (!shouldUseIncrementalNovelPagination(book, layout)) {
@@ -290,7 +290,7 @@ export const useReaderStore = defineStore('reader', () => {
     paginator.paginateChapter(targetChapter);
     const pages = paginator.buildPages({ provisional: true });
     const restoredIndex = findAnchorIndex(pages, { chapterIndex: targetChapter, ratio: anchor?.ratio ?? 0 });
-    const order = [];
+    const order: any[] = [];
     for (let distance = 1; distance < chapters.length; distance++) {
       if (targetChapter + distance < chapters.length) order.push(targetChapter + distance);
       if (targetChapter - distance >= 0) order.push(targetChapter - distance);
@@ -308,7 +308,7 @@ export const useReaderStore = defineStore('reader', () => {
   function updatePendingPageIndicator(pages) {
     if (!pages.length || layoutConfig.direction === 'vertical') return;
     const bounds = spreadBounds(currentIndex.value, pages.length, effectiveDouble.value, layoutConfig.coverOffset);
-    const visible = [];
+    const visible: any[] = [];
     for (let i = bounds.start; i <= bounds.end; i++) {
       if (pages[i]) visible.push(pages[i].pageNumber);
     }
@@ -379,7 +379,7 @@ export const useReaderStore = defineStore('reader', () => {
   }
 
   async function openBook(id: string, options: { preserveCollectionOrder?: boolean; position?: 'start' | 'end' | string; finishCurrent?: boolean; [key: string]: any } = {}) {
-    const book = shelf.library.find(b => b.id === id);
+    const book = shelf.library.find((b: any) => b.id === id);
     if (!book) return false;
     const previousBook = currentBook.value;
     const token = ++openRequestToken;
@@ -456,7 +456,7 @@ export const useReaderStore = defineStore('reader', () => {
       if (previousBook && previousBook.id !== id) releaseBookPageUrls(previousBook);
       requestRender('none');
       return true;
-    } catch (err) {
+    } catch (err: any) {
       if (token === openRequestToken) {
         openError.value = `无法打开《${book.title}》：${err.message || '请检查本地存档'}`;
         console.warn('[HOMURA] 打开书本失败', err);

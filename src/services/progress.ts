@@ -9,7 +9,7 @@
 import { HomuraStore } from './storage.ts';
 
 const SAVE_DEBOUNCE_MS = 350;
-let saveTimer = null;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
 function makeRecord(reader) {
   const book = reader.currentBook;
@@ -80,7 +80,7 @@ export function applyRestoredProgress(book, activePages, progressMap) {
 
 export function scheduleProgressSave(reader, shelf) {
   if (!reader.currentBook) return;
-  clearTimeout(saveTimer);
+  if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveTimer = null;
     writeCurrentProgress(reader, shelf);
@@ -88,7 +88,7 @@ export function scheduleProgressSave(reader, shelf) {
 }
 
 export function flushProgress(reader, shelf) {
-  clearTimeout(saveTimer);
+  if (saveTimer) clearTimeout(saveTimer);
   saveTimer = null;
   return writeCurrentProgress(reader, shelf);
 }

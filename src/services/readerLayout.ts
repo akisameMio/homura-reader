@@ -72,7 +72,7 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 export function resolveFontStack(value) {
   const match = READER_FONT_OPTIONS.find((option) => option.value === resolveFontValue(value));
-  return (match || READER_FONT_OPTIONS.find((option) => option.value === 'song')).stack;
+  return (match || READER_FONT_OPTIONS.find((option) => option.value === 'song'))!.stack;
 }
 
 export function resolveLineHeight(value) {
@@ -101,9 +101,9 @@ interface ReaderLayoutPrefs {
 export function resolveReaderMetrics({ width, height, layout = {}, compact = false }: { width: number | string; height: number | string; layout?: ReaderLayoutPrefs; compact?: boolean }) {
   const safeWidth = Math.max(0, Number(width) || 0);
   const safeHeight = Math.max(0, Number(height) || 0);
-  const marginKey = READER_MARGIN_OPTIONS.some((option) => option.value === layout.pageMargin)
+  const marginKey = (READER_MARGIN_OPTIONS.some((option) => option.value === layout.pageMargin)
     ? layout.pageMargin
-    : 'normal';
+    : 'normal') as 'narrow' | 'normal' | 'wide';
 
   const padX = compact
     ? COMPACT_PAD[marginKey]

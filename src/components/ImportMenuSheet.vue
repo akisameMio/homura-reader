@@ -55,8 +55,8 @@ const props = defineProps({
 });
 const emit = defineEmits(['update:open', 'create-collection', 'pick-files', 'pick-folder']);
 
-const dialogRef = shallowRef(null);
-const firstItemRef = shallowRef(null);
+const dialogRef = shallowRef<HTMLDialogElement | null>(null);
+const firstItemRef = shallowRef<HTMLElement | null>(null);
 
 watch(
   () => props.open,
