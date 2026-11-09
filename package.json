@@ -4,7 +4,7 @@
   "private": true,
   "description": "HOMURA — ACGN GO 本地漫画与轻小说阅读器",
   "scripts": {
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "check:dark-glow": "node scripts/check-dark-glow.mjs",
     "tauri": "tauri",
     "icons:generate": "node scripts/generate-icons.mjs",
@@ -16,7 +16,8 @@
     "android:init": "tauri android init && npm run android:sync-icons",
     "android:dev": "tauri android dev",
     "android:build": "tauri android build --target aarch64 --apk",
-    "android:build:debug": "tauri android build --debug --target aarch64 --apk"
+    "android:build:debug": "tauri android build --debug --target aarch64 --apk",
+    "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
     "@tauri-apps/plugin-fs": "^2.7.1",
@@ -30,11 +31,14 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.9.0",
+    "@types/node": "^26.6.6",
     "@vitejs/plugin-vue": "^5.2.4",
     "autoprefixer": "^10.6.2",
     "jsdom": "^26.1.0",
     "postcss": "^8.5.32",
     "tailwindcss": "^3.4.19",
-    "vite": "^6.3.5"
+    "typescript": "^6.0.3",
+    "vite": "^6.3.5",
+    "vue-tsc": "^3.3.14"
   }
 }
