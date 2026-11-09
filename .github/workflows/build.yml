@@ -78,6 +78,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: ${{ matrix.args }}
+          # tauri-action 在有 tagName 时默认会把配好的草稿 Release 直接发布出去（draft 会被忽略），
+          # 而要它「只传产物、不发布」必须显式给 releaseId；这里指定空字符串表示不指定 release，
+          # 让动作返回它实际创建/命中的草稿 Release ID，后续 Android 的 gh release upload 才找得到对象。
+          releaseId: ''
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: 'HOMURA v__VERSION__'
           releaseBody: ${{ steps.notes.outputs.body }}
@@ -285,4 +289,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
+          # 找不到对应 tag 的 Release 直接报错退出：之前 gh 找不到对象时会静默成功，
+          # 导致 APK 没被挂上去而整条流水线仍是绿的。
+          if ! gh release view "${GITHUB_REF_NAME}" > /dev/null 2>&1; then
+            echo "::error::draft release for ${GITHUB_REF_NAME} not found, cannot attach APK"
+            exit 1
+          fi
           gh release upload "${GITHUB_REF_NAME}" "$APK_PATH" --clobber
