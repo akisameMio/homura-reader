@@ -64,7 +64,7 @@ const COMPACT_PAD = { narrow: 16, normal: 22, wide: 30 };
 
 const FOLIO_HEIGHT = 24;
 const TOP_CHROME = { compact: 104, desktop: 96 };
-const BOTTOM_CHROME = { compact: 112, desktop: 96 };
+const BOTTOM_CHROME = { compact: 72, desktop: 56 };
 const DOUBLE_PAGE_MAX = 540;
 const SINGLE_PAGE_MAX = 640;
 

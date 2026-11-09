@@ -238,104 +238,6 @@
       background: color-mix(in oklab, var(--md-primary) 10%, transparent);
     }
 
-    /* 底部进度条：不占满整行，居中悬浮在纸面之下，两侧露出手势区 */
-    .md-reader-bottombar {
-      position: absolute;
-      z-index: 30;
-      right: 0;
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
-      left: 0;
-      display: flex;
-      align-items: center;
-      gap: 2px;
-      width: min(560px, calc(100% - 28px));
-      margin-inline: auto;
-      padding: 4px 6px;
-      border-radius: 28px;
-      color: var(--md-reader-ink);
-      background: var(--md-surface-high);
-      box-shadow:
-        0 1px 2px 0 color-mix(in oklab, var(--md-shadow-color-soft) 24%, transparent),
-        0 2px 6px 2px color-mix(in oklab, var(--md-shadow-color-soft) 14%, transparent);
-    }
-    .md-reader-scrub {
-      display: flex;
-      flex: 1 1 auto;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 0;
-      padding: 6px 4px 2px;
-    }
-    .md-reader-scrub-meta {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 0 2px;
-      font-family: var(--font-mono, ui-monospace, monospace);
-      font-size: 10.5px;
-      font-variant-numeric: tabular-nums;
-      letter-spacing: 0.06em;
-      line-height: 1.2;
-      color: var(--md-reader-ink-soft);
-    }
-    .md-reader-scrub-pages {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .md-reader-scrub-percent {
-      flex-shrink: 0;
-      font-weight: 500;
-      color: var(--md-reader-ink);
-    }
-    /* 进度条：纸面上不用 16px 胶囊滑轨，收成 2px 细线 + 9px 圆点，避免压过正文 */
-    .md-reader-scrub .md-range {
-      height: 28px;
-    }
-    .md-reader-scrub .md-range::-webkit-slider-runnable-track {
-      height: 2px;
-      border-radius: 999px;
-      background:
-        linear-gradient(
-          var(--md-range-direction),
-          var(--md-primary) 0,
-          var(--md-primary) var(--md-range-progress),
-          color-mix(in oklab, var(--md-reader-ink) 16%, transparent) var(--md-range-progress),
-          color-mix(in oklab, var(--md-reader-ink) 16%, transparent) 100%
-        );
-    }
-    .md-reader-scrub .md-range::-webkit-slider-thumb {
-      width: 9px;
-      height: 9px;
-      margin-top: -3.5px;
-      border-radius: 50%;
-      background: var(--md-primary);
-    }
-    .md-reader-scrub .md-range:focus-visible::-webkit-slider-thumb {
-      box-shadow:
-        0 0 0 2px var(--md-reader-paper),
-        0 0 0 4px color-mix(in oklab, var(--md-primary) 60%, transparent);
-    }
-    .md-reader-scrub .md-range::-moz-range-track {
-      height: 2px;
-      border-radius: 999px;
-      background:
-        linear-gradient(
-          var(--md-range-direction),
-          var(--md-primary) 0,
-          var(--md-primary) var(--md-range-progress),
-          color-mix(in oklab, var(--md-reader-ink) 16%, transparent) var(--md-range-progress),
-          color-mix(in oklab, var(--md-reader-ink) 16%, transparent) 100%
-        );
-    }
-    .md-reader-scrub .md-range::-moz-range-thumb {
-      width: 9px;
-      height: 9px;
-      border: 0;
-      border-radius: 50%;
-      background: var(--md-primary);
-    }
     /* 左右翻页箭头：鼠标落在纸面上时浮现，离开淡出；触屏保留手势，不占画面 */
     .reader-stage-shell {
       position: relative;
@@ -427,11 +329,6 @@
         .md-reader-topbar-title {
           display: none;
         }
-      }
-      .md-reader-bottombar {
-        width: calc(100% - 28px);
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
-        border-radius: 24px;
       }
     }
 

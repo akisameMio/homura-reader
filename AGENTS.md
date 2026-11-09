@@ -65,7 +65,7 @@ src/
       tokens.css           MD3 色彩 / 间距 / 圆角 / 阴影 token，末尾是 legacy 别名映射
       base.css             根布局、平台标记、手机底栏根节点、阅读器返回遮罩与边缘
       library.css          书架、书库卡、网格、FAB、拖拽 ghost、手机底部胶囊
-      overlays.css         阅读器顶栏 / 底栏 / 抽屉 / 菜单 / 弹层
+      overlays.css         阅读器顶栏 / 抽屉 / 菜单 / 弹层
       controls.css         按钮、开关、分段控件、44px 命中区
       canvas.css           阅读表面、翻页舞台、surface-reveal 主题切换遮罩
       legacy.css           历史遗留组件样式（.uiverse-btn 等）
@@ -159,7 +159,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
   | 层 | z-index | 位置 |
   | --- | --- | --- |
   | sticky 顶栏 | 20 | `LibraryHeader.vue`、`SettingsView.vue` |
-  | 浮层菜单 / 阅读器顶底栏 / 阅读手势层 / 浮动侧栏 | 30 | `overlays.css:142`、`PaginatedView.vue` 手势层（必须高于翻页舞台的 20） |
+  | 浮层菜单 / 阅读器顶栏 / 阅读手势层 / 浮动侧栏 | 30 | `overlays.css:142`、`PaginatedView.vue` 手势层（必须高于翻页舞台的 20） |
   | 阅读器返回边缘 | 31 | `.reader-back-edge` |
   | 阅读状态条 | 35 | `.md-reader-status` |
   | 手机底部导航 / 遮罩 / FAB / 灵动胶囊 | 40 | `#homura-mobile-nav-root`、`.md-scrim`、`.md-fab-pos` |

@@ -284,8 +284,9 @@ test('增量测量分页保持段落顺序且不丢正文', () => {
       return node.textContent;
     });
 
-    assert.deepEqual(texts, ['甲', '乙丙', '丁戊']);
-    assert.deepEqual(pages.map(page => page.pageNumber), [1, 2, 3]);
+    // 每屏 3 块（章首页 + 两个段落）：BOTTOM_CHROME.compact = 72 时可用高度 510
+    assert.deepEqual(texts, ['甲乙', '丙丁戊']);
+    assert.deepEqual(pages.map(page => page.pageNumber), [1, 2]);
     // 章首页只注入到本章第一页，序号取标题里的「第一章」而不是书里的次序
     assert.match(pages[0].html, /reader-chapter/);
     assert.match(pages[0].html, /reader-chapter-num[^>]*>1</);
@@ -322,11 +323,11 @@ test('增量分页先测当前章，其余章用整章占位，补齐后与同�
     paginator.paginateChapter(1);
     const partial = paginator.buildPages({ provisional: true });
 
-    assert.deepEqual(partial.map(page => page.chapterIndex), [0, 1, 1, 2]);
+    assert.deepEqual(partial.map(page => page.chapterIndex), [0, 1, 2]);
     assert.equal(partial[0].provisional, true);
     assert.equal(partial[1].provisional, undefined);
-    assert.equal(partial[3].provisional, true);
-    assert.deepEqual(partial.map(page => page.pageNumber), [1, 2, 3, 4]);
+    assert.equal(partial[2].provisional, true);
+    assert.deepEqual(partial.map(page => page.pageNumber), [1, 2, 3]);
 
     paginator.paginateChapter(0);
     paginator.paginateChapter(2);
@@ -339,8 +340,8 @@ test('增量分页先测当前章，其余章用整章占位，补齐后与同�
       return node.textContent;
     });
 
-    assert.deepEqual(texts, ['甲', '乙丙', '丁', '戊', '己', '庚辛']);
-    assert.deepEqual(complete.map(page => page.pageNumber), [1, 2, 3, 4, 5, 6]);
+    assert.deepEqual(texts, ['甲乙', '丙', '丁戊', '己庚', '辛']);
+    assert.deepEqual(complete.map(page => page.pageNumber), [1, 2, 3, 4, 5]);
     assert.ok(complete.every(page => page.provisional === undefined));
     assert.equal(measurer.innerHTML, '');
   } finally {

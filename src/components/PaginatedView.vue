@@ -46,13 +46,22 @@
       <template v-else>
         <div class="reader-spread" :class="{ 'is-single': slotVMs[slot] && slotVMs[slot].mode === 'single' }">
           <template v-if="slotVMs[slot] && slotVMs[slot].mode === 'double'">
-            <NovelCard :page="slotVMs[slot].left!" />
-            <NovelCard :page="slotVMs[slot].right!" />
+            <NovelCard :page="slotVMs[slot].left!" :total="reader.activePages.length" />
+            <NovelCard :page="slotVMs[slot].right!" :total="reader.activePages.length" />
           </template>
-          <NovelCard v-else-if="slotVMs[slot] && slotVMs[slot].single" :page="slotVMs[slot].single!" />
+          <NovelCard
+            v-else-if="slotVMs[slot] && slotVMs[slot].single"
+            :page="slotVMs[slot].single!"
+            :total="reader.activePages.length"
+          />
         </div>
       </template>
     </div>
+
+    <!-- 页脚右侧：本章剩余页数，只在鼠标落在纸面或工具栏可见时出现 -->
+    <p v-if="!isManga && chapterRemaining > 0" class="reader-chapter-left" aria-hidden="true">
+      本章还剩 {{ chapterRemaining }} 页
+    </p>
   </div>
 </template>
 
@@ -98,6 +107,21 @@ const pageStage = shallowRef<HTMLElement | null>(null);
 let stageResizeObserver: ResizeObserver | null = null;
 
 const isManga = computed(() => reader.currentBook && reader.currentBook.type === 'manga');
+
+// 当前章节还剩几页（不含正在看的这一屏）：页脚右下角用，翻页后自然跟随。
+const chapterRemaining = computed(() => {
+  const pages = reader.activePages;
+  if (!pages.length) return 0;
+  const start = Math.min(reader.currentIndex, pages.length - 1);
+  const chapter = pages[start]?.chapterIndex;
+  let last = start;
+  while (last + 1 < pages.length && pages[last + 1]?.chapterIndex === chapter) last += 1;
+  const visible = reader.getSpreadPair(start);
+  const end = visible.reduce((max, page) => (page && page.chapterIndex === chapter
+    ? Math.max(max, pages.indexOf(page))
+    : max), start);
+  return Math.max(0, last - end);
+});
 
 // 纸面几何：变量挂在舞台上，两个 buffer 槽位与纸页共同继承。
 // 不经过响应式 :style 绑定，避免翻页动画进行中被重渲染改写 transform。

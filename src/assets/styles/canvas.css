@@ -172,3 +172,51 @@
       color: var(--md-reader-ink-faint, var(--md-on-surface-variant));
       user-select: none;
     }
+    /* 页脚两种形态：静止只留页码，鼠标落在纸面或工具栏可见时补上 /总页 */
+    .reader-folio-full {
+      display: none;
+    }
+    .reader-stage-shell:hover .reader-folio-plain,
+    .reader-stage-shell.is-chrome .reader-folio-plain {
+      display: none;
+    }
+    .reader-stage-shell:hover .reader-folio-full,
+    .reader-stage-shell.is-chrome .reader-folio-full {
+      display: inline;
+    }
+    .reader-stage-shell:hover .reader-folio,
+    .reader-stage-shell.is-chrome .reader-folio {
+      letter-spacing: 0.08em;
+    }
+
+    /* 纸面右下角：本章还剩多少页，跟页码一起只在有事件时出现 */
+    .reader-chapter-left {
+      position: absolute;
+      right: var(--reader-pad-x, 120px);
+      bottom: calc(var(--reader-pad-bottom, 76px) - 24px);
+      /* 纸页底色由 .reader-spread 铺满整个舞台，页脚提示要压在它和翻页层之上 */
+      z-index: 25;
+      margin: 0;
+      font-family: var(--font-sans, system-ui, sans-serif);
+      font-size: 11px;
+      letter-spacing: 0.02em;
+      color: var(--md-reader-ink-faint, var(--md-on-surface-variant));
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 200ms var(--md-ease-standard, ease);
+    }
+    .reader-stage-shell:hover .reader-chapter-left,
+    .reader-stage-shell.is-chrome .reader-chapter-left {
+      opacity: 1;
+    }
+    @media (max-width: 899px) {
+      .reader-chapter-left {
+        right: var(--reader-pad-x, 22px);
+        bottom: calc(var(--reader-pad-bottom, 104px) - 22px);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .reader-chapter-left {
+        transition: none;
+      }
+    }

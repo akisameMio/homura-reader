@@ -23,7 +23,10 @@
     >
       <template v-if="reader.currentBook">
         <!-- 纸面铺满整块画布：设置抽屉浮在纸面上，不再挤压正文重排 -->
-        <div class="reader-stage-shell" :class="{ 'is-obscured': ui.readerDrawerOpen }">
+        <div
+          class="reader-stage-shell"
+          :class="{ 'is-obscured': ui.readerDrawerOpen, 'is-chrome': ui.readerChromeVisible }"
+        >
           <WebtoonView
             v-if="reader.layoutConfig.direction === 'vertical'"
             :key="'webtoon-' + reader.currentBook?.id"
@@ -69,17 +72,6 @@
         />
       </Transition>
 
-      <Transition
-        enter-active-class="md-reader-bar-enter-active"
-        enter-from-class="translate-y-2 opacity-0"
-        enter-to-class="translate-y-0 opacity-100"
-        leave-active-class="md-reader-bar-leave-active"
-        leave-from-class="translate-y-0 opacity-100"
-        leave-to-class="translate-y-2 opacity-0"
-      >
-        <ReaderBottomBar v-if="ui.readerChromeVisible" />
-      </Transition>
-
       <ReaderTocDrawer />
       <ReaderSettingsDrawer />
       <ReaderCollectionDrawer />
@@ -123,9 +115,9 @@ import { useUiStore } from '../stores/ui.ts';
 import { useViewport } from '../composables/useViewport.ts';
 import { useShortcuts } from '../composables/useShortcuts.ts';
 import { useReaderBackDismiss } from '../composables/useReaderBackDismiss.ts';
+import { useVolumeKeys } from '../composables/useVolumeKeys.ts';
 import MdIcon from './MdIcon.vue';
 import ReaderTopBar from './ReaderTopBar.vue';
-import ReaderBottomBar from './ReaderBottomBar.vue';
 import ReaderTocDrawer from './ReaderTocDrawer.vue';
 import ReaderSettingsDrawer from './ReaderSettingsDrawer.vue';
 import ReaderCollectionDrawer from './ReaderCollectionDrawer.vue';
@@ -276,4 +268,5 @@ onBeforeUnmount(() => {
 });
 
 useShortcuts(reader, viewportRef, dismissWithPredictiveBack);
+useVolumeKeys(reader, ui);
 </script>

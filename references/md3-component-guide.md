@@ -424,7 +424,7 @@
 | 需要抄的结构 | 参考文件 |
 | --- | --- |
 | 图标按钮、浮动顶栏 | `src/components/ReaderTopBar.vue` |
-| 进度滑条、浮动底栏 | `src/components/ReaderBottomBar.vue` |
+| 页脚页码、本章剩余提示 | `src/components/NovelCard.vue` |
 | 抽屉外壳、拖拽、底部操作 | `src/components/ReaderSettingsDrawer.vue` |
 | 抽屉标题与手机拖拽条 | `src/components/ReaderDrawerHeader.vue` |
 | 章节列表与当前项 | `src/components/ReaderTocDrawer.vue` |
