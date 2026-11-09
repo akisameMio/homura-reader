@@ -7,14 +7,14 @@
    ========================================================================== */
 
 import { readFile } from '@tauri-apps/plugin-fs';
-import { getNativeFile } from './nativeStorage.js';
+import { getNativeFile } from './nativeStorage.ts';
 import {
   NativeErrorCode,
   canUseNativeBridge,
   invokeNativeCommand,
   normalizeNativeError
-} from './nativeRuntime.js';
-import { isAndroid } from './platform.js';
+} from './nativeRuntime.ts';
+import { isAndroid } from './platform.ts';
 
 const IMPORT_FILTER_EXTENSIONS = [
   'epub',
@@ -50,7 +50,7 @@ const MIME_BY_EXTENSION = {
   bmp: 'image/bmp'
 };
 
-const NATIVE_IMPORT_FALLBACK_CODES = new Set([
+const NATIVE_IMPORT_FALLBACK_CODES: Set<string> = new Set([
   NativeErrorCode.UNAVAILABLE,
   NativeErrorCode.UNSUPPORTED,
   NativeErrorCode.DISABLED,
@@ -225,7 +225,7 @@ export async function stageNativeImportPath(bookId, sourcePath) {
 }
 
 export async function stageNativeImportUri(bookId, uri, name = '') {
-  const args = { bookId, uri };
+  const args: Record<string, any> = { bookId, uri };
   if (name) args.name = name;
   return invokeNativeCommand('android-archive', 'stageImportUri', args, {
     feature: 'native-import'

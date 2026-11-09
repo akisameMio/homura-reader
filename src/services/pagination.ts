@@ -5,10 +5,10 @@
    智能分页的测量器 DOM 由调用方注入（App.vue 的 #novelPaginationMeasurer）。
    ========================================================================== */
 
-import { escapeHtml } from './utils.js';
-import { resolveProseStyle, resolveReaderMetrics } from './readerLayout.js';
-import { hasArchiveSource, readArchiveBlobByPath, readArchivePageBlob } from './archiveAccess.js';
-import { ensureNativePageAsset } from './nativeArchive.js';
+import { escapeHtml } from './utils.ts';
+import { resolveProseStyle, resolveReaderMetrics } from './readerLayout.ts';
+import { hasArchiveSource, readArchiveBlobByPath, readArchivePageBlob } from './archiveAccess.ts';
+import { ensureNativePageAsset } from './nativeArchive.ts';
 
 // asset 协议不可用（旧包 / 配置缺失）时整本书回退 Blob，避免每页都试一次
 let nativeAssetUsable = true;
@@ -132,7 +132,7 @@ export function releaseBookPageUrls(book) {
   (book.pageItems || []).forEach(item => releasePageItemUrl(book, item));
 }
 
-export async function decodeImgIntoElement(imgEl, url, pageObj, options = {}) {
+export async function decodeImgIntoElement(imgEl: HTMLImageElement, url: string, pageObj: any, options: { preserveSrcOnEmpty?: boolean; [key: string]: any } = {}) {
   if (!imgEl) return false;
   if (!url) {
     // 复用的翻页槽位需要清掉旧页；条漫的 img 是每页独占的，
@@ -179,7 +179,7 @@ export async function decodeImgIntoElement(imgEl, url, pageObj, options = {}) {
 }
 
 // 统一入口：asset 失败时自动回退到 Blob 通道，调用方不用关心平台差异
-export async function decodePageImage(imgEl, pageObj, options = {}) {
+export async function decodePageImage(imgEl: HTMLImageElement, pageObj: any, options: Record<string, any> = {}) {
   const url = await ensurePageUrlLoaded(pageObj);
   if (!url) return false;
   if (await decodeImgIntoElement(imgEl, url, pageObj, options)) return true;
@@ -441,7 +441,7 @@ export function splitLongParagraph(html, measurer, maxHeight) {
     if (to.type === 'text') range.setEnd(to.node, to.offset);
     else if (to.type === 'before') range.setEndBefore(to.node);
     else range.setEndAfter(to.node);
-    const paragraph = source.cloneNode(false);
+    const paragraph = source.cloneNode(false) as Element;
     paragraph.append(range.cloneContents());
     return paragraph.outerHTML;
   }
@@ -486,7 +486,7 @@ export function collectNovelBlocks(html) {
   wrapper.innerHTML = html || '';
   const blocks = [];
 
-  function hasDirectText(node) {
+  function hasDirectText(node: Node) {
     return Array.from(node.childNodes).some(child => (
       child.nodeType === Node.TEXT_NODE && child.textContent.trim()
     ));

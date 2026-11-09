@@ -94,11 +94,11 @@ export async function openPdfDocument(file) {
 export function createPdfPageItems(pdfDoc, pageCount) {
   const items = [];
   for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
-    const item = { pdfPageIndex: pageIndex };
+    const item: any = { pdfPageIndex: pageIndex };
     item.render = async () => {
       try {
         const blob = await renderPageBlob(pdfDoc, pageIndex, RENDER_TARGET_WIDTH);
-        const url = URL.createObjectURL(blob);
+        const url = URL.createObjectURL(blob as Blob);
         rememberRenderedUrl(item, url);
         return url;
       } catch (err) {

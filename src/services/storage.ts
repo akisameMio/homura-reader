@@ -14,9 +14,9 @@
    浏览器禁用 IndexedDB（例如直接 file:// 打开）时自动降级为纯内存模式。
    ========================================================================== */
 
-import { removeBookDir, clearAll } from './opfs.js';
-import { clearNativeSources, removeNativeBookDir } from './nativeStorage.js';
-import { disableNativeFeature } from './nativeRuntime.js';
+import { removeBookDir, clearAll } from './opfs.ts';
+import { clearNativeSources, removeNativeBookDir } from './nativeStorage.ts';
+import { disableNativeFeature } from './nativeRuntime.ts';
 import {
   canUseNativeMetadata,
   clearNativeMetadata,
@@ -28,7 +28,7 @@ import {
   saveNativeProgress,
   upsertNativeBook,
   upsertNativeBooks
-} from './nativeMetadata.js';
+} from './nativeMetadata.ts';
 
 const nowMs = typeof performance !== 'undefined' && typeof performance.now === 'function'
   ? () => performance.now()
@@ -102,7 +102,7 @@ export const HomuraStore = (() => {
   // 书籍元数据与源文件在同一次事务里写入，保证不会出现「有书没源」的孤儿记录
   function idbSaveBook(meta, source) {
     if (disabled) return Promise.reject(new Error('IndexedDB 不可用'));
-    return openDb().then(db => new Promise((resolve, reject) => {
+    return openDb().then(db => new Promise<void>((resolve, reject) => {
       const tx = db.transaction([STORE_BOOKS, STORE_SOURCES], 'readwrite');
       tx.objectStore(STORE_BOOKS).put(meta);
       tx.objectStore(STORE_SOURCES).put(source);
@@ -115,7 +115,7 @@ export const HomuraStore = (() => {
   // 批量导入时把整批书目与来源放进同一次事务，避免每本一次提交。
   function idbSaveBooks(entries) {
     if (disabled) return Promise.reject(new Error('IndexedDB 不可用'));
-    return openDb().then(db => new Promise((resolve, reject) => {
+    return openDb().then(db => new Promise<void>((resolve, reject) => {
       const tx = db.transaction([STORE_BOOKS, STORE_SOURCES], 'readwrite');
       const books = tx.objectStore(STORE_BOOKS);
       const sources = tx.objectStore(STORE_SOURCES);
@@ -139,7 +139,7 @@ export const HomuraStore = (() => {
 
   function idbUpdateBookCover(id, customCoverBlob) {
     if (disabled) return Promise.reject(new Error('本地存储不可用，封面未保存'));
-    return openDb().then(db => new Promise((resolve, reject) => {
+    return openDb().then(db => new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_BOOKS, 'readwrite');
       const store = tx.objectStore(STORE_BOOKS);
       let found = false;
@@ -158,7 +158,7 @@ export const HomuraStore = (() => {
   // 只更新解析后可能变化的元数据，保留加入时间、收藏与自定义封面。
   function idbUpdateBookMeta(id, patch) {
     if (disabled) return Promise.reject(new Error('本地存储不可用，书本信息未保存'));
-    return openDb().then(db => new Promise((resolve, reject) => {
+    return openDb().then(db => new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_BOOKS, 'readwrite');
       const store = tx.objectStore(STORE_BOOKS);
       let found = false;
@@ -180,7 +180,7 @@ export const HomuraStore = (() => {
 
   function idbUpdateSourceManifest(id, nativePageManifest) {
     if (disabled) return Promise.reject(new Error('本地存储不可用，书页清单未保存'));
-    return openDb().then(db => new Promise((resolve, reject) => {
+    return openDb().then(db => new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_SOURCES, 'readwrite');
       const store = tx.objectStore(STORE_SOURCES);
       let found = false;
@@ -198,7 +198,7 @@ export const HomuraStore = (() => {
 
   function idbUpdateBookFavorite(id, favorite) {
     if (disabled) return Promise.reject(new Error('本地存储不可用，收藏未保存'));
-    return openDb().then(db => new Promise((resolve, reject) => {
+    return openDb().then(db => new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_BOOKS, 'readwrite');
       const store = tx.objectStore(STORE_BOOKS);
       let found = false;
@@ -221,7 +221,7 @@ export const HomuraStore = (() => {
   // 整批写入归属，移动多个书本时不会留下同时属于两个书库的中间状态。
   function idbSaveCollections(collections) {
     if (disabled) return Promise.reject(new Error('IndexedDB 不可用，书库无法保存'));
-    return openDb().then(db => new Promise((resolve, reject) => {
+    return openDb().then(db => new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_COLLECTIONS, 'readwrite');
       const store = tx.objectStore(STORE_COLLECTIONS);
       store.clear();
@@ -400,7 +400,7 @@ export const HomuraStore = (() => {
     if (written) metas.forEach(upsertCachedBook);
   }
 
-  async function saveBook(meta, source, options = {}) {
+  async function saveBook(meta: any, source: any, options: { timing?: any } = {}) {
     const timing = options.timing || null;
     markNativeDirty();
     const idbStarted = timing ? nowMs() : 0;
@@ -412,7 +412,7 @@ export const HomuraStore = (() => {
     if (timing) timing.sqliteMs += nowMs() - sqliteStarted;
   }
 
-  async function saveBooks(entries, options = {}) {
+  async function saveBooks(entries: any[], options: { timing?: any } = {}) {
     if (!entries.length) return;
     const timing = options.timing || null;
     markNativeDirty();
@@ -514,7 +514,7 @@ export const HomuraStore = (() => {
     // 先提交元数据删除，再回收原始文件；事务失败时不能留下「记录还在、源文件已删」的坏书。
     if (!disabled) {
       const db = await openDb();
-      await new Promise((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         const tx = db.transaction([STORE_BOOKS, STORE_SOURCES, STORE_PROGRESS], 'readwrite');
         tx.objectStore(STORE_BOOKS).delete(id);
         tx.objectStore(STORE_SOURCES).delete(id);
@@ -537,7 +537,7 @@ export const HomuraStore = (() => {
     // 清空也必须先完成元数据事务，再由调用方在互斥队列内回收源文件。
     if (!disabled) {
       const db = await openDb();
-      await new Promise((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         const tx = db.transaction([STORE_BOOKS, STORE_SOURCES, STORE_PROGRESS, STORE_COLLECTIONS], 'readwrite');
         tx.objectStore(STORE_BOOKS).clear();
         tx.objectStore(STORE_SOURCES).clear();

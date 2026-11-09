@@ -13,7 +13,7 @@ import {
   canUseNativeBridge,
   disableNativeFeature,
   invokeNativeCommand
-} from './nativeRuntime.js';
+} from './nativeRuntime.ts';
 
 const COVER_MAX_EDGE = 480;
 const WEBP_QUALITY = 0.84;

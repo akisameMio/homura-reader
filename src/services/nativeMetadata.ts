@@ -13,7 +13,7 @@ import {
   canUseNativeBridge,
   invokeNativeCommand,
   isNativeFeatureAvailable
-} from './nativeRuntime.js';
+} from './nativeRuntime.ts';
 
 const FEATURE = 'metadata';
 const MAX_COVER_BYTES = 24 * 1024 * 1024;

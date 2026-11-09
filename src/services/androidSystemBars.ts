@@ -5,7 +5,7 @@
    切换图标明暗，否则夜间模式会在深色底上继续显示黑色系统图标。
    ========================================================================== */
 
-import { isAndroid } from './platform.js';
+import { isAndroid } from './platform.ts';
 
 const SET_APPEARANCE_COMMAND = 'plugin:android-system-bars|setAppearance';
 let lastDark = null;

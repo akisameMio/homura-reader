@@ -6,8 +6,8 @@
    ========================================================================== */
 
 import JSZip from 'jszip';
-import { sanitizeEpubHtml } from './sanitize.js';
-import { shouldReadEpubAsManga, TEXT_CHAPTER_MIN_LENGTH } from './epubType.js';
+import { sanitizeEpubHtml } from './sanitize.ts';
+import { shouldReadEpubAsManga, TEXT_CHAPTER_MIN_LENGTH } from './epubType.ts';
 import {
   clearNativeArchiveBookCache,
   closeNativeArchive,
@@ -15,7 +15,7 @@ import {
   readNativePageBlob,
   readNativeTextBatch,
   shouldFallbackNativeArchive
-} from './nativeArchive.js';
+} from './nativeArchive.ts';
 
 const NATIVE_TEXT_BATCH_SIZE = 128;
 // 导入时只抽样 spine 与封面；采样贴近判型阈值时再回退全量解析。
@@ -150,7 +150,18 @@ export async function createJsZipEpubArchive(file) {
   };
 }
 
-export async function createNativeEpubArchive(nativePath, options = {}) {
+interface EpubParseOptions {
+  id?: string;
+  name?: string;
+  fallbackTitle?: string;
+  metadataOnly?: boolean;
+  nativePath?: string;
+  loadFallbackFile?: () => unknown | Promise<unknown>;
+  markZipPaths?: boolean;
+  [key: string]: unknown;
+}
+
+export async function createNativeEpubArchive(nativePath: string, options: EpubParseOptions = {}) {
   const archiveId = options.id;
   if (!archiveId) throw new Error('原生 EPUB 缺少书籍 ID');
 
@@ -191,7 +202,14 @@ export async function createNativeEpubArchive(nativePath, options = {}) {
       const index = entryIndexByPath.get(path);
       const entry = entryByPath.get(path);
       if (!Number.isInteger(index)) throw new Error('原生 EPUB 图片索引缺失');
-      const item = {
+      const item: {
+        nativeArchiveId: string;
+        nativeArchivePath: string;
+        nativeIndex: number;
+        url: string;
+        imageWidth?: number;
+        imageHeight?: number;
+      } = {
         nativeArchiveId: archiveId,
         nativeArchivePath: nativePath,
         nativeIndex: index,
@@ -305,7 +323,7 @@ function isImageItem(item, path = '') {
     || /\.(jpe?g|png|webp|gif|avif|bmp|svg)$/i.test(path);
 }
 
-function extractPageImages(archive, parser, rawHtml, pagePath, options = {}) {
+function extractPageImages(archive: any, parser: any, rawHtml: string, pagePath: string, options: EpubParseOptions = {}) {
   const htmlDoc = parser.parseFromString(rawHtml, 'text/html');
   const imgs = htmlDoc.querySelectorAll('img, image');
   const imagePaths = [];
@@ -345,11 +363,11 @@ function selectSampleIndices(length, limit) {
   return [...indices].sort((a, b) => a - b);
 }
 
-async function readOpfCoverPath(archive, pkg) {
+async function readOpfCoverPath(archive: any, pkg: any) {
   const candidates = [];
-  const entries = Object.values(pkg.manifest);
+  const entries = Object.values(pkg.manifest) as Array<{ properties?: string } & Record<string, unknown>>;
   const coverImage = entries.find(item => (
-    /(?:^|\s)cover-image(?:\s|$)/i.test(item.properties)
+    /(?:^|\s)cover-image(?:\s|$)/i.test(item.properties || '')
     && isImageItem(item)
   ));
   if (coverImage) candidates.push(coverImage);
@@ -611,7 +629,7 @@ async function parseEpubFull(archive, pkg, id) {
   };
 }
 
-export async function parseEpubArchive(archive, options = {}) {
+export async function parseEpubArchive(archive: any, options: EpubParseOptions = {}) {
   const id = options.id;
   if (!id) throw new Error('EPUB 解析缺少书籍 ID');
   const fallbackTitle = options.fallbackTitle || '未命名 EPUB';
@@ -620,7 +638,7 @@ export async function parseEpubArchive(archive, options = {}) {
   return parseEpubFull(archive, pkg, id);
 }
 
-export async function parseEpubNativeArchive(nativePath, options = {}) {
+export async function parseEpubNativeArchive(nativePath: string, options: EpubParseOptions = {}) {
   const id = options.id || makeEpubId();
   const fallbackTitle = epubTitleFromFileName(options.name || 'book.epub');
   try {
@@ -642,7 +660,7 @@ export async function parseEpubNativeArchive(nativePath, options = {}) {
 }
 
 // 原生环境优先从 AppData 里的原文件随机读取；允许恢复的失败再回落到 JSZip。
-export async function parseEpubFile(file, options = {}) {
+export async function parseEpubFile(file: any, options: EpubParseOptions = {}) {
   const id = options.id || makeEpubId();
   const fallbackTitle = epubTitleFromFileName(options.name || file?.name);
 

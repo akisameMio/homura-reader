@@ -15,9 +15,9 @@ import {
   bytesToBase64,
   canUseNativeBridge,
   runNativeWithFallback
-} from './nativeRuntime.js';
-import { isSafeImageUrl } from './utils.js';
-import { sanitizeElement } from './sanitize.js';
+} from './nativeRuntime.ts';
+import { isSafeImageUrl } from './utils.ts';
+import { sanitizeElement } from './sanitize.ts';
 
 const TAG_HEADINGS = 'h1,h2,h3,h4,h5,h6,font,p,div,td,th';
 
@@ -42,7 +42,8 @@ const MOBI_NATIVE_FALLBACK_CODES = [
 ];
 
 class MobiError extends Error {
-  constructor(code, message) {
+  code: string;
+  constructor(code: string, message: string) {
     super(message);
     this.name = 'MobiError';
     this.code = code;
@@ -124,14 +125,22 @@ function imageRecordAt(buf, starts, recordIndex) {
 
 // ---- EXTH 元数据 ----
 
-function readExth(buf, rec0, mobiLength) {
+interface ExthMeta {
+  coverOffset?: number;
+  cdeType?: string;
+  writingMode?: string;
+  pageProgression?: string;
+  title?: string;
+}
+
+function readExth(buf: any, rec0: number, mobiLength: number): ExthMeta {
   const base = rec0 + 16 + mobiLength;
   if (String.fromCharCode(buf[base], buf[base + 1], buf[base + 2], buf[base + 3]) !== 'EXTH') {
     return {};
   }
   const exthLength = readU32(buf, base + 4);
   const count = readU32(buf, base + 8);
-  const result = {};
+  const result: ExthMeta = {};
   let p = base + 12;
   const limit = Math.min(base + exthLength, buf.length);
   for (let i = 0; i < count && p + 8 <= limit; i++) {

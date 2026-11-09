@@ -4,9 +4,9 @@
    把导入来源写进 IndexedDB，并在重新打开应用时取回原始文件、重新解析书籍。
    ========================================================================== */
 
-import { HomuraStore } from './storage.js';
-import { canUseOPFS, isAndroid } from './platform.js';
-import { putFile, getFile, removeFile, removeBookDir } from './opfs.js';
+import { HomuraStore } from './storage.ts';
+import { canUseOPFS, isAndroid } from './platform.ts';
+import { putFile, getFile, removeFile, removeBookDir } from './opfs.ts';
 import {
   canUseNativeStorage,
   getNativeFile,
@@ -14,31 +14,31 @@ import {
   putNativeFile,
   removeNativeBookDir,
   removeNativeFile
-} from './nativeStorage.js';
-import { parseEpubFileLazy, parseTxtFile, parseMobiFileLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks } from './parsers.js';
+} from './nativeStorage.ts';
+import { parseEpubFileLazy, parseTxtFile, parseMobiFileLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks } from './parsers.ts';
 import {
   createNativeMangaManifest,
   isNativeMangaManifestValid,
   parseEpubNativeArchive
-} from './epubParser.js';
-import { createCoverThumbnail } from './coverThumb.js';
+} from './epubParser.ts';
+import { createCoverThumbnail } from './coverThumb.ts';
 import {
   canUseNativeArchive,
   ensureNativeArchiveSession,
   shouldFallbackNativeArchive
-} from './nativeArchive.js';
+} from './nativeArchive.ts';
 import {
   isAndroidContentUri,
   stageNativeImportPath,
   stageNativeImportUri
-} from './nativeImport.js';
+} from './nativeImport.ts';
 
 const nowMs = typeof performance !== 'undefined' && typeof performance.now === 'function'
   ? () => performance.now()
   : () => Date.now();
 
 export function makeFileSource(file) {
-  const source = {
+  const source: Record<string, any> = {
     kind: 'file',
     name: file.name,
     size: file.size,
@@ -58,7 +58,7 @@ export async function stageNativeFileSource(bookId, file) {
     nativeFilePath(bookId, `source/${file.name || 'source'}`),
     file
   );
-  const source = {
+  const source: Record<string, any> = {
     kind: 'file',
     name: file.name,
     size: file.size,
@@ -276,7 +276,9 @@ function createBookMeta(book) {
 }
 
 // 失败时抛错，由调用方（shelf store）统一提示
-export async function persistBook(book, source, options = {}) {
+interface PersistTiming { stageMs: number; coverMs: number; writeMs: number; [key: string]: number; }
+
+export async function persistBook(book: any, source: any, options: { timing?: PersistTiming | null; coverThumb?: unknown; [key: string]: any } = {}) {
   const timing = options.timing || null;
   // 封面解码和原文件暂存可以并行，避免导入多等一次缩略图生成。
   // 导入流水线会预先并发生成缩略图，这里直接复用结果，避免重复解码。
@@ -307,7 +309,7 @@ export async function persistBook(book, source, options = {}) {
 
 // 批量导入的提交层：一次申请持久存储、一次 IndexedDB 事务、一次 SQLite 镜像。
 // 单本暂存失败只影响该本；整批事务失败时清掉已暂存目录，由调用方逐本重试。
-export async function persistBooks(items, options = {}) {
+export async function persistBooks(items: any[], options: { timing?: PersistTiming | null; [key: string]: any } = {}) {
   const timing = options.timing || null;
   if (!items.length) return { persistence: null, saved: [], failed: [] };
 

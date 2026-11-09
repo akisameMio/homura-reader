@@ -7,13 +7,13 @@
    的普通失败可以回退 JSZip，安全限制与超限错误必须原样抛出。
    ========================================================================== */
 
-import { isAndroid } from './platform.js';
+import { isAndroid } from './platform.ts';
 import {
   NativeErrorCode,
   canUseNativeBridge,
   invokeNativeCommand,
   normalizeNativeError
-} from './nativeRuntime.js';
+} from './nativeRuntime.ts';
 
 const openArchives = new Set();
 const lifecycleQueues = new Map();
@@ -23,7 +23,7 @@ export function canUseNativeArchive() {
   return canUseNativeBridge();
 }
 
-async function invokeNative(command, args) {
+async function invokeNative(command: string, args: Record<string, unknown> = {}) {
   return invokeNativeCommand(isAndroid ? 'android-archive' : null, command, args, {
     feature: 'archive'
   });
@@ -31,7 +31,7 @@ async function invokeNative(command, args) {
 
 // 只有普通后端失败和“能力不存在 / 格式暂不支持”允许改走 JSZip。
 // 路径越界、条目过多、解压过大等限制必须由原生后端终止本次解析。
-const ARCHIVE_FALLBACK_CODES = new Set([
+const ARCHIVE_FALLBACK_CODES: Set<string> = new Set([
   NativeErrorCode.UNAVAILABLE,
   NativeErrorCode.UNSUPPORTED,
   NativeErrorCode.DISABLED,
@@ -72,11 +72,11 @@ function nativeArchivePathFor(book) {
     || '';
 }
 
-export function openNativeDocument(archiveId, path, options = {}) {
+export function openNativeDocument(archiveId: string, path: string, options: { scanDimensions?: boolean; includeEntries?: boolean; [key: string]: any } = {}) {
   return enqueueLifecycle(archiveId, async () => {
     // 已持久化页清单时只需要恢复 ZipFile 会话，不再扫描全部图片尺寸或
     // 把几千条 ZIP 元数据经 IPC 送回 WebView。
-    const args = { archiveId, path };
+    const args: Record<string, any> = { archiveId, path };
     if (isAndroid) {
       args.scanDimensions = options.scanDimensions !== false;
       args.includeEntries = options.includeEntries !== false;

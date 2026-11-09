@@ -2,7 +2,7 @@
    HOMURA · 一级书库与目录导入规划
    ========================================================================== */
 
-import { normalizeBookTitle } from './bookTitles.js';
+import { normalizeBookTitle } from './bookTitles.ts';
 
 export function collectionNameError(title, collections, exceptId = null) {
   const name = String(title || '').trim();

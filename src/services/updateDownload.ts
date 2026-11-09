@@ -5,7 +5,7 @@
    浏览器调试环境没有原生命令，调用方应回退到 GitHub Releases 页面。
    ========================================================================== */
 
-import { isAndroid } from './platform.js';
+import { isAndroid } from './platform.ts';
 
 const PROGRESS_EVENT = 'update-download-progress';
 const PENDING_UPDATE_KEY = 'homura_pending_update_v1';

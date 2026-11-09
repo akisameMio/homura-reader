@@ -6,7 +6,7 @@
    本模块不持有状态：reader / shelf store 由调用方传入。
    ========================================================================== */
 
-import { HomuraStore } from './storage.js';
+import { HomuraStore } from './storage.ts';
 
 const SAVE_DEBOUNCE_MS = 350;
 let saveTimer = null;

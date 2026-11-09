@@ -5,17 +5,17 @@
    书籍对象；以及把散装图片按文件夹分组生成漫画书的 buildImageFolderBooks。
    ========================================================================== */
 
-import { escapeHtml } from './utils.js';
-import { decodeTxtBytesAsync } from './textEncoding.js';
-import { renderMarkdown } from './markdown.js';
-import { parseMobiFileData } from './mobi.js';
-import { openPdfDocument, createPdfPageItems, renderPdfCoverBlob } from './pdf.js';
-import { parseEpubFile } from './epubParser.js';
+import { escapeHtml } from './utils.ts';
+import { decodeTxtBytesAsync } from './textEncoding.ts';
+import { renderMarkdown } from './markdown.ts';
+import { parseMobiFileData } from './mobi.ts';
+import { openPdfDocument, createPdfPageItems, renderPdfCoverBlob } from './pdf.ts';
+import { parseEpubFile } from './epubParser.ts';
 import {
   clearNativeArchiveBookCache,
   closeNativeArchive
-} from './nativeArchive.js';
-import { removeNativeBookDir } from './nativeStorage.js';
+} from './nativeArchive.ts';
+import { removeNativeBookDir } from './nativeStorage.ts';
 
 // 同名书被跳过时还未入架，及时释放解析阶段创建的位图 URL 与 PDF worker。
 export async function discardParsedBook(book) {
@@ -58,7 +58,7 @@ export async function parsePdfFileLazy(file) {
     if (pageCount === 0) throw new Error('PDF 中没有可显示的页面');
 
     const coverBlob = await renderPdfCoverBlob(pdfDoc);
-    const coverUrl = URL.createObjectURL(coverBlob);
+    const coverUrl = URL.createObjectURL(coverBlob as Blob);
 
     return {
       id: 'pdf_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),

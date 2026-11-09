@@ -15,26 +15,41 @@ export const NativeErrorCode = Object.freeze({
   SECURITY_LIMIT: 'NATIVE_SECURITY_LIMIT',
   LIMIT_EXCEEDED: 'NATIVE_LIMIT_EXCEEDED',
   CANCELLED: 'NATIVE_CANCELLED'
-});
+} as const);
 
-const KNOWN_CODES = new Set(Object.values(NativeErrorCode));
+export type NativeErrorCodeValue = typeof NativeErrorCode[keyof typeof NativeErrorCode];
 
-const DEFAULT_FALLBACK_CODES = new Set([
+const KNOWN_CODES: Set<string> = new Set(Object.values(NativeErrorCode));
+
+const DEFAULT_FALLBACK_CODES: Set<string> = new Set([
   NativeErrorCode.UNAVAILABLE,
   NativeErrorCode.UNSUPPORTED,
   NativeErrorCode.DISABLED
 ]);
 
 // 这两类错误必须由当前后端明确拒绝，不能回退到校验更弱的实现。
-const NEVER_FALLBACK_CODES = new Set([
+const NEVER_FALLBACK_CODES: Set<string> = new Set([
   NativeErrorCode.SECURITY_LIMIT,
   NativeErrorCode.LIMIT_EXCEEDED
 ]);
 
-const disabledFeatures = new Map();
+const disabledFeatures = new Map<string, string>();
+
+interface NativeBridgeErrorOptions {
+  feature?: string | null;
+  plugin?: string | null;
+  command?: string | null;
+  cause?: unknown;
+}
 
 export class NativeBridgeError extends Error {
-  constructor(code, message, options = {}) {
+  code: string;
+  feature: string | null;
+  plugin: string | null;
+  command: string | null;
+  cause?: unknown;
+
+  constructor(code: string, message?: string, options: NativeBridgeErrorOptions = {}) {
     super(message || '原生调用失败');
     this.name = 'NativeBridgeError';
     const normalizedCode = typeof code === 'string' ? code.toUpperCase() : '';
@@ -93,7 +108,7 @@ function classifyMessage(message) {
   return NativeErrorCode.COMMAND_FAILED;
 }
 
-export function normalizeNativeError(error, context = {}) {
+export function normalizeNativeError(error: unknown, context: NativeBridgeErrorOptions = {}): NativeBridgeError {
   if (error instanceof NativeBridgeError) {
     if (!error.feature && context.feature) error.feature = context.feature;
     if (!error.plugin && context.plugin) error.plugin = context.plugin;
@@ -102,7 +117,8 @@ export function normalizeNativeError(error, context = {}) {
   }
 
   const message = errorMessage(error);
-  const explicit = typeof error?.code === 'string' ? error.code.toUpperCase() : '';
+  const maybeError = error as { code?: unknown } | null | undefined;
+  const explicit = typeof maybeError?.code === 'string' ? maybeError.code.toUpperCase() : '';
   const code = KNOWN_CODES.has(explicit) ? explicit : classifyMessage(message);
   return new NativeBridgeError(code, message, { ...context, cause: error });
 }
@@ -146,7 +162,7 @@ function fallbackCodeSet(value) {
   return DEFAULT_FALLBACK_CODES;
 }
 
-export async function invokeNativeCommand(plugin, command, args = {}, options = {}) {
+export async function invokeNativeCommand(plugin: string | null, command: string | null, args: Record<string, unknown> = {}, options: { feature?: string | null } = {}) {
   if (!command) {
     throw new NativeBridgeError(
       NativeErrorCode.COMMAND_FAILED,
@@ -186,6 +202,17 @@ export async function invokeNativeCommand(plugin, command, args = {}, options = 
 // 原生能力的统一兜底入口。默认只对“不可用 / 不支持 / 已禁用”回退；
 // 调用方可以通过 fallbackOn 或 shouldFallback 明确扩大范围，但安全与超限错误
 // 永远由当前后端抛出，不会触发回退。
+interface RunNativeWithFallbackOptions {
+  feature?: string;
+  plugin?: string | null;
+  command?: string;
+  args?: Record<string, unknown>;
+  fallback?: (error: NativeBridgeError) => unknown;
+  fallbackOn?: Set<string> | string[];
+  shouldFallback?: ((error: NativeBridgeError) => boolean) | null;
+  logger?: Pick<Console, 'warn'>;
+}
+
 export async function runNativeWithFallback({
   feature = 'default',
   plugin = null,
@@ -195,7 +222,7 @@ export async function runNativeWithFallback({
   fallbackOn = DEFAULT_FALLBACK_CODES,
   shouldFallback = null,
   logger = console
-} = {}) {
+}: RunNativeWithFallbackOptions = {}) {
   if (typeof fallback !== 'function') {
     throw new TypeError('runNativeWithFallback 需要 fallback 函数');
   }

@@ -6,7 +6,7 @@
    v-html或被误当作外链。
    ========================================================================== */
 
-import { isAndroid } from './platform.js';
+import { isAndroid } from './platform.ts';
 
 export const REPOSITORY_URL = 'https://github.com/Leon-Ning-san/HOMURA-reader';
 export const RELEASES_PAGE_URL = `${REPOSITORY_URL}/releases`;
@@ -53,7 +53,7 @@ function cleanHeading(value) {
 
 function normalizeGroupTitle(value) {
   const title = cleanHeading(value);
-  const match = GROUP_LABELS.find(([pattern]) => pattern.test(title));
+  const match = GROUP_LABELS.find(([pattern]: [RegExp, string]) => pattern.test(title));
   return match ? match[1] : title || '更新';
 }
 
@@ -223,7 +223,7 @@ export function detectUpdatePlatform() {
   if (isAndroid) return 'android';
   const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
   const platform = typeof navigator !== 'undefined'
-    ? navigator.userAgentData?.platform || navigator.platform || ''
+    ? (navigator as any).userAgentData?.platform || navigator.platform || ''
     : '';
   const descriptor = `${platform} ${userAgent}`;
 
@@ -301,8 +301,8 @@ export function selectReleaseAsset(release, platform = detectUpdatePlatform()) {
   };
 }
 
-function updateError(code, message) {
-  const error = new Error(message);
+function updateError(code: string, message: string) {
+  const error = new Error(message) as Error & { code: string };
   error.code = code;
   return error;
 }

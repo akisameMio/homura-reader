@@ -6,7 +6,7 @@
    表格、脚注与 SVG。两条路径共用同一份清单，避免各自演化出现防护漂移。
    ========================================================================== */
 
-import { isSafeImageUrl, isSafeLinkUrl } from './utils.js';
+import { isSafeImageUrl, isSafeLinkUrl } from './utils.ts';
 
 const ALLOWED_TAGS = new Set([
   'a', 'abbr', 'address', 'article', 'aside', 'b', 'big', 'blockquote', 'br',
@@ -61,8 +61,8 @@ function cleanUrlValue(value) {
   return String(value || '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
 }
 
-function sanitizeAttributes(el, tagName) {
-  for (const attr of Array.from(el.attributes)) {
+function sanitizeAttributes(el: Element, tagName: string) {
+  for (const attr of Array.from(el.attributes) as Attr[]) {
     const name = attr.name.toLowerCase();
     const value = attr.value;
 

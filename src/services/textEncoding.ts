@@ -10,7 +10,7 @@ import {
   bytesToBase64,
   canUseNativeBridge,
   runNativeWithFallback
-} from './nativeRuntime.js';
+} from './nativeRuntime.ts';
 
 // TXT 通常远小于这个值；大文件继续交给 JS，避免 base64 和 IPC 先吃掉内存。
 export const NATIVE_TEXT_MAX_BYTES = 8 * 1024 * 1024;

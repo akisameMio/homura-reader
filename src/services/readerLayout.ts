@@ -89,7 +89,16 @@ export function resolveLineHeight(value) {
  * @param {object} input.layout  reader.layoutConfig（direction / spread / fontFamily / lineHeight / pageMargin）
  * @param {boolean} [input.compact] 是否走手机版式（<900px）
  */
-export function resolveReaderMetrics({ width, height, layout = {}, compact = false }) {
+interface ReaderLayoutPrefs {
+  pageMargin?: string;
+  spread?: number | string;
+  fontSize?: number | string;
+  fontFamily?: string;
+  lineHeight?: unknown;
+  [key: string]: unknown;
+}
+
+export function resolveReaderMetrics({ width, height, layout = {}, compact = false }: { width: number | string; height: number | string; layout?: ReaderLayoutPrefs; compact?: boolean }) {
   const safeWidth = Math.max(0, Number(width) || 0);
   const safeHeight = Math.max(0, Number(height) || 0);
   const marginKey = READER_MARGIN_OPTIONS.some((option) => option.value === layout.pageMargin)
@@ -129,7 +138,7 @@ export function resolveReaderMetrics({ width, height, layout = {}, compact = fal
 }
 
 /** 正文容器需要的内联变量：字体、字号、行高、段距都与测量保持一致。 */
-export function resolveProseStyle(layout = {}, metrics = {}) {
+export function resolveProseStyle(layout: ReaderLayoutPrefs = {}, metrics: Record<string, unknown> = {}) {
   const fontSize = Number(layout.fontSize) || 18;
   return {
     '--reader-font-family': resolveFontStack(layout.fontFamily),

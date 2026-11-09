@@ -9,7 +9,7 @@ export function escapeHtml(str) {
 }
 
 // 桌面用窗口滚动，手机书架改用内部滚动容器；统一按最近的滚动容器回到顶部。
-export function scrollAppToTop(behavior = 'auto') {
+export function scrollAppToTop(behavior: ScrollBehavior = 'auto') {
   const scrollers = document.querySelectorAll('[data-app-scroll]');
   let scrolled = false;
   scrollers.forEach(node => {

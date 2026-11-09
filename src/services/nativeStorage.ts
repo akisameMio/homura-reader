@@ -7,8 +7,8 @@
    ========================================================================== */
 
 import { BaseDirectory, mkdir, readFile, remove, stat, writeFile } from '@tauri-apps/plugin-fs';
-import { canUseNativeBridge } from './nativeRuntime.js';
-import { clearNativeArchiveBookCache, clearNativeArchiveCache } from './nativeArchive.js';
+import { canUseNativeBridge } from './nativeRuntime.ts';
+import { clearNativeArchiveBookCache, clearNativeArchiveCache } from './nativeArchive.ts';
 
 const ROOT_DIR = 'homura-native-sources';
 const BASE_DIR = BaseDirectory.AppData;

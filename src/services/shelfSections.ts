@@ -1,4 +1,4 @@
-import { resolveBookFormat } from './utils.js';
+import { resolveBookFormat } from './utils.ts';
 
 export function bookShelfCategory(book) {
   const format = resolveBookFormat(book);

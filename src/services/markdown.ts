@@ -6,7 +6,7 @@
    ========================================================================== */
 
 import { Marked } from 'marked';
-import { escapeHtml, isSafeLinkUrl } from './utils.js';
+import { escapeHtml, isSafeLinkUrl } from './utils.ts';
 
 const marked = new Marked({
   gfm: true,

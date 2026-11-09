@@ -9,7 +9,7 @@ import {
   ensureNativeArchiveSession,
   readNativePageBlob,
   readNativeTextBatch
-} from './nativeArchive.js';
+} from './nativeArchive.ts';
 
 export function hasArchiveSource(book) {
   return !!(book?.zipContent || book?.nativeArchiveId != null);
