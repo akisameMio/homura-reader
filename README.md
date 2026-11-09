@@ -6,8 +6,8 @@
 
 HOMURA是一个**本地优先**的阅读器：漫画、轻小说、PDF 和图集导入后即可阅读，解析、分页与渲染全部在本机完成，书籍内容不会上传。桌面端使用 Tauri 2 打包，同一套前端也提供 Android 构建。
 
-- 当前版本：**2.2.1**
-- 技术栈：Vue 3 + Pinia + Vite 6 + Tauri 2（纯 JavaScript）
+- 当前版本：**2.2.3**
+- 技术栈：Vue 3 + Pinia + Vite 6 + Tauri 2 + TypeScript
 - 仓库：[Leon-Ning-san/HOMURA-reader](https://github.com/Leon-Ning-san/HOMURA-reader)
 - 下载：[GitHub Releases](https://github.com/Leon-Ning-san/HOMURA-reader/releases)
 
@@ -15,19 +15,21 @@ HOMURA是一个**本地优先**的阅读器：漫画、轻小说、PDF 和图集
 
 | 项目 | 当前状态 |
 | --- | --- |
-| 发布版本 | `2.2.1`，`package.json`、`Cargo.toml`、`tauri.conf.json` 三处版本一致 |
+| 发布版本 | `2.2.3`，`package.json`、`Cargo.toml`、`tauri.conf.json` 三处版本一致 |
 | 桌面平台 | macOS / Windows / Linux |
 | 移动平台 | Android arm64-v8a APK |
-| 核心链路 | 导入、本地存档、恢复、分页/滚动阅读、目录跳转、进度记忆均可用 |
-| 尚未完成 | 标签、侧栏设置仍是占位入口；书签尚未实现 |
-| 质量保障 | 仓库暂无自动化测试、ESLint 或 TypeScript，以构建检查和手动回归为主 |
+| 核心链路 | 导入、本地存档、恢复、分页/滚动阅读、目录跳转、进度记忆、一级书库、收藏、自定义封面、导入进度与失败重试、应用内更新均可用 |
+| 尚未完成 | 标签功能尚未实现；书签功能尚未实现 |
+| 质量保障 | 有 `node:test` + jsdom 单元测试（218 条）与 `vue-tsc` 类型检查；没有 ESLint 或 E2E，关键阅读流程仍需手动回归 |
 | 许可 | 尚未添加 `LICENSE` 文件 |
 
 ## 功能概览
 
 - **多格式书架**：EPUB / KEPUB、PDF、MOBI、TXT、Markdown 和图片文件夹。
+- **一级书库与收藏**：可新建、改名、删除书库，书本可多选移入或跨库搬移；收藏页平铺展示全部收藏书。
 - **两种阅读方式**：小说使用自动分页引擎；漫画支持单页、双页、首页单排和上下条漫。
 - **本地进度记忆**：按书保存页码、阅读比例、方向、单双页、字号、字体、行距、页边距和条漫尺寸，重开自动续读。
+- **导入进度与更新**：导入过程可取消、单本失败可重试，同名书会提示确认；应用内可检查、下载并安装新版本。
 - **Material Design 3 界面**：10 套主题色、白昼 / 护眼 / 夜间三种表面，桌面与窄屏分别适配。
 - **离线书库**：书籍元数据、封面、原文件与进度都保存在本机；应用不同步或上传书籍内容。
 
@@ -59,7 +61,7 @@ Markdown 输出会经过安全处理：原始 HTML 只作为文本显示，链�
 - 导入与书架中已有作品同名的书本时，会提示确认，默认跳过，也可选择「仍然导入」保留独立版本。同批次导入也会检查重名，识别时忽略英文大小写、首尾空白及全半角差异，以解析后的书名为准。
 - 搜索支持书名和书库名称；界面占位文案中的作者搜索尚未实现。
 - 可以单本移除或清空书架。清除应用数据会同时删除本地书架记录。
-- 标签和侧栏设置仍是占位入口。
+- 标签功能尚未实现（书架筛选里没有标签入口）。
 
 ## 阅读器
 
@@ -75,7 +77,7 @@ Markdown 输出会经过安全处理：原始 HTML 只作为文本显示，链�
 - 全屏按钮默认只在 Windows 的阅读器与主页顶栏显示；其他系统可在「设置 → 调试」中强制显示。
 - 阅读工具栏在无操作 2.2 秒后自动隐藏；设置抽屉或目录抽屉打开时不会自动隐藏。
 - 阅读书库内作品时，顶部「本目录」按进入阅读器时的书库顺序显示所有书本，并高亮当前书本。末页继续向后翻会打开下一本首页，首页向前翻会打开上一本末页；首本和末本不循环。鼠标、触屏、键盘和底栏翻页按钮共用此规则，单本不启用跨书阅读。
-- 鼠标和触屏均支持横向跟手翻页；短点在松手时生效：画布左侧 25% 与左方向键一致，右侧 25% 与右方向键一致，中间 50% 切换工具栏。长按达到 300ms 或移动达到 8px 后不再视为点击，滑动不足翻页距离会回弹。
+- 鼠标和触屏均支持横向跟手翻页；短点在松手时生效：画布左侧 30% 与左方向键一致，右侧 30% 与右方向键一致，中间 40% 切换工具栏。长按达到 300ms 或移动达到 8px 后不再视为点击，滑动不足翻页距离会回弹。
 - 目录支持漫画页码与小说/EPUB 章节跳转；目录状态不会持久化，书签功能尚未实现。
 
 ### 主题与表面
@@ -91,7 +93,7 @@ Markdown 输出会经过安全处理：原始 HTML 只作为文本显示，链�
 | `←` / `→` | 上一页 / 下一页；右到左模式会反转翻页方向 |
 | `Space` | 下一页 |
 | `↑` / `↓` | 上一页 / 下一页 |
-| `Esc` | 依次关闭设置/目录、唤出工具栏、退出阅读器 |
+| `Esc` | 逐层退出：先关设置/目录抽屉，再唤出工具栏，最后退出阅读器 |
 | `F` | 进入 / 退出全屏；桌面端走 Tauri 原生窗口 API |
 
 条漫模式保留原生纵向滚动，不使用左右翻页快捷键。输入框获得焦点时，键盘快捷键会自动让位。
@@ -135,9 +137,10 @@ npm run build      # tauri build，Tauri 会先构建前端再打包安装包
 
 | 命令 | 作用 |
 | --- | --- |
-| `npm test` | 验证书名排序、同名识别、书库归属、目录分组和阅读手势规则 |
+| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，218 条用例，覆盖解析、书名排序、同名识别、书库归属、目录分组和阅读手势规则 |
+| `npm run typecheck` | `vue-tsc --noEmit`，类型检查（当前 0 报错） |
 | `npm run dev:vite` | 只启动 Vite 开发服务器，端口固定为 `5173`，支持 HMR |
-| `npm run build:vite` | 只构建前端到 `dist/`，是最快的构建验证 |
+| `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`，是最快的构建验证 |
 | `npm run dev` | 启动 Tauri 开发窗口；`beforeDevCommand` 自动运行 Vite |
 | `npm run build` | 构建桌面安装包；`beforeBuildCommand` 自动构建前端 |
 | `npm run icons:generate` | 从 `src-tauri/app-icon.png` 母版生成各平台图标，并同步网页、启动页和已初始化的 Android 工程 |
@@ -145,6 +148,8 @@ npm run build      # tauri build，Tauri 会先构建前端再打包安装包
 | `npm run android:dev` | 运行 Android 开发版 |
 | `npm run android:build` | 构建 Android arm64 release APK，需要本地 release keystore |
 | `npm run android:build:debug` | 构建 Android arm64 debug APK |
+| `npm run check:dark-glow` | 扫描夜间白色泛光（`build:vite` 会自动执行） |
+| `npm run tauri` | 直通 Tauri CLI |
 
 桌面构建产物位于 `src-tauri/target/release/bundle/`。Vite 资源通过相对路径加载，不能直接双击 `dist/index.html` 以 `file://` 打开；请使用开发服务器或本地静态服务器。
 
@@ -154,43 +159,43 @@ npm run build      # tauri build，Tauri 会先构建前端再打包安装包
 
 ```text
 homura-reader/
-├── index.html                  # Vite 入口，首帧前同步恢复主题
-├── vite.config.js              # Vue 插件、相对路径 base、PDF 资源同步
-├── AGENTS.md                   # 项目协作与实现约束
+├── index.html                  # Vite 入口，首帧前加载 homura-boot.js 恢复主题
+├── vite.config.js              # Vue 插件、相对路径 base、PDF 资源同步、生产 Tailwind 预编译
+├── tsconfig.json               # 类型检查配置（allowJs 渐进迁移，strict 已开）
+├── AGENTS.md                   # 项目协作与实现约束（动代码前先读）
 ├── src/
-│   ├── main.js                 # createApp + Pinia
-│   ├── App.vue                 # 书架布局、导入入口、离屏分页测量器
-│   ├── assets/homura.css       # MD3 token、阅读表面、组件样式与动效
-│   ├── stores/
-│   │   ├── theme.js            # 10 套主题色、3 种表面、翻页过渡
-│   │   ├── shelf.js            # 书架、进度映射、示例书、IndexedDB 恢复
-│   │   ├── reader.js           # 当前书籍、分页状态、阅读动作
-│   │   └── ui.js               # 阅读器工具栏、目录、设置与全屏状态
-│   ├── services/
-│   │   ├── parsers.js          # EPUB / TXT / MD / PDF / MOBI 总入口
-│   │   ├── pagination.js       # 小说智能分页、章节与图片页构建
-│   │   ├── pdf.js              # PDF 懒加载、页面位图与 LRU 缓存
-│   │   ├── mobi.js             # PalmDOC / MOBI 解析
-│   │   ├── markdown.js         # marked + 安全渲染
-│   │   ├── storage.js          # IndexedDB 完整存档 + SQLite 元数据镜像
-│   │   ├── nativeMetadata.js   # SQLite 书目 / 书库 / 进度桥接
-│   │   ├── coverThumb.js       # Rust 封面缩略图与 Canvas / WebP 兜底
-│   │   ├── opfs.js             # Origin Private File System 原文件存储
-│   │   ├── restore.js          # 原生 AppData / OPFS / 句柄 / Blob 存档恢复
-│   │   ├── nativeStorage.js    # Android / 桌面共用的 AppData 原文件存储
-│   │   └── progress.js         # 阅读进度与排版记忆、节流落盘
-│   ├── composables/            # 导入、快捷键、视口、抽屉拖拽
-│   └── components/             # SideNav、LibraryHeader、BookShelf、BookCard、
-│                               # ReaderModal、PaginatedView、WebtoonView、
-│                               # ReaderTocDrawer、ReaderSettingsDrawer 等
-├── src-tauri/                  # Tauri 2 壳、权限、图标与打包配置
-├── public/vendor/              # 内置 Tailwind 运行时，断网可用
-├── scripts/release-notes.mjs   # Conventional Commits → Release 说明
+│   ├── main.ts                 # createApp + Pinia
+│   ├── App.vue                 # 总布局、侧栏/底栏骨架、书架筛选排序、FAB、离屏分页测量器
+│   ├── types.ts                # Book / BookSource / ReaderPage / Collection / ReadingProgress 等核心领域类型
+│   ├── assets/
+│   │   ├── homura.css          # 样式入口，只有 6 行 @import
+│   │   └── styles/             # tokens / base / library / overlays / controls /
+│   │                           # canvas / legacy / theme-picker / content 九个模块
+│   ├── stores/                 # 7 个 setup store：theme / shelf / reader / ui / settings / importProgress / updates
+│   ├── services/               # 35 个：解析、存储、平台适配、原生桥接、更新（不依赖 Vue / Pinia）
+│   │   ├── parsers.ts / epubParser.ts / epubType.ts   # 解析调度与漫画/小说判定
+│   │   ├── pagination.ts       # 小说智能分页、章节与图片页构建
+│   │   ├── pdf.ts / mobi.ts / markdown.ts / textEncoding.ts
+│   │   ├── storage.ts / nativeMetadata.ts / nativeStorage.ts / opfs.ts / restore.ts / progress.ts
+│   │   ├── nativeRuntime.ts / nativeArchive.ts / nativeImport.ts / coverThumb.ts
+│   │   ├── collections.ts / collectionReading.ts / bookTitles.ts / shelfSections.ts
+│   │   └── updates.ts / updateDownload.ts / external.ts / readerGestures.ts / archiveAccess.ts / sanitize.ts 等
+│   ├── composables/            # 9 个：useImporter / useViewport / useShortcuts / useSheetDrag /
+│   │                           # useShelfDialogs / useScrollBounce / useDuplicateImport /
+│   │                           # useReaderBackDismiss / useAndroidBackExit
+│   └── components/             # 41 个 SFC：SideNav、LibraryHeader、BookShelf、BookCard、
+│                               # ReaderModal、PaginatedView、WebtoonView、DesktopIsland、SettingsView 等
+├── tests/                      # 31 个 .test.mjs（node:test + jsdom）
+├── scripts/                    # check-dark-glow / generate-icons / release-notes / sync-android-icons
+├── references/                 # MD3 组件写法、token、系统布局、桌面灵动胶囊状态机
+├── src-tauri/                  # Tauri 2 壳、Rust 命令、5 个本地 Android 插件、权限与打包配置
+├── public/homura-boot.js       # 首帧前的同步引导脚本（CSP 禁内联，不能挪回 index.html）
+├── public/vendor/              # 开发环境运行时 Tailwind；生产构建转静态 CSS
 ├── design-preview/             # 设计原型与截图，不是生产代码
-└── .github/workflows/build.yml # 三平台桌面与 Android 自动构建
+└── .github/workflows/          # 三平台桌面与 Android 自动构建
 ```
 
-PDF、Markdown 安全渲染和分页测量需要 DOM / Canvas，因此 `services/` 并非全部是纯逻辑模块；`stores/` 负责状态与动作，`components/` 负责视图与交互。翻页引擎 `PaginatedView.vue` 与 `WebtoonView.vue` 直接操作 DOM 和 Web Animations API，不通过 `v-for` 重渲染翻页画面。
+services / stores / composables 三层已全部迁移为 TypeScript（`components/` 的 `<script setup>` 也已是 `lang="ts"`）。PDF、Markdown 安全渲染和分页测量需要 DOM / Canvas，因此 `services/` 并非全部是纯逻辑模块；`stores/` 负责状态与动作，`components/` 负责视图与交互。翻页引擎 `PaginatedView.vue` 与 `WebtoonView.vue` 直接操作 DOM 和 Web Animations API，不通过 `v-for` 重渲染翻页画面。
 
 ## 本地存储与隐私
 
@@ -201,7 +206,8 @@ PDF、Markdown 安全渲染和分页测量需要 DOM / Canvas，因此 `services
 - 桌面原生 ZIP 通道只接受 `homura-native-sources` 下的路径，EPUB 条目按需解到 AppCache，并按最近访问时间保留 24 个文件 / 192MB；安全限制与资源超限错误不会回退到 JSZip。
 - 导入后会检查存储配额；已用空间达到 85% 或剩余不足 200 MB 时会提示。
 - 阅读进度写入做了 350 ms 防抖，并在关闭阅读器、页面卸载或切到后台时补写。
-- `localStorage` 保存主题偏好、桌面侧栏折叠状态、封面缩略图迁移版本与 SQLite 镜像 dirty 标记；翻页过渡样式不持久化。
+- 应用内更新会从 GitHub Releases 读取最新版本，下载安装包后交给系统安装；下载只校验字节数是否完整，没有签名/哈希校验，请以官方仓库发布为准。
+- `localStorage` 保存主题偏好、表面模式、翻页过渡样式、阅读器默认排版、桌面侧栏折叠状态、封面缩略图迁移版本与 SQLite 镜像 dirty 标记等。
 - 每本书会记住阅读方向、单双页、首页单排、字号、字体、行距、页边距和条漫尺寸；目录状态不会持久化，书签功能尚未实现。
 - 应用不上传书籍内容，也没有云同步。清除应用本地数据会一起清掉书架记录，重要文件请保留原始副本。
 - Google Fonts 需要联网，完全断网时会回退到系统字体；Tailwind 运行时已随应用分发，PDF 资源也随包构建。
@@ -211,16 +217,17 @@ PDF、Markdown 安全渲染和分页测量需要 DOM / Canvas，因此 `services
 - 不支持 DRM 加密书籍、AZW3 / KF8、旧版 Huffman 压缩 MOBI 和加密 PDF。
 - PDF 按固定版式渲染，不能改字号或重排；EPUB 的固定版式、复杂 CSS 和自定义字体也不能完整还原。
 - 目录可以跳转，但目录状态不保存；书签功能尚未实现。
-- 书架搜索只匹配书名，标签和侧栏设置仍是占位功能。
+- 书架搜索只匹配书名与书库名，不支持作者搜索或标签筛选。
 - macOS 安装包尚未签名/公证，首次启动需要手动放行。
-- 项目提供书名排序、同名识别、书库归属、目录分组和手势判定的单元测试，尚未覆盖完整阅读流程；没有 ESLint 和 TypeScript，改动后仍需执行构建并手动回归关键阅读流程。
+- 项目提供书名排序、同名识别、书库归属、目录分组和手势判定等单元测试（`npm test`，218 条），配合 `npm run typecheck` 做类型检查；但没有 E2E、覆盖不到完整阅读流程，也没有 ESLint，改动后仍需执行构建并手动回归关键阅读流程。
 
 ## 开发与发布
 
 开发和代码约束以仓库根目录的 [`AGENTS.md`](AGENTS.md) 为准。提交前至少运行：
 
 ```bash
-npm test
+npm test          # 单元测试（218 条）
+npm run typecheck # vue-tsc 类型检查
 npm run build:vite
 ```
 
@@ -249,4 +256,4 @@ CI 只在推送 `v*` 标签或手动触发 `workflow_dispatch` 时运行，不�
 
 ---
 
-*README 按 v2.2.1 当前实现整理。功能状态以代码为准；本鱼写完先去吃小鱼干了。* 🐋
+*README 按 v2.2.3 当前实现整理。功能状态以代码为准；本鱼写完先去吃小鱼干了。* 🐋
