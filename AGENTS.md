@@ -9,7 +9,7 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 
 - 当前版本 `2.2.1`
 - 技术栈：Vue 3 + Pinia + Vite 6 + Tauri 2（Rust）
-- **渐进式 TypeScript**：`src/services/`（35 个）、`src/stores/`（7 个）、`src/composables/`（9 个）三层的逻辑代码已全部迁移为 `.ts`；`components/`（41 个 `.vue`）的 `<script setup>` 已全部升级为 `lang="ts"`（保留原有运行时 `defineProps({...})` / `defineEmits([...])` 写法，未改写成泛型语法）；`main.js` 尚未迁移。`tsconfig.json` 开 `allowJs: true` 允许 JS/TS 混存，`strict: false`（迁移期宽松，后续逐项收紧）。`npm run typecheck`（`vue-tsc --noEmit`）已清零 0 报错，可作为门槛使用。没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
+- **TypeScript**：`src/services/`（35 个）、`src/stores/`（7 个）、`src/composables/`（9 个）三层的逻辑代码已全部迁移为 `.ts`；`components/`（41 个 `.vue`）的 `<script setup>` 已全部升级为 `lang="ts"`（保留原有运行时 `defineProps({...})` / `defineEmits([...])` 写法，未改写成泛型语法）；入口 `src/main.ts` 亦已迁移。`tsconfig.json` 开 `allowJs: true` 允许 JS/TS 混存，`strict: true`（`noImplicitAny` / `noUnusedLocals` / `noUnusedParameters` 仍为 `false`，后续可逐个收紧）。`npm run typecheck`（`vue-tsc --noEmit`）已清零 0 报错，可作为门槛使用。没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
 - 新增 / 迁移文件时，指向已迁移 `.ts` 文件（services / stores / composables）的 import 必须写 `.ts` 后缀（Node `--experimental-strip-types` 不会把 `./x.js` 解析到 `x.ts`，只有 Vite / tsc 会）
 - 数据存本机 IndexedDB（`homura_shelf`，v3，4 个 store：`books` / `sources` / `progress` / `collections`）；Tauri 环境额外把书目 / 书库 / 进度镜像到 `$APPDATA/homura-metadata/homura.sqlite3`；原文件按平台写 `$APPDATA/homura-native-sources`、OPFS（`homura-sources`）或 IndexedDB Blob；主题与设置偏好写 localStorage
 
@@ -57,7 +57,7 @@ index.html                 Vite 入口；首帧前同步加载 public/homura-boo
 vite.config.js             Vue 插件 + 相对路径 base + pdf.js 资源同步 + 生产 Tailwind 预编译
 tailwind.config.js         构建期 Tailwind 配置（开发环境仍读 public/vendor/tailwind-config.js）
 src/
-  main.js                  createApp + Pinia + 写入 documentElement.dataset.platform
+  main.ts                  createApp + Pinia + 写入 documentElement.dataset.platform
   App.vue                  总布局、侧栏/底栏骨架、书架筛选与排序、FAB、离屏分页测量器、启动图收尾
   assets/
     homura.css             样式入口，只有 6 行 @import（顺序即层叠顺序）
@@ -102,7 +102,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 
 ## 4. 代码与架构约定
 
-- **Vue 3 `<script setup>` 单文件组件**，纯 JS。保持现有风格：2 空格缩进、单引号、语句结尾分号。
+- **Vue 3 `<script setup>` 单文件组件**，TypeScript。保持现有风格：2 空格缩进、单引号、语句结尾分号。
 - 分层边界：
   - `services/` 不依赖 Vue / Pinia，负责解析、存储、平台适配；需要 DOM/Canvas 的逻辑（如 PDF 渲染）也集中在这里。
   - `stores/` 只放状态与动作，不直接写复杂 DOM。
