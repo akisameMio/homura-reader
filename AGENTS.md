@@ -7,7 +7,7 @@
 
 HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集拖进来就能看，解析与渲染全部在本机完成，不上传任何文件。桌面端用 Tauri 2 打包（macOS / Windows / Linux），同一套前端也构建 Android APK。
 
-- 当前版本 `2.2.3`
+- 当前版本 `2.2.4`
 - 技术栈：Vue 3 + Pinia + Vite 6 + Tauri 2（Rust）
 - **TypeScript**：`src/services/`（35 个）、`src/stores/`（7 个）、`src/composables/`（10 个）三层的逻辑代码已全部迁移为 `.ts`；`components/`（41 个 `.vue`）的 `<script setup>` 已全部升级为 `lang="ts"`（保留原有运行时 `defineProps({...})` / `defineEmits([...])` 写法，未改写成泛型语法）；入口 `src/main.ts` 亦已迁移。`tsconfig.json` 开 `allowJs: true` 允许 JS/TS 混存，`strict: true`，且 `noImplicitAny` / `noUnusedLocals` / `noUnusedParameters` 均已开启。`npm run typecheck`（`vue-tsc --noEmit`）已清零 0 报错，可作为门槛使用。没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
 - 新增 / 迁移文件时，指向已迁移 `.ts` 文件（services / stores / composables）的 import 必须写 `.ts` 后缀（Node `--experimental-strip-types` 不会把 `./x.js` 解析到 `x.ts`，只有 Vite / tsc 会）
