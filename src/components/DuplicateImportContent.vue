@@ -25,7 +25,7 @@
         <span class="duplicate-cover" aria-hidden="true"></span>
         <span class="duplicate-copy">
           <b>{{ item.title }}</b>
-          <small>{{ pending.batch && item.count > 1 ? `待导入 ${item.count} 个文件` : '待导入' }}</small>
+          <small>{{ pending.batch && (item.count ?? 0) > 1 ? `待导入 ${item.count} 个文件` : '待导入' }}</small>
         </span>
         <span class="duplicate-chip is-incoming">待导入</span>
       </div>
@@ -75,11 +75,13 @@
 
 <script setup lang="ts">
 import { computed, nextTick, shallowRef } from 'vue';
+import type { PropType } from 'vue';
 import { DUPLICATE_SKIP_ALL } from '../composables/useDuplicateImport.ts';
+import type { DuplicatePending } from '../composables/useDuplicateImport.ts';
 import MdIcon from './MdIcon.vue';
 
 const props = defineProps({
-  pending: { type: Object, default: null },
+  pending: { type: Object as PropType<DuplicatePending | null>, default: null },
   hostPrimaryAction: { type: Boolean, default: false }
 });
 const emit = defineEmits(['resolve']);

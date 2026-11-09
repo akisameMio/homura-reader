@@ -7,7 +7,10 @@
 </template>
 
 <script setup lang="ts">
+import { type PropType } from 'vue';
+import type { ReaderPage } from '../types.ts';
+
 defineProps({
-  page: { type: Object, required: true }
+  page: { type: Object as PropType<ReaderPage>, required: true }
 });
 </script>

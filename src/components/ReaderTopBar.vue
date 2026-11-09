@@ -161,27 +161,27 @@ const emit = defineEmits(['back']);
 
 const favoriteBusy = ref(false);
 const favoriteError = ref('');
-const isFavorite = computed(() => !!((shelf.library as any[]).find(book => book.id === (reader.currentBook as any)?.id))?.favorite);
+const isFavorite = computed(() => !!((shelf.library).find(book => book.id === reader.currentBook?.id))?.isFavorite);
 // 漫画与 PDF 的页面是位图，没有字体 / 行距可调
-const isReflowable = computed(() => (reader.currentBook as any)?.type !== 'manga');
-const bookTitle = computed(() => (reader.currentBook as any)?.title || '');
+const isReflowable = computed(() => reader.currentBook?.type !== 'manga');
+const bookTitle = computed(() => reader.currentBook?.title || '');
 const fontOptions = READER_FONT_OPTIONS;
 const typeButton = ref<HTMLElement | null>(null);
 const fontMenu = ref<HTMLElement | null>(null);
 
-watch(() => (reader.currentBook as any)?.id, () => {
+watch(() => reader.currentBook?.id, () => {
   favoriteError.value = '';
   ui.closeFontMenu();
 });
 
-function onDocumentPointerDown(event) {
+function onDocumentPointerDown(event: PointerEvent) {
   if (!ui.fontMenuOpen) return;
-  const target = event.target;
+  const target = event.target as Node | null;
   if (fontMenu.value?.contains(target) || typeButton.value?.contains(target)) return;
   ui.closeFontMenu();
 }
 
-function onDocumentKeydown(event) {
+function onDocumentKeydown(event: KeyboardEvent) {
   if (!ui.fontMenuOpen || event.key !== 'Escape') return;
   // 浮层优先吃掉 Esc，别让全局快捷键顺手关掉阅读器
   event.preventDefault();
@@ -197,21 +197,21 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', onDocumentKeydown, true);
 });
 
-function pickFont(value) {
+function pickFont(value: string) {
   reader.setFontFamily(value);
   ui.closeFontMenu();
   nextTick(() => typeButton.value?.focus());
 }
 
 async function toggleFavorite() {
-  const id = (reader.currentBook as any)?.id;
+  const id = reader.currentBook?.id;
   if (!id || favoriteBusy.value) return;
   favoriteBusy.value = true;
   favoriteError.value = '';
   try {
     await shelf.toggleFavorite(id);
   } catch (err) {
-    if ((reader.currentBook as any)?.id === id) favoriteError.value = (err as any).message || '收藏保存失败，请重试';
+    if (reader.currentBook?.id === id) favoriteError.value = (err as Error).message || '收藏保存失败，请重试';
     console.warn('[HOMURA] 收藏保存失败', err);
   } finally {
     favoriteBusy.value = false;

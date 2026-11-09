@@ -78,7 +78,6 @@ const open = computed({
 });
 
 const {
-  sheetRef,
   onDragStart: onSheetDragStart,
   onDragMove: onSheetDragMove,
   onDragEnd: onSheetDragEnd,

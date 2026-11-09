@@ -199,7 +199,7 @@ const settings = useSettingsStore();
 const ui = useUiStore();
 const { isCompact } = useViewport();
 
-const menu = ref(null);
+const menu = ref<string | null>(null);
 const countBadgeRef = shallowRef<HTMLElement | null>(null);
 let previousBadgeLeft: number | null = null;
 let badgeAnimation: Animation | null = null;
@@ -243,7 +243,7 @@ onBeforeUnmount(() => {
   badgeAnimation = null;
 });
 
-function toggleMenu(name) {
+function toggleMenu(name: string) {
   menu.value = menu.value === name ? null : name;
 }
 
@@ -278,7 +278,7 @@ const formatOptions = [
 
 const activeFormat = computed(() => formatOptions.find(opt => opt.value !== 'all' && opt.value === props.type) || null);
 
-function pickType(value) {
+function pickType(value: string) {
   emit('update:type', value);
   menu.value = null;
 }
@@ -289,7 +289,7 @@ const sortOptions = [
   { value: 'progress', label: '阅读进度' }
 ];
 
-function pickSort(value) {
+function pickSort(value: string) {
   emit('update:sort', value);
   menu.value = null;
 }

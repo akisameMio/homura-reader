@@ -194,6 +194,8 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, shallowRef } from 'vue';
+import type { PropType } from 'vue';
+import type { NormalizedRelease } from '../services/updates.ts';
 import { openGitHubUrl } from '../services/external.ts';
 import { formatBytes } from '../services/platform.ts';
 import { getUpdateErrorMessage } from '../services/updates.ts';
@@ -203,10 +205,10 @@ import MdIcon from './MdIcon.vue';
 const props = defineProps({
   status: { type: String, default: 'idle' },
   hostPrimaryAction: { type: Boolean, default: false },
-  release: { type: Object, default: null },
+  release: { type: Object as PropType<NormalizedRelease | null>, default: null },
   currentVersion: { type: String, required: true },
-  packageInfo: { type: Object, required: true },
-  error: { type: Object, default: null },
+  packageInfo: { type: Object as PropType<Record<string, unknown>>, required: true },
+  error: { type: Object as PropType<Record<string, unknown> | null>, default: null },
   download: {
     type: Object,
     default: () => ({
@@ -221,7 +223,7 @@ const props = defineProps({
       platform: ''
     })
   },
-  downloadError: { type: Object, default: null }
+  downloadError: { type: Object as PropType<Record<string, unknown> | null>, default: null }
 });
 
 const emit = defineEmits(['close', 'retry', 'changelog', 'download', 'cancel-download', 'install']);
@@ -270,7 +272,7 @@ const installWarning = computed(() => {
 const summaryItems = computed(() => {
   if (!props.release) return [];
   const items = props.release.notes.groups
-    .flatMap(group => group.items)
+    .flatMap((group: { items: string[] }) => group.items)
     .slice(0, 4);
   return items.length > 0
     ? items

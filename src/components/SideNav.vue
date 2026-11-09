@@ -156,7 +156,7 @@ const navItems = [
   { key: 'settings', label: '设置', icon: 'settings' }
 ];
 
-function select(key) {
+function select(key: string) {
   emit('nav', key);
 }
 

@@ -33,29 +33,29 @@ const importer = useImporter();
 const active = ref(false);
 let dragDepth = 0;
 
-function isFileDrag(e) {
+function isFileDrag(e: DragEvent) {
   return !!(e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files'));
 }
 
-function onDragEnter(e) {
+function onDragEnter(e: DragEvent) {
   if (!isFileDrag(e)) return;
   dragDepth++;
   active.value = true;
 }
 
-function onDragOver(e) {
+function onDragOver(e: DragEvent) {
   if (!isFileDrag(e)) return;
   e.preventDefault();
   if (!active.value) active.value = true;
 }
 
-function onDragLeave(e) {
+function onDragLeave(e: DragEvent) {
   if (!isFileDrag(e)) return;
   dragDepth = Math.max(0, dragDepth - 1);
   if (dragDepth === 0) active.value = false;
 }
 
-async function onDrop(e) {
+async function onDrop(e: DragEvent) {
   if (!isFileDrag(e)) return;
   e.preventDefault();
   dragDepth = 0;

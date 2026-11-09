@@ -43,7 +43,7 @@
         <!-- 漫画：页码网格 -->
         <nav v-if="isManga" class="md-toc-grid" aria-label="漫画页码">
           <button
-            v-for="(page, idx) in reader.activePages"
+            v-for="(_page, idx) in reader.activePages"
             :key="idx"
             type="button"
             @click="jumpTo(idx)"
@@ -86,13 +86,13 @@ import { useUiStore } from '../stores/ui.ts';
 import { useViewport } from '../composables/useViewport.ts';
 import { useSheetDrag } from '../composables/useSheetDrag.ts';
 import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
+import type { ReaderPage } from '../types.ts';
 
 const reader = useReaderStore();
 const ui = useUiStore();
 const { isCompact } = useViewport();
 const tocOpen = computed(() => ui.tocOpen);
 const {
-  sheetRef: tocSheetRef,
   onDragStart: onSheetDragStart,
   onDragMove: onSheetDragMove,
   onDragEnd: onSheetDragEnd,
@@ -108,8 +108,8 @@ const isManga = computed(() => reader.currentBook && reader.currentBook.type ===
 // 小说分页后同一章节可能跨多页，这里按 chapterIndex 聚合成目录条目
 const groups = computed(() => {
   if (!reader.currentBook || isManga.value) return [];
-  const map = new Map();
-  reader.activePages.forEach((page: any, idx) => {
+  const map = new Map<number, { key: number; title: string; index: number; end: number }>();
+  reader.activePages.forEach((page: ReaderPage, idx) => {
     const key = page.chapterIndex != null ? page.chapterIndex : 0;
     if (!map.has(key)) {
       map.set(key, {
@@ -119,7 +119,7 @@ const groups = computed(() => {
         end: idx
       });
     }
-    map.get(key).end = idx;
+    map.get(key)!.end = idx;
   });
   return [...map.values()];
 });
@@ -130,11 +130,11 @@ const tocSubtitle = computed(() => {
   return `${groups.value.length} 章 · ${pages} 页`;
 });
 
-function isCurrentChapter(group) {
+function isCurrentChapter(group: { index: number; end: number }) {
   return reader.currentIndex >= group.index && reader.currentIndex <= group.end;
 }
 
-function jumpTo(index) {
+function jumpTo(index: number) {
   reader.onSliderInput(index);
   ui.closeToc();
 }

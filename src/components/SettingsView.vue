@@ -87,7 +87,7 @@
               </div>
               <MdSegmentedControl
                 class="w-full"
-                :model-value="(theme.transitionStyle as any)"
+                :model-value="theme.transitionStyle"
                 :options="transitionOptions"
                 aria-label="翻页过渡"
                 @update:model-value="theme.setTransitionStyle"
@@ -595,13 +595,13 @@ const surfaceLabel = computed(() => {
   const option = SURFACE_MODE_OPTIONS.find(item => item.value === theme.surfaceMode);
   return option ? option.label : theme.surfaceMode;
 });
-const transitionLabel = computed(() => TRANSITION_LABELS[(theme.transitionStyle as any)] || '');
+const transitionLabel = computed(() => TRANSITION_LABELS[theme.transitionStyle] || '');
 const directionLabel = computed(() => {
   const option = directionOptions.find(item => item.value === readerDefaults.direction);
   return option ? option.label : '';
 });
 const spreadLabel = computed(() => readerDefaults.spread === 2 ? '双页' : '单页');
-const webtoonFitLabel = computed(() => WEBTOON_FIT_LABELS[readerDefaults.webtoonFit] || '');
+const webtoonFitLabel = computed(() => (WEBTOON_FIT_LABELS as Record<string, string>)[readerDefaults.webtoonFit as string] || '');
 const previewSinglePage = computed(() =>
   readerDefaults.spread === 1 || readerDefaults.direction === 'vertical'
 );
@@ -616,11 +616,11 @@ const previewCopyStyle = computed(() => ({
 const storageInfo = ref<{ usage: number; quota: number; ratio: number } | null>(null);
 const storageLoading = ref(true);
 const actionNote = ref('');
-const pendingAction = ref(null);
+const pendingAction = ref<string | null>(null);
 const actionBusy = ref(false);
 const cancelButtonRef = ref<HTMLButtonElement | null>(null);
 const confirmButtonRef = ref<HTMLButtonElement | null>(null);
-let dialogTrigger: any = null;
+let dialogTrigger: HTMLElement | null = null;
 const modalLayerOpen = computed(() => !!pendingAction.value);
 let previousModalBodyOverflow = '';
 let modalLayerLocked = false;
@@ -651,19 +651,19 @@ const dataDialogDescription = computed(() => {
   return `将删除 ${progressCount.value} 本作品的阅读位置与排版记忆。作品本身不会被删除。`;
 });
 
-function setDirection(value) {
+function setDirection(value: string) {
   settings.setReaderDefault('direction', value);
 }
 
-function setSpread(value) {
+function setSpread(value: number | string) {
   settings.setReaderDefault('spread', Number(value));
 }
 
-function setFontSize(value) {
+function setFontSize(value: number | string) {
   settings.setReaderDefault('fontSize', Number(value));
 }
 
-function changeDefaultFont(delta) {
+function changeDefaultFont(delta: number) {
   settings.setReaderDefault('fontSize', readerDefaults.fontSize + delta);
 }
 
@@ -683,7 +683,7 @@ async function openRepository() {
   }
 }
 
-async function selectSection(key) {
+async function selectSection(key: string) {
   if (activeSection.value === key) return;
   activeSection.value = key;
   debugNote.value = '';
@@ -704,9 +704,9 @@ function addDemoNovel() {
   debugNote.value = `已添加「${book.title}」`;
 }
 
-function requestDataAction(action) {
+function requestDataAction(action: string) {
   if (actionBusy.value) return;
-  dialogTrigger = document.activeElement;
+      dialogTrigger = document.activeElement as HTMLElement | null;
   pendingAction.value = action;
 }
 
@@ -728,7 +728,7 @@ async function confirmDataAction() {
       actionNote.value = '阅读进度已清空';
     }
   } catch (err) {
-    actionNote.value = (err as any).message || '清空失败，请重试';
+    actionNote.value = (err as Error).message || '清空失败，请重试';
     console.warn('[HOMURA] 清空数据失败', err);
   } finally {
     await refreshStorage();
@@ -737,7 +737,7 @@ async function confirmDataAction() {
   }
 }
 
-function onDialogKeydown(event) {
+function onDialogKeydown(event: KeyboardEvent) {
   if (!pendingAction.value) return;
   if (event.key === 'Escape') {
     event.preventDefault();

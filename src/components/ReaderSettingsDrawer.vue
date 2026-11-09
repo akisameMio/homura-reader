@@ -197,11 +197,11 @@
 
           <div class="md-drawer-group-head mt-4">
             <span class="md-drawer-group-label">翻页过渡</span>
-            <b class="md-drawer-group-value">{{ TRANSITION_LABELS[(theme.transitionStyle as any)] }}</b>
+            <b class="md-drawer-group-value">{{ TRANSITION_LABELS[theme.transitionStyle] }}</b>
           </div>
           <MdSegmentedControl
             class="w-full"
-            :model-value="(theme.transitionStyle as any)"
+            :model-value="theme.transitionStyle"
             :options="transitionOptions"
             aria-label="翻页过渡"
             @update:model-value="theme.setTransitionStyle"
@@ -216,12 +216,12 @@
             </div>
             <div class="flex-1 min-w-0">
               <input ref="coverInput" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.avif,.bmp" class="hidden" aria-label="选择自定义封面图片" @change="onCoverSelected" />
-              <button type="button" class="md-tonal-button w-full" :disabled="coverBusy" @click="(coverInput as any)?.click()">{{ coverBusy ? '正在保存…' : '选择封面图片' }}</button>
+              <button type="button" class="md-tonal-button w-full" :disabled="coverBusy" @click="coverInput?.click()">{{ coverBusy ? '正在保存…' : '选择封面图片' }}</button>
               <button v-if="hasCustomCover" type="button" class="md-text-button w-full mt-1" :disabled="coverBusy" @click="saveCover(null)">恢复原封面</button>
               <p class="mt-2 text-[11px] leading-relaxed text-[var(--md-on-surface-variant)]">图片仅保存在本机，不修改原书文件。</p>
             </div>
           </div>
-          <p v-if="(reader.currentBook as any)?.id.startsWith('demo_')" class="mt-2 text-[11px] text-[var(--md-on-surface-variant)]">示例书封面仅在本次打开期间保留。</p>
+          <p v-if="reader.currentBook?.id.startsWith('demo_')" class="mt-2 text-[11px] text-[var(--md-on-surface-variant)]">示例书封面仅在本次打开期间保留。</p>
           <p v-if="coverError" role="alert" class="mt-2 text-[13px] text-[var(--md-error)]">{{ coverError }}</p>
         </section>
         </div>
@@ -275,11 +275,11 @@ const coverInput = shallowRef<HTMLInputElement | null>(null);
 const hasOverflow = ref(false);
 const coverBusy = ref(false);
 const coverError = ref('');
-const coverBook = computed(() => (shelf.library as any[]).find(book => book.id === (reader.currentBook as any)?.id));
-const currentCover = computed(() => (coverBook.value as any)?.cover || null);
-const hasCustomCover = computed(() => !!(coverBook.value as any)?.customCoverBlob);
-watch(() => (reader.currentBook as any)?.id, () => { coverError.value = ''; });
-watch([scrollRef, contentRef], ([scroll, content], previous, onCleanup) => {
+const coverBook = computed(() => shelf.library.find(book => book.id === reader.currentBook?.id));
+const currentCover = computed(() => coverBook.value?.cover || null);
+const hasCustomCover = computed(() => !!(coverBook.value)?.customCoverBlob);
+watch(() => reader.currentBook?.id, () => { coverError.value = ''; });
+watch([scrollRef, contentRef], ([scroll, content], _previous, onCleanup) => {
   if (!scroll || !content) return;
   const update = () => { hasOverflow.value = scroll.scrollHeight > scroll.clientHeight + 1; };
   const observer = new ResizeObserver(update);
@@ -289,27 +289,29 @@ watch([scrollRef, contentRef], ([scroll, content], previous, onCleanup) => {
   onCleanup(() => observer.disconnect());
 }, { flush: 'post' });
 
-function onFontNumberChange(event) {
-  if (event.target.value !== '') reader.setFontSize(event.target.value);
-  event.target.value = config.fontSize;
+function onFontNumberChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  if (input.value !== '') reader.setFontSize(Number(input.value));
+  input.value = String(config.fontSize);
 }
 
-async function saveCover(file) {
+async function saveCover(file: File | null) {
   if (coverBusy.value) return;
   coverError.value = '';
   coverBusy.value = true;
   try {
     await reader.setCustomCover(file);
   } catch (err) {
-    coverError.value = (err as any).message || '封面保存失败，请重试';
+    coverError.value = (err as Error).message || '封面保存失败，请重试';
   } finally {
     coverBusy.value = false;
   }
 }
 
-function onCoverSelected(event) {
-  const file = event.target.files?.[0];
-  event.target.value = '';
+function onCoverSelected(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
   if (file) saveCover(file);
 }
 const theme = useThemeStore();
@@ -322,7 +324,6 @@ const lineHeightLabel = computed(() => (READER_LINE_HEIGHT_OPTIONS.find(option =
 const pageMarginLabel = computed(() => (READER_MARGIN_OPTIONS.find(option => option.value === config.pageMargin) || READER_MARGIN_OPTIONS[1]).label);
 const settingsOpen = computed(() => ui.settingsOpen);
 const {
-  sheetRef: settingsSheetRef,
   onDragStart: onSheetDragStart,
   onDragMove: onSheetDragMove,
   onDragEnd: onSheetDragEnd,
@@ -334,7 +335,7 @@ const {
 });
 
 const isVertical = computed(() => config.direction === 'vertical');
-const isManga = computed(() => reader.currentBook && (reader.currentBook as any).type === 'manga');
+const isManga = computed(() => reader.currentBook && reader.currentBook.type === 'manga');
 
 const directions = [
   { value: 'ltr', label: '从左到右', title: '普通排版' },

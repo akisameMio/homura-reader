@@ -69,7 +69,7 @@ const props = defineProps({
 });
 
 const path = computed(() => {
-  const icon = ICONS[props.name];
+  const icon = (ICONS as Record<string, string[]>)[props.name];
   if (!icon) return '';
   return props.filled && icon[1] ? icon[1] : icon[0];
 });

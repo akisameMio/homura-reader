@@ -8,7 +8,7 @@
     style="scroll-padding-top: calc(3.5rem + env(safe-area-inset-top)); scroll-padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));"
   >
     <div
-      v-for="(p, idx) in (reader.activePages as any[])"
+      v-for="(p, idx) in reader.activePages"
       :key="idx"
       :id="'webtoon-page-' + idx"
       class="webtoon-page w-full flex flex-col items-center justify-center shrink-0"
@@ -38,9 +38,9 @@
   >
     <div ref="novelContent" :style="novelProseStyle" class="max-w-[660px] mx-auto bg-[var(--md-surface-low)] border-[0.5px] border-[var(--md-outline-variant)] rounded-[16px] p-5 sm:p-12 space-y-8">
       <section
-        v-for="p in (reader.activePages as any[])"
+        v-for="p in reader.activePages"
         :key="p.pageNumber"
-        :id="'webtoon-page-' + (p.pageNumber - 1)"
+        :id="'webtoon-page-' + ((p.pageNumber ?? 0) - 1)"
         data-novel-section
         class="webtoon-chapter border-b-[0.5px] border-[var(--border-line)] pb-6 last:border-none"
       >
@@ -66,8 +66,9 @@
 
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useReaderStore } from '../stores/reader.ts';
-import { decodePageImage, releaseDistantPageUrls } from '../services/pagination.ts';
+import { decodePageImage, releaseDistantPageUrls, type MangaPageItem } from '../services/pagination.ts';
 import { resolveProseStyle } from '../services/readerLayout.ts';
+import type { ReaderPage } from '../types.ts';
 
 const MANGA_DECODE_CONCURRENCY = 2;
 const MANGA_VISIBLE_MARGIN = 2;
@@ -75,15 +76,15 @@ const MANGA_QUEUE_WINDOW = 18;
 
 const reader = useReaderStore();
 const scrollRoot = ref<HTMLElement | null>(null);
-const novelContent = ref(null);
+const novelContent = ref<HTMLElement | null>(null);
 let scrollFrame = 0;
 let novelOffsetFrame = 0;
 let mangaOffsetFrame = 0;
 let novelOffsets: number[] = [];
 let mangaPageOffsets: number[] = [];
 let mangaImages: HTMLImageElement[] = [];
-const mangaDecodeQueue = new Map<number, any>();
-const mangaDecoding = new Map<number, any>();
+const mangaDecodeQueue = new Map<number, { index: number; imgEl: HTMLImageElement; pageData: ReaderPage; seq: number }>();
+const mangaDecoding = new Map<number, number>();
 const mangaLoadedIndexes = new Set<number>();
 let mangaDecodeActive = 0;
 let mangaDecodeSeq = 0;
@@ -92,9 +93,9 @@ let lastMangaDirection = 1;
 let lastScrollTop = 0;
 let lastScrollAt = 0;
 let mangaScrollVelocity = 0;
-const mountedBookId = (reader.currentBook as any)?.id;
-const mountedBook = reader.currentBook as any;
-const initialMangaIndex = (reader.currentBook as any)?.type === 'manga' ? reader.currentIndex : 0;
+const mountedBookId = reader.currentBook?.id;
+const mountedBook = reader.currentBook;
+const initialMangaIndex = reader.currentBook?.type === 'manga' ? reader.currentIndex : 0;
 let restoringMangaProgress = initialMangaIndex > 0;
 let disposed = false;
 let boundsObserver: ResizeObserver | null = null;
@@ -103,13 +104,13 @@ let lastMangaImage: HTMLImageElement | null = null;
 const mangaHasStableLayout = !!(mountedBook?.pageItems || []).every(hasPageSize);
 
 const novelProseStyle = computed(() => resolveProseStyle(reader.layoutConfig));
-const isManga = computed(() => reader.currentBook && (reader.currentBook as any).type === 'manga');
+const isManga = computed(() => reader.currentBook && reader.currentBook.type === 'manga');
 
-function hasPageSize(page) {
+function hasPageSize(page: ReaderPage | null | undefined) {
   return Number(page?.imageWidth) > 0 && Number(page?.imageHeight) > 0;
 }
 
-function webtoonPageStyle(page) {
+function webtoonPageStyle(page: ReaderPage) {
   if (!hasPageSize(page)) return undefined;
   const width = Number(page?.imageWidth) || 0;
   const height = Number(page?.imageHeight) || 0;
@@ -131,7 +132,7 @@ function webtoonPageStyle(page) {
   };
 }
 
-function webtoonImageClass(page) {
+function webtoonImageClass(page: ReaderPage) {
   if (hasPageSize(page)) return 'block w-full h-full object-contain';
   const fit = reader.layoutConfig.webtoonFit;
   if (fit === 'screen') return 'max-h-[calc(100dvh-6rem)] w-auto max-w-full object-contain mx-auto';
@@ -140,11 +141,11 @@ function webtoonImageClass(page) {
 }
 
 // 条漫滚出预载窗口后释放原图 URL 与 DOM 位图，避免整本图的编码字节都留在内存里。
-function releaseFarWebtoonPages(currentIdx) {
-  releaseDistantPageUrls(mountedBook, currentIdx, 6);
+function releaseFarWebtoonPages(currentIdx: number) {
+  if (mountedBook) releaseDistantPageUrls(mountedBook, currentIdx, 6);
 }
 
-function cancelMangaDecode(index) {
+function cancelMangaDecode(index: number) {
   mangaDecodeQueue.delete(index);
   // 原生解压无法真正中止；删掉 token 让迟到结果不再写回 img。
   mangaDecoding.delete(index);
@@ -152,7 +153,7 @@ function cancelMangaDecode(index) {
 
 // 清掉 src 会同步丢掉图片的固有高度，整卷高度瞬间缩短会把滚动位置带跑。
 // 释放前把当前渲染高度钉在页面容器上，重新解码后再恢复自然布局。
-function releaseImageElement(imgEl) {
+function releaseImageElement(imgEl: HTMLImageElement) {
   // 还在加载的页不要急着放掉：此时量到的是 alt 行高，会把整卷高度记小。
   if (!imgEl?.getAttribute('src') || !imgEl.complete || !imgEl.naturalHeight) return;
   const wrapper = imgEl.parentElement;
@@ -172,7 +173,7 @@ function releaseImageElement(imgEl) {
   }
 }
 
-function restoreImageElement(imgEl) {
+function restoreImageElement(imgEl: HTMLImageElement) {
   const wrapper = imgEl?.parentElement;
   if (wrapper?.dataset.placeholderHeight) {
     wrapper.style.height = '';
@@ -181,7 +182,7 @@ function restoreImageElement(imgEl) {
   if (imgEl) imgEl.style.visibility = '';
 }
 
-function enqueueMangaDecode(index) {
+function enqueueMangaDecode(index: number) {
   if (disposed || !isManga.value) return;
   const imgEl = mangaImages[index];
   const pageData = reader.activePages[index];
@@ -202,7 +203,7 @@ function enqueueMangaDecode(index) {
   pumpMangaDecodeQueue();
 }
 
-function mangaDecodeScore(index, visible, current) {
+function mangaDecodeScore(index: number, visible: { start: number; end: number }, current: number) {
   if (index >= visible.start && index <= visible.end) {
     return Math.abs(index - current);
   }
@@ -223,7 +224,7 @@ function pumpMangaDecodeQueue() {
     }
   }
   while (mangaDecodeActive < MANGA_DECODE_CONCURRENCY && mangaDecodeQueue.size > 0) {
-    let best: any = null;
+    let best: { index: number; imgEl: HTMLImageElement; pageData: ReaderPage; seq: number } | null = null;
     let bestScore = Infinity;
     for (const task of mangaDecodeQueue.values()) {
       const score = mangaDecodeScore(task.index, visible, current);
@@ -237,9 +238,9 @@ function pumpMangaDecodeQueue() {
     const token = ++mangaDecodeToken;
     mangaDecoding.set(best.index, token);
     mangaDecodeActive++;
-    decodePageImage(best.imgEl, best.pageData.itemRef, { preserveSrcOnEmpty: true })
+    decodePageImage(best.imgEl, best.pageData.itemRef as MangaPageItem, { preserveSrcOnEmpty: true })
       .then(ok => {
-        if (disposed || (reader.currentBook as any)?.id !== mountedBookId) return;
+        if (disposed || reader.currentBook?.id !== mountedBookId) return;
         if (mangaDecoding.get(best.index) !== token) return;
         if (ok) {
           mangaLoadedIndexes.add(best.index);
@@ -361,7 +362,7 @@ function mangaPrefetchAhead() {
 }
 
 function syncMangaScrollPosition() {
-  if (disposed || !isManga.value || (reader.currentBook as any)?.id !== mountedBookId) return;
+  if (disposed || !isManga.value || reader.currentBook?.id !== mountedBookId) return;
   const root = scrollRoot.value;
   if (!root || reader.activePages.length === 0) return;
   // 恢复旧进度时先不要用滚动容器的初始 top 覆盖 currentIndex。
@@ -426,7 +427,7 @@ function ensureNovelOffsets() {
   if (novelOffsets.length !== reader.activePages.length) measureNovelOffsets();
 }
 
-function findNovelSectionIndex(probe) {
+function findNovelSectionIndex(probe: number) {
   let low = 0;
   let high = novelOffsets.length - 1;
   let result = 0;
@@ -443,7 +444,7 @@ function findNovelSectionIndex(probe) {
 }
 
 function syncNovelScrollPosition() {
-  if (disposed || (reader.currentBook as any)?.id !== mountedBookId) return;
+  if (disposed || reader.currentBook?.id !== mountedBookId) return;
   const root = scrollRoot.value;
   if (!root || isManga.value || reader.activePages.length === 0) return;
 
@@ -484,7 +485,7 @@ function onScroll() {
 
 function syncScrollBounds() {
   const root = scrollRoot.value;
-  if (!root || disposed || (reader.currentBook as any)?.id !== mountedBookId) return;
+  if (!root || disposed || reader.currentBook?.id !== mountedBookId) return;
   if (isManga.value && (!lastMangaImage || !lastMangaImage.isConnected)) {
     lastMangaImage = root.querySelector(`img[data-lazy-index="${reader.activePages.length - 1}"]`);
   }
@@ -539,11 +540,11 @@ onMounted(() => {
   }
 
   // 注册滚动入口：store 的翻页 / 滑条动作在条漫模式下转成滚动
-  reader.webtoonScrollBy = dir => {
+  reader.webtoonScrollBy = (dir: number) => {
     const el = scrollRoot.value;
     if (el) el.scrollBy({ top: dir * el.clientHeight * 0.88, behavior: 'smooth' });
   };
-  reader.webtoonScrollTo = idx => scrollToSection(idx, 'smooth');
+  reader.webtoonScrollTo = (idx: number) => scrollToSection(idx, 'smooth');
 
   if (isManga.value) {
     // 条漫恢复进度时先把容器滚到目标页，再建立观察器，避免启动时抢解第一页。
@@ -551,7 +552,7 @@ onMounted(() => {
     mangaImages = Array.from(scrollRoot.value!.querySelectorAll('img[data-lazy-index]'));
     reader.webtoonObserver = new IntersectionObserver(entries => {
       entries.forEach(entry => {
-        if (disposed || (reader.currentBook as any)?.id !== mountedBookId) return;
+        if (disposed || reader.currentBook?.id !== mountedBookId) return;
         const lazyIndex = parseInt(entry.target.getAttribute('data-lazy-index') as string, 10);
         if (!Number.isInteger(lazyIndex)) return;
         if (!entry.isIntersecting) return;
@@ -559,7 +560,7 @@ onMounted(() => {
       });
     }, { root: scrollRoot.value, rootMargin: '1600px 0px', threshold: 0.01 });
 
-    scrollRoot.value!.querySelectorAll('img[data-lazy-index]').forEach(img => (reader.webtoonObserver as any).observe(img));
+    scrollRoot.value!.querySelectorAll('img[data-lazy-index]').forEach(img => (reader.webtoonObserver as IntersectionObserver).observe(img));
     lastMangaImage = scrollRoot.value!.querySelector(`img[data-lazy-index="${total - 1}"]`);
     lastScrollTop = scrollRoot.value!.scrollTop;
     lastScrollAt = performance.now();

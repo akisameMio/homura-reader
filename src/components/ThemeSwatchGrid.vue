@@ -36,7 +36,9 @@ defineProps({
 
 const theme = useThemeStore();
 
-function swatchStyle(option) {
+type ThemeOption = (typeof THEME_OPTIONS)[number];
+
+function swatchStyle(option: ThemeOption) {
   const [light, base, deep] = option.tones;
   return {
     '--swatch-light': light,

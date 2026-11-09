@@ -23,7 +23,7 @@ import { useDuplicateImport } from '../composables/useDuplicateImport.ts';
 import DuplicateImportContent from './DuplicateImportContent.vue';
 
 const dialogRef = shallowRef<HTMLDialogElement | null>(null);
-const contentRef = shallowRef<any>(null);
+const contentRef = shallowRef<{ focusInitial?: () => void } | null>(null);
 const { pendingDuplicate, resolveImport } = useDuplicateImport();
 
 watch(pendingDuplicate, async pending => {
@@ -35,10 +35,10 @@ watch(pendingDuplicate, async pending => {
   if (!pendingDuplicate.value) return;
   if (!dialogRef.value) return;
   if (!dialogRef.value.open) dialogRef.value.showModal();
-  contentRef.value?.focusInitial();
+  contentRef.value?.focusInitial?.();
 }, { immediate: true });
 
-function onBackdropClick(event) {
+function onBackdropClick(event: MouseEvent) {
   if (!dialogRef.value) return;
   if (event.target !== dialogRef.value) return;
   const bounds = dialogRef.value.getBoundingClientRect();
@@ -47,7 +47,7 @@ function onBackdropClick(event) {
   }
 }
 
-function onKeydown(event) {
+function onKeydown(event: KeyboardEvent) {
   if (event.key !== 'Tab') return;
   if (!dialogRef.value) return;
   const buttons = dialogRef.value.querySelectorAll('button');

@@ -24,7 +24,7 @@
           '--enter-seed-bottom': `${enterSeed.bottom}px`
         }"
         :role="surface === 'shelf'
-          ? ((pendingShelfDialog as any)?.kind === 'confirm' ? 'alertdialog' : 'dialog')
+          ? (shelfDialogDisplay?.kind === 'confirm' ? 'alertdialog' : 'dialog')
           : ['duplicate', 'import', 'update'].includes(surface as string) ? 'dialog' : undefined"
         :aria-modal="surface === 'shelf' || surface === 'duplicate' ? 'true' : undefined"
         :aria-labelledby="surface === 'shelf'
@@ -86,7 +86,7 @@
           v-else-if="surface === 'shelf'"
           ref="shelfContentRef"
           host-primary-action
-          :request="(pendingShelfDialog as any)"
+          :request="shelfDialogDisplay"
           @resolve="resolveShelfDialog"
         />
 
@@ -95,12 +95,12 @@
           ref="updatePanelRef"
           host-primary-action
           :status="updates.updateStatus"
-          :release="(updates.latestRelease as any)"
+          :release="updates.latestRelease"
           :current-version="updates.appVersion"
           :package-info="updates.updatePackage"
-          :error="(updates.updateError as any)"
+          :error="updateErrorForDisplay"
           :download="updates.downloadState"
-          :download-error="(updates.downloadError as any)"
+          :download-error="downloadErrorForDisplay"
           @close="updates.closeUpdateDialog"
           @retry="updates.checkForUpdates"
           @changelog="updates.openChangelog"
@@ -226,6 +226,7 @@ import {
   shallowRef,
   watch
 } from 'vue';
+import type { ComponentPublicInstance } from 'vue';
 import { canPickFolder } from '../services/platform.ts';
 import { useImportProgressStore } from '../stores/importProgress.ts';
 import { useUpdateStore } from '../stores/updates.ts';
@@ -247,19 +248,20 @@ const updates = useUpdateStore();
 const { pendingShelfDialog, resolveShelfDialog } = useShelfDialogs();
 const { pendingDuplicate, resolveImport } = useDuplicateImport();
 
-const rootRef = shallowRef<any>(null);
-const surfaceRef = shallowRef<any>(null);
-const importPanelRef = shallowRef<any>(null);
-const duplicateContentRef = shallowRef<any>(null);
-const shelfContentRef = shallowRef<any>(null);
-const updatePanelRef = shallowRef<any>(null);
-const importButtonRef = shallowRef<any>(null);
-const updateButtonRef = shallowRef<any>(null);
+const rootRef = shallowRef<HTMLElement | null>(null);
+const surfaceRef = shallowRef<HTMLElement | null>(null);
+const importPanelRef = shallowRef<InstanceType<typeof ImportProgressPanel> | null>(null);
+const duplicateContentRef = shallowRef<InstanceType<typeof DuplicateImportContent> | null>(null);
+const shelfContentRef = shallowRef<InstanceType<typeof ShelfDialogContent> | null>(null);
+const updatePanelRef = shallowRef<InstanceType<typeof UpdateIslandPanel> | null>(null);
+const importButtonRef = shallowRef<HTMLButtonElement | null>(null);
+const updateButtonRef = shallowRef<HTMLButtonElement | null>(null);
 
 const menuOpen = ref(false);
-const lastTrigger = shallowRef<any>(null);
-const restoreFocusTarget = shallowRef<any>(null);
-const heldAction = shallowRef<any>(null);
+const lastTrigger = shallowRef<HTMLElement | null>(null);
+const restoreFocusTarget = shallowRef<HTMLElement | null>(null);
+type IslandAction = { label?: string; icon?: string; variant?: 'primary' | 'tonal' | 'danger'; disabled?: boolean; run?: () => void };
+const heldAction = shallowRef<IslandAction | null>(null);
 const actionFaceShown = ref(false);
 const surfaceSwapping = ref(false);
 const surfaceLeaving = ref(false);
@@ -268,9 +270,9 @@ const returnFocus = ref('import');
 let autoDismissTimer = 0;
 let actionFaceTimer = 0;
 
-function setSurfaceRef(element) {
+function setSurfaceRef(element: Element | ComponentPublicInstance | null) {
   // 两张卡片同时在 DOM 中时只跟随最新挂载的那张，旧卡片卸载不能清空引用。
-  if (element) {
+  if (element instanceof HTMLElement) {
     surfaceRef.value = element;
     return;
   }
@@ -287,6 +289,9 @@ const updatePending = computed(() => (
 const importSurfaceOpen = computed(() => (
   importProgress.status !== 'idle' && importProgress.expanded
 ));
+const shelfDialogDisplay = computed(() => pendingShelfDialog.value);
+const updateErrorForDisplay = computed(() => (updates.updateError ?? null) as Record<string, unknown> | null);
+const downloadErrorForDisplay = computed(() => (updates.downloadError ?? null) as Record<string, unknown> | null);
 const surface = computed(() => {
   if (pendingDuplicate.value) return 'duplicate';
   if (pendingShelfDialog.value) return 'shelf';
@@ -297,7 +302,7 @@ const surface = computed(() => {
 });
 const surfaceKey = computed(() => {
   if (surface.value === 'duplicate') return 'duplicate';
-  if (surface.value === 'shelf') return `shelf-${(pendingShelfDialog.value as any)?.kind || 'dialog'}`;
+  if (surface.value === 'shelf') return `shelf-${shelfDialogDisplay.value?.kind || 'dialog'}`;
   if (surface.value === 'update') return `update-${updates.updateStatus}`;
   return surface.value;
 });
@@ -398,7 +403,7 @@ const buttonDisabled = computed(() => (
   && !!heldAction.value?.disabled
 ));
 
-function choose(action) {
+function choose(action: 'pick-files' | 'pick-folder' | 'create-collection') {
   menuOpen.value = false;
   emit(action);
 }
@@ -454,7 +459,7 @@ function syncActiveAction() {
   const action = activeAction.value;
   if (!action || !surface.value || surfaceSwapping.value) return;
   clearActionFaceTimer();
-  heldAction.value = action;
+  heldAction.value = action as IslandAction | null;
   actionFaceShown.value = true;
 }
 
@@ -517,7 +522,7 @@ function focusImportWhenReady(remaining = 5) {
   requestAnimationFrame(() => focusImportWhenReady(remaining - 1));
 }
 
-async function focusSurface(key) {
+async function focusSurface(key: string | null) {
   if (!key) {
     await nextTick();
     const active = document.activeElement;
@@ -579,7 +584,7 @@ async function focusSurface(key) {
     return;
   }
   if (surface.value === 'menu') {
-    surfaceRef.value?.querySelector('.island-menu-item')?.focus();
+    surfaceRef.value?.querySelector<HTMLElement>('.island-menu-item')?.focus();
   }
 }
 
@@ -599,7 +604,7 @@ function focusableElements(): HTMLElement[] {
   return elements;
 }
 
-function onKeydown(event) {
+function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') {
     if (pendingDuplicate.value) {
       event.preventDefault();
@@ -644,8 +649,8 @@ function onKeydown(event) {
   }
 }
 
-function onDocumentPointerDown(event) {
-  if (rootRef.value?.contains(event.target)) return;
+function onDocumentPointerDown(event: PointerEvent) {
+  if (rootRef.value?.contains(event.target as Node)) return;
   if (pendingDuplicate.value) {
     resolveImport();
     return;
@@ -669,7 +674,7 @@ watch(
   (pending, previous) => {
     if (pending && !previous) {
       const active = document.activeElement;
-      restoreFocusTarget.value = active && active !== document.body ? active : null;
+      restoreFocusTarget.value = active instanceof HTMLElement && active !== document.body ? active : null;
     }
     if (pending && surface.value === 'duplicate') {
       nextTick(() => {
@@ -685,7 +690,7 @@ watch(
   (pending, previous) => {
     if (pending && !previous) {
       const active = document.activeElement;
-      restoreFocusTarget.value = active && active !== document.body ? active : null;
+      restoreFocusTarget.value = active instanceof HTMLElement && active !== document.body ? active : null;
     }
     if (pending && surface.value === 'shelf') {
       nextTick(() => {
@@ -703,7 +708,7 @@ watch(
     returnFocus.value = 'update';
     if (pendingShelfDialog.value) return;
     const active = document.activeElement;
-    if (active && active !== document.body && !rootRef.value?.contains(active)) {
+    if (active instanceof HTMLElement && active !== document.body && !rootRef.value?.contains(active)) {
       restoreFocusTarget.value = active;
     }
   },

@@ -60,15 +60,17 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import type { PropType } from 'vue';
+import type { Book } from '../types.ts';
 import { resolveBookFormat } from '../services/utils.ts';
 import MdIcon from './MdIcon.vue';
 
 const props = defineProps({
-  book: { type: Object, required: true },
+  book: { type: Object as PropType<Book>, required: true },
   selecting: { type: Boolean, default: false },
   selected: { type: Boolean, default: false },
   removeLabel: { type: String, default: '从书架移除' },
-  progress: { type: Object, default: null },
+  progress: { type: Object as PropType<Record<string, unknown> | null>, default: null },
   dragging: { type: Boolean, default: false }
 });
 

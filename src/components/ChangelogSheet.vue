@@ -122,7 +122,7 @@ const props = defineProps({
   open: { type: Boolean, default: false },
   compact: { type: Boolean, default: false },
   status: { type: String, default: 'idle' },
-  releases: { type: Array as PropType<any[]>, default: () => [] },
+  releases: { type: Array as PropType<ChangelogRelease[]>, default: () => [] },
   currentVersion: { type: String, required: true },
   error: { type: Object, default: null }
 });
@@ -148,11 +148,19 @@ const {
   onClose: () => emit('close')
 });
 
-function isCurrent(release) {
+interface ChangelogRelease {
+  id?: string;
+  version: string;
+  tag?: string;
+  dateLabel?: string;
+  notes: { intro?: string; itemCount: number; groups: Array<{ title: string; items: string[] }> };
+}
+
+function isCurrent(release: ChangelogRelease) {
   return release.version === props.currentVersion.replace(/^v/i, '');
 }
 
-function releaseSummary(release) {
+function releaseSummary(release: ChangelogRelease) {
   if (release.notes.intro) return release.notes.intro;
   if (release.notes.itemCount > 0) return `${release.notes.itemCount} 项更新`;
   return '';
@@ -176,7 +184,7 @@ function focusableElements(): HTMLElement[] {
   ) as HTMLElement[];
 }
 
-function onPanelKeydown(event) {
+function onPanelKeydown(event: KeyboardEvent) {
   if (!props.open) return;
   if (event.key === 'Escape') {
     event.preventDefault();

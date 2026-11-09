@@ -247,7 +247,7 @@ const liveMessage = ref('');
 let lastLiveAt = 0;
 let lastLiveDone = 0;
 
-function stepState(key) {
+function stepState(key: string) {
   if (store.status === 'done' || store.status === 'cancelled') {
     return store.phase === 'save' || store.status === 'done' ? 'complete' : 'pending';
   }

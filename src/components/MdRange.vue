@@ -31,7 +31,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue']);
 
-function toNumber(value) {
+function toNumber(value: number | string) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
 }
@@ -50,8 +50,8 @@ const progress = computed(() => {
   return Math.min(100, Math.max(0, ((currentValue.value - min) / (max - min)) * 100));
 });
 
-function onInput(event) {
-  const value = Number(event.target.value);
+function onInput(event: Event) {
+  const value = Number((event.target as HTMLInputElement).value);
   currentValue.value = value;
   emit('update:modelValue', value);
 }

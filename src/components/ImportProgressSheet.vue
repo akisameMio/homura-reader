@@ -23,7 +23,7 @@ defineEmits(['retry']);
 
 const store = useImportProgressStore();
 const dialogRef = shallowRef<HTMLDialogElement | null>(null);
-const panelRef = shallowRef<any>(null);
+const panelRef = shallowRef<{ focusInitial?: () => void } | null>(null);
 const open = computed(() => store.status !== 'idle' && store.expanded);
 
 watch(
@@ -32,7 +32,7 @@ watch(
     await nextTick();
     if (visible) {
       if (!dialogRef.value?.open) dialogRef.value?.showModal();
-      panelRef.value?.focusInitial();
+      panelRef.value?.focusInitial?.();
       return;
     }
     dialogRef.value?.close();
@@ -48,7 +48,7 @@ function closeSheet() {
   store.dismiss();
 }
 
-function onBackdropClick(event) {
+function onBackdropClick(event: MouseEvent) {
   if (event.target === dialogRef.value) closeSheet();
 }
 </script>

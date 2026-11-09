@@ -81,7 +81,7 @@
           <span>{{ option.title }}</span>
           <MdIcon name="chevron_right" />
         </button>
-        <p v-if="!request.options.length" class="move-empty">暂无其他书库，请先新建书库。</p>
+        <p v-if="!request.options?.length" class="move-empty">暂无其他书库，请先新建书库。</p>
       </div>
     </template>
 
@@ -158,10 +158,12 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, shallowRef, watch } from 'vue';
+import type { PropType } from 'vue';
 import MdIcon from './MdIcon.vue';
+import type { ShelfDialogOptions } from '../composables/useShelfDialogs.ts';
 
 const props = defineProps({
-  request: { type: Object, default: null },
+  request: { type: Object as PropType<ShelfDialogOptions | null>, default: null },
   hostPrimaryAction: { type: Boolean, default: false }
 });
 const emit = defineEmits(['resolve']);

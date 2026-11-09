@@ -26,10 +26,10 @@
         <div class="reader-stage-shell" :class="{ 'is-obscured': ui.readerDrawerOpen }">
           <WebtoonView
             v-if="reader.layoutConfig.direction === 'vertical'"
-            :key="'webtoon-' + (reader.currentBook as any).id"
+            :key="'webtoon-' + reader.currentBook?.id"
           />
           <template v-else>
-            <PaginatedView :key="'paginated-' + (reader.currentBook as any).type + '-' + (reader.currentBook as any).id" />
+            <PaginatedView :key="'paginated-' + reader.currentBook?.type + '-' + reader.currentBook?.id" />
             <!-- 左右翻页箭头：跟手翻页之外给鼠标用户一个落点，悬停纸面时浮现 -->
             <button
               type="button"
@@ -147,7 +147,7 @@ const {
 } = useReaderBackDismiss(reader, ui);
 
 // 桌面：鼠标贴近上下边缘唤出工具栏；工具栏可见时，移动鼠标会重新计时
-function onMouseMove(e) {
+function onMouseMove(e: PointerEvent) {
   if (e.pointerType !== 'mouse' || e.buttons) return;
   if (!reader.currentBook) return;
   const nearEdge = e.clientY <= 88 || e.clientY >= window.innerHeight - 88;
@@ -155,13 +155,13 @@ function onMouseMove(e) {
 }
 
 // 条漫保留原生纵向滚动，鼠标按住正文也可上下拖动，短点沿用四分区。
-const tapInfo = { active: false, pointerId: null, x: 0, y: 0, t: 0, maxDistance: 0, scrollTop: 0 };
+const tapInfo = { active: false, pointerId: null as number | null, x: 0, y: 0, t: 0, maxDistance: 0, scrollTop: 0 };
 
-function onTouchStart(e) {
+function onTouchStart(e: PointerEvent) {
   if (reader.layoutConfig.direction !== 'vertical' || e.isPrimary === false) return;
   if (ui.readerDrawerOpen) return;
   if (e.pointerType === 'mouse' && e.button !== 0) return;
-  if (e.target.closest?.('button, input, a, select, textarea, [role="dialog"]')) return;
+  if ((e.target as HTMLElement | null)?.closest?.('button, input, a, select, textarea, [role="dialog"]')) return;
   tapInfo.active = true;
   tapInfo.pointerId = e.pointerId;
   tapInfo.x = e.clientX;
@@ -171,7 +171,7 @@ function onTouchStart(e) {
   tapInfo.scrollTop = viewportRef.value!.querySelector('[data-reader-scroll]')?.scrollTop || 0;
 }
 
-function onViewportPointerMove(e) {
+function onViewportPointerMove(e: PointerEvent) {
   onMouseMove(e);
   if (!tapInfo.active || tapInfo.pointerId !== e.pointerId) return;
   const dx = e.clientX - tapInfo.x;
@@ -185,7 +185,7 @@ function onViewportPointerMove(e) {
   }
 }
 
-function onTouchEnd(e) {
+function onTouchEnd(e: PointerEvent) {
   if (!tapInfo.active || tapInfo.pointerId !== e.pointerId) return;
   tapInfo.active = false;
   const bounds = viewportRef.value!.getBoundingClientRect();
@@ -198,7 +198,7 @@ function onTouchEnd(e) {
 
 function cancelVerticalGesture() { tapInfo.active = false; }
 
-watch(() => (reader.currentCollection as any)?.id, id => { if (!id && ui.collectionTocOpen) ui.closeCollectionToc(); });
+watch(() => reader.currentCollection?.id, id => { if (!id && ui.collectionTocOpen) ui.closeCollectionToc(); });
 
 // 阅读器隐藏 body 滚动前，记录页面滚动条宽度。部分 WebView 不支持
 // scrollbar-gutter，若只隐藏滚动条，返回结束时书架会被突然挤窄。
@@ -229,7 +229,7 @@ function measureFixedViewportWidth() {
   return width;
 }
 
-function setReaderScrollLock(locked) {
+function setReaderScrollLock(locked: boolean) {
   const html = document.documentElement;
   const isLocked = html.classList.contains('reader-scroll-locked');
   if (locked === isLocked) return;
@@ -262,7 +262,7 @@ function setReaderScrollLock(locked) {
 }
 
 // 阅读器是全屏遮罩，锁住底层书架页的滚动，避免右侧多出无用的长滚动条
-watch(() => (reader.currentBook as any)?.id, id => {
+watch(() => reader.currentBook?.id, id => {
   cancelVerticalGesture();
   setReaderScrollLock(!!id);
   document.documentElement.classList.toggle('reader-active', !!id);

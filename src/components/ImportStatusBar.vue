@@ -141,7 +141,7 @@ watch(
 
 watch(
   () => store.status,
-  status => {
+  () => {
     clearDismissTimer();
     if (!store.isAutoDismissable || store.expanded) return;
     dismissTimer = window.setTimeout(() => {

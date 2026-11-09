@@ -7,18 +7,19 @@
     @click="onBackdropClick"
     @keydown.stop="onKeydown"
   >
-    <ShelfDialogContent ref="contentRef" :request="(pendingShelfDialog as any)" @resolve="resolveShelfDialog" />
+    <ShelfDialogContent ref="contentRef" :request="shelfDialogRequestForDisplay" @resolve="resolveShelfDialog" />
   </dialog>
 </template>
 
 <script setup lang="ts">
-import { shallowRef, watch, nextTick } from 'vue';
+import { shallowRef, computed, watch, nextTick } from 'vue';
 import { useShelfDialogs } from '../composables/useShelfDialogs.ts';
 import ShelfDialogContent from './ShelfDialogContent.vue';
 
 const { pendingShelfDialog, resolveShelfDialog } = useShelfDialogs();
 const dialogRef = shallowRef<HTMLDialogElement | null>(null);
-const contentRef = shallowRef<any>(null);
+const contentRef = shallowRef<InstanceType<typeof ShelfDialogContent> | null>(null);
+const shelfDialogRequestForDisplay = computed(() => pendingShelfDialog.value);
 
 watch(pendingShelfDialog, async pending => {
   if (!pending) {
@@ -31,7 +32,7 @@ watch(pendingShelfDialog, async pending => {
   contentRef.value?.focusInitial();
 }, { immediate: true });
 
-function onKeydown(event) {
+function onKeydown(event: KeyboardEvent) {
   if (event.key !== 'Tab') return;
   if (!dialogRef.value) return;
   const elements = [...dialogRef.value.querySelectorAll('button, input')] as HTMLElement[];
@@ -46,7 +47,7 @@ function onKeydown(event) {
   }
 }
 
-function onBackdropClick(event) {
+function onBackdropClick(event: MouseEvent) {
   if (event.target === dialogRef.value) resolveShelfDialog();
 }
 

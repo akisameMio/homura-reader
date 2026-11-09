@@ -62,7 +62,7 @@
   <section class="md-shelf-grid" :aria-label="favoritesOnly ? '收藏内容' : currentCollection ? `书库：${currentCollection.title}` : '书架内容'">
     <ContinueReading v-if="!favoritesOnly && !currentCollection && !selecting && featuredBooks.length" :books="featuredBooks" @open="$emit('open', $event)" />
     <CollectionCard v-for="collection in displayCollections" :key="collection.id" :collection="collection" :books="booksForCollection(collection)" :sort-key="sortKey" :touch-over="touchDrag.overId === collection.id" :selecting="selecting" :selected="selectedCollectionIds.includes(collection.id)" @open="openCollection" @toggle="toggleCollection" @move="moveDropped" />
-    <BookCard v-for="book in renderedBooks" :key="book.id" :book="book" :progress="(shelf.progressInfoFor(book.id) as any)" :selecting="selecting" :selected="selectedIds.includes(book.id)" :dragging="touchDrag.active && touchDrag.ids.includes(book.id)" :remove-label="favoritesOnly ? '取消收藏' : '从书架移除'" @open="openBook" @remove="removeBook" @drag="onBookDrag" @touchstart="onBookTouchStart($event, book.id)" />
+    <BookCard v-for="book in renderedBooks" :key="book.id" :book="book" :progress="shelf.progressInfoFor(book.id) ?? undefined" :selecting="selecting" :selected="selectedIds.includes(book.id)" :dragging="touchDrag.active && touchDrag.ids.includes(book.id)" :remove-label="favoritesOnly ? '取消收藏' : '从书架移除'" @open="openBook" @remove="removeBook" @drag="onBookDrag" @touchstart="onBookTouchStart($event, book.id)" />
     <div v-if="renderedBooks.length < orderedBooks.length" ref="loadMoreSentinel" class="col-span-full h-8" aria-hidden="true"></div>
     <p v-if="!displayBooks.length && !displayCollections.length" class="col-span-full py-16 text-center text-[13px] text-[var(--md-on-surface-variant)]">{{ emptyShelfHint }}</p>
   </section>
@@ -94,19 +94,20 @@ import ContinueReading from './ContinueReading.vue';
 import CollectionCard from './CollectionCard.vue';
 import MdIcon from './MdIcon.vue';
 import ShelfBatchBar from './ShelfBatchBar.vue';
+import type { Book, Collection } from '../types.ts';
 
-const props = defineProps({ books: { type: Array as PropType<any[]>, default: () => [] }, sortKey: { type: String, default: 'title' }, query: { type: String, default: '' }, hasFilter: { type: Boolean, default: false }, homeRequest: { type: Number, default: 0 }, favoritesOnly: { type: Boolean, default: false } });
+const props = defineProps({ books: { type: Array as PropType<Book[]>, default: () => [] }, sortKey: { type: String, default: 'title' }, query: { type: String, default: '' }, hasFilter: { type: Boolean, default: false }, homeRequest: { type: Number, default: 0 }, favoritesOnly: { type: Boolean, default: false } });
 const emit = defineEmits(['open', 'browse']);
 const shelf = useShelfStore();
 const { askShelfDialog } = useShelfDialogs();
 const { isTouch } = useViewport();
 const selecting = ref(false);
-const selectedIds = ref<any[]>([]);
-const selectedCollectionIds = ref<any[]>([]);
+const selectedIds = ref<string[]>([]);
+const selectedCollectionIds = ref<string[]>([]);
 const busy = ref(false);
-const currentCollection = computed(() => props.favoritesOnly ? null : (shelf.collections as any[]).find(item => item.id === shelf.activeCollectionId) || null);
+const currentCollection = computed(() => props.favoritesOnly ? null : shelf.collections.find(item => item.id === shelf.activeCollectionId) || null);
 const showShelfHeaderRow = computed(() => !currentCollection.value && !selecting.value);
-const groupedIds = computed(() => new Set((shelf.collections as any[]).flatMap(item => item.bookIds)));
+const groupedIds = computed(() => new Set(shelf.collections.flatMap(item => item.bookIds)));
 const displayBooks = computed(() => props.books.filter(book => props.favoritesOnly ? book.favorite : currentCollection.value ? currentCollection.value.bookIds.includes(book.id) : !groupedIds.value.has(book.id)));
 const featuredBooks = computed(() => currentCollection.value ? displayBooks.value : props.hasFilter ? props.books : shelf.library);
 const orderedBooks = computed(() => currentCollection.value ? displayBooks.value : groupShelfBooks(displayBooks.value).flatMap(section => section.books));
@@ -142,19 +143,19 @@ const TOUCH_DRAG_DELAY = 420;
 const TOUCH_DRAG_CANCEL_DISTANCE = 10;
 const AUTO_SCROLL_EDGE = 88;
 const AUTO_SCROLL_MAX_SPEED = 14;
-const touchDrag = reactive<any>({
+const touchDrag = reactive({
   active: false,
   x: 0,
   y: 0,
-  ids: [],
+  ids: [] as string[],
   title: '',
   cover: '',
   count: 0,
-  overId: null,
+  overId: null as string | null,
   home: false
 });
 let touchTimer: number | null = null;
-let touchContext: any = null;
+let touchContext: { id: string; startX: number; startY: number; x: number; y: number; scrollEl: Element | null } | null = null;
 let autoScrollFrame = 0;
 let autoScrollVelocity = 0;
 let autoScrollEl: Element | null = null;
@@ -169,7 +170,7 @@ const touchGhostStyle = computed(() => {
 });
 const touchDragHint = computed(() => {
   if (touchDrag.overId) {
-    const collection = (shelf.collections as any[]).find(item => item.id === touchDrag.overId);
+    const collection = shelf.collections.find(item => item.id === touchDrag.overId);
     return collection ? `松手移入「${collection.title}」` : '松手移入书库';
   }
   if (touchDrag.home) return '松手移回主页';
@@ -180,20 +181,20 @@ const displayCollections = computed(() => {
   if (props.favoritesOnly || currentCollection.value) return [];
   const visible = new Set(props.books.map(book => book.id));
   const keyword = normalizeBookTitle(props.query);
-  const list = (shelf.collections as any[]).filter(item => !props.hasFilter || (keyword && normalizeBookTitle(item.title).includes(keyword)) || item.bookIds.some(id => visible.has(id)));
-  const latest = item => Math.max(0, ...item.bookIds.map(id => shelf.progressMap[id]?.updatedAt || 0));
-  return [...list].sort((a, b) => (props.sortKey === 'recent' ? b.createdAt - a.createdAt : props.sortKey === 'progress' ? latest(b) - latest(a) : 0) || compareBookTitles(a, b));
+  const list = shelf.collections.filter(item => !props.hasFilter || (keyword && normalizeBookTitle(item.title).includes(keyword)) || item.bookIds.some((id: string) => visible.has(id)));
+  const latest = (item: Collection) => Math.max(0, ...item.bookIds.map((id: string) => shelf.progressMap[id]?.updatedAt || 0));
+  return [...list].sort((a, b) => (props.sortKey === 'recent' ? (b.createdAt || 0) - (a.createdAt || 0) : props.sortKey === 'progress' ? latest(b) - latest(a) : 0) || compareBookTitles(a, b));
 });
 
-function booksForCollection(collection) {
+function booksForCollection(collection: Collection) {
   const ids = new Set(collection.bookIds);
-  return (shelf.library as any[]).filter(book => ids.has(book.id));
+  return shelf.library.filter(book => ids.has(book.id));
 }
 
-function openCollection(id) { shelf.activeCollectionId = id; emit('browse'); }
+function openCollection(id: string) { shelf.activeCollectionId = id; emit('browse'); }
 function clearSelection() { selectedIds.value = []; selectedCollectionIds.value = []; }
 function toggleSelection() { selecting.value = !selecting.value; clearSelection(); }
-function toggleCollection(id) {
+function toggleCollection(id: string) {
   selectedCollectionIds.value = selectedCollectionIds.value.includes(id)
     ? selectedCollectionIds.value.filter(item => item !== id)
     : [...selectedCollectionIds.value, id];
@@ -206,12 +207,12 @@ function selectAll() {
   selectedIds.value = displayBooks.value.map(book => book.id);
   selectedCollectionIds.value = displayCollections.value.map(collection => collection.id);
 }
-async function removeBook(id) {
+async function removeBook(id: string) {
   if (!props.favoritesOnly) {
     try {
       await shelf.removeBook(id);
     } catch (err) {
-      shelf.error = (err as any).message || '移除书本失败，请重试';
+      shelf.error = (err as Error).message || '移除书本失败，请重试';
       console.warn('[HOMURA] 移除书本失败', err);
     }
     return;
@@ -219,25 +220,25 @@ async function removeBook(id) {
   try {
     await shelf.setFavorite(id, false);
   } catch (err) {
-    shelf.error = (err as any).message || '取消收藏失败，请重试';
+    shelf.error = (err as Error).message || '取消收藏失败，请重试';
     console.warn('[HOMURA] 取消收藏失败', err);
   }
 }
-function openBook(id) {
+function openBook(id: string) {
   if (!selecting.value) return emit('open', id);
   selectedIds.value = selectedIds.value.includes(id) ? selectedIds.value.filter(item => item !== id) : [...selectedIds.value, id];
 }
 
-async function perform(action) {
+async function perform(action: () => unknown) {
   if (busy.value) return;
   busy.value = true;
   try { await action(); } catch (err) { console.warn('[HOMURA] 书库操作失败', err); } finally { busy.value = false; }
 }
 
 async function chooseDestination() {
-  const options = (shelf.collections as any[]).filter(item => item.id !== shelf.activeCollectionId).sort(compareBookTitles).map(item => ({ value: item.id, title: item.title }));
+  const options = shelf.collections.filter(item => item.id !== shelf.activeCollectionId).sort(compareBookTitles).map(item => ({ value: item.id, title: item.title }));
   const target = await askShelfDialog({ kind: 'move', title: '移入书库', message: `将选中的 ${selectedIds.value.length} 本书移动到：`, options });
-  if (target !== null) await moveSelected(target);
+  if (typeof target === 'string') await moveSelected(target);
 }
 
 async function deleteSelected() {
@@ -245,7 +246,7 @@ async function deleteSelected() {
   const collectionCount = selectedCollectionIds.value.length;
   if ((!bookCount && !collectionCount) || busy.value) return;
   const removingFavorites = props.favoritesOnly;
-  const changes: any[] = [];
+  const changes: string[] = [];
   if (bookCount) changes.push(`删除选中的 ${bookCount} 本作品、原始文件与阅读记录`);
   if (collectionCount) changes.push(`删除选中的 ${collectionCount} 个书库（书库内作品会移回主页）`);
   const confirmed = await askShelfDialog({
@@ -267,8 +268,8 @@ async function deleteSelected() {
   const bookIds = [...selectedIds.value];
   const collectionIds = [...selectedCollectionIds.value];
   await perform(async () => {
-    const failedBooks: any[] = [];
-    const failedCollections: any[] = [];
+    const failedBooks: string[] = [];
+    const failedCollections: string[] = [];
     for (const id of bookIds) {
       try {
         if (removingFavorites) await shelf.setFavorite(id, false);
@@ -295,23 +296,23 @@ async function deleteSelected() {
   });
 }
 
-async function moveSelected(target) {
+async function moveSelected(target: string | null) {
   await perform(async () => { await shelf.moveBooks(selectedIds.value, target); clearSelection(); selecting.value = false; });
 }
 
-function onBookDrag(event, id) {
+function onBookDrag(event: DragEvent, id: string) {
   const ids = selectedIds.value.includes(id) ? selectedIds.value : [id];
-  event.dataTransfer.setData('application/x-homura-books', JSON.stringify(ids));
-  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer!.setData('application/x-homura-books', JSON.stringify(ids));
+  event.dataTransfer!.effectAllowed = 'move';
 }
 
-async function moveDropped(ids, target) {
+async function moveDropped(ids: string[], target: string | null) {
   await perform(async () => { await shelf.moveBooks(ids, target); selectedIds.value = []; selecting.value = false; });
 }
 
-function onBookTouchStart(event, id) {
+function onBookTouchStart(event: TouchEvent, id: string) {
   if (!canTouchMoveBooks.value || touchDrag.active || event.touches.length !== 1) return;
-  if (event.target && event.target.closest('.card-remove-btn')) return;
+  if (event.target && (event.target as HTMLElement).closest('.card-remove-btn')) return;
 
   cancelTouchCandidate();
   const touch = event.touches[0];
@@ -321,7 +322,7 @@ function onBookTouchStart(event, id) {
     startY: touch.clientY,
     x: touch.clientX,
     y: touch.clientY,
-    scrollEl: findScrollParent(event.currentTarget)
+    scrollEl: findScrollParent(event.currentTarget as Element)
   };
   window.addEventListener('touchmove', onBookTouchMove, { passive: false });
   window.addEventListener('touchend', onBookTouchEnd, { passive: false });
@@ -332,12 +333,13 @@ function onBookTouchStart(event, id) {
 function beginTouchDrag() {
   touchTimer = null;
   if (!touchContext || touchDrag.active) return;
-  const ids = selectedIds.value.includes(touchContext.id) ? [...selectedIds.value] : [touchContext.id];
-  const book = (shelf.library as any[]).find(item => item.id === touchContext.id);
-  autoScrollEl = touchContext.scrollEl;
+  const ctx = touchContext;
+  const ids = selectedIds.value.includes(ctx.id) ? [...selectedIds.value] : [ctx.id];
+  const book = shelf.library.find(item => item.id === ctx.id);
+  autoScrollEl = ctx.scrollEl;
   touchDrag.active = true;
-  touchDrag.x = touchContext.x;
-  touchDrag.y = touchContext.y;
+  touchDrag.x = ctx.x;
+  touchDrag.y = ctx.y;
   touchDrag.ids = ids;
   touchDrag.title = book?.title || '';
   touchDrag.cover = book?.cover || '';
@@ -348,7 +350,7 @@ function beginTouchDrag() {
   updateAutoScroll();
 }
 
-function onBookTouchMove(event) {
+function onBookTouchMove(event: TouchEvent) {
   if (!touchContext) return;
   if (event.touches.length !== 1) {
     if (touchDrag.active) finishTouchDrag(false);
@@ -373,7 +375,7 @@ function onBookTouchMove(event) {
   updateAutoScroll();
 }
 
-function onBookTouchEnd(event) {
+function onBookTouchEnd(event: TouchEvent) {
   if (!touchContext) return;
   if (touchDrag.active) {
     event.preventDefault();
@@ -383,13 +385,13 @@ function onBookTouchEnd(event) {
   cancelTouchCandidate();
 }
 
-function onBookTouchCancel(event) {
+function onBookTouchCancel(event: TouchEvent) {
   if (!touchContext) return;
   event.preventDefault();
   finishTouchDrag(false);
 }
 
-function finishTouchDrag(commit) {
+function finishTouchDrag(commit: boolean) {
   const wasActive = touchDrag.active;
   const ids = [...touchDrag.ids];
   const targetId = touchDrag.overId;
@@ -434,7 +436,7 @@ function updateTouchDropTarget() {
   touchDrag.home = !collection && !!home;
 }
 
-function findScrollParent(element) {
+function findScrollParent(element: Element | null | undefined) {
   let current = element?.parentElement || null;
   while (current && current !== document.body) {
     const style = window.getComputedStyle(current);
@@ -491,7 +493,7 @@ function armClickGuard() {
   }, 500);
 }
 
-function onDocumentClick(event) {
+function onDocumentClick(event: MouseEvent) {
   if (!swallowClick) return;
   swallowClick = false;
   if (swallowClickTimer !== null) {
@@ -502,15 +504,15 @@ function onDocumentClick(event) {
   event.stopPropagation();
 }
 
-function onRootDragOver(event) {
+function onRootDragOver(event: DragEvent) {
   if (Array.from(event.dataTransfer?.types || []).includes('application/x-homura-books')) event.preventDefault();
 }
 
-function onRootDrop(event) {
+function onRootDrop(event: DragEvent) {
   if (!Array.from(event.dataTransfer?.types || []).includes('application/x-homura-books')) return;
   event.preventDefault();
   event.stopPropagation();
-  try { const ids = JSON.parse(event.dataTransfer.getData('application/x-homura-books')); if (Array.isArray(ids)) moveDropped(ids.filter(id => typeof id === 'string'), null); } catch (err) { console.warn('[HOMURA] 拖动书本失败', err); }
+  try { const ids = JSON.parse(event.dataTransfer!.getData('application/x-homura-books')); if (Array.isArray(ids)) moveDropped(ids.filter(id => typeof id === 'string'), null); } catch (err) { console.warn('[HOMURA] 拖动书本失败', err); }
 }
 
 watch(() => shelf.activeCollectionId, () => { selecting.value = false; selectedIds.value = []; });

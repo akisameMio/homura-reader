@@ -5,7 +5,7 @@
         <span class="md-collection-board">
           <span v-for="index in 4" :key="index" class="md-collection-tile" :class="{ 'is-empty': !covers[index - 1] }">
             <template v-if="covers[index - 1]">
-              <img v-if="covers[index - 1].cover" :src="covers[index - 1].cover" alt="" loading="lazy" decoding="async" draggable="false" />
+              <img v-if="covers[index - 1].cover" :src="covers[index - 1].cover || undefined" alt="" loading="lazy" decoding="async" draggable="false" />
               <span v-else class="md-collection-fallback">{{ covers[index - 1].title }}</span>
             </template>
             <MdIcon v-else name="auto_stories" />
@@ -31,11 +31,13 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import type { PropType } from 'vue';
 import { sortShelfBooks } from '../services/bookTitles.ts';
 import { useShelfStore } from '../stores/shelf.ts';
 import MdIcon from './MdIcon.vue';
+import type { Book, Collection } from '../types.ts';
 
-const props = defineProps({ collection: { type: Object, required: true }, books: { type: Array, default: () => [] }, sortKey: { type: String, default: 'title' }, touchOver: { type: Boolean, default: false }, selecting: { type: Boolean, default: false }, selected: { type: Boolean, default: false } });
+const props = defineProps({ collection: { type: Object as PropType<Collection>, required: true }, books: { type: Array as PropType<Book[]>, default: () => [] as Book[] }, sortKey: { type: String, default: 'title' }, touchOver: { type: Boolean, default: false }, selecting: { type: Boolean, default: false }, selected: { type: Boolean, default: false } });
 const emit = defineEmits(['open', 'toggle', 'move']);
 const hovering = ref(false);
 const shelf = useShelfStore();
@@ -44,24 +46,24 @@ const covers = computed(() => {
   return sortShelfBooks(props.books, props.sortKey, shelf.progressMap).slice(0, 4);
 });
 
-function onDragOver(event) {
+function onDragOver(event: DragEvent) {
   if (!Array.from(event.dataTransfer?.types || []).includes('application/x-homura-books')) return;
   event.preventDefault();
-  event.dataTransfer.dropEffect = 'move';
+  event.dataTransfer!.dropEffect = 'move';
   hovering.value = true;
 }
 
-function onDragLeave(event) {
-  if (!event.currentTarget.contains(event.relatedTarget)) hovering.value = false;
+function onDragLeave(event: DragEvent) {
+  if (!(event.currentTarget as Node).contains(event.relatedTarget as Node)) hovering.value = false;
 }
 
-function onDrop(event) {
+function onDrop(event: DragEvent) {
   hovering.value = false;
   if (!Array.from(event.dataTransfer?.types || []).includes('application/x-homura-books')) return;
   event.preventDefault();
   event.stopPropagation();
   try {
-    const ids = JSON.parse(event.dataTransfer.getData('application/x-homura-books'));
+    const ids = JSON.parse(event.dataTransfer!.getData('application/x-homura-books'));
     if (Array.isArray(ids) && ids.every(id => typeof id === 'string')) emit('move', ids, props.collection.id);
   } catch (err) {
     console.warn('[HOMURA] 无法读取拖动的书本', err);

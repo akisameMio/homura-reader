@@ -43,7 +43,7 @@ import MdIcon from './MdIcon.vue';
 
 const theme = useThemeStore();
 
-function selectMode(mode, event: MouseEvent) {
+function selectMode(mode: string, event: MouseEvent) {
   if (mode === theme.surfaceMode) return;
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
   theme.setSurfaceMode(mode, false, {

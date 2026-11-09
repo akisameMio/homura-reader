@@ -36,9 +36,9 @@ const emit = defineEmits(['update:modelValue']);
 
 const activeIndex = computed(() => props.options.findIndex(option => option.value === props.modelValue));
 
-function select(value, event) {
+function select(value: string | number, event: MouseEvent) {
   if (value === props.modelValue) return;
-  const rect = event?.currentTarget?.getBoundingClientRect?.();
+  const rect = (event?.currentTarget as HTMLElement | null)?.getBoundingClientRect?.();
   const origin = rect
     ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
     : null;

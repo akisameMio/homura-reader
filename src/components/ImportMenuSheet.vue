@@ -76,12 +76,12 @@ function close() {
   emit('update:open', false);
 }
 
-function choose(action) {
+function choose(action: 'create-collection' | 'pick-files' | 'pick-folder') {
   close();
   emit(action);
 }
 
-function onBackdropClick(event) {
+function onBackdropClick(event: MouseEvent) {
   if (event.target === dialogRef.value) close();
 }
 </script>
