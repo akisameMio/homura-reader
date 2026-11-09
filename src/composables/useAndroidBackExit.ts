@@ -6,7 +6,7 @@
    ========================================================================== */
 
 import { onMounted, onBeforeUnmount, watch } from 'vue';
-import { isAndroid } from '../services/platform.js';
+import { isAndroid } from '../services/platform.ts';
 
 const EXIT_CONFIRM_WINDOW = 2000;
 const EXIT_TOAST_TEXT = '再按一次退出';

@@ -7,7 +7,7 @@
 
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { applyAndroidSystemBars } from '../services/androidSystemBars.js';
+import { applyAndroidSystemBars } from '../services/androidSystemBars.ts';
 
 // 原生窗口 / 浏览器地址栏底色，与 homura.css 的 --md-surface 保持一致
 const SURFACE_CANVAS = { light: '#F8FAFC', warm: '#FAF6EE', dark: '#0F1115' };

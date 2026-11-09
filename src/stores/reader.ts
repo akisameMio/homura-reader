@@ -11,20 +11,20 @@
 
 import { defineStore } from 'pinia';
 import { ref, shallowRef, reactive, computed, nextTick } from 'vue';
-import { useShelfStore } from './shelf.js';
-import { useSettingsStore } from './settings.js';
-import { hydrateBook } from '../services/restore.js';
-import { buildActivePages, createNovelPaginator, getNovelPaginationKey, ensureBookImagesResolved, releaseBookPageUrls } from '../services/pagination.js';
+import { useShelfStore } from './shelf.ts';
+import { useSettingsStore } from './settings.ts';
+import { hydrateBook } from '../services/restore.ts';
+import { buildActivePages, createNovelPaginator, getNovelPaginationKey, ensureBookImagesResolved, releaseBookPageUrls } from '../services/pagination.ts';
 import {
   READER_FONT_OPTIONS,
   READER_LINE_HEIGHT_OPTIONS,
   READER_MARGIN_OPTIONS,
   resolveFontValue
-} from '../services/readerLayout.js';
-import { applyRestoredProgress, scheduleProgressSave, flushProgress } from '../services/progress.js';
-import { collectionReadingOrder, adjacentCollectionBook, spreadBounds } from '../services/collectionReading.js';
-import { hasArchiveSource } from '../services/archiveAccess.js';
-import { ensureNativeArchiveSession, releaseNativeArchiveSession } from '../services/nativeArchive.js';
+} from '../services/readerLayout.ts';
+import { applyRestoredProgress, scheduleProgressSave, flushProgress } from '../services/progress.ts';
+import { collectionReadingOrder, adjacentCollectionBook, spreadBounds } from '../services/collectionReading.ts';
+import { hasArchiveSource } from '../services/archiveAccess.ts';
+import { ensureNativeArchiveSession, releaseNativeArchiveSession } from '../services/nativeArchive.ts';
 
 const LAYOUT_DIRECTIONS = ['ltr', 'rtl', 'vertical'];
 const WEBTOON_FITS = ['screen', 'medium', 'wide'];
@@ -59,7 +59,7 @@ export const useReaderStore = defineStore('reader', () => {
   const activeTransitionAnims = shallowRef([]);
   const preloadTimer = ref(null);
   const resizeTimer = ref(null);
-  let fontPaginationTimer = 0;
+  let fontPaginationTimer: ReturnType<typeof setTimeout> | 0 = 0;
   // 长篇小说在后台按章节增量补页；补页期间不把当前页判定成全书末页。
   const paginationPending = ref(false);
   let novelPaginationJob = null;
@@ -378,7 +378,7 @@ export const useReaderStore = defineStore('reader', () => {
     scheduleNovelPagination();
   }
 
-  async function openBook(id, options = {}) {
+  async function openBook(id: string, options: { preserveCollectionOrder?: boolean; position?: 'start' | 'end' | string; finishCurrent?: boolean; [key: string]: any } = {}) {
     const book = shelf.library.find(b => b.id === id);
     if (!book) return false;
     const previousBook = currentBook.value;

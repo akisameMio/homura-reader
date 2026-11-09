@@ -8,7 +8,7 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import packageInfo from '../../package.json';
-import { openGitHubUrl } from '../services/external.js';
+import { openGitHubUrl } from '../services/external.ts';
 import {
   canDownloadUpdateInApp,
   cancelUpdateDownload,
@@ -17,14 +17,14 @@ import {
   installDownloadedUpdate as launchDownloadedUpdate,
   loadPendingUpdate,
   savePendingUpdate
-} from '../services/updateDownload.js';
+} from '../services/updateDownload.ts';
 import {
   detectUpdatePlatform,
   fetchStableReleases,
   isVersionNewer,
   RELEASES_PAGE_URL,
   selectReleaseAsset
-} from '../services/updates.js';
+} from '../services/updates.ts';
 
 function emptyDownloadState() {
   return {

@@ -5,8 +5,8 @@ let resolvePending = null;
 let queue = Promise.resolve();
 
 export function useShelfDialogs() {
-  function askShelfDialog(options) {
-    const task = queue.then(() => new Promise(resolve => {
+  function askShelfDialog(options: any): Promise<any> {
+    const task = queue.then(() => new Promise<any>(resolve => {
       resolvePending = resolve;
       pendingShelfDialog.value = options;
     }));

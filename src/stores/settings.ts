@@ -7,8 +7,8 @@
 
 import { defineStore } from 'pinia';
 import { computed, reactive, ref } from 'vue';
-import { isWindows } from '../services/platform.js';
-import { resolveFontValue } from '../services/readerLayout.js';
+import { isWindows } from '../services/platform.ts';
+import { resolveFontValue } from '../services/readerLayout.ts';
 
 const READER_DEFAULTS_KEY = 'homura_reader_defaults';
 const DEBUG_FORCE_FULLSCREEN_KEY = 'homura_debug_force_fullscreen';

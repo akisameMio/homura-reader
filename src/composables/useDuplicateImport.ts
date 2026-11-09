@@ -87,7 +87,7 @@ export function useDuplicateImport() {
     return session;
   }
 
-  function resolveImport(result = false) {
+  function resolveImport(result: boolean | string = false) {
     const resolve = resolveDuplicate;
     if (!resolve) return;
     const pending = pendingDuplicate.value;

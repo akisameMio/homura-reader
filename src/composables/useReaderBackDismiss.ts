@@ -7,7 +7,7 @@
    ========================================================================== */
 
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { isAndroid } from '../services/platform.js';
+import { isAndroid } from '../services/platform.ts';
 
 const COMMIT_RATIO = 0.28;
 const FLING_VELOCITY = 0.52;
@@ -379,7 +379,7 @@ export function useReaderBackDismiss(reader, ui) {
 
   async function enableNativePredictiveBack() {
     if (!nativePredictiveBackSupported.value || nativeChannel || !reader.currentBook) return;
-    const core = getTauriCore();
+    const core = getTauriCore() as any;
     if (!core || !core.Channel || typeof core.invoke !== 'function') return;
 
     const token = ++nativeEnableToken;
@@ -407,7 +407,7 @@ export function useReaderBackDismiss(reader, ui) {
       return;
     }
 
-    const core = getTauriCore();
+    const core = getTauriCore() as any;
     if (!core || !core.Channel || typeof core.invoke !== 'function') {
       androidBackMode = 'fallback';
       await enableAndroidFallback();

@@ -114,7 +114,7 @@ export const useImportProgressStore = defineStore('importProgress', () => {
     && !cancelRequested.value
   ));
 
-  function begin(options = {}) {
+  function begin(options: Record<string, any> = {}) {
     status.value = 'running';
     total.value = Math.max(0, Number(options.total) || 0);
     done.value = 0;

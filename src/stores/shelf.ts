@@ -8,15 +8,15 @@
 
 import { defineStore } from 'pinia';
 import { shallowRef, ref } from 'vue';
-import { collectionNameError, moveCollectionBooks, restoreCollections } from '../services/collections.js';
-import { sortShelfBooks } from '../services/bookTitles.js';
-import { HomuraStore } from '../services/storage.js';
-import { restoreLibrary, persistBook, persistBooks } from '../services/restore.js';
-import { loadProgressMap } from '../services/progress.js';
-import { createDemoManga, createDemoNovel } from '../services/demo.js';
-import { prepareBookCover } from '../services/bookCover.js';
-import { createCoverThumbnail } from '../services/coverThumb.js';
-import { runShelfMutation } from '../services/mutationQueue.js';
+import { collectionNameError, moveCollectionBooks, restoreCollections } from '../services/collections.ts';
+import { sortShelfBooks } from '../services/bookTitles.ts';
+import { HomuraStore } from '../services/storage.ts';
+import { restoreLibrary, persistBook, persistBooks } from '../services/restore.ts';
+import { loadProgressMap } from '../services/progress.ts';
+import { createDemoManga, createDemoNovel } from '../services/demo.ts';
+import { prepareBookCover } from '../services/bookCover.ts';
+import { createCoverThumbnail } from '../services/coverThumb.ts';
+import { runShelfMutation } from '../services/mutationQueue.ts';
 
 export const useShelfStore = defineStore('shelf', () => {
   const library = shallowRef([]);
@@ -83,7 +83,7 @@ export const useShelfStore = defineStore('shelf', () => {
   }
 
   // 新增书籍并落盘；写入失败由导入层汇总记录
-  async function addBook(book, source, options = {}) {
+  async function addBook(book: any, source: any, options: { onSaved?: (book: any) => unknown | Promise<unknown>; [key: string]: any } = {}) {
     if (!source) throw new Error('缺少原文件来源');
     try {
       const result = await persistBook(book, source, options);
@@ -104,7 +104,7 @@ export const useShelfStore = defineStore('shelf', () => {
   }
 
   // 批量导入：整批落盘成功后只替换一次 library，避免每加一本就重排整架。
-  async function addBooks(items, options = {}) {
+  async function addBooks(items: any[], options: { onSaved?: (book: any) => unknown | Promise<unknown>; [key: string]: any } = {}) {
     if (!items.length) return { saved: [], failed: [] };
     try {
       const result = await persistBooks(items, options);
@@ -202,7 +202,7 @@ export const useShelfStore = defineStore('shelf', () => {
     if (!book.customCoverBlob) book.originalCover = book.cover;
     const previous = book.cover;
     book.customCoverBlob = blob;
-    book.cover = blob ? URL.createObjectURL(blob) : (book.originalCover || (book.coverBlob ? URL.createObjectURL(book.coverBlob) : null));
+    book.cover = blob ? URL.createObjectURL(blob as Blob) : (book.originalCover || (book.coverBlob ? URL.createObjectURL(book.coverBlob as Blob) : null));
     if (previous?.startsWith('blob:') && previous !== book.originalCover && previous !== book.cover) URL.revokeObjectURL(previous);
     touchBook(book);
     return book;
@@ -236,8 +236,8 @@ export const useShelfStore = defineStore('shelf', () => {
   }
 
   // 启动初始化：恢复书架 + 进度表；第一次使用时放示例书
-  async function optimizeStoredCover(book) {
-    const patch = {};
+  async function optimizeStoredCover(book: any) {
+    const patch: Record<string, any> = {};
     if (book.coverBlob) {
       const thumb = await createCoverThumbnail(book.coverBlob);
       if (thumb && thumb !== book.coverBlob) patch.coverBlob = thumb;

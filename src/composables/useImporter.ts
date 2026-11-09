@@ -4,25 +4,25 @@
    文件选择、文件夹选择、拖拽导入，以及 File System Access 句柄采集。
    ========================================================================== */
 
-import { useShelfStore } from '../stores/shelf.js';
-import { useSettingsStore } from '../stores/settings.js';
-import { useImportProgressStore, importFailureReason } from '../stores/importProgress.js';
-import { useDuplicateImport } from './useDuplicateImport.js';
-import { useShelfDialogs } from './useShelfDialogs.js';
-import { planFolderCollections, availableCollectionName, collectionNameError } from '../services/collections.js';
-import { findSameTitleBook, normalizeBookTitle } from '../services/bookTitles.js';
-import { HomuraStore } from '../services/storage.js';
-import { formatBytes, isAndroid } from '../services/platform.js';
-import { parseTxtFile, parseMobiFileLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks, discardParsedBook, isJunkImagePath } from '../services/parsers.js';
-import { createNativeMangaManifest, makeEpubId, parseEpubFile } from '../services/epubParser.js';
+import { useShelfStore } from '../stores/shelf.ts';
+import { useSettingsStore } from '../stores/settings.ts';
+import { useImportProgressStore, importFailureReason } from '../stores/importProgress.ts';
+import { useDuplicateImport } from './useDuplicateImport.ts';
+import { useShelfDialogs } from './useShelfDialogs.ts';
+import { planFolderCollections, availableCollectionName, collectionNameError } from '../services/collections.ts';
+import { findSameTitleBook, normalizeBookTitle } from '../services/bookTitles.ts';
+import { HomuraStore } from '../services/storage.ts';
+import { formatBytes, isAndroid } from '../services/platform.ts';
+import { parseTxtFile, parseMobiFileLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks, discardParsedBook, isJunkImagePath } from '../services/parsers.ts';
+import { createNativeMangaManifest, makeEpubId, parseEpubFile } from '../services/epubParser.ts';
 import {
   makeFileSource,
   makeFolderSource,
   stageNativeFileSource,
   stageNativePathSource
-} from '../services/restore.js';
-import { canUseNativeArchive, releaseNativeArchiveSession } from '../services/nativeArchive.js';
-import { removeNativeBookDir } from '../services/nativeStorage.js';
+} from '../services/restore.ts';
+import { canUseNativeArchive, releaseNativeArchiveSession } from '../services/nativeArchive.ts';
+import { removeNativeBookDir } from '../services/nativeStorage.ts';
 import {
   isAndroidContentUri,
   isNativeImportFile,
@@ -33,11 +33,11 @@ import {
   pickNativeUriImportFiles,
   scanNativeImportPaths,
   shouldFallbackNativeImport
-} from '../services/nativeImport.js';
-import { createCoverThumbnail } from '../services/coverThumb.js';
-import { releaseBookPageUrls } from '../services/pagination.js';
-import { runShelfMutation } from '../services/mutationQueue.js';
-import { NativeErrorCode } from '../services/nativeRuntime.js';
+} from '../services/nativeImport.ts';
+import { createCoverThumbnail } from '../services/coverThumb.ts';
+import { releaseBookPageUrls } from '../services/pagination.ts';
+import { runShelfMutation } from '../services/mutationQueue.ts';
+import { NativeErrorCode } from '../services/nativeRuntime.ts';
 
 let quotaWarned = false;
 let activeImportBatch = null;
@@ -266,7 +266,7 @@ export function useImporter() {
     // useImporter 会被 App 与 DragOverlay 分别实例化，锁必须放在模块级；
     // 否则拖拽入口能绕过锁，第二批会覆盖当前进度。
     if (activeImportBatch || importProgress.isRunning) return;
-    const files = Array.from(fileList).filter(f => !f.name.startsWith('.'));
+    const files = (Array.from(fileList) as any[]).filter((f: any) => !f.name.startsWith('.'));
     if (files.length === 0) return;
 
     // 所有导入入口与清空书架共用互斥队列，防止同名漏判和源文件删除竞态。
@@ -397,7 +397,7 @@ export function useImporter() {
         const staged = viaNativePath
           ? await stageNativePathSource(bookId, file)
           : await stageNativeFileSource(bookId, file);
-        source = staged;
+        source = staged as any;
         nativePath = staged.nativePath;
         if (viaNativePath) metrics.nativeStageMs += now() - started;
       } catch (err) {
@@ -497,7 +497,7 @@ export function useImporter() {
     }
     book.nativeArchiveStaged = !!nativePath;
     const pageManifest = createNativeMangaManifest(book);
-    if (pageManifest) source = { ...source, nativePageManifest: pageManifest };
+    if (pageManifest) source = { ...source, nativePageManifest: pageManifest } as any;
     return { book, source };
   }
 
@@ -599,7 +599,7 @@ export function useImporter() {
           const rebuilt = buildImageFolderBooks(files)[0];
           if (!rebuilt) throw new Error('图片目录为空');
           rebuilt.book.id = group.book.id;
-          rebuilt.book.nativeArchiveStaged = nativeEntries.some(Boolean);
+          (rebuilt.book as any).nativeArchiveStaged = nativeEntries.some(Boolean);
           group = rebuilt;
           if (nativeEntries.some(Boolean)) {
             prepared = {
@@ -911,8 +911,8 @@ export function useImporter() {
 
   // ---- 拖拽：递归遍历 webkitGetAsEntry 目录树 ----
 
-  function traverseFileTree(item, path, outList) {
-    return new Promise(resolve => {
+  function traverseFileTree(item: any, path: string, outList: any[]): Promise<void> {
+    return new Promise<void>(resolve => {
       // __MACOSX 整个目录跳过，里面的 ._* 只是资源分叉，读进来也叫不醒。
       if (item.name === '__MACOSX') {
         resolve();

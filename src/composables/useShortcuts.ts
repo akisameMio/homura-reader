@@ -6,7 +6,7 @@
    ========================================================================== */
 
 import { onMounted, onBeforeUnmount } from 'vue';
-import { useUiStore } from '../stores/ui.js';
+import { useUiStore } from '../stores/ui.ts';
 
 export function useShortcuts(reader, viewportRef, dismissWithPredictiveBack) {
   const ui = useUiStore();
