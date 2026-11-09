@@ -11,9 +11,9 @@
     "checkJs": false,
 
     "strict": true,
-    "noImplicitAny": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
 
     // 只做类型检查，产物仍由 Vite / esbuild 负责
     "noEmit": true,
