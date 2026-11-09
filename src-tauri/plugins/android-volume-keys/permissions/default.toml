@@ -1,0 +1,13 @@
+[default]
+description = "Allows HOMURA to turn pages with the Android volume keys while reading."
+permissions = ["allow-enable", "allow-disable"]
+
+[[permission]]
+identifier = "allow-enable"
+description = "Allows enabling native volume key paging."
+commands.allow = ["enable"]
+
+[[permission]]
+identifier = "allow-disable"
+description = "Allows disabling native volume key paging."
+commands.allow = ["disable"]

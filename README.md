@@ -98,6 +98,8 @@ Markdown 输出会经过安全处理：原始 HTML 只作为文本显示，链�
 
 条漫模式保留原生纵向滚动，不使用左右翻页快捷键。输入框获得焦点时，键盘快捷键会自动让位。
 
+Android 端可在「设置 → 外观与阅读」里打开「音量键翻页」：音量加键上一页、音量减键下一页，默认关闭。打开抽屉或设置面板时音量键会交还系统调节音量。
+
 ## 下载与安装
 
 到 [GitHub Releases](https://github.com/Leon-Ning-san/HOMURA-reader/releases) 下载对应安装包：
@@ -180,15 +182,16 @@ homura-reader/
 │   │   ├── nativeRuntime.ts / nativeArchive.ts / nativeImport.ts / coverThumb.ts
 │   │   ├── collections.ts / collectionReading.ts / bookTitles.ts / shelfSections.ts
 │   │   └── updates.ts / updateDownload.ts / external.ts / readerGestures.ts / archiveAccess.ts / sanitize.ts 等
-│   ├── composables/            # 9 个：useImporter / useViewport / useShortcuts / useSheetDrag /
+│   ├── composables/            # 10 个：useImporter / useViewport / useShortcuts / useSheetDrag /
 │   │                           # useShelfDialogs / useScrollBounce / useDuplicateImport /
-│   │                           # useReaderBackDismiss / useAndroidBackExit
+│   │                           # useReaderBackDismiss / useAndroidBackExit / useVolumeKeys
 │   └── components/             # 41 个 SFC：SideNav、LibraryHeader、BookShelf、BookCard、
 │                               # ReaderModal、PaginatedView、WebtoonView、DesktopIsland、SettingsView 等
 ├── tests/                      # 31 个 .test.mjs（node:test + jsdom）
-├── scripts/                    # check-dark-glow / generate-icons / release-notes / sync-android-icons
+├── scripts/                    # check-dark-glow / generate-icons / release-notes / sync-android-icons /
+│                               # patch-android-manifest
 ├── references/                 # MD3 组件写法、token、系统布局、桌面灵动胶囊状态机
-├── src-tauri/                  # Tauri 2 壳、Rust 命令、5 个本地 Android 插件、权限与打包配置
+├── src-tauri/                  # Tauri 2 壳、Rust 命令、6 个本地 Android 插件、权限与打包配置
 ├── public/homura-boot.js       # 首帧前的同步引导脚本（CSP 禁内联，不能挪回 index.html）
 ├── public/vendor/              # 开发环境运行时 Tailwind；生产构建转静态 CSS
 ├── design-preview/             # 设计原型与截图，不是生产代码

@@ -1646,6 +1646,7 @@ dependencies = [
  "tauri-plugin-android-predictive-back",
  "tauri-plugin-android-system-bars",
  "tauri-plugin-android-toast",
+ "tauri-plugin-android-volume-keys",
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
  "tauri-plugin-opener",
@@ -4175,6 +4176,14 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-android-toast"
+version = "0.1.0"
+dependencies = [
+ "tauri",
+ "tauri-plugin",
+]
+
+[[package]]
+name = "tauri-plugin-android-volume-keys"
 version = "0.1.0"
 dependencies = [
  "tauri",

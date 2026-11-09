@@ -193,6 +193,23 @@
               />
             </div>
 
+            <div v-if="isAndroid" class="settings-block">
+              <div class="settings-head">
+                <span class="settings-title">音量键翻页</span>
+                <span class="settings-value">{{ settings.volumeKeysTurnPage ? '已开启' : '已关闭' }}</span>
+              </div>
+              <MdSwitch
+                :model-value="settings.volumeKeysTurnPage"
+                title="音量加键上一页、音量减键下一页"
+                @update:model-value="settings.setVolumeKeysTurnPage"
+              >
+                <span class="settings-value-copy">
+                  <b>用音量键翻页</b>
+                  <span>全局生效；音量加键上一页、音量减键下一页，关闭后音量键照常调节系统音量。</span>
+                </span>
+              </MdSwitch>
+            </div>
+
             <button type="button" class="settings-reset-button" @click="settings.resetReaderDefaults">
               恢复阅读默认值
             </button>
@@ -493,7 +510,7 @@ import { storeToRefs } from 'pinia';
 import packageInfo from '../../package.json';
 import { createDemoManga, createDemoNovel } from '../services/demo.ts';
 import { HomuraStore } from '../services/storage.ts';
-import { formatBytes, isWindows } from '../services/platform.ts';
+import { formatBytes, isAndroid, isWindows } from '../services/platform.ts';
 import { openGitHubUrl } from '../services/external.ts';
 import { REPOSITORY_URL } from '../services/updates.ts';
 import { scrollAppToTop } from '../services/utils.ts';

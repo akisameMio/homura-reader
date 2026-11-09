@@ -33,6 +33,7 @@ tauri-plugin-android-predictive-back = { path = "plugins/android-predictive-back
 tauri-plugin-android-installer = { path = "plugins/android-installer" }
 tauri-plugin-android-archive = { path = "plugins/android-archive" }
 tauri-plugin-android-system-bars = { path = "plugins/android-system-bars" }
+tauri-plugin-android-volume-keys = { path = "plugins/android-volume-keys" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 webpki-root-certs = "1"

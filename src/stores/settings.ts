@@ -14,6 +14,7 @@ const READER_DEFAULTS_KEY = 'homura_reader_defaults';
 const DEBUG_FORCE_FULLSCREEN_KEY = 'homura_debug_force_fullscreen';
 const DEBUG_AUTO_UPDATE_CHECK_KEY = 'homura_debug_auto_update_check';
 const IMPORT_COLLECTION_PROMPT_KEY = 'homura_import_collection_prompt';
+const VOLUME_KEYS_TURN_PAGE_KEY = 'homura_volume_keys_turn_page';
 const DIRECTIONS = ['ltr', 'rtl', 'vertical'];
 const WEBTOON_FITS = ['screen', 'medium', 'wide'];
 const LINE_HEIGHTS = ['tight', 'normal', 'loose'];
@@ -100,11 +101,21 @@ function readImportCollectionPrompt() {
   }
 }
 
+function readVolumeKeysTurnPage() {
+  try {
+    return localStorage.getItem(VOLUME_KEYS_TURN_PAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export const useSettingsStore = defineStore('settings', () => {
   const readerDefaults = reactive(readReaderDefaults());
   const debugForceFullscreen = ref(readDebugForceFullscreen());
   const debugAutoUpdateCheck = ref(readDebugAutoUpdateCheck());
   const importCollectionPrompt = ref(readImportCollectionPrompt());
+  // 默认关闭：不主动劫持 Android 硬件音量键，用户手动打开后才交给阅读器翻页
+  const volumeKeysTurnPage = ref(readVolumeKeysTurnPage());
   const showFullscreenButton = computed(() => isWindows || debugForceFullscreen.value);
 
   function persistReaderDefaults() {
@@ -152,16 +163,28 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  function setVolumeKeysTurnPage(value: unknown) {
+    const next = !!value;
+    volumeKeysTurnPage.value = next;
+    try {
+      localStorage.setItem(VOLUME_KEYS_TURN_PAGE_KEY, next ? '1' : '0');
+    } catch (err) {
+      console.warn('[HOMURA] 音量键翻页开关保存失败', err);
+    }
+  }
+
   return {
     readerDefaults,
     debugForceFullscreen,
     debugAutoUpdateCheck,
     importCollectionPrompt,
+    volumeKeysTurnPage,
     showFullscreenButton,
     setReaderDefault,
     resetReaderDefaults,
     setDebugForceFullscreen,
     setDebugAutoUpdateCheck,
-    setImportCollectionPrompt
+    setImportCollectionPrompt,
+    setVolumeKeysTurnPage
   };
 });

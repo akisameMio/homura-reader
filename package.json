@@ -13,10 +13,10 @@
     "dev": "tauri dev",
     "build": "tauri build",
     "android:sync-icons": "node scripts/sync-android-icons.mjs",
-    "android:init": "tauri android init && npm run android:sync-icons",
-    "android:dev": "tauri android dev",
-    "android:build": "tauri android build --target aarch64 --apk",
-    "android:build:debug": "tauri android build --debug --target aarch64 --apk",
+    "android:init": "tauri android init && node scripts/patch-android-manifest.mjs && npm run android:sync-icons",
+    "android:dev": "node scripts/patch-android-manifest.mjs && tauri android dev",
+    "android:build": "node scripts/patch-android-manifest.mjs && tauri android build --target aarch64 --apk",
+    "android:build:debug": "node scripts/patch-android-manifest.mjs && tauri android build --debug --target aarch64 --apk",
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {

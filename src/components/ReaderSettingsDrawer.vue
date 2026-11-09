@@ -181,6 +181,22 @@
           />
         </section>
 
+        <!-- 音量键翻页：仅 Android 原生插件提供，音量键在 WebView 里收不到 keydown -->
+        <section v-if="isAndroid" class="md-drawer-section">
+          <div class="md-drawer-group-head">
+            <span class="md-drawer-group-label">音量键翻页</span>
+            <b class="md-drawer-group-value">{{ settings.volumeKeysTurnPage ? '已开启' : '已关闭' }}</b>
+          </div>
+          <MdSwitch
+            :model-value="settings.volumeKeysTurnPage"
+            title="音量加键上一页、音量减键下一页"
+            @update:model-value="settings.setVolumeKeysTurnPage"
+          >
+            <span class="text-[13px] font-medium">用音量键翻页</span>
+          </MdSwitch>
+          <p class="mt-2 text-[11px] leading-relaxed text-[var(--md-on-surface-variant)]">音量加键上一页、音量减键下一页；该设置全局生效，关闭后音量键照常调节系统音量。</p>
+        </section>
+
         <!-- 外观 -->
         <section class="md-drawer-section">
           <div class="md-drawer-group-head">
@@ -248,6 +264,8 @@
 import { computed, ref, shallowRef, watch, nextTick } from 'vue';
 import { useReaderStore, WEBTOON_FIT_LABELS, NOVEL_FONT_MIN, NOVEL_FONT_MAX } from '../stores/reader.ts';
 import { READER_LINE_HEIGHT_OPTIONS, READER_MARGIN_OPTIONS } from '../services/readerLayout.ts';
+import { isAndroid } from '../services/platform.ts';
+import { useSettingsStore } from '../stores/settings.ts';
 import { useShelfStore } from '../stores/shelf.ts';
 import {
   SURFACE_MODE_OPTIONS,
@@ -316,6 +334,7 @@ function onCoverSelected(event: Event) {
 }
 const theme = useThemeStore();
 const ui = useUiStore();
+const settings = useSettingsStore();
 const { isPhone, isCompact } = useViewport();
 const config = reader.layoutConfig;
 const lineHeightOptions = READER_LINE_HEIGHT_OPTIONS.map(option => ({ value: option.value, label: option.label }));

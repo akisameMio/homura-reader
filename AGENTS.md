@@ -9,7 +9,7 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 
 - 当前版本 `2.2.3`
 - 技术栈：Vue 3 + Pinia + Vite 6 + Tauri 2（Rust）
-- **TypeScript**：`src/services/`（35 个）、`src/stores/`（7 个）、`src/composables/`（9 个）三层的逻辑代码已全部迁移为 `.ts`；`components/`（41 个 `.vue`）的 `<script setup>` 已全部升级为 `lang="ts"`（保留原有运行时 `defineProps({...})` / `defineEmits([...])` 写法，未改写成泛型语法）；入口 `src/main.ts` 亦已迁移。`tsconfig.json` 开 `allowJs: true` 允许 JS/TS 混存，`strict: true`，且 `noImplicitAny` / `noUnusedLocals` / `noUnusedParameters` 均已开启。`npm run typecheck`（`vue-tsc --noEmit`）已清零 0 报错，可作为门槛使用。没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
+- **TypeScript**：`src/services/`（35 个）、`src/stores/`（7 个）、`src/composables/`（10 个）三层的逻辑代码已全部迁移为 `.ts`；`components/`（41 个 `.vue`）的 `<script setup>` 已全部升级为 `lang="ts"`（保留原有运行时 `defineProps({...})` / `defineEmits([...])` 写法，未改写成泛型语法）；入口 `src/main.ts` 亦已迁移。`tsconfig.json` 开 `allowJs: true` 允许 JS/TS 混存，`strict: true`，且 `noImplicitAny` / `noUnusedLocals` / `noUnusedParameters` 均已开启。`npm run typecheck`（`vue-tsc --noEmit`）已清零 0 报错，可作为门槛使用。没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
 - 新增 / 迁移文件时，指向已迁移 `.ts` 文件（services / stores / composables）的 import 必须写 `.ts` 后缀（Node `--experimental-strip-types` 不会把 `./x.js` 解析到 `x.ts`，只有 Vite / tsc 会）
 - 数据存本机 IndexedDB（`homura_shelf`，v3，4 个 store：`books` / `sources` / `progress` / `collections`）；Tauri 环境额外把书目 / 书库 / 进度镜像到 `$APPDATA/homura-metadata/homura.sqlite3`；原文件按平台写 `$APPDATA/homura-native-sources`、OPFS（`homura-sources`）或 IndexedDB Blob；主题与设置偏好写 localStorage
 
@@ -73,19 +73,22 @@ src/
       content.css          阅读内容排版（小说正文 / 章节 / Markdown）
   stores/                  7 个 setup store：theme / shelf / reader / ui / settings / importProgress / updates
   services/                35 个：解析、存储、平台、原生桥接、更新（不依赖 Vue / Pinia）
-  composables/             9 个：useImporter / useViewport / useShortcuts / useSheetDrag / useShelfDialogs /
-                           useScrollBounce / useDuplicateImport / useReaderBackDismiss / useAndroidBackExit
+  composables/             10 个：useImporter / useViewport / useShortcuts / useSheetDrag / useShelfDialogs /
+                           useScrollBounce / useDuplicateImport / useReaderBackDismiss / useAndroidBackExit /
+                           useVolumeKeys
   components/              41 个 SFC（视图与交互）
 tests/                     31 个 .test.mjs（node:test + assert/strict + jsdom）
-scripts/                   4 个：check-dark-glow / generate-icons / release-notes / sync-android-icons
+scripts/                   5 个：check-dark-glow / generate-icons / release-notes / sync-android-icons /
+                           patch-android-manifest
 references/                4 份规范：md3-component-guide / tokens / ui-component-spec / desktop-island
 public/homura-boot.js      首帧前的同步引导脚本（CSP 禁止内联脚本，不能挪回 index.html）
 public/vendor/             开发环境运行时 Tailwind；生产构建转静态 CSS 并从 dist 删除
 public/pdfjs/              pdf.js 运行时资源，由 vite 插件生成，已 gitignore
 src-tauri/src/             lib.rs 命令注册 + desktop_archive / native_import / metadata_store /
                            mobi_parser / text_decoder / cover_thumb / update_downloader
-src-tauri/plugins/         5 个本地 Android 插件：android-archive / android-installer /
-                           android-predictive-back / android-system-bars / android-toast
+src-tauri/plugins/         6 个本地 Android 插件：android-archive / android-installer /
+                           android-predictive-back / android-system-bars / android-toast /
+                           android-volume-keys
 design-preview/            设计原型 HTML 与截图，不是生产代码
 .github/workflows/         三平台 + Android 自动打包
 ```
