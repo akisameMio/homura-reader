@@ -3,19 +3,21 @@
    ========================================================================== */
 
 import { pinyin } from 'pinyin-pro';
+import type { ReadingProgress } from '../types.ts';
 
 const titleCollator = new Intl.Collator('en', {
   numeric: true,
   sensitivity: 'base',
   ignorePunctuation: true
 });
-const sortKeys = new WeakMap();
+interface SortKey { title: string; phonetic: string; group: number }
+const sortKeys = new WeakMap<object, SortKey>();
 
-export function normalizeBookTitle(title) {
+export function normalizeBookTitle(title: unknown) {
   return String(title || '').normalize('NFKC').trim().replace(/\s+/gu, ' ').toLowerCase();
 }
 
-function titleSortKey(book) {
+function titleSortKey(book: { title?: unknown }) {
   const title = normalizeBookTitle(book.title);
   const cached = sortKeys.get(book);
   if (cached && cached.title === title) return cached;
@@ -28,7 +30,7 @@ function titleSortKey(book) {
   return key;
 }
 
-export function compareBookTitles(a, b) {
+export function compareBookTitles(a: { title?: unknown }, b: { title?: unknown }) {
   const keyA = titleSortKey(a);
   const keyB = titleSortKey(b);
   return keyA.group - keyB.group
@@ -36,13 +38,13 @@ export function compareBookTitles(a, b) {
     || titleCollator.compare(keyA.title, keyB.title);
 }
 
-export function findSameTitleBook(books, title) {
+export function findSameTitleBook(books: { title?: unknown }[], title: unknown) {
   const normalized = normalizeBookTitle(title);
   if (!normalized) return null;
   return books.find(book => normalizeBookTitle(book.title) === normalized) || null;
 }
 
-export function sortShelfBooks(books, key = 'title', progressMap = {}) {
+export function sortShelfBooks<T extends { id: string; title?: unknown }>(books: T[], key = 'title', progressMap: Record<string, ReadingProgress> = {}): T[] {
   const list = [...books];
   if (key === 'title') list.sort(compareBookTitles);
   if (key === 'progress') list.sort((a, b) => (progressMap[b.id]?.updatedAt || 0) - (progressMap[a.id]?.updatedAt || 0));

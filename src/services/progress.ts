@@ -7,11 +7,47 @@
    ========================================================================== */
 
 import { HomuraStore } from './storage.ts';
+import type { Book, ReaderPage, ReadingProgress } from '../types.ts';
 
 const SAVE_DEBOUNCE_MS = 350;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
-function makeRecord(reader) {
+/** 进度记录追加的排版字段（webtoonFit 不在基础 ReadingProgress 里）。 */
+interface ProgressLayout {
+  direction?: string;
+  spread?: number;
+  coverOffset?: boolean;
+  fontSize?: number;
+  webtoonFit?: unknown;
+  fontFamily?: string | unknown;
+  lineHeight?: number | unknown;
+  pageMargin?: number | unknown;
+}
+
+interface ProgressRecord extends ReadingProgress {
+  layout?: ProgressLayout;
+  chapterIndex?: number;
+  chapterRatio?: number;
+  total?: number;
+  ratio?: number;
+  type?: string;
+}
+
+/** reader store 里进度计算所需的最小结构。 */
+interface ReaderLike {
+  currentBook: Book | null;
+  activePages: ReaderPage[];
+  currentIndex: number;
+  layoutConfig: ProgressLayout;
+}
+
+/** shelf store 里进度回写所需的最小结构。 */
+interface ShelfLike {
+  setProgressRecord(record: ProgressRecord): void;
+}
+
+
+function makeRecord(reader: ReaderLike) {
   const book = reader.currentBook;
   const total = reader.activePages.length;
   if (!book || total === 0) return null;
@@ -47,7 +83,7 @@ function makeRecord(reader) {
   };
 }
 
-function writeCurrentProgress(reader, shelf) {
+function writeCurrentProgress(reader: ReaderLike, shelf: ShelfLike) {
   const record = makeRecord(reader);
   if (!record) return Promise.resolve();
   // 先同步更新内存表，书架重绘时能立刻读到最新百分比
@@ -59,9 +95,10 @@ function writeCurrentProgress(reader, shelf) {
 export async function loadProgressMap() {
   try {
     const list = await HomuraStore.listProgress();
-    const map = {};
-    list.forEach(rec => {
-      if (rec && rec.id) map[rec.id] = rec;
+    const map: Record<string, ProgressRecord> = {};
+    list.forEach((rec: ProgressRecord) => {
+      const id = typeof rec?.id === 'string' ? rec.id : null;
+      if (rec && id) map[id] = rec;
     });
     return map;
   } catch (err) {
@@ -70,7 +107,7 @@ export async function loadProgressMap() {
 }
 
 // 在 buildActivePages() 之后调用：按比例换算出新分页下的位置；返回 -1 表示无记录
-export function applyRestoredProgress(book, activePages, progressMap) {
+export function applyRestoredProgress(book: Book | null | undefined, activePages: ReaderPage[], progressMap: Record<string, ProgressRecord>) {
   const rec = book && progressMap[book.id];
   if (!rec || activePages.length === 0) return -1;
   const lastIdx = Math.max(0, activePages.length - 1);
@@ -78,7 +115,7 @@ export function applyRestoredProgress(book, activePages, progressMap) {
   return Math.min(lastIdx, Math.max(0, Math.round(ratio * lastIdx)));
 }
 
-export function scheduleProgressSave(reader, shelf) {
+export function scheduleProgressSave(reader: ReaderLike, shelf: ShelfLike) {
   if (!reader.currentBook) return;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
@@ -87,14 +124,14 @@ export function scheduleProgressSave(reader, shelf) {
   }, SAVE_DEBOUNCE_MS);
 }
 
-export function flushProgress(reader, shelf) {
+export function flushProgress(reader: ReaderLike, shelf: ShelfLike) {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = null;
   return writeCurrentProgress(reader, shelf);
 }
 
 // 关窗 / 切后台时兜底刷写，防止防抖窗口内的最后一次翻页丢失
-export function installProgressFlushHooks(reader, shelf) {
+export function installProgressFlushHooks(reader: ReaderLike, shelf: ShelfLike) {
   window.addEventListener('beforeunload', () => { flushProgress(reader, shelf); });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) flushProgress(reader, shelf);

@@ -2,7 +2,9 @@
    HOMURA · 通用小工具
    ========================================================================== */
 
-export function escapeHtml(str) {
+import type { Book, BookFormat } from '../types.ts';
+
+export function escapeHtml(str: unknown) {
   return String(str || '').replace(/[&<>"']/g, (m: string) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   } as Record<string, string>)[m]);
@@ -20,19 +22,19 @@ export function scrollAppToTop(behavior: ScrollBehavior = 'auto') {
   if (!scrolled) window.scrollTo({ top: 0, behavior });
 }
 
-function normalizedUrl(url) {
+function normalizedUrl(url: unknown) {
   return String(url || '')
     .replace(/[\u0000-\u0020\u007f-\u009f]/g, '')
     .trim();
 }
 
-function urlProtocol(url) {
+function urlProtocol(url: unknown) {
   const probe = normalizedUrl(url);
   const match = probe.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
   return match ? match[1].toLowerCase() : '';
 }
 
-export function isSafeLinkUrl(url) {
+export function isSafeLinkUrl(url: unknown) {
   const normalized = normalizedUrl(url);
   if (!normalized || normalized.startsWith('//')) return false;
   const protocol = urlProtocol(url);
@@ -40,7 +42,7 @@ export function isSafeLinkUrl(url) {
 }
 
 // 书内图片只允许嵌入位图或相对路径，避免 HTML 内容在阅读时偷偷发起外部请求。
-export function isSafeImageUrl(url) {
+export function isSafeImageUrl(url: unknown) {
   const raw = String(url || '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
   if (!raw) return false;
   if (/^data:image\/(?:jpeg|png|gif|webp|avif|bmp);base64,[a-z0-9+/=\s]+$/i.test(raw)) return true;
@@ -60,12 +62,12 @@ const FORMAT_BY_ID_PREFIX = [
   ['img_', 'images']
 ];
 
-export function resolveBookFormat(book) {
+export function resolveBookFormat(book: Book | null | undefined): BookFormat | string | null {
   if (!book) return null;
   if (book.format) return book.format;
   const id = String(book.id || '');
   const hit = FORMAT_BY_ID_PREFIX.find(([prefix]) => id.startsWith(prefix));
   if (hit) return hit[1];
   // 早期 EPUB 直接以 type 标记，仍按 EPUB 归类
-  return book.type === 'epub' ? 'epub' : null;
+  return (book.type as string) === 'epub' ? 'epub' : null;
 }

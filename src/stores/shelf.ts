@@ -17,26 +17,27 @@ import { createDemoManga, createDemoNovel } from '../services/demo.ts';
 import { prepareBookCover } from '../services/bookCover.ts';
 import { createCoverThumbnail } from '../services/coverThumb.ts';
 import { runShelfMutation } from '../services/mutationQueue.ts';
+import type { Book, BookSource, Collection, ImportEntry, ReadingProgress } from '../types.ts';
 
 export const useShelfStore = defineStore('shelf', () => {
-  const library = shallowRef<any[]>([]);
-  const progressMap = shallowRef<Record<string, any>>({});
-  const collections = shallowRef<any[]>([]);
+  const library = shallowRef<Book[]>([]);
+  const progressMap = shallowRef<Record<string, ReadingProgress>>({});
+  const collections = shallowRef<Collection[]>([]);
   const activeCollectionId = ref<string | null>(null);
   const sortKey = ref('title');
   const error = ref('');
-  let collectionQueue = Promise.resolve();
-  let favoriteQueue = Promise.resolve();
+  let collectionQueue: Promise<unknown> = Promise.resolve();
+  let favoriteQueue: Promise<unknown> = Promise.resolve();
   let coverOptimizationQueued = false;
 
-  function booksInCollection(id) {
+  function booksInCollection(id: string) {
     const collection = collections.value.find(item => item.id === id);
     if (!collection) return [];
     const ids = new Set(collection.bookIds);
     return sortShelfBooks(library.value.filter(book => ids.has(book.id)), sortKey.value, progressMap.value);
   }
 
-  function updateCollections(change) {
+  function updateCollections(change: (current: Collection[]) => Collection[]) {
     const task = collectionQueue.then(async () => {
       const next = change(collections.value);
       await HomuraStore.saveCollections(next);
@@ -50,9 +51,9 @@ export const useShelfStore = defineStore('shelf', () => {
     return task;
   }
 
-  async function createCollection(title) {
+  async function createCollection(title: string) {
     const item = { id: `collection_${crypto.randomUUID()}`, title: title.trim(), createdAt: Date.now(), bookIds: [] };
-    await updateCollections(current => {
+    await updateCollections((current: Collection[]) => {
       const message = collectionNameError(title, current);
       if (message) throw new Error(message);
       return [...current, item];
@@ -60,30 +61,30 @@ export const useShelfStore = defineStore('shelf', () => {
     return item;
   }
 
-  function renameCollection(id, title) {
-    return updateCollections(current => {
+  function renameCollection(id: string, title: string) {
+    return updateCollections((current: Collection[]) => {
       const message = collectionNameError(title, current, id);
       if (message) throw new Error(message);
-      return current.map(item => item.id === id ? { ...item, title: title.trim() } : item);
+      return current.map((item: Collection) => item.id === id ? { ...item, title: title.trim() } : item);
     });
   }
 
-  async function deleteCollection(id) {
-    await updateCollections(current => current.filter(item => item.id !== id));
+  async function deleteCollection(id: string) {
+    await updateCollections((current: Collection[]) => current.filter((item: Collection) => item.id !== id));
     if (activeCollectionId.value === id) activeCollectionId.value = null;
   }
 
-  function moveBooks(ids, targetId: any = null) {
+  function moveBooks(ids: string[], targetId: string | null = null) {
     const existing = new Set(library.value.map(book => book.id));
-    return updateCollections(current => moveCollectionBooks(current, ids.filter(id => existing.has(id)), targetId));
+    return updateCollections((current: Collection[]) => moveCollectionBooks(current, ids.filter((id: string) => existing.has(id)), targetId));
   }
 
-  function unshiftBook(book) {
+  function unshiftBook(book: Book) {
     library.value = [book, ...library.value];
   }
 
   // 新增书籍并落盘；写入失败由导入层汇总记录
-  async function addBook(book: any, source: any, options: { onSaved?: (book: any) => unknown | Promise<unknown>; [key: string]: any } = {}) {
+  async function addBook(book: Book, source: BookSource, options: { onSaved?: (book: Book) => unknown | Promise<unknown>; [key: string]: unknown } = {}) {
     if (!source) throw new Error('缺少原文件来源');
     try {
       const result = await persistBook(book, source, options);
@@ -104,7 +105,7 @@ export const useShelfStore = defineStore('shelf', () => {
   }
 
   // 批量导入：整批落盘成功后只替换一次 library，避免每加一本就重排整架。
-  async function addBooks(items: any[], options: { onSaved?: (book: any) => unknown | Promise<unknown>; [key: string]: any } = {}) {
+  async function addBooks(items: ImportEntry[], options: { onSaved?: (book: Book) => unknown | Promise<unknown>; [key: string]: unknown } = {}) {
     if (!items.length) return { saved: [], failed: [] };
     try {
       const result = await persistBooks(items, options);
@@ -128,11 +129,11 @@ export const useShelfStore = defineStore('shelf', () => {
     }
   }
 
-  async function removeBook(id) {
+  async function removeBook(id: string) {
     try {
       await HomuraStore.deleteBook(id);
     } catch (err) {
-      error.value = (err as any).message || '移除书本失败，请重试';
+      error.value = (err as Error).message || '移除书本失败，请重试';
       console.error('[HOMURA] 移除书本失败', err);
       throw err;
     }
@@ -144,7 +145,7 @@ export const useShelfStore = defineStore('shelf', () => {
     }
     if (collections.value.some(item => item.bookIds.includes(id))) {
       try {
-        await updateCollections(current => moveCollectionBooks(current, [id], null));
+        await updateCollections((current: Collection[]) => moveCollectionBooks(current, [id], null));
       } catch (err) {
         console.warn('[HOMURA] 书本已移除，但书库归属清理失败', err);
       }
@@ -179,7 +180,7 @@ export const useShelfStore = defineStore('shelf', () => {
   }
 
   // hydrateBook 会就地改写 book 字段，调用后触发一次浅刷新让卡片更新
-  function touchBook(book) {
+  function touchBook(book: Book) {
     const idx = library.value.findIndex(b => b.id === book.id);
     if (idx === -1) return;
     const next = library.value.slice();
@@ -187,28 +188,28 @@ export const useShelfStore = defineStore('shelf', () => {
     library.value = next;
   }
 
-  function setProgressRecord(record) {
+  function setProgressRecord(record: ReadingProgress & { id: string }) {
     progressMap.value = Object.assign({}, progressMap.value, { [record.id]: record });
   }
 
-  async function setBookCover(id, file) {
+  async function setBookCover(id: string, file: File | null) {
     let book = library.value.find(item => item.id === id);
     if (!book) throw new Error('书本已从书架移除');
     const blob = file ? await prepareBookCover(file) : null;
     // 示例内容没有原始文件存档，封面随本次示例一起保留在内存中。
-    if (!id.startsWith('demo_')) await HomuraStore.updateBookCover(id, blob);
+    if (!id.startsWith('demo_')) await HomuraStore.updateBookCover(id, blob as Blob | null);
     book = library.value.find(item => item.id === id);
     if (!book) return null;
     if (!book.customCoverBlob) book.originalCover = book.cover;
     const previous = book.cover;
     book.customCoverBlob = blob;
-    book.cover = blob ? URL.createObjectURL(blob as Blob) : (book.originalCover || (book.coverBlob ? URL.createObjectURL(book.coverBlob as Blob) : null));
+    book.cover = blob ? URL.createObjectURL(blob as Blob) : ((book.originalCover as string | undefined) || (book.coverBlob ? URL.createObjectURL(book.coverBlob as Blob) : null));
     if (previous?.startsWith('blob:') && previous !== book.originalCover && previous !== book.cover) URL.revokeObjectURL(previous);
     touchBook(book);
     return book;
   }
 
-  function updateFavorite(id, change) {
+  function updateFavorite(id: string, change: (favorite: boolean) => boolean) {
     const task = favoriteQueue.then(async () => {
       const book = library.value.find(item => item.id === id);
       if (!book) throw new Error('书本已从书架移除');
@@ -222,28 +223,33 @@ export const useShelfStore = defineStore('shelf', () => {
     return task;
   }
 
-  function toggleFavorite(id) { return updateFavorite(id, favorite => !favorite); }
-  function setFavorite(id, favorite) { return updateFavorite(id, () => !!favorite); }
+  function toggleFavorite(id: string) { return updateFavorite(id, (favorite: boolean) => !favorite); }
+  function setFavorite(id: string, favorite: boolean) { return updateFavorite(id, () => !!favorite); }
 
   // 书架展示用：无记录或仍在第一页时不显示，避免满屏「读至 0%」
-  function progressInfoFor(bookId) {
+  function progressInfoFor(bookId: string): { percent: number; index: number; total: number; updatedAt: number } | null {
     const rec = progressMap.value[bookId];
     if (!rec) return null;
     const ratio = typeof rec.ratio === 'number' ? rec.ratio : 0;
     const percent = Math.min(100, Math.max(0, Math.round(ratio * 100)));
     if (percent <= 0) return null;
-    return { percent, index: rec.index, total: rec.total, updatedAt: rec.updatedAt };
+    return {
+      percent,
+      index: typeof rec.index === 'number' ? rec.index : 0,
+      total: typeof rec.total === 'number' ? rec.total : 0,
+      updatedAt: typeof rec.updatedAt === 'number' ? rec.updatedAt : 0
+    };
   }
 
   // 启动初始化：恢复书架 + 进度表；第一次使用时放示例书
-  async function optimizeStoredCover(book: any) {
-    const patch: Record<string, any> = {};
+  async function optimizeStoredCover(book: Book) {
+    const patch: Record<string, unknown> = {};
     if (book.coverBlob) {
       const thumb = await createCoverThumbnail(book.coverBlob);
       if (thumb && thumb !== book.coverBlob) patch.coverBlob = thumb;
     }
     if (book.customCoverBlob) {
-      const thumb = await createCoverThumbnail(book.customCoverBlob);
+      const thumb = await createCoverThumbnail(book.customCoverBlob as Blob);
       if (thumb && thumb !== book.customCoverBlob) patch.customCoverBlob = thumb;
     }
     if (!Object.keys(patch).length) return;
@@ -254,7 +260,7 @@ export const useShelfStore = defineStore('shelf', () => {
     Object.assign(current, patch);
     const source = current.customCoverBlob || current.coverBlob;
     const previous = current.cover;
-    if (source) current.cover = URL.createObjectURL(source);
+    if (source) current.cover = URL.createObjectURL(source as Blob);
     if (previous?.startsWith('blob:')) URL.revokeObjectURL(previous);
     touchBook(current);
   }
@@ -264,7 +270,7 @@ export const useShelfStore = defineStore('shelf', () => {
 
   // 旧版本把原图直接存进书架。启动后利用空闲时间逐本换成长边 480px 的封面，
   // 避免一次性解码整库封面把启动和滚动拖慢；迁移完成后记版本号，后续只处理大图。
-  function scheduleCoverOptimization(books) {
+  function scheduleCoverOptimization(books: Book[]) {
     if (coverOptimizationQueued) return;
     let needsMigration = false;
     try {
@@ -273,7 +279,7 @@ export const useShelfStore = defineStore('shelf', () => {
       needsMigration = false;
     }
     if (!needsMigration) return;
-    const candidates = books.filter(book => book.restored
+    const candidates = books.filter((book: Book) => book.restored
       && !book.id.startsWith('demo_')
       && (book.coverBlob || book.customCoverBlob));
     if (!candidates.length) {
@@ -319,12 +325,12 @@ export const useShelfStore = defineStore('shelf', () => {
     const restored = await restoreLibrary();
     progressMap.value = await loadProgressMap();
     if (restored === null) return false;
-    library.value = restored;
-    scheduleCoverOptimization(restored);
-    collections.value = restoreCollections(await HomuraStore.listCollections(), restored);
+    library.value = restored as Book[];
+    scheduleCoverOptimization(restored as Book[]);
+    collections.value = restoreCollections(await HomuraStore.listCollections(), restored as Book[]);
     if (restored.length === 0 && collections.value.length === 0) {
-      unshiftBook(createDemoNovel());
-      unshiftBook(createDemoManga());
+      unshiftBook(createDemoNovel() as Book);
+      unshiftBook(createDemoManga() as Book);
     }
     return restored.length > 0;
   }

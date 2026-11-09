@@ -51,7 +51,7 @@ export const canUseOPFS = typeof navigator !== 'undefined'
 // iOS 不接受未知扩展名的 accept 过滤，会直接置灰文件；这里干脆不做扩展名限制
 export const fileAccept = isIOS ? '' : '.epub,.pdf,.mobi,.prc,.azw,.txt,.md,image/*';
 
-export function formatBytes(bytes) {
+export function formatBytes(bytes: number) {
   if (!bytes || bytes < 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let value = bytes;

@@ -5,14 +5,18 @@
    窗口尺寸变化时的小说重排。Android 返回手势由 useReaderBackDismiss 接管。
    ========================================================================== */
 
-import { onMounted, onBeforeUnmount } from 'vue';
+import { onMounted, onBeforeUnmount, type Ref } from 'vue';
 import { useUiStore } from '../stores/ui.ts';
+import type { useReaderStore } from '../stores/reader.ts';
 
-export function useShortcuts(reader, viewportRef, dismissWithPredictiveBack) {
+type ReaderStore = ReturnType<typeof useReaderStore>;
+
+export function useShortcuts(reader: ReaderStore, viewportRef: Ref<HTMLElement | null>, dismissWithPredictiveBack: () => void) {
   const ui = useUiStore();
 
-  function onKeydown(e) {
-    if (e.target && ['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+  function onKeydown(e: KeyboardEvent) {
+    const target = e.target as HTMLElement | null;
+    if (target && ['INPUT', 'TEXTAREA'].includes(target.tagName)) return;
 
     if (!reader.currentBook) return;
     if (ui.readerDrawerOpen && e.key !== 'Escape') return;
@@ -45,7 +49,7 @@ export function useShortcuts(reader, viewportRef, dismissWithPredictiveBack) {
   }
 
   // Mouse Wheel Page Turn Support（条漫模式让位原生滚动）
-  function onWheel(e) {
+  function onWheel(e: WheelEvent) {
     if (!reader.currentBook) return;
     // 抽屉打开时滚轮属于抽屉内容，不能截成阅读器翻页
     if (ui.readerDrawerOpen) return;
@@ -110,6 +114,6 @@ export function useShortcuts(reader, viewportRef, dismissWithPredictiveBack) {
     if (viewportRef.value) {
       viewportRef.value.removeEventListener('wheel', onWheel);
     }
-    clearTimeout(reader.resizeTimer);
+    window.clearTimeout(reader.resizeTimer ?? undefined);
   });
 }

@@ -15,9 +15,31 @@ import {
   normalizeNativeError
 } from './nativeRuntime.ts';
 
-const openArchives = new Set();
-const lifecycleQueues = new Map();
-const ensureTasks = new Map();
+const openArchives = new Set<string>();
+const lifecycleQueues = new Map<string, Promise<unknown>>();
+const ensureTasks = new Map<string, Promise<boolean>>();
+
+/** 原生页面/文本读取返回的最小字段结构 */
+interface NativeFileResult {
+  path?: string;
+  width?: number;
+  height?: number;
+  mime?: string;
+  size?: number;
+}
+
+/** 页项最小结构（用于回退查找 nativeArchiveId/Path） */
+interface PageItemLike {
+  nativeArchiveId?: string;
+  nativeArchivePath?: string;
+}
+
+/** 会话所需的书本字段 */
+interface ArchiveSessionBook {
+  nativeArchiveId?: string | null;
+  nativeArchivePath?: string | null;
+  pageItems?: PageItemLike[] | null;
+}
 
 export function canUseNativeArchive() {
   return canUseNativeBridge();
@@ -39,13 +61,13 @@ const ARCHIVE_FALLBACK_CODES: Set<string> = new Set([
   NativeErrorCode.INVALID_DATA
 ]);
 
-export function shouldFallbackNativeArchive(error) {
+export function shouldFallbackNativeArchive(error: unknown) {
   const normalized = normalizeNativeError(error, { feature: 'archive' });
   return ARCHIVE_FALLBACK_CODES.has(normalized.code);
 }
 
 // open / close 必须按压缩包串行，避免快速切书时 close 晚于下一轮 open 执行。
-function enqueueLifecycle(archiveId, operation) {
+function enqueueLifecycle<T>(archiveId: string, operation: () => Promise<T>): Promise<T> {
   const previous = lifecycleQueues.get(archiveId) || Promise.resolve();
   const task = previous.catch(() => {}).then(operation);
   lifecycleQueues.set(archiveId, task);
@@ -60,23 +82,23 @@ function enqueueLifecycle(archiveId, operation) {
   return task;
 }
 
-function nativeArchiveIdFor(book) {
+function nativeArchiveIdFor(book: ArchiveSessionBook | null | undefined) {
   return book?.nativeArchiveId
-    || (book?.pageItems || []).find(item => item?.nativeArchiveId)?.nativeArchiveId
+    || (book?.pageItems || []).find((item) => item?.nativeArchiveId)?.nativeArchiveId
     || null;
 }
 
-function nativeArchivePathFor(book) {
+function nativeArchivePathFor(book: ArchiveSessionBook | null | undefined) {
   return book?.nativeArchivePath
-    || (book?.pageItems || []).find(item => item?.nativeArchivePath)?.nativeArchivePath
+    || (book?.pageItems || []).find((item) => item?.nativeArchivePath)?.nativeArchivePath
     || '';
 }
 
-export function openNativeDocument(archiveId: string, path: string, options: { scanDimensions?: boolean; includeEntries?: boolean; [key: string]: any } = {}) {
+export function openNativeDocument(archiveId: string, path: string, options: { scanDimensions?: boolean; includeEntries?: boolean; [key: string]: unknown } = {}) {
   return enqueueLifecycle(archiveId, async () => {
     // 已持久化页清单时只需要恢复 ZipFile 会话，不再扫描全部图片尺寸或
     // 把几千条 ZIP 元数据经 IPC 送回 WebView。
-    const args: Record<string, any> = { archiveId, path };
+    const args: Record<string, unknown> = { archiveId, path };
     if (isAndroid) {
       args.scanDimensions = options.scanDimensions !== false;
       args.includeEntries = options.includeEntries !== false;
@@ -87,15 +109,15 @@ export function openNativeDocument(archiveId: string, path: string, options: { s
   });
 }
 
-export function extractNativePage(archiveId, index) {
+export function extractNativePage(archiveId: string, index: number) {
   return invokeNative('extract', { archiveId, index });
 }
 
-export function extractNativeEntry(archiveId, index) {
+export function extractNativeEntry(archiveId: string, index: number) {
   return extractNativePage(archiveId, index);
 }
 
-export async function readNativeTextBatch(archiveId, paths) {
+export async function readNativeTextBatch(archiveId: string, paths: string[] | unknown) {
   if (!Array.isArray(paths) || paths.length === 0) return [];
   if (!openArchives.has(archiveId)) throw new Error('原生压缩包会话尚未打开');
   const result = await invokeNative('readTextBatch', {
@@ -105,7 +127,7 @@ export async function readNativeTextBatch(archiveId, paths) {
   return Array.isArray(result?.texts) ? result.texts : [];
 }
 
-export function closeNativeArchive(archiveId) {
+export function closeNativeArchive(archiveId: string) {
   // 立即从可用集合移除；真正的 close 与后续 open 由同一条队列排序。
   openArchives.delete(archiveId);
   return enqueueLifecycle(archiveId, async () => {
@@ -117,7 +139,7 @@ export function closeNativeArchive(archiveId) {
   });
 }
 
-export function clearNativeArchiveBookCache(bookId) {
+export function clearNativeArchiveBookCache(bookId: string) {
   openArchives.delete(bookId);
   ensureTasks.delete(bookId);
   return enqueueLifecycle(bookId, () => invokeNative('clearBook', { bookId }));
@@ -132,12 +154,12 @@ export async function clearNativeArchiveCache() {
   }
 }
 
-export function isNativeArchiveSessionOpen(archiveId) {
+export function isNativeArchiveSessionOpen(archiveId: string | null | undefined) {
   return !!archiveId && openArchives.has(archiveId);
 }
 
 // 关闭阅读器后页面项仍然保留，重新打开时按需恢复 ZipFile 句柄。
-export function ensureNativeArchiveSession(book) {
+export function ensureNativeArchiveSession(book: ArchiveSessionBook | null | undefined) {
   const archiveId = nativeArchiveIdFor(book);
   if (!archiveId) return Promise.resolve(false);
   if (openArchives.has(archiveId)) return Promise.resolve(true);
@@ -160,16 +182,16 @@ export function ensureNativeArchiveSession(book) {
 }
 
 // 只释放 ZipFile 句柄，保留已解压的页面缓存，方便快速重开同一本书。
-export function releaseNativeArchiveSession(book) {
+export function releaseNativeArchiveSession(book: ArchiveSessionBook | null | undefined) {
   const archiveId = nativeArchiveIdFor(book);
   if (!archiveId) return Promise.resolve();
   return closeNativeArchive(archiveId).catch(() => {});
 }
 
 // 缓存文件位于 AppCache；读取路径由 plugin-fs 的 appcache 递归读权限覆盖。
-export async function ensureNativePageAsset(archiveId, index) {
+export async function ensureNativePageAsset(archiveId: string, index: number) {
   if (!Number.isInteger(index)) return null;
-  const file = await extractNativePage(archiveId, index);
+  const file = await extractNativePage(archiveId, index) as NativeFileResult | null | undefined;
   if (!file?.path) return null;
   const convertFileSrc = typeof window !== 'undefined'
     ? window.__TAURI__?.core?.convertFileSrc
@@ -183,8 +205,8 @@ export async function ensureNativePageAsset(archiveId, index) {
   };
 }
 
-export async function readNativePageBlob(archiveId, index) {
-  const file = await extractNativePage(archiveId, index);
+export async function readNativePageBlob(archiveId: string, index: number) {
+  const file = await extractNativePage(archiveId, index) as NativeFileResult;
   if (!file?.path) throw new Error('原生页面缓存路径为空');
   const { readFile } = await import('@tauri-apps/plugin-fs');
   const bytes = await readFile(file.path);

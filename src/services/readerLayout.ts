@@ -38,10 +38,10 @@ export const READER_FONT_OPTIONS = [
 // 早期版本只存了 song / hei / kai，旧值在这里归一，避免老读者书掉回默认。
 const FONT_ALIASES = { hei: 'square', default: 'system' };
 
-export function resolveFontValue(value) {
-  const normalized = FONT_ALIASES[value] || value;
+export function resolveFontValue(value: unknown): string {
+  const normalized = (FONT_ALIASES as Record<string, string>)[value as string] || value;
   return READER_FONT_OPTIONS.some((option) => option.value === normalized)
-    ? normalized
+    ? (normalized as string)
     : 'song';
 }
 
@@ -68,14 +68,14 @@ const BOTTOM_CHROME = { compact: 112, desktop: 96 };
 const DOUBLE_PAGE_MAX = 540;
 const SINGLE_PAGE_MAX = 640;
 
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-export function resolveFontStack(value) {
+export function resolveFontStack(value: unknown) {
   const match = READER_FONT_OPTIONS.find((option) => option.value === resolveFontValue(value));
   return (match || READER_FONT_OPTIONS.find((option) => option.value === 'song'))!.stack;
 }
 
-export function resolveLineHeight(value) {
+export function resolveLineHeight(value: unknown) {
   const match = READER_LINE_HEIGHT_OPTIONS.find((option) => option.value === value);
   return (match || READER_LINE_HEIGHT_OPTIONS[1]).ratio;
 }
@@ -93,7 +93,7 @@ interface ReaderLayoutPrefs {
   pageMargin?: string;
   spread?: number | string;
   fontSize?: number | string;
-  fontFamily?: string;
+  fontFamily?: string | unknown;
   lineHeight?: unknown;
   [key: string]: unknown;
 }
@@ -138,7 +138,7 @@ export function resolveReaderMetrics({ width, height, layout = {}, compact = fal
 }
 
 /** 正文容器需要的内联变量：字体、字号、行高、段距都与测量保持一致。 */
-export function resolveProseStyle(layout: ReaderLayoutPrefs = {}, metrics: Record<string, unknown> = {}) {
+export function resolveProseStyle(layout: ReaderLayoutPrefs = {}, _metrics: Record<string, unknown> = {}) {
   const fontSize = Number(layout.fontSize) || 18;
   return {
     '--reader-font-family': resolveFontStack(layout.fontFamily),

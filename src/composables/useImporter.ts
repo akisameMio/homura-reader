@@ -38,9 +38,99 @@ import { createCoverThumbnail } from '../services/coverThumb.ts';
 import { releaseBookPageUrls } from '../services/pagination.ts';
 import { runShelfMutation } from '../services/mutationQueue.ts';
 import { NativeErrorCode } from '../services/nativeRuntime.ts';
+import type { Book, BookSource } from '../types.ts';
+
+
+/** 导入任务：一个待解析的源（单文件 / 图片文件夹分组） */
+interface ImportTask {
+  kind: string;
+  file?: ImportFile;
+  group?: {
+    book: Book;
+    folderName: string;
+    files: ImportFile[];
+  };
+  title?: string;
+  titleIsReliable?: boolean;
+  size?: number;
+  failureReason?: string;
+  duplicateApprovedTitleKey?: string;
+}
+
+/** 带自定义附加字段的 File（拖拽 / 目录句柄采集时挂上的相对路径与句柄） */
+type ImportFile = File & {
+  customRelativePath?: string;
+  webkitRelativePath?: string;
+  customHandle?: FileSystemFileHandle | null;
+  nativePath?: string;
+};
+
+/** 批次耗时统计 */
+interface ImportMetrics {
+  files: number;
+  tasks: number;
+  importTasks: number;
+  concurrency: number;
+  commitBatchSize: number;
+  commitBatches: number;
+  saved: number;
+  skipped: number;
+  failed: number;
+  parseFailed: number;
+  nativeTasks: number;
+  stageMs: number;
+  nativeStageMs: number;
+  readMs: number;
+  parseMs: number;
+  coverMs: number;
+  idbMs: number;
+  sqliteMs: number;
+  commitMs: number;
+  startedAt: number;
+}
+
+/** 已准备好的待入库条目 */
+interface Prepared {
+  book: Book;
+  source: BookSource;
+  coverThumb?: Blob | null;
+  [key: string]: unknown;
+}
+
+/** 重复导入会话（来自 useDuplicateImport） */
+interface DuplicateSession {
+  confirmDuplicates: (items: { title?: string; existingTitle?: string; count: number }[]) => Promise<boolean>;
+  confirmDuplicate: (book: Book, existingBook: Book) => Promise<boolean>;
+  hide: () => void;
+  close: () => void;
+}
+
+/** File System Access 目录/文件句柄（最小结构） */
+interface FsDirectoryHandle {
+  name: string;
+  kind?: string;
+  entries: () => AsyncIterableIterator<[string, FsFileHandle]>;
+}
+interface FsFileHandle {
+  kind: string;
+  name?: string;
+  getFile: () => Promise<File>;
+  entries?: () => AsyncIterableIterator<[string, FsFileHandle]>;
+}
+
+/** webkitGetAsEntry 返回的文件 / 目录条目（最小结构） */
+interface FsEntry {
+  name: string;
+  isFile: boolean;
+  isDirectory: boolean;
+  file: (onSuccess: (file: File) => void, onError?: () => void) => void;
+  createReader: () => {
+    readEntries: (onSuccess: (entries: FsEntry[]) => void, onError?: () => void) => void;
+  };
+}
 
 let quotaWarned = false;
-let activeImportBatch: any = null;
+let activeImportBatch: Promise<unknown> | null = null;
 const IMPORT_TIMING_ENABLED = !!import.meta.env?.DEV;
 const LARGE_FILE_BYTES = 64 * 1024 * 1024;
 const VERY_LARGE_FILE_BYTES = 256 * 1024 * 1024;
@@ -57,13 +147,13 @@ const now = typeof performance !== 'undefined' && typeof performance.now === 'fu
   ? () => performance.now()
   : () => Date.now();
 
-function importTitleFromFileName(name) {
+function importTitleFromFileName(name: string | null | undefined) {
   return String(name || '')
     .replace(/(\.kepub)?\.epub$/i, '')
     .replace(/\.[^.]+$/, '');
 }
 
-function createImportMetrics(files, tasks) {
+function createImportMetrics(files: File[], tasks: ImportTask[]) {
   return {
     files: files.length,
     tasks: tasks.length,
@@ -75,9 +165,9 @@ function createImportMetrics(files, tasks) {
     skipped: 0,
     failed: 0,
     parseFailed: 0,
-    nativeTasks: tasks.filter(task => (
+    nativeTasks: tasks.filter((task: ImportTask) => (
       isNativeImportFile(task.file)
-      || (task.group?.files || []).some(file => isNativeImportFile(file))
+      || (task.group?.files || []).some((file: File) => isNativeImportFile(file))
     )).length,
     stageMs: 0,
     nativeStageMs: 0,
@@ -91,7 +181,7 @@ function createImportMetrics(files, tasks) {
   };
 }
 
-function logImportMetrics(metrics, savedCount) {
+function logImportMetrics(metrics: ImportMetrics, savedCount: number) {
   if (!IMPORT_TIMING_ENABLED) return;
   // 阶段耗时是各任务耗时之和，并发导入时会大于实际 wall time。
   const payload = {
@@ -119,9 +209,9 @@ function logImportMetrics(metrics, savedCount) {
   console.info('[HOMURA][import] 批次耗时', payload);
 }
 
-function buildImportTasks(files) {
-  const tasks: any[] = [];
-  const addFileTasks = (list, kind, titleIsReliable = true) => {
+function buildImportTasks(files: File[]) {
+  const tasks: ImportTask[] = [];
+  const addFileTasks = (list: File[], kind: string, titleIsReliable = true) => {
     for (const file of list) {
       tasks.push({
         kind,
@@ -134,39 +224,39 @@ function buildImportTasks(files) {
   };
 
   // EPUB / MOBI 的书名来自容器元数据，不能拿文件名直接断定同名。
-  addFileTasks(files.filter(f => /\.epub$/i.test(f.name)), 'epub', false);
-  addFileTasks(files.filter(f => /\.pdf$/i.test(f.name)), 'pdf');
-  addFileTasks(files.filter(f => /\.(mobi|prc|azw)$/i.test(f.name)), 'mobi', false);
-  addFileTasks(files.filter(f => /\.md$/i.test(f.name)), 'markdown');
-  addFileTasks(files.filter(f => /\.txt$/i.test(f.name)), 'txt');
+  addFileTasks(files.filter((f: File) => /\.epub$/i.test(f.name)), 'epub', false);
+  addFileTasks(files.filter((f: File) => /\.pdf$/i.test(f.name)), 'pdf');
+  addFileTasks(files.filter((f: File) => /\.(mobi|prc|azw)$/i.test(f.name)), 'mobi', false);
+  addFileTasks(files.filter((f: File) => /\.md$/i.test(f.name)), 'markdown');
+  addFileTasks(files.filter((f: File) => /\.txt$/i.test(f.name)), 'txt');
 
   // macOS 打包留下的 __MACOSX / ._* 不是真正的页面，提前剔掉免得白读内存。
-  const imgFiles = files.filter(f => f.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|avif|bmp)$/i.test(f.name))
-    .filter(f => !isJunkImagePath(f.customRelativePath || f.webkitRelativePath || f.name));
-  for (const group of buildImageFolderBooks(imgFiles)) {
+  const imgFiles = files.filter((f: ImportFile) => f.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|avif|bmp)$/i.test(f.name))
+    .filter((f: ImportFile) => !isJunkImagePath(f.customRelativePath || f.webkitRelativePath || f.name));
+  for (const group of buildImageFolderBooks(imgFiles) as unknown as NonNullable<ImportTask['group']>[]) {
     tasks.push({
       kind: 'images',
       group,
       title: group.folderName,
       titleIsReliable: true,
-      size: group.files.reduce((total, file) => total + (file.size || 0), 0)
+      size: group.files.reduce((total: number, file: File) => total + (file.size || 0), 0)
     });
   }
   return tasks;
 }
 
-function chooseImportConcurrency(tasks) {
+function chooseImportConcurrency(tasks: ImportTask[]) {
   if (tasks.length <= 1) return 1;
-  const maxSize = tasks.reduce((max, task) => Math.max(max, task.size || 0), 0);
+  const maxSize = tasks.reduce((max: number, task: ImportTask) => Math.max(max, task.size || 0), 0);
   if (isAndroid) return maxSize > 32 * 1024 * 1024 ? 1 : ANDROID_IMPORT_CONCURRENCY;
   if (maxSize > VERY_LARGE_FILE_BYTES) return 2;
   if (maxSize > LARGE_FILE_BYTES) return 3;
   return Math.min(DESKTOP_IMPORT_CONCURRENCY, tasks.length);
 }
 
-function chooseCommitBatchSize(tasks) {
+function chooseCommitBatchSize(tasks: ImportTask[]) {
   if (tasks.length <= 1) return 1;
-  const maxSize = tasks.reduce((max, task) => Math.max(max, task.size || 0), 0);
+  const maxSize = tasks.reduce((max: number, task: ImportTask) => Math.max(max, task.size || 0), 0);
   const countCap = isAndroid
     ? (maxSize > 32 * 1024 * 1024 ? VERY_LARGE_COMMIT_BATCH_SIZE : ANDROID_COMMIT_BATCH_SIZE)
     : maxSize > VERY_LARGE_FILE_BYTES
@@ -189,18 +279,18 @@ function chooseCommitBatchSize(tasks) {
 
 // 有界滚动并发池：同一批任务按原始 index 回填结果，提交顺序不随完成先后变化。
 // 原生导入失败需要整批交给用户重选，必须等已在跑的任务收尾，避免后台继续写盘。
-async function runPool(items, concurrency, worker, onError, shouldStop = () => false) {
-  const results: any[] = new Array(items.length);
+async function runPool<T, R>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<R>, onError: ((err: unknown, item: T, index: number) => void) | null, shouldStop = () => false) {
+  const results: (R | null)[] = new Array(items.length);
   let next = 0;
-  let fatalError: any = null;
+  let fatalError: (Error & { partialResults?: (R | null)[] }) | null = null;
   async function lane() {
     while (!fatalError && !shouldStop() && next < items.length) {
       const index = next++;
       try {
         results[index] = await worker(items[index], index);
-      } catch (err: any) {
-        if (err?.nativeImportFallback) {
-          fatalError = fatalError || err;
+      } catch (err: unknown) {
+        if ((err as { nativeImportFallback?: boolean })?.nativeImportFallback) {
+          fatalError = fatalError || (err as Error & { partialResults?: (R | null)[] });
           return;
         }
         console.warn('[HOMURA] 导入预处理任务失败', err);
@@ -211,13 +301,13 @@ async function runPool(items, concurrency, worker, onError, shouldStop = () => f
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, lane));
   if (fatalError) {
-    fatalError.partialResults = results.filter(Boolean);
+    (fatalError as Error & { partialResults?: (unknown | null)[] }).partialResults = results.filter(Boolean);
     throw fatalError;
   }
   return results;
 }
 
-async function discardPreparedResults(preparedList) {
+async function discardPreparedResults(preparedList: (Prepared | null)[] | null | undefined) {
   for (const prepared of preparedList || []) {
     if (prepared?.book) await discardParsedBook(prepared.book).catch(() => {});
   }
@@ -242,17 +332,17 @@ export function useImporter() {
   const { createDuplicateSession } = useDuplicateImport();
   const { askShelfDialog } = useShelfDialogs();
 
-  function taskFiles(task) {
+  function taskFiles(task: ImportTask | null | undefined): ImportFile[] {
     if (!task) return [];
     if (task.group?.files?.length) return task.group.files.slice();
     return task.file ? [task.file] : [];
   }
 
-  function markTaskFailure(task, error) {
+  function markTaskFailure(task: ImportTask | null | undefined, error: unknown) {
     if (task && !task.failureReason) task.failureReason = importFailureReason(error);
   }
 
-  function recordTaskFailure(task, error, fallbackName = '') {
+  function recordTaskFailure(task: ImportTask | null | undefined, error: unknown, fallbackName = '') {
     importProgress.recordFailure({
       name: task?.title || fallbackName || '未命名文件',
       reason: task?.failureReason || importFailureReason(error),
@@ -261,12 +351,12 @@ export function useImporter() {
     });
   }
 
-  function handleFiles(fileList, { offerCollection = false, targetId = shelf.activeCollectionId } = {}) {
+  function handleFiles(fileList: FileList | ImportFile[] | Array<ReturnType<typeof makeNativeImportFile>> | null, { offerCollection = false, targetId = shelf.activeCollectionId }: { offerCollection?: boolean; targetId?: string | null } = {}) {
     if (!fileList || fileList.length === 0) return;
     // useImporter 会被 App 与 DragOverlay 分别实例化，锁必须放在模块级；
     // 否则拖拽入口能绕过锁，第二批会覆盖当前进度。
     if (activeImportBatch || importProgress.isRunning) return;
-    const files = (Array.from(fileList) as any[]).filter((f: any) => !f.name.startsWith('.'));
+    const files = (Array.from(fileList as ArrayLike<File>) as ImportFile[]).filter((f: File) => !f.name.startsWith('.'));
     if (files.length === 0) return;
 
     // 所有导入入口与清空书架共用互斥队列，防止同名漏判和源文件删除竞态。
@@ -285,7 +375,7 @@ export function useImporter() {
     return handleFiles(files, { targetId: importProgress.targetId });
   }
 
-  async function importBatch(files, targetId: any = null, offerCollection) {
+  async function importBatch(files: ImportFile[], targetId: string | null = null, offerCollection: boolean) {
     const targetLabel = targetId
       ? (shelf.collections.find(item => item.id === targetId)?.title || '全部作品')
       : '全部作品';
@@ -296,7 +386,7 @@ export function useImporter() {
       return ids;
     };
     if (!settings.importCollectionPrompt) return importIntoCurrent();
-    const plan = planFolderCollections(files);
+    const plan = planFolderCollections(files as unknown as { name: string; webkitRelativePath?: string; customRelativePath?: string }[]);
     if (plan.bookCount < 2 || (!plan.hasDirectories && (!offerCollection || targetId))) return importIntoCurrent();
     const grouping = plan.hasDirectories ? `按目录分别创建 ${plan.groups.length} 个一级书库` : '将这批作品放进一个新书库';
     const create = await askShelfDialog({
@@ -306,16 +396,16 @@ export function useImporter() {
     if (create === null) return [];
     if (!create) return importIntoCurrent();
     const reserved = [...shelf.collections];
-    const groups: any[] = [];
+    const groups: { path?: string; bookCount: number; title?: string; files: ImportFile[] }[] = [];
     // 所有名称确认后才导入；中途取消不会留下半批书库。
     for (const group of plan.groups) {
       const message = group.path ? `目录：${group.path} · ${group.bookCount} 本作品` : `${group.bookCount} 本作品`;
-      const title = await askShelfDialog({ kind: 'name', title: '创建导入书库', message, initialName: availableCollectionName(group.title, reserved), validate: name => collectionNameError(name, reserved) });
+      const title = await askShelfDialog({ kind: 'name', title: '创建导入书库', message, initialName: availableCollectionName(group.title, reserved), validate: (name: string) => collectionNameError(name, reserved) }) as string | null;
       if (title === null) return [];
-      reserved.push({ title });
-      groups.push({ ...group, title });
+      reserved.push({ title } as unknown as (typeof reserved)[number]);
+      groups.push({ ...group, title } as unknown as (typeof groups)[number]);
     }
-    const savedIds: any[] = [];
+    const savedIds: string[] = [];
     for (const group of groups) {
       const ids = await importFiles(group.files, {
         targetId: '',
@@ -323,7 +413,7 @@ export function useImporter() {
       });
       if (!ids.length) continue;
       savedIds.push(...ids);
-      const collection = await shelf.createCollection(group.title);
+      const collection = await shelf.createCollection(group.title ?? '');
       await shelf.moveBooks(ids, collection.id);
     }
     shelf.activeCollectionId = null;
@@ -331,17 +421,17 @@ export function useImporter() {
   }
 
   // 导入前只按文件名快速识别可能的同名书，避免重复文件也走完整解析。
-  async function preflightDuplicateTasks(tasks, duplicateSession) {
+  async function preflightDuplicateTasks(tasks: ImportTask[], duplicateSession: DuplicateSession) {
     if (!tasks.length || !shelf.library.length) {
       return { tasks, skipped: 0 };
     }
-    const knownByTitle = new Map<string, any>();
+    const knownByTitle = new Map<string, Book>();
     for (const book of shelf.library) {
       const key = normalizeBookTitle(book.title);
       if (key && !knownByTitle.has(key)) knownByTitle.set(key, book);
     }
 
-    const groups = new Map<string, any>();
+    const groups = new Map<string, { key: string; title?: string; existingTitle?: string; tasks: ImportTask[] }>();
     for (const task of tasks) {
       if (!task.titleIsReliable) continue;
       const key = normalizeBookTitle(task.title);
@@ -376,13 +466,13 @@ export function useImporter() {
       if (task.kind === 'images' && task.group?.book) await discardParsedBook(task.group.book);
     }
     return {
-      tasks: tasks.filter(task => !skippedTasks.has(task)),
+      tasks: tasks.filter((task: ImportTask) => !skippedTasks.has(task)),
       skipped: skippedTasks.size
     };
   }
 
-  async function prepareEpubTask(task, metrics) {
-    let file = task.file;
+  async function prepareEpubTask(task: ImportTask, metrics: ImportMetrics): Promise<Prepared | null> {
+    let file = task.file!;
     const bookId = makeEpubId();
     let source = makeFileSource(file);
     let nativePath = '';
@@ -397,7 +487,7 @@ export function useImporter() {
         const staged = viaNativePath
           ? await stageNativePathSource(bookId, file)
           : await stageNativeFileSource(bookId, file);
-        source = staged as any;
+        source = staged as BookSource;
         nativePath = staged.nativePath;
         if (viaNativePath) metrics.nativeStageMs += now() - started;
       } catch (err) {
@@ -413,7 +503,7 @@ export function useImporter() {
         // 交给系统文件输入重选；安全与超限错误仍由上面的分支终止。
         if (isAndroidContentUri(file.nativePath)) {
           await removeNativeBookDir(bookId).catch(() => {});
-          (err as any).nativeImportFallback = true;
+          (err as { nativeImportFallback?: boolean }).nativeImportFallback = true;
           throw err;
         }
         console.warn('[HOMURA] 原生 EPUB 预存失败，沿用 JSZip', err);
@@ -437,7 +527,7 @@ export function useImporter() {
     }
 
     const parseStarted = now();
-    let book: any = null;
+    let book: Book | null = null;
     const parseOptions = {
       id: bookId,
       name: file.name,
@@ -448,20 +538,21 @@ export function useImporter() {
     };
     const parseFullEpub = () => parseEpubFile(file, parseOptions);
     importProgress.setPhase('parse');
-    let parseFailure: any = null;
+    let parseFailure: unknown = null;
     try {
-      let metadataError: any = null;
+      let metadataError: unknown = null;
       try {
         book = await parseEpubFile(file, { ...parseOptions, metadataOnly: true });
       } catch (err) {
-        metadataError = err as any;
-        parseFailure = err as any;
+        metadataError = err;
+        parseFailure = err;
       }
 
       if (metadataError) {
-        const canRetryFull = (metadataError as any).code !== NativeErrorCode.SECURITY_LIMIT
-          && (metadataError as any).code !== NativeErrorCode.LIMIT_EXCEEDED
-          && (metadataError as any).code !== NativeErrorCode.CANCELLED;
+        const metadataCode = (metadataError as { code?: string }).code;
+        const canRetryFull = metadataCode !== NativeErrorCode.SECURITY_LIMIT
+          && metadataCode !== NativeErrorCode.LIMIT_EXCEEDED
+          && metadataCode !== NativeErrorCode.CANCELLED;
         if (!canRetryFull) {
           console.warn('[HOMURA] EPUB 被安全或限额规则拒绝，不再回退', metadataError);
         } else {
@@ -497,16 +588,16 @@ export function useImporter() {
     }
     book.nativeArchiveStaged = !!nativePath;
     const pageManifest = createNativeMangaManifest(book);
-    if (pageManifest) source = { ...source, nativePageManifest: pageManifest } as any;
+    if (pageManifest) source = { ...source, nativePageManifest: pageManifest } as BookSource;
     return { book, source };
   }
 
-  async function prepareParsedTask(task, parser, metrics, label) {
+  async function prepareParsedTask(task: ImportTask, parser: (file: File) => Promise<unknown>, metrics: ImportMetrics, label: string): Promise<Prepared | null> {
     const started = now();
-    let file = task.file;
-    let book: any = null;
+    let file = task.file!;
+    let book: Book | null = null;
     let stagedBookId = '';
-    let stagedSource: any = null;
+    let stagedSource: BookSource | null = null;
     importProgress.setPhase('read');
     try {
       if (isNativeImportFile(file)) {
@@ -515,15 +606,15 @@ export function useImporter() {
           const stageStarted = now();
           try {
             stagedSource = await stageNativePathSource(stagedBookId, file);
-          } catch (err: any) {
-            if (shouldFallbackNativeImport(err)) err.nativeImportFallback = true;
+          } catch (err: unknown) {
+            if (shouldFallbackNativeImport(err)) (err as { nativeImportFallback?: boolean }).nativeImportFallback = true;
             throw err;
           } finally {
             metrics.stageMs += now() - stageStarted;
           }
           const readStarted = now();
           try {
-            file = await materializeStagedNativeImportFile(file, stagedSource.nativePath);
+            file = await materializeStagedNativeImportFile(file, stagedSource.nativePath as string);
           } finally {
             metrics.readMs += now() - readStarted;
           }
@@ -537,9 +628,9 @@ export function useImporter() {
         }
       }
       importProgress.setPhase('parse');
-      book = await parser(file);
-    } catch (err: any) {
-      if (err?.nativeImportFallback) {
+      book = (await parser(file)) as Book | null;
+    } catch (err: unknown) {
+      if ((err as { nativeImportFallback?: boolean })?.nativeImportFallback) {
         if (stagedBookId) await removeNativeBookDir(stagedBookId).catch(() => {});
         throw err;
       }
@@ -560,8 +651,8 @@ export function useImporter() {
     return { book, source: makeFileSource(file) };
   }
 
-  async function prepareImportTask(task, metrics) {
-    let prepared: any = null;
+  async function prepareImportTask(task: ImportTask, metrics: ImportMetrics): Promise<Prepared | null> {
+    let prepared: Prepared | null = null;
     if (task.kind === 'epub') prepared = await prepareEpubTask(task, metrics);
     else if (task.kind === 'pdf') prepared = await prepareParsedTask(task, parsePdfFileLazy, metrics, 'PDF');
     else if (task.kind === 'mobi') prepared = await prepareParsedTask(task, parseMobiFileLazy, metrics, 'MOBI');
@@ -570,7 +661,12 @@ export function useImporter() {
     else if (task.kind === 'images') {
       importProgress.setPhase('read');
       let group = task.group;
-      if (group?.files?.some(file => isNativeImportFile(file))) {
+      if (!group) {
+        metrics.parseFailed++;
+        markTaskFailure(task, new Error('图片分组缺失'));
+        return null;
+      }
+      if (group.files.some((file: ImportFile) => isNativeImportFile(file))) {
         const readStarted = now();
         try {
           const files = new Array(group.files.length);
@@ -581,8 +677,8 @@ export function useImporter() {
               let staged;
               try {
                 staged = await stageNativePathSource(group.book.id, file);
-              } catch (err: any) {
-                if (shouldFallbackNativeImport(err)) err.nativeImportFallback = true;
+              } catch (err: unknown) {
+                if (shouldFallbackNativeImport(err)) (err as { nativeImportFallback?: boolean }).nativeImportFallback = true;
                 throw err;
               }
               files[index] = await materializeStagedNativeImportFile(file, staged.nativePath);
@@ -599,8 +695,8 @@ export function useImporter() {
           const rebuilt = buildImageFolderBooks(files)[0];
           if (!rebuilt) throw new Error('图片目录为空');
           rebuilt.book.id = group.book.id;
-          (rebuilt.book as any).nativeArchiveStaged = nativeEntries.some(Boolean);
-          group = rebuilt;
+          (rebuilt.book as Book).nativeArchiveStaged = nativeEntries.some(Boolean);
+          group = rebuilt as unknown as NonNullable<ImportTask['group']>;
           if (nativeEntries.some(Boolean)) {
             prepared = {
               book: group.book,
@@ -616,12 +712,12 @@ export function useImporter() {
               }
             };
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.warn('[HOMURA] 读取原生图片目录失败', err);
-          if (group?.files?.some(file => isAndroidContentUri(file.nativePath))) {
+          if (group?.files?.some((file: ImportFile) => isAndroidContentUri(file.nativePath))) {
             await removeNativeBookDir(group.book.id).catch(() => {});
           }
-          if (err?.nativeImportFallback) throw err;
+          if ((err as { nativeImportFallback?: boolean })?.nativeImportFallback) throw err;
           markTaskFailure(task, err);
           return null;
         } finally {
@@ -645,28 +741,29 @@ export function useImporter() {
     importProgress.setPhase('cover');
     const coverStarted = now();
     prepared.coverThumb = await createCoverThumbnail(
-      prepared.book.coverBlob,
+      prepared.book.coverBlob ?? null,
       undefined,
-      prepared.book.coverNative
+      prepared.book.coverNative as { archivePath?: string; entryPath?: string } | null | undefined
     ).catch(() => null);
     metrics.coverMs += now() - coverStarted;
     return prepared;
   }
 
   // 保存成功后书架只需要元数据与封面；下次打开由 hydrateBook 重新解析原文件。
-  async function releaseImportedBookRuntime(book, coverThumb) {
+  async function releaseImportedBookRuntime(book: Book, coverThumb: Blob | null | undefined) {
     try {
       releaseBookPageUrls(book);
-      for (const url of new Set(book.resourceUrls || [])) {
+      for (const url of new Set((book.resourceUrls as String[] | null | undefined) || [])) {
         if (typeof url === 'string' && url.startsWith('blob:') && url !== book.cover) URL.revokeObjectURL(url);
       }
-      if (book.pdfDoc?.loadingTask?.destroy) await book.pdfDoc.loadingTask.destroy();
-      else if (book.pdfDoc?.destroy) await book.pdfDoc.destroy();
+      const pdfDoc = book.pdfDoc as { loadingTask?: { destroy?: () => Promise<void> }; destroy?: () => Promise<void> } | null | undefined;
+      if (pdfDoc?.loadingTask?.destroy) await pdfDoc.loadingTask.destroy();
+      else if (pdfDoc?.destroy) await pdfDoc.destroy();
     } catch (err) {
       console.warn('[HOMURA] 释放导入后的页面资源失败', book.title, err);
     }
     try {
-      await releaseNativeArchiveSession(book);
+      await releaseNativeArchiveSession(book as unknown as { nativeArchiveId?: string | null; nativeArchivePath?: string | null; pageItems?: { nativeArchiveId?: string; nativeArchivePath?: string }[] | null });
     } catch (err) {
       console.warn('[HOMURA] 释放导入后的原生 EPUB 会话失败', book.title, err);
     }
@@ -681,13 +778,13 @@ export function useImporter() {
         console.warn('[HOMURA] 替换导入后的封面缩略图失败', book.title, err);
       }
     }
-    book.chapters = null;
-    book.pageItems = null;
-    book.resourceUrls = null;
+    (book as { chapters?: unknown }).chapters = null;
+    (book as { pageItems?: unknown }).pageItems = null;
+    (book as { resourceUrls?: unknown }).resourceUrls = null;
     book.zipContent = null;
     book.pdfDoc = null;
-    book.nativeArchiveId = null;
-    book.nativeArchivePath = null;
+    (book as { nativeArchiveId?: unknown }).nativeArchiveId = null;
+    (book as { nativeArchivePath?: unknown }).nativeArchivePath = null;
     book.nativeEntryIndexByPath = null;
     book.nativeArchiveStaged = false;
     book.coverNative = null;
@@ -695,9 +792,9 @@ export function useImporter() {
   }
 
   // 同一批内也要按顺序判重，前一本确认保留后，后一本必须继续询问。
-  async function confirmPreparedDuplicates(preparedList, taskList, metrics, duplicateSession) {
-    const accepted: any[] = [];
-    const knownInBatch = new Map<string, any>();
+  async function confirmPreparedDuplicates(preparedList: (Prepared | null)[], taskList: ImportTask[], metrics: ImportMetrics, duplicateSession: DuplicateSession) {
+    const accepted: Prepared[] = [];
+    const knownInBatch = new Map<string, Book>();
     try {
       for (let index = 0; index < preparedList.length; index++) {
         const prepared = preparedList[index];
@@ -708,8 +805,8 @@ export function useImporter() {
         const existingBook = (titleKey && knownInBatch.get(titleKey)) || findSameTitleBook(shelf.library, book.title);
         if (existingBook && task?.duplicateApprovedTitleKey !== titleKey) {
           importProgress.setPhase('confirm');
-          importProgress.setCurrentName(book.title);
-          const keep = await duplicateSession.confirmDuplicate(book, existingBook);
+          importProgress.setCurrentName(book.title ?? '');
+          const keep = await duplicateSession.confirmDuplicate(book, existingBook as unknown as Book);
           importProgress.setPhase('save');
           if (!keep) {
             metrics.skipped++;
@@ -727,7 +824,7 @@ export function useImporter() {
     return accepted;
   }
 
-  async function commitPreparedBatch(preparedList, taskList, savedBooks, metrics, duplicateSession) {
+  async function commitPreparedBatch(preparedList: (Prepared | null)[], taskList: ImportTask[], savedBooks: Book[], metrics: ImportMetrics, duplicateSession: DuplicateSession) {
     importProgress.setPhase('save');
     const accepted = await confirmPreparedDuplicates(preparedList, taskList, metrics, duplicateSession);
     if (!accepted.length) return;
@@ -736,7 +833,7 @@ export function useImporter() {
     const coverThumbs = new Map(accepted.map(prepared => [prepared.book.id, prepared.coverThumb]));
     const preparedById = new Map(accepted.map(prepared => [prepared.book.id, prepared]));
     const acceptedIds = new Set(accepted.map(prepared => prepared.book.id));
-    const taskByBookId = new Map<any, any>();
+    const taskByBookId = new Map<string, ImportTask>();
     for (let index = 0; index < preparedList.length; index++) {
       const prepared = preparedList[index];
       if (prepared && acceptedIds.has(prepared.book.id)) {
@@ -745,11 +842,11 @@ export function useImporter() {
     }
     importProgress.setPhase('save');
     importProgress.setCurrentName(
-      accepted.length === 1 ? accepted[0].book.title : `本批 ${accepted.length} 本作品`
+      accepted.length === 1 ? (accepted[0].book.title ?? '') : `本批 ${accepted.length} 本作品`
     );
     const started = now();
     try {
-      const result: any = await shelf.addBooks(
+      const result = await shelf.addBooks(
         accepted.map(prepared => ({
           book: prepared.book,
           source: prepared.source,
@@ -815,7 +912,7 @@ export function useImporter() {
     }
   }
 
-  async function importFiles(files, { targetId = shelf.activeCollectionId, targetLabel = '' }: any = {}) {
+  async function importFiles(files: ImportFile[], { targetId = shelf.activeCollectionId, targetLabel = '' }: { targetId?: string | null; targetLabel?: string } = {}) {
     const tasks = buildImportTasks(files);
     const metrics = createImportMetrics(files, tasks);
     if (!tasks.length) {
@@ -839,13 +936,13 @@ export function useImporter() {
       const targetCollection = shelf.collections.find(item => item.id === targetId);
       importProgress.begin({
         total: importTasks.length,
-        bytesTotal: importTasks.reduce((sum, task) => sum + (task.size || 0), 0),
+        bytesTotal: importTasks.reduce((sum: number, task: ImportTask) => sum + (task.size || 0), 0),
         skipped: preflight.skipped,
         targetId,
         targetLabel: targetLabel || targetCollection?.title || '全部作品'
       });
 
-      const savedBooks: any[] = [];
+      const savedBooks: Book[] = [];
       metrics.concurrency = chooseImportConcurrency(importTasks);
       const commitBatchSize = chooseCommitBatchSize(importTasks);
       metrics.commitBatchSize = commitBatchSize;
@@ -855,7 +952,7 @@ export function useImporter() {
           const prepared = await runPool(
             batchTasks,
             metrics.concurrency,
-            async task => {
+            async (task: ImportTask) => {
               importProgress.taskStarted(task, task.title);
               try {
                 const result = await prepareImportTask(task, metrics);
@@ -868,7 +965,7 @@ export function useImporter() {
                 importProgress.taskSettled(task, task.size);
               }
             },
-            (err, task) => {
+            (err: unknown, task: ImportTask) => {
               metrics.parseFailed++;
               markTaskFailure(task, err);
               recordTaskFailure(task, err);
@@ -878,12 +975,13 @@ export function useImporter() {
           await commitPreparedBatch(prepared, batchTasks, savedBooks, metrics, duplicateSession);
           if (importProgress.cancelRequested) break;
         }
-      } catch (err: any) {
-        if (err?.nativeImportFallback) {
-          await discardPreparedResults(err.partialResults);
-          delete err.partialResults;
+      } catch (err: unknown) {
+        const importErr = err as { nativeImportFallback?: boolean; partialResults?: (Prepared | null)[]; nativeSavedCount?: number };
+        if (importErr?.nativeImportFallback) {
+          await discardPreparedResults(importErr.partialResults ?? null);
+          delete importErr.partialResults;
           // 已提交的书不能因为剩余文件失败而让用户重选整批，否则会重复询问同名书。
-          err.nativeSavedCount = savedBooks.length;
+          importErr.nativeSavedCount = savedBooks.length;
           logImportMetrics(metrics, savedBooks.length);
         }
         importProgress.recordFailure({
@@ -911,7 +1009,7 @@ export function useImporter() {
 
   // ---- 拖拽：递归遍历 webkitGetAsEntry 目录树 ----
 
-  function traverseFileTree(item: any, path: string, outList: any[]): Promise<void> {
+  function traverseFileTree(item: FsEntry, path: string, outList: ImportFile[]): Promise<void> {
     return new Promise<void>(resolve => {
       // __MACOSX 整个目录跳过，里面的 ._* 只是资源分叉，读进来也叫不醒。
       if (item.name === '__MACOSX') {
@@ -919,7 +1017,7 @@ export function useImporter() {
         return;
       }
       if (item.isFile) {
-        item.file(file => {
+        item.file((file: ImportFile) => {
           // 隐藏文件和 macOS 资源分叉文件不参与导入。
           if (file.name.startsWith('.') || isJunkImagePath(path + file.name)) {
             resolve();
@@ -937,7 +1035,7 @@ export function useImporter() {
       } else if (item.isDirectory) {
         const dirReader = item.createReader();
         const readEntriesBatch = () => {
-          dirReader.readEntries(async entries => {
+          dirReader.readEntries(async (entries: FsEntry[]) => {
             if (!entries || entries.length === 0) {
               resolve();
             } else {
@@ -955,15 +1053,17 @@ export function useImporter() {
     });
   }
 
-  async function handleDrop(e) {
-    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
-      const collectedFiles: any[] = [];
-      const entries: any[] = [];
-      for (let i = 0; i < e.dataTransfer.items.length; i++) {
-        const item = e.dataTransfer.items[i];
+  async function handleDrop(e: DragEvent) {
+    const dataTransfer = e.dataTransfer;
+    if (!dataTransfer) return;
+    if (dataTransfer.items && dataTransfer.items.length > 0) {
+      const collectedFiles: ImportFile[] = [];
+      const entries: FsEntry[] = [];
+      for (let i = 0; i < dataTransfer.items.length; i++) {
+        const item = dataTransfer.items[i];
         if (item.kind === 'file') {
           const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
-          if (entry) entries.push(entry);
+          if (entry) entries.push(entry as unknown as FsEntry);
           else {
             const f = item.getAsFile();
             if (f) collectedFiles.push(f);
@@ -981,21 +1081,21 @@ export function useImporter() {
       }
     }
 
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      await handleFiles(e.dataTransfer.files);
+    if (dataTransfer.files && dataTransfer.files.length > 0) {
+      await handleFiles(dataTransfer.files);
     }
   }
 
   // ---- File System Access：优先引用原文件句柄 ----
 
-  async function pickFilesViaFSA(options) {
-    let handles: any[] = [];
+  async function pickFilesViaFSA(options: { offerCollection?: boolean; targetId?: string | null }) {
+    let handles: FileSystemFileHandle[] = [];
     try {
       handles = await window.showOpenFilePicker({ multiple: true });
     } catch (err) {
       return;
     }
-    const files: any[] = [];
+    const files: ImportFile[] = [];
     for (const handle of handles) {
       try {
         const file = await handle.getFile();
@@ -1008,7 +1108,7 @@ export function useImporter() {
 
   // Tauri 优先用系统选择器：桌面拿真实路径，Android 拿 content:// URI，
   // 大文件都由原生侧直接复制，WebView 只接收轻量元数据。
-  async function pickNativeFiles(options) {
+  async function pickNativeFiles(options: { offerCollection?: boolean; targetId?: string | null }) {
     if (isAndroid) {
       const files = await pickNativeUriImportFiles({ multiple: true });
       if (!files || files.length === 0) return false;
@@ -1041,13 +1141,14 @@ export function useImporter() {
   }
 
   async function pickFolderViaFSA() {
-    let dirHandle: any = null;
+    let dirHandle: FsDirectoryHandle | null = null;
     try {
-      dirHandle = await window.showDirectoryPicker({ mode: 'read' });
+      dirHandle = (await window.showDirectoryPicker({ mode: 'read' })) as unknown as FsDirectoryHandle;
     } catch (err) {
       return;
     }
-    const files: any[] = [];
+    if (!dirHandle) return;
+    const files: ImportFile[] = [];
     await collectFilesFromDirHandle(dirHandle, dirHandle.name + '/', files);
     if (files.length > 0) await handleFiles(files);
     else console.warn('[HOMURA] 该文件夹内没有可导入的文件');
@@ -1055,7 +1156,7 @@ export function useImporter() {
 
   // ---- 递归遍历目录句柄，收集文件 ----
 
-  async function collectFilesFromDirHandle(dirHandle, path, out) {
+  async function collectFilesFromDirHandle(dirHandle: FsDirectoryHandle, path: string, out: ImportFile[]) {
     for await (const [name, entry] of dirHandle.entries()) {
       if (name.startsWith('.') || name === '__MACOSX') continue;
       if (entry.kind === 'file') {
@@ -1065,7 +1166,7 @@ export function useImporter() {
           out.push(file);
         } catch (err) {}
       } else if (entry.kind === 'directory') {
-        await collectFilesFromDirHandle(entry, path + name + '/', out);
+        await collectFilesFromDirHandle(entry as unknown as FsDirectoryHandle, path + name + '/', out);
       }
     }
   }

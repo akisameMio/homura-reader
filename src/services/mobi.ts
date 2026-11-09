@@ -50,17 +50,17 @@ class MobiError extends Error {
   }
 }
 
-function readU16(buf, offset) {
+function readU16(buf: Uint8Array, offset: number) {
   return buf[offset] * 256 + buf[offset + 1];
 }
 
-function readU32(buf, offset) {
+function readU32(buf: Uint8Array, offset: number) {
   return ((buf[offset] << 24) | (buf[offset + 1] << 16) | (buf[offset + 2] << 8) | buf[offset + 3]) >>> 0;
 }
 
 // ---- PalmDOC LZ77 解压：输出恰好 limit 字节，尾部记录附加数据直接忽略 ----
 
-function decompressPalmDoc(src, limit) {
+function decompressPalmDoc(src: Uint8Array, limit: number) {
   const out = new Uint8Array(limit);
   let i = 0;
   let o = 0;
@@ -95,7 +95,7 @@ function decompressPalmDoc(src, limit) {
 
 // ---- PDB 记录表 ----
 
-function readPdbRecords(buf) {
+function readPdbRecords(buf: Uint8Array) {
   const count = readU16(buf, 76);
   if (count <= 0) throw new MobiError('BAD_FILE', 'MOBI 文件记录表为空');
   const starts = new Array(count + 1);
@@ -106,7 +106,7 @@ function readPdbRecords(buf) {
 
 // ---- 图片：按魔数判断 MIME，不信任扩展名 ----
 
-function imageMime(bytes) {
+function imageMime(bytes: Uint8Array) {
   if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
   if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
   if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return 'image/gif';
@@ -114,7 +114,7 @@ function imageMime(bytes) {
   return null;
 }
 
-function imageRecordAt(buf, starts, recordIndex) {
+function imageRecordAt(buf: Uint8Array, starts: number[], recordIndex: number): { start: number; end: number; mime: string } | null {
   if (recordIndex < 0 || recordIndex + 1 >= starts.length) return null;
   const start = starts[recordIndex];
   const end = starts[recordIndex + 1] ?? buf.length;
@@ -133,7 +133,40 @@ interface ExthMeta {
   title?: string;
 }
 
-function readExth(buf: any, rec0: number, mobiLength: number): ExthMeta {
+/** 图片记录（PDB 记录区间 + 推算的 recindex） */
+interface MobiImageRecord {
+  recindex: number;
+  start: number;
+  end: number;
+  mime: string;
+}
+
+/** 原生/JS 统一的 MOBI 容器 */
+interface MobiContainer {
+  title?: string;
+  rawText?: string;
+  compression?: number;
+  encoding?: string;
+  cdeType?: string;
+  writingMode?: string;
+  pageProgression?: string;
+  imageRecords?: unknown[];
+  cover?: { start?: number; end?: number; mime?: string } | null;
+  coverBlob?: Blob | null;
+  pageRangeBase?: number;
+  createImageBlob?: (record: MobiImageRecord) => Blob | null;
+}
+
+/** 漫画页（原文件区间或原生偏移） */
+interface MobiPage {
+  alt: string;
+  start: number | null;
+  end: number | null;
+  mime: string | null;
+  recindex?: number;
+}
+
+function readExth(buf: Uint8Array, rec0: number, mobiLength: number): ExthMeta {
   const base = rec0 + 16 + mobiLength;
   if (String.fromCharCode(buf[base], buf[base + 1], buf[base + 2], buf[base + 3]) !== 'EXTH') {
     return {};
@@ -157,7 +190,7 @@ function readExth(buf: any, rec0: number, mobiLength: number): ExthMeta {
   return result;
 }
 
-function decodeText(bytes, encoding) {
+function decodeText(bytes: Uint8Array, encoding: string) {
   try {
     return new TextDecoder(encoding).decode(bytes).replace(/\0+$/, '').trim();
   } catch (err) {
@@ -169,7 +202,7 @@ function decodeText(bytes, encoding) {
 
 // 图片记录缺失时不能直接把 <img> 删掉，否则整页会从分页结果里消失。
 // 保留一个等高的占位页，让页码与书里的页序继续对得上。
-function replaceWithMissingPage(dom, node) {
+function replaceWithMissingPage(dom: Document, node: Element) {
   const alt = (node.getAttribute('alt') || '').replace(/\s+/g, ' ').trim();
   const label = alt ? `${alt} · 图片数据缺失` : '图片数据缺失';
   const figure = dom.createElement('figure');
@@ -183,7 +216,7 @@ function replaceWithMissingPage(dom, node) {
 }
 
 // 净化前的 MOBI 专有预处理：占位 recindex，并拆掉没有跳转目标的 filepos 锚点。
-function prepareMobiBody(body) {
+function prepareMobiBody(body: HTMLElement) {
   for (const node of body.querySelectorAll('*')) {
     if (!node.isConnected) continue;
     const tag = node.tagName.toLowerCase();
@@ -203,7 +236,7 @@ function prepareMobiBody(body) {
 // 净化后的 MOBI 专有后处理：占位串换成 blob URL，其余图片只保留内嵌位图。
 // 远程 http(s) 图片在此被丢弃——书内 HTML 不该在打开书籍时偷偷发起外部请求。
 // 记录缺失的 recindex 仍保留占位页，维持页码与书里的页序一致。
-function resolveMobiImages(body, imageUrlFor) {
+function resolveMobiImages(body: HTMLElement, imageUrlFor: (recindex: number) => string | null) {
   const dom = body.ownerDocument;
   let missingImages = 0;
   for (const img of body.querySelectorAll('img')) {
@@ -224,7 +257,7 @@ function resolveMobiImages(body, imageUrlFor) {
   return missingImages;
 }
 
-function sanitizeInto(dom, imageUrlFor) {
+function sanitizeInto(dom: Document, imageUrlFor: (recindex: number) => string | null) {
   if (!dom.body) return 0;
   prepareMobiBody(dom.body);
   sanitizeElement(dom.body);
@@ -233,7 +266,7 @@ function sanitizeInto(dom, imageUrlFor) {
 
 // ---- 章节标题：取首个短标题块，否则退化为书号 ----
 
-function pickChapterTitle(body, fallbackTitle, index) {
+function pickChapterTitle(body: HTMLElement, fallbackTitle: string, index: number) {
   const nodes = body.querySelectorAll(TAG_HEADINGS);
   for (let i = 0; i < Math.min(nodes.length, 4); i++) {
     const text = (nodes[i].textContent || '').replace(/\s+/g, ' ').trim();
@@ -246,7 +279,7 @@ function pickChapterTitle(body, fallbackTitle, index) {
 
 // ---- 主入口：ArrayBuffer → 书籍数据 ----
 
-export function parseMobiBuffer(arrayBuffer, fallbackTitle = 'MOBI') {
+export function parseMobiBuffer(arrayBuffer: ArrayBuffer | Uint8Array, fallbackTitle = 'MOBI') {
   const buf = arrayBuffer instanceof Uint8Array ? arrayBuffer : new Uint8Array(arrayBuffer);
   if (buf.length < 90) throw new MobiError('BAD_FILE', '文件过小，不是有效的 MOBI');
 
@@ -301,7 +334,7 @@ export function parseMobiBuffer(arrayBuffer, fallbackTitle = 'MOBI') {
   if (!rawText) throw new MobiError('BAD_FILE', 'MOBI 正文解码失败');
 
   // 统一整理成图片记录表：原生路径直接给出文件区间，JS 路径从 PDB 记录表现扫。
-  const imageRecords: any[] = [];
+  const imageRecords: MobiImageRecord[] = [];
   for (let recordIndex = firstImage; recordIndex + 1 < starts.length; recordIndex++) {
     const record = imageRecordAt(buf, starts, recordIndex);
     if (!record) continue;
@@ -316,7 +349,7 @@ export function parseMobiBuffer(arrayBuffer, fallbackTitle = 'MOBI') {
   const coverRecord = imageRecordAt(buf, starts, coverIndex)
     || imageRecordAt(buf, starts, firstImage);
   const coverBlob = coverRecord
-    ? new Blob([buf.subarray(coverRecord.start, coverRecord.end)], { type: coverRecord.mime })
+    ? new Blob([buf.subarray(coverRecord.start, coverRecord.end) as BlobPart], { type: coverRecord.mime })
     : null;
 
   const title = (exth.title || '').trim() || headerTitle || fallbackTitle;
@@ -331,15 +364,15 @@ export function parseMobiBuffer(arrayBuffer, fallbackTitle = 'MOBI') {
     imageRecords,
     coverBlob,
     pageRangeBase: buf.byteOffset,
-    createImageBlob: record => new Blob(
-      [buf.subarray(record.start, record.end)],
+    createImageBlob: (record: MobiImageRecord) => new Blob(
+      [buf.subarray(record.start, record.end) as BlobPart],
       { type: record.mime }
     )
   });
 }
 
 // Rust 只负责容器与正文，DOM 解析、漫画判定、章节切分和正文净化仍在这里完成。
-export function buildMobiBookData(container) {
+export function buildMobiBookData(container: MobiContainer) {
   const {
     title,
     rawText,
@@ -360,16 +393,16 @@ export function buildMobiBookData(container) {
     throw new TypeError('buildMobiBookData 需要 createImageBlob');
   }
 
-  const recordsByIndex = new Map();
-  for (const record of imageRecords) {
+  const recordsByIndex = new Map<number, MobiImageRecord>();
+  for (const record of imageRecords as MobiImageRecord[]) {
     if (!record || !Number.isInteger(record.recindex) || record.recindex <= 0) continue;
     if (!Number.isInteger(record.start) || !Number.isInteger(record.end) || record.end <= record.start) continue;
     recordsByIndex.set(record.recindex, record);
   }
 
   // 图片记录惰性建 URL，只有正文真正引用时才占内存。
-  const imageUrls = new Map();
-  const imageUrlFor = recindex => {
+  const imageUrls = new Map<number, { url: string; mime: string }>();
+  const imageUrlFor = (recindex: number): string | null => {
     const record = recordsByIndex.get(recindex);
     if (!record) return null;
     const cached = imageUrls.get(record.start);
@@ -381,13 +414,13 @@ export function buildMobiBookData(container) {
     return url;
   };
 
-  const { cleaned, parts } = splitMobiParts(rawText);
+  const { cleaned, parts } = splitMobiParts(rawText as string);
   const docs = parseMobiDocs(parts);
   const isComic = shouldReadMobiAsManga(docs, cdeType);
   const comicPages = isComic ? collectMobiPages(docs) : [];
 
-  let chapters: any[] = [];
-  let pages: any[] = [];
+  let chapters: Array<{ title: string; htmlContent: string }> = [];
+  let pages: MobiPage[] = [];
   if (comicPages.length > 0) {
     pages = comicPages.map(page => {
       const record = recordsByIndex.get(page.recindex);
@@ -403,7 +436,7 @@ export function buildMobiBookData(container) {
       console.warn(`[HOMURA] MOBI 有 ${missingPages} 页图片记录缺失或损坏，已保留空页以维持页码`);
     }
   } else {
-    chapters = splitChapters(docs, cleaned, title, imageUrlFor);
+    chapters = splitChapters(docs, cleaned, title as string, imageUrlFor);
   }
 
   const isRtl = writingMode === 'rtl' || writingMode.endsWith('-rl')
@@ -423,29 +456,31 @@ export function buildMobiBookData(container) {
   };
 }
 
-function normalizeNativeMobiRecord(record, fileSize, requireRecindex) {
+function normalizeNativeMobiRecord(record: { recindex?: number; start?: number; end?: number; mime?: string } | null | undefined, fileSize: number, requireRecindex: boolean): MobiImageRecord {
+  if (!record) throw new MobiError('BAD_FILE', '原生 MOBI 图片记录无效');
   const validRecindex = !requireRecindex
-    || (Number.isInteger(record?.recindex) && record.recindex > 0);
-  if (!record
-    || !validRecindex
-    || !Number.isInteger(record.start)
-    || !Number.isInteger(record.end)
-    || record.start < 0
-    || record.end <= record.start
-    || record.end > fileSize
+    || (Number.isInteger(record.recindex) && (record.recindex as number) > 0);
+  const start = record.start;
+  const end = record.end;
+  if (!validRecindex
+    || !Number.isInteger(start)
+    || !Number.isInteger(end)
+    || (start as number) < 0
+    || (end as number) <= (start as number)
+    || (end as number) > fileSize
     || typeof record.mime !== 'string'
     || !record.mime) {
     throw new MobiError('BAD_FILE', '原生 MOBI 图片记录无效');
   }
   return {
-    recindex: record.recindex,
-    start: record.start,
-    end: record.end,
-    mime: record.mime
+    recindex: record.recindex as number,
+    start: start as number,
+    end: end as number,
+    mime: record.mime as string
   };
 }
 
-function buildMobiDataFromNative(container, file, fallbackTitle) {
+function buildMobiDataFromNative(container: MobiContainer, file: File & { size: number }, fallbackTitle: string) {
   if (!container
     || typeof container.title !== 'string'
     || typeof container.rawText !== 'string'
@@ -453,8 +488,8 @@ function buildMobiDataFromNative(container, file, fallbackTitle) {
     throw new MobiError('BAD_FILE', '原生 MOBI 解析结果无效');
   }
 
-  const imageRecords = container.imageRecords.map(
-    record => normalizeNativeMobiRecord(record, file.size, true)
+  const imageRecords = (container.imageRecords || []).map(
+    (record) => normalizeNativeMobiRecord(record as { recindex?: number; start?: number; end?: number; mime?: string }, file.size, true)
   );
   const cover = container.cover
     ? normalizeNativeMobiRecord(container.cover, file.size, false)
@@ -471,12 +506,12 @@ function buildMobiDataFromNative(container, file, fallbackTitle) {
     imageRecords,
     coverBlob: cover ? file.slice(cover.start, cover.end, cover.mime) : null,
     pageRangeBase: 0,
-    createImageBlob: record => file.slice(record.start, record.end, record.mime)
+    createImageBlob: (record: MobiImageRecord) => file.slice(record.start, record.end, record.mime)
   });
 }
 
 // Tauri 环境优先让 Rust 解 PDB / PalmDOC；原生失败或文件过大时仍交给 JS。
-export async function parseMobiFileData(file, fallbackTitle = 'MOBI') {
+export async function parseMobiFileData(file: File, fallbackTitle = 'MOBI') {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const fallback = () => parseMobiBuffer(bytes, fallbackTitle);
   if (bytes.length === 0 || bytes.length > NATIVE_MOBI_MAX_BYTES || !canUseNativeBridge()) {
@@ -503,7 +538,7 @@ export async function parseMobiFileData(file, fallbackTitle = 'MOBI') {
   }
 }
 
-function mergeChunks(chunks) {
+function mergeChunks(chunks: Uint8Array[]) {
   const total = chunks.reduce((sum, c) => sum + c.length, 0);
   const merged = new Uint8Array(total);
   let offset = 0;
@@ -514,26 +549,26 @@ function mergeChunks(chunks) {
   return merged;
 }
 
-function splitMobiParts(rawText) {
+function splitMobiParts(rawText: string) {
   // 去掉 <head>/<guide> 引导信息，只留正文
   const cleaned = rawText
     .replace(/<head[\s\S]*?<\/head>/gi, '')
     .replace(/<guide[\s\S]*?<\/guide>/gi, '');
 
-  let parts = cleaned.split(/<mbp:pagebreak\s*\/?>/i).filter(p => p && p.trim());
+  let parts = cleaned.split(/<mbp:pagebreak\s*\/?>/i).filter((p) => p && p.trim());
   if (parts.length === 1) {
     // 没有分页标记的书：退化为按标题标签切分
-    parts = cleaned.split(/(?=<h[1-3][\s>])/i).filter(p => p && p.trim());
+    parts = cleaned.split(/(?=<h[1-3][\s>])/i).filter((p) => p && p.trim());
   }
   return { cleaned, parts };
 }
 
-function parseMobiDocs(parts) {
+function parseMobiDocs(parts: string[]): Document[] {
   const parser = new DOMParser();
-  return parts.map(part => parser.parseFromString(part, 'text/html'));
+  return parts.map((part) => parser.parseFromString(part, 'text/html'));
 }
 
-function shouldReadMobiAsManga(docs, cdeType) {
+function shouldReadMobiAsManga(docs: Document[], cdeType: string) {
   if (cdeType === 'comic') return true;
   if (docs.length === 0) return false;
 
@@ -549,8 +584,8 @@ function shouldReadMobiAsManga(docs, cdeType) {
   return textPages / docs.length <= MOBI_TEXT_PAGE_RATIO_LIMIT;
 }
 
-function collectMobiPages(docs) {
-  const pages: any[] = [];
+function collectMobiPages(docs: Document[]) {
+  const pages: Array<{ recindex: number; alt: string }> = [];
   for (const doc of docs) {
     if (!doc.body) continue;
     for (const img of doc.body.querySelectorAll('img[recindex]')) {
@@ -565,8 +600,8 @@ function collectMobiPages(docs) {
   return pages;
 }
 
-function splitChapters(docs, cleaned, bookTitle, imageUrlFor) {
-  const chapters: any[] = [];
+function splitChapters(docs: Document[], cleaned: string, bookTitle: string, imageUrlFor: (recindex: number) => string | null) {
+  const chapters: Array<{ title: string; htmlContent: string }> = [];
   let missingImages = 0;
   docs.forEach((doc, index) => {
     if (!doc.body) return;

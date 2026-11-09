@@ -19,12 +19,52 @@ const LIBRARY_MAX_OFFSET = 28;
 const SCRIM_OPACITY = 1;
 const READER_BACK_DIRECTION = 1;
 
-function clamp(value, min, max) {
+function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-export function useReaderBackDismiss(reader, ui) {
-  let gesture: any = null;
+interface ReaderLike {
+  currentBook: unknown;
+  closeReader: () => void;
+}
+interface UiLike {
+  readerDrawerOpen: boolean;
+  settingsOpen: boolean;
+  tocOpen: boolean;
+  collectionTocOpen: boolean;
+  closeSettings: () => void;
+  closeToc: () => void;
+  closeCollectionToc: () => void;
+}
+interface BackGesture {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startTime: number;
+  lastX: number;
+  lastTime: number;
+  axis: 'x' | null;
+  active: boolean;
+}
+interface NativeBackEvent {
+  phase?: string;
+  progress?: number;
+}
+interface BackListener {
+  unregister?: () => void;
+}
+
+interface TauriChannelCtor {
+  new (handler: (event: NativeBackEvent) => void): unknown;
+}
+
+interface TauriCoreLike {
+  invoke: (cmd: string, args?: Record<string, unknown>) => Promise<{ supported?: boolean }>;
+  Channel?: TauriChannelCtor;
+}
+
+export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
+  let gesture: BackGesture | null = null;
   let settling = false;
   let closing = false;
   let settleToken = 0;
@@ -32,15 +72,15 @@ export function useReaderBackDismiss(reader, ui) {
   let pendingProgress = 0;
   let pendingDirection = 1;
   let activeDirection = 1;
-  let nativeMode: any = null;
-  let nativeChannel: any = null;
+  let nativeMode: string | null = null;
+  let nativeChannel: unknown = null;
   let nativeEnableToken = 0;
   let androidBackMode = 'pending';
-  let fallbackListener: any = null;
+  let fallbackListener: BackListener | (() => void) | null = null;
   let fallbackToken = 0;
   const nativePredictiveBackSupported = ref(false);
 
-  function applyProgress(progress, direction = activeDirection) {
+  function applyProgress(progress: number, direction = activeDirection) {
     const width = window.innerWidth || 375;
     const p = clamp(progress, 0, 1);
     const side = direction < 0 ? -1 : 1;
@@ -56,7 +96,7 @@ export function useReaderBackDismiss(reader, ui) {
     rootStyle.setProperty('--homura-back-scrim-opacity', `${SCRIM_OPACITY * (1 - p)}`);
   }
 
-  function queueProgress(progress, direction = activeDirection) {
+  function queueProgress(progress: number, direction = activeDirection) {
     pendingProgress = progress;
     pendingDirection = direction;
     if (frameId) return;
@@ -102,20 +142,21 @@ export function useReaderBackDismiss(reader, ui) {
     }, SETTLE_DURATION);
   }
 
-  function releasePointer(e) {
-    if (e.currentTarget && e.currentTarget.releasePointerCapture) {
+  function releasePointer(e: PointerEvent) {
+    const target = e.currentTarget as Element | null;
+    if (target && target.releasePointerCapture) {
       try {
-        e.currentTarget.releasePointerCapture(e.pointerId);
+        target.releasePointerCapture(e.pointerId);
       } catch (err) {}
     }
   }
 
-  function clearGesture(e) {
+  function clearGesture(e: PointerEvent | null) {
     if (e) releasePointer(e);
     gesture = null;
   }
 
-  function settle(commit) {
+  function settle(commit: boolean) {
     if (settling) return;
     settling = true;
     closing = commit;
@@ -156,7 +197,7 @@ export function useReaderBackDismiss(reader, ui) {
     }, SETTLE_DURATION);
   }
 
-  function onPointerDown(e) {
+  function onPointerDown(e: PointerEvent) {
     if (settling || !reader.currentBook || ui.readerDrawerOpen) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
 
@@ -172,12 +213,12 @@ export function useReaderBackDismiss(reader, ui) {
       active: false
     };
     try {
-      e.currentTarget.setPointerCapture(e.pointerId);
+      (e.currentTarget as Element | null)?.setPointerCapture(e.pointerId);
     } catch (err) {}
     e.stopPropagation();
   }
 
-  function onPointerMove(e) {
+  function onPointerMove(e: PointerEvent) {
     if (!gesture || e.pointerId !== gesture.pointerId) return;
 
     const dx = e.clientX - gesture.startX;
@@ -204,7 +245,7 @@ export function useReaderBackDismiss(reader, ui) {
     queueProgress(dx / (window.innerWidth || 375));
   }
 
-  function finishGesture(e, cancelled = false) {
+  function finishGesture(e: PointerEvent, cancelled = false) {
     if (!gesture || e.pointerId !== gesture.pointerId) return;
     const current = gesture;
     clearGesture(e);
@@ -224,15 +265,15 @@ export function useReaderBackDismiss(reader, ui) {
     settle(commit);
   }
 
-  function onPointerUp(e) {
+  function onPointerUp(e: PointerEvent) {
     finishGesture(e);
   }
 
-  function onPointerCancel(e) {
+  function onPointerCancel(e: PointerEvent) {
     finishGesture(e, true);
   }
 
-  function onPointerLostCapture(e) {
+  function onPointerLostCapture(e: PointerEvent) {
     if (gesture && e.pointerId === gesture.pointerId) finishGesture(e, true);
   }
 
@@ -252,7 +293,7 @@ export function useReaderBackDismiss(reader, ui) {
     else if (ui.collectionTocOpen) ui.closeCollectionToc();
   }
 
-  function onNativeBackEvent(event) {
+  function onNativeBackEvent(event: NativeBackEvent) {
     if (!reader.currentBook) return;
     const phase = event && event.phase;
 
@@ -325,7 +366,7 @@ export function useReaderBackDismiss(reader, ui) {
     return window.__TAURI__ && window.__TAURI__.core;
   }
 
-  function unregisterListener(listener) {
+  function unregisterListener(listener: BackListener | (() => void) | null | undefined) {
     if (typeof listener === 'function') return listener();
     if (listener && typeof listener.unregister === 'function') return listener.unregister();
   }
@@ -379,7 +420,7 @@ export function useReaderBackDismiss(reader, ui) {
 
   async function enableNativePredictiveBack() {
     if (!nativePredictiveBackSupported.value || nativeChannel || !reader.currentBook) return;
-    const core = getTauriCore() as any;
+    const core = getTauriCore() as TauriCoreLike | null;
     if (!core || !core.Channel || typeof core.invoke !== 'function') return;
 
     const token = ++nativeEnableToken;
@@ -407,7 +448,7 @@ export function useReaderBackDismiss(reader, ui) {
       return;
     }
 
-    const core = getTauriCore() as any;
+    const core = getTauriCore() as TauriCoreLike | null;
     if (!core || !core.Channel || typeof core.invoke !== 'function') {
       androidBackMode = 'fallback';
       await enableAndroidFallback();

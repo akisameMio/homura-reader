@@ -7,20 +7,40 @@
 
 import { shallowRef } from 'vue';
 
-const pendingDuplicate = shallowRef<any>(null);
+interface DuplicateItem { title?: string; existingTitle?: string; count?: number }
+export interface DuplicatePending {
+  batch: boolean;
+  count: number;
+  items: DuplicateItem[];
+  title?: string;
+  existingTitle?: string;
+  busy: boolean;
+  sessionId: number;
+}
+interface DuplicateSession {
+  id: number;
+  skipAll: boolean;
+  closed: boolean;
+  confirmDuplicates: (items: DuplicateItem[]) => Promise<boolean>;
+  confirmDuplicate: (book: DuplicateItem, existingBook: DuplicateItem) => Promise<boolean>;
+  hide: () => void;
+  close: () => void;
+}
+
+const pendingDuplicate = shallowRef<DuplicatePending | null>(null);
 let resolveDuplicate: ((value: boolean) => void) | null = null;
-let activeSession: any = null;
+let activeSession: DuplicateSession | null = null;
 let sessionSerial = 0;
 
 export const DUPLICATE_SKIP_ALL = 'skip-all';
 
-function normalizeDuplicateItems(items) {
-  return (items || []).filter(item => item && item.title);
+function normalizeDuplicateItems(items: DuplicateItem[] | null | undefined) {
+  return (items || []).filter((item: DuplicateItem) => item && item.title);
 }
 
-function batchPending(items, sessionId = 0) {
+function batchPending(items: DuplicateItem[], sessionId = 0) {
   const list = normalizeDuplicateItems(items);
-  const count = list.reduce((total, item) => total + (item.count || 1), 0);
+  const count = list.reduce((total: number, item: DuplicateItem) => total + (item.count || 1), 0);
   return {
     batch: list.length > 1 || count > 1,
     count,
@@ -32,21 +52,21 @@ function batchPending(items, sessionId = 0) {
   };
 }
 
-function presentDuplicate(pending) {
+function presentDuplicate(pending: DuplicatePending) {
   pendingDuplicate.value = pending;
-  return new Promise(resolve => {
+  return new Promise<boolean>((resolve) => {
     resolveDuplicate = resolve;
   });
 }
 
 export function useDuplicateImport() {
-  function confirmDuplicates(items) {
+  function confirmDuplicates(items: DuplicateItem[]) {
     const list = normalizeDuplicateItems(items);
     if (list.length === 0) return Promise.resolve(true);
     return presentDuplicate(batchPending(list));
   }
 
-  function confirmDuplicate(book, existingBook) {
+  function confirmDuplicate(book: DuplicateItem, existingBook: DuplicateItem) {
     return confirmDuplicates([{ title: book.title, existingTitle: existingBook.title }]);
   }
 
@@ -54,17 +74,17 @@ export function useDuplicateImport() {
   // 卡片内容而不是先清空 pending，避免卡片反复收缩再展开。
   function createDuplicateSession() {
     const sessionId = ++sessionSerial;
-    const session = {
+    const session: DuplicateSession = {
       id: sessionId,
       skipAll: false,
       closed: false,
-      confirmDuplicates(items) {
+      confirmDuplicates(items: DuplicateItem[]) {
         const list = normalizeDuplicateItems(items);
         if (list.length === 0) return Promise.resolve(true);
         if (session.closed || session.skipAll) return Promise.resolve(false);
         return presentDuplicate(batchPending(list, sessionId));
       },
-      confirmDuplicate(book, existingBook) {
+      confirmDuplicate(book: DuplicateItem, existingBook: DuplicateItem) {
         return session.confirmDuplicates([{ title: book.title, existingTitle: existingBook.title }]);
       },
       hide() {

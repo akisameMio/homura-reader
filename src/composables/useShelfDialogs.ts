@@ -1,12 +1,23 @@
 import { shallowRef } from 'vue';
 
-const pendingShelfDialog = shallowRef(null);
-let resolvePending: ((value: any) => void) | null = null;
-let queue = Promise.resolve();
+export interface ShelfDialogOptions {
+  kind: string;
+  title: string;
+  message: string;
+  initialName?: string;
+  options?: Array<{ value: string; title?: string }>;
+  confirmLabel?: string;
+  validate?: (name: string) => string | null;
+}
+type ShelfDialogResult = string | boolean | null;
+
+const pendingShelfDialog = shallowRef<ShelfDialogOptions | null>(null);
+let resolvePending: ((value: ShelfDialogResult) => void) | null = null;
+let queue: Promise<unknown> = Promise.resolve();
 
 export function useShelfDialogs() {
-  function askShelfDialog(options: any): Promise<any> {
-    const task = queue.then(() => new Promise<any>(resolve => {
+  function askShelfDialog(options: ShelfDialogOptions): Promise<ShelfDialogResult> {
+    const task = queue.then(() => new Promise<ShelfDialogResult>(resolve => {
       resolvePending = resolve;
       pendingShelfDialog.value = options;
     }));
@@ -14,7 +25,7 @@ export function useShelfDialogs() {
     return task;
   }
 
-  function resolveShelfDialog(value = null) {
+  function resolveShelfDialog(value: ShelfDialogResult = null) {
     const resolve = resolvePending;
     pendingShelfDialog.value = null;
     resolvePending = null;

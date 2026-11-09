@@ -6,6 +6,7 @@
    ========================================================================== */
 
 import JSZip from 'jszip';
+import type { Book } from '../types.ts';
 import { sanitizeEpubHtml } from './sanitize.ts';
 import { shouldReadEpubAsManga, TEXT_CHAPTER_MIN_LENGTH } from './epubType.ts';
 import {
@@ -23,7 +24,49 @@ const METADATA_SAMPLE_LIMIT = 10;
 const METADATA_MIN_SAMPLE = 8;
 const METADATA_COVER_SCAN_PAGES = 4;
 
-function resolveRelativePath(basePath, relativePath) {
+/** EPUB 存档适配层：JSZip 与原生 ZIP 同构 */
+interface EpubArchive {
+  kind: 'jszip' | 'native';
+  zipContent?: JSZip;
+  archiveId?: string;
+  nativeArchivePath?: string;
+  entryIndexByPath?: Map<string, number>;
+  hasPath(path: string): boolean;
+  resolvePath(candidates: string[]): string | null;
+  readTexts(paths: string[]): Promise<(string | null)[]>;
+  readBlobByPath(path: string): Promise<Blob | null>;
+  makePageItem(path: string, url: string | null): Record<string, unknown>;
+  bookFields(): Record<string, unknown>;
+}
+
+/** 解析出的 OPF 包信息 */
+interface EpubPackage {
+  parser: DOMParser;
+  opfDoc: Document;
+  opfPath: string;
+  opfDir: string;
+  manifest: Record<string, { id: string | null; href: string | null; mediaType: string; properties: string; path?: string }>;
+  spine: Array<{ id: string | null; href: string | null; path: string }>;
+  bookTitle: string;
+}
+
+/** 原生 ZIP 条目 */
+interface NativeZipEntry {
+  path?: string;
+  name?: string;
+  index?: number;
+  width?: number;
+  height?: number;
+}
+
+/** 封面字段 */
+interface EpubCoverFields {
+  cover: string | null;
+  coverBlob: Blob | null;
+  coverNative: { archivePath?: string; entryPath?: string } | null;
+}
+
+function resolveRelativePath(basePath: string, relativePath: string) {
   const baseDir = basePath.includes('/') ? basePath.substring(0, basePath.lastIndexOf('/') + 1) : '';
   const stack = baseDir.split('/').filter(Boolean);
   const parts = relativePath.split('/');
@@ -34,7 +77,7 @@ function resolveRelativePath(basePath, relativePath) {
   return stack.join('/');
 }
 
-function safeDecodePath(path) {
+function safeDecodePath(path: string) {
   try {
     return decodeURIComponent(path);
   } catch (err) {
@@ -46,7 +89,7 @@ export function makeEpubId() {
   return 'epub_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
 }
 
-export function epubTitleFromFileName(name) {
+export function epubTitleFromFileName(name: unknown) {
   return String(name || 'book.epub').replace(/(\.kepub)?\.epub$/i, '');
 }
 
@@ -54,13 +97,13 @@ const NATIVE_MANGA_MANIFEST_VERSION = 1;
 
 // EPUB 漫画的页序与图片尺寸在导入时已经完整解析过，顺手存成轻量清单。
 // 首次打开只按 ZIP 条目索引取图，不再重新解析全书 XHTML、扫描图片头。
-export function createNativeMangaManifest(book) {
+export function createNativeMangaManifest(book: Book | null | undefined) {
   if (book?.type !== 'manga' || book?.format !== 'epub') return null;
   const items: { index: number; width: number; height: number }[] = [];
-  for (const item of book.pageItems || []) {
+  for (const item of (book.pageItems || []) as Array<{ nativeIndex?: number; imageWidth?: number; imageHeight?: number }>) {
     if (!Number.isInteger(item?.nativeIndex)) return null;
     items.push({
-      index: item.nativeIndex,
+      index: item.nativeIndex as number,
       width: Math.max(0, Number(item.imageWidth) || 0),
       height: Math.max(0, Number(item.imageHeight) || 0)
     });
@@ -73,24 +116,25 @@ export function createNativeMangaManifest(book) {
   };
 }
 
-export function isNativeMangaManifestValid(manifest) {
-  return manifest?.version === NATIVE_MANGA_MANIFEST_VERSION
-    && Array.isArray(manifest.items)
-    && manifest.items.length > 0
-    && manifest.items.every(item => Number.isInteger(item?.index) && item.index >= 0);
+export function isNativeMangaManifestValid(manifest: unknown) {
+  const m = manifest as { version?: number; items?: Array<{ index?: number }> } | null | undefined;
+  return m?.version === NATIVE_MANGA_MANIFEST_VERSION
+    && Array.isArray(m.items)
+    && m.items.length > 0
+    && m.items.every((item) => Number.isInteger(item?.index) && (item.index as number) >= 0);
 }
 
-async function readNativeTexts(archiveId, paths, entryIndexByPath) {
-  const textByPath = new Map<string, any>();
-  const validPaths = paths.filter(path => entryIndexByPath.has(path));
+async function readNativeTexts(archiveId: string, paths: string[], entryIndexByPath: Map<string, number>) {
+  const textByPath = new Map<string, string>();
+  const validPaths = paths.filter((path) => entryIndexByPath.has(path));
 
-  const readBatch = async batch => {
+  const readBatch = async (batch: string[]) => {
     if (batch.length === 0) return;
     const entries = await readNativeTextBatch(archiveId, batch);
     for (const entry of entries) {
       if (entry?.path) textByPath.set(entry.path, entry.text);
     }
-    const missing = batch.filter(path => !textByPath.has(path));
+    const missing = batch.filter((path) => !textByPath.has(path));
     // Kotlin 单次最多返回 32MB 文本；被总量截断时递归拆批补读，
     // 单个条目仍读不到才视为缺失，避免长篇小说后半段静默消失。
     if (missing.length === 0 || batch.length === 1) return;
@@ -102,23 +146,23 @@ async function readNativeTexts(archiveId, paths, entryIndexByPath) {
   for (let start = 0; start < validPaths.length; start += NATIVE_TEXT_BATCH_SIZE) {
     await readBatch(validPaths.slice(start, start + NATIVE_TEXT_BATCH_SIZE));
   }
-  return paths.map((path: string) => textByPath.has(path) ? textByPath.get(path) : null);
+  return paths.map((path: string) => textByPath.has(path) ? (textByPath.get(path) ?? null) : null);
 }
 
-export async function createJsZipEpubArchive(file) {
+export async function createJsZipEpubArchive(file: Blob): Promise<EpubArchive> {
   const zip = new JSZip();
   const zipContent = await zip.loadAsync(file);
 
   return {
     kind: 'jszip',
     zipContent,
-    hasPath(path) {
+    hasPath(path: string) {
       return !!zipContent.file(path);
     },
-    resolvePath(candidates) {
-      return candidates.find(path => !!zipContent.file(path)) || null;
+    resolvePath(candidates: string[]) {
+      return candidates.find((path) => !!zipContent.file(path)) || null;
     },
-    async readTexts(paths) {
+    async readTexts(paths: string[]) {
       const texts: (string | null)[] = [];
       for (const path of paths) {
         const entry = zipContent.file(path);
@@ -134,11 +178,11 @@ export async function createJsZipEpubArchive(file) {
       }
       return texts;
     },
-    async readBlobByPath(path) {
+    async readBlobByPath(path: string) {
       const entry = zipContent.file(path);
       return entry ? entry.async('blob') : null;
     },
-    makePageItem(path, url) {
+    makePageItem(path: string, url: string | null) {
       return {
         zipEntry: zipContent.file(path),
         url
@@ -161,24 +205,24 @@ interface EpubParseOptions {
   [key: string]: unknown;
 }
 
-export async function createNativeEpubArchive(nativePath: string, options: EpubParseOptions = {}) {
+export async function createNativeEpubArchive(nativePath: string, options: EpubParseOptions = {}): Promise<EpubArchive> {
   const archiveId = options.id;
   if (!archiveId) throw new Error('原生 EPUB 缺少书籍 ID');
 
   const opened = await openNativeDocument(archiveId, nativePath);
-  const entries = Array.isArray(opened?.entries) ? opened.entries : [];
+  const entries = Array.isArray(opened?.entries) ? (opened.entries as NativeZipEntry[]) : [];
   if (entries.length === 0) throw new Error('原生 EPUB 没有可读取的条目');
 
-  const entryIndexByPath = new Map();
-  const entryByPath = new Map();
+  const entryIndexByPath = new Map<string, number>();
+  const entryByPath = new Map<string, NativeZipEntry>();
   for (const entry of entries) {
     const path = entry?.path || entry?.name;
     if (!path) continue;
     entryByPath.set(path, entry);
-    if (Number.isInteger(entry.index)) entryIndexByPath.set(path, entry.index);
+    if (Number.isInteger(entry.index) && typeof entry.index === 'number') entryIndexByPath.set(path, entry.index);
   }
 
-  const hasPath = path => entryIndexByPath.has(path);
+  const hasPath = (path: string) => entryIndexByPath.has(path);
 
   return {
     kind: 'native',
@@ -186,27 +230,27 @@ export async function createNativeEpubArchive(nativePath: string, options: EpubP
     nativeArchivePath: nativePath,
     entryIndexByPath,
     hasPath,
-    resolvePath(candidates) {
+    resolvePath(candidates: string[]) {
       return candidates.find(hasPath) || null;
     },
-    async readTexts(paths) {
+    async readTexts(paths: string[]) {
       return readNativeTexts(archiveId, paths, entryIndexByPath);
     },
-    async readBlobByPath(path) {
+    async readBlobByPath(path: string) {
       const index = entryIndexByPath.get(path);
-      if (!Number.isInteger(index)) return null;
+      if (!Number.isInteger(index) || typeof index !== 'number') return null;
       const page = await readNativePageBlob(archiveId, index);
       return page.blob;
     },
-    makePageItem(path, url) {
+    makePageItem(path: string, url: string | null) {
       const index = entryIndexByPath.get(path);
       const entry = entryByPath.get(path);
-      if (!Number.isInteger(index)) throw new Error('原生 EPUB 图片索引缺失');
+      if (!Number.isInteger(index) || typeof index !== 'number') throw new Error('原生 EPUB 图片索引缺失');
       const item: {
         nativeArchiveId: string;
         nativeArchivePath: string;
         nativeIndex: number;
-        url: string;
+        url: string | null;
         imageWidth?: number;
         imageHeight?: number;
       } = {
@@ -215,7 +259,7 @@ export async function createNativeEpubArchive(nativePath: string, options: EpubP
         nativeIndex: index,
         url
       };
-      if (entry?.width > 0 && entry?.height > 0) {
+      if (entry && (entry.width as number) > 0 && (entry.height as number) > 0) {
         item.imageWidth = entry.width;
         item.imageHeight = entry.height;
       }
@@ -231,26 +275,26 @@ export async function createNativeEpubArchive(nativePath: string, options: EpubP
   };
 }
 
-async function readEpubCover(archive, path) {
+async function readEpubCover(archive: EpubArchive, path: string | null): Promise<EpubCoverFields> {
   if (!path) return { cover: null, coverBlob: null, coverNative: null };
   const coverBlob = await archive.readBlobByPath(path);
   if (!coverBlob) throw new Error('无法读取 EPUB 封面图');
   return {
     cover: URL.createObjectURL(coverBlob),
     coverBlob,
-    coverNative: archive.kind === 'native' && archive.nativeArchivePath
+    coverNative: archive.kind === 'native' && archive.nativeArchivePath && path
       ? { archivePath: archive.nativeArchivePath, entryPath: path }
       : null
   };
 }
 
-function parseEpubXml(parser, xml, label) {
+function parseEpubXml(parser: DOMParser, xml: string, label: string): Document {
   const doc = parser.parseFromString(xml, 'text/xml');
   if (doc.querySelector('parsererror')) throw new Error(`${label}格式无效`);
   return doc;
 }
 
-async function readEpubPackage(archive, fallbackTitle) {
+async function readEpubPackage(archive: EpubArchive, fallbackTitle: string): Promise<EpubPackage> {
   const parser = new DOMParser();
 
   const [containerXml] = await archive.readTexts(['META-INF/container.xml']);
@@ -279,22 +323,23 @@ async function readEpubPackage(archive, fallbackTitle) {
     || opfDoc.getElementsByTagName('dc:title')[0]
     || opfDoc.querySelector('title');
   const parsedTitle = titleEl?.textContent?.trim();
-  const bookTitle = parsedTitle || fallbackTitle;
 
-  const manifest: any = {};
-  opfDoc.querySelectorAll('manifest > item').forEach(item => {
-    manifest[item.getAttribute('id')] = {
-      id: item.getAttribute('id'),
+  const manifest: EpubPackage['manifest'] = {};
+  opfDoc.querySelectorAll('manifest > item').forEach((item) => {
+    const itemId = item.getAttribute('id');
+    if (!itemId) return;
+    manifest[itemId] = {
+      id: itemId,
       href: item.getAttribute('href'),
       mediaType: item.getAttribute('media-type') || '',
       properties: item.getAttribute('properties') || ''
     };
   });
 
-  const spine: { id: any; href: any; path: any }[] = [];
-  opfDoc.querySelectorAll('spine > itemref').forEach(ref => {
+  const spine: Array<{ id: string | null; href: string | null; path: string }> = [];
+  opfDoc.querySelectorAll('spine > itemref').forEach((ref) => {
     const itemId = ref.getAttribute('idref');
-    const item = manifest[itemId];
+    const item = itemId ? manifest[itemId] : undefined;
     if (!item?.href) return;
     const fullPath = opfDir + safeDecodePath(item.href.split('#')[0]);
     const path = archive.resolvePath([fullPath, item.href, item.href.split('#')[0]]);
@@ -312,18 +357,18 @@ async function readEpubPackage(archive, fallbackTitle) {
   };
 }
 
-function manifestPath(archive, opfDir, item) {
+function manifestPath(archive: EpubArchive, opfDir: string, item: { href?: string | null } | null | undefined) {
   if (!item?.href) return null;
-  const href = item.href.split('#')[0];
+  const href = (item.href as string).split('#')[0];
   return archive.resolvePath([opfDir + safeDecodePath(href), item.href, href]);
 }
 
-function isImageItem(item, path = '') {
+function isImageItem(item: { mediaType?: string } | null | undefined, path = '') {
   return /^image\//i.test(item?.mediaType || '')
     || /\.(jpe?g|png|webp|gif|avif|bmp|svg)$/i.test(path);
 }
 
-function extractPageImages(archive: any, parser: any, rawHtml: string, pagePath: string, options: EpubParseOptions = {}) {
+function extractPageImages(archive: EpubArchive, parser: DOMParser, rawHtml: string, pagePath: string, options: EpubParseOptions = {}) {
   const htmlDoc = parser.parseFromString(rawHtml, 'text/html');
   const imgs = htmlDoc.querySelectorAll('img, image');
   const imagePaths: string[] = [];
@@ -352,7 +397,7 @@ function extractPageImages(archive: any, parser: any, rawHtml: string, pagePath:
   };
 }
 
-function selectSampleIndices(length, limit) {
+function selectSampleIndices(length: number, limit: number) {
   if (length <= 0) return [];
   if (length <= limit) return Array.from({ length }, (_, index) => index);
 
@@ -363,12 +408,12 @@ function selectSampleIndices(length, limit) {
   return [...indices].sort((a, b) => a - b);
 }
 
-async function readOpfCoverPath(archive: any, pkg: any) {
-  const candidates: any[] = [];
+async function readOpfCoverPath(archive: EpubArchive, pkg: EpubPackage) {
+  const candidates: Array<{ path?: string; mediaType?: string; href?: string | null; id?: string | null; properties?: string }> = [];
   const entries = Object.values(pkg.manifest) as Array<{ properties?: string } & Record<string, unknown>>;
   const coverImage = entries.find(item => (
     /(?:^|\s)cover-image(?:\s|$)/i.test(item.properties || '')
-    && isImageItem(item)
+    && isImageItem(item as { mediaType?: string })
   ));
   if (coverImage) candidates.push(coverImage);
 
@@ -409,7 +454,7 @@ function metadataSampleNeedsFullParse({
   textChapterCount,
   imageHeavyChapterCount,
   imageCount
-}) {
+}: { spineCount: number; sampledCount: number; missingCount: number; chapterCount: number; textChapterCount: number; imageHeavyChapterCount: number; imageCount: number }) {
   if (chapterCount === 0 || missingCount > 0) return true;
   if (sampledCount < Math.min(METADATA_MIN_SAMPLE, spineCount)) return true;
 
@@ -431,7 +476,7 @@ function metadataSampleNeedsFullParse({
   return false;
 }
 
-async function parseEpubMetadata(archive, pkg, id) {
+async function parseEpubMetadata(archive: EpubArchive, pkg: EpubPackage, id: string) {
   const sampleIndices = selectSampleIndices(pkg.spine.length, METADATA_SAMPLE_LIMIT);
   const coverIndices = Array.from(
     { length: Math.min(METADATA_COVER_SCAN_PAGES, pkg.spine.length) },
@@ -447,7 +492,7 @@ async function parseEpubMetadata(archive, pkg, id) {
   let textChapterCount = 0;
   let imageHeavyChapterCount = 0;
   let sampledImageTotal = 0;
-  const sampledImagePaths = new Set();
+  const sampledImagePaths = new Set<string>();
 
   for (const index of sampleIndices) {
     const rawHtml = rawByIndex.get(index);
@@ -510,7 +555,7 @@ async function parseEpubMetadata(archive, pkg, id) {
   }
   if (!coverPath) coverPath = fallbackCoverPath;
 
-  let coverFields: { cover: any; coverBlob: any; coverNative: any } = { cover: null, coverBlob: null, coverNative: null };
+  let coverFields: EpubCoverFields = { cover: null, coverBlob: null, coverNative: null };
   if (coverPath) {
     try {
       coverFields = await readEpubCover(archive, coverPath);
@@ -542,12 +587,12 @@ async function parseEpubMetadata(archive, pkg, id) {
   };
 }
 
-async function parseEpubFull(archive, pkg, id) {
+async function parseEpubFull(archive: EpubArchive, pkg: EpubPackage, id: string) {
   const { parser, spine } = pkg;
-  const rawHtmls = await archive.readTexts(spine.map(item => item.path));
+  const rawHtmls = await archive.readTexts(spine.map((item) => item.path));
   const lazyMangaPaths: string[] = [];
-  const seenGlobalPaths = new Set();
-  const chapters: { title: any; htmlContent: string }[] = [];
+  const seenGlobalPaths = new Set<string>();
+  const chapters: Array<{ title: string; htmlContent: string }> = [];
   let imageHeavyCount = 0;
   let textChapterCount = 0;
 
@@ -575,7 +620,7 @@ async function parseEpubFull(archive, pkg, id) {
 
     const chapterHeading = htmlDoc.body?.querySelector('h1, h2, h3')?.textContent?.trim()
       || htmlDoc.querySelector('title')?.textContent?.trim()
-      || item.href.split('/').pop().replace(/\.[^.]+$/, '');
+      || (item.href as string).split('/').pop()!.replace(/\.[^.]+$/, '');
     const bodyHtml = sanitizeEpubHtml(htmlDoc.body ? htmlDoc.body.innerHTML : rawHtml);
     if (bodyHtml.length > 0) {
       chapters.push({
@@ -629,7 +674,7 @@ async function parseEpubFull(archive, pkg, id) {
   };
 }
 
-export async function parseEpubArchive(archive: any, options: EpubParseOptions = {}) {
+export async function parseEpubArchive(archive: EpubArchive, options: EpubParseOptions = {}) {
   const id = options.id;
   if (!id) throw new Error('EPUB 解析缺少书籍 ID');
   const fallbackTitle = options.fallbackTitle || '未命名 EPUB';
@@ -648,7 +693,7 @@ export async function parseEpubNativeArchive(nativePath: string, options: EpubPa
       fallbackTitle,
       metadataOnly: options.metadataOnly
     });
-    if (book?.needsFullParse) {
+    if ((book as { needsFullParse?: boolean } | null)?.needsFullParse) {
       await closeNativeArchive(id).catch(() => {});
     }
     return book;
@@ -660,7 +705,7 @@ export async function parseEpubNativeArchive(nativePath: string, options: EpubPa
 }
 
 // 原生环境优先从 AppData 里的原文件随机读取；允许恢复的失败再回落到 JSZip。
-export async function parseEpubFile(file: any, options: EpubParseOptions = {}) {
+export async function parseEpubFile(file: Blob & { name?: string }, options: EpubParseOptions = {}) {
   const id = options.id || makeEpubId();
   const fallbackTitle = epubTitleFromFileName(options.name || file?.name);
 
@@ -680,7 +725,7 @@ export async function parseEpubFile(file: any, options: EpubParseOptions = {}) {
   const fallbackFile = typeof options.loadFallbackFile === 'function'
     ? await options.loadFallbackFile()
     : file;
-  const archive = await createJsZipEpubArchive(fallbackFile);
+  const archive = await createJsZipEpubArchive(fallbackFile as Blob);
   return parseEpubArchive(archive, {
     id,
     fallbackTitle,

@@ -23,7 +23,8 @@ import {
   fetchStableReleases,
   isVersionNewer,
   RELEASES_PAGE_URL,
-  selectReleaseAsset
+  selectReleaseAsset,
+  type NormalizedRelease
 } from '../services/updates.ts';
 
 function emptyDownloadState() {
@@ -45,19 +46,31 @@ function createDownloadId() {
   return `update_${random.replace(/[^a-zA-Z0-9_-]/g, '')}`;
 }
 
+
+/** 已下载待安装的更新条目（updateDownload 服务落盘结构） */
+interface PendingUpdate {
+  size: number;
+  version: string;
+  path?: string;
+  fileName?: string;
+  platform?: string;
+  packageLabel?: string;
+  [key: string]: unknown;
+}
+
 export const useUpdateStore = defineStore('updates', () => {
   const appVersion = packageInfo.version;
   const updatePlatform = detectUpdatePlatform();
-  const releases = ref<any[]>([]);
-  const latestRelease = ref<any>(null);
+  const releases = ref<NormalizedRelease[]>([]);
+  const latestRelease = ref<NormalizedRelease | null>(null);
   const updateDialogOpen = ref(false);
   const updateStatus = ref('idle');
-  const updateError = ref<any>(null);
-  const downloadError = ref<any>(null);
+  const updateError = ref<unknown>(null);
+  const downloadError = ref<{ message?: string } | unknown>(null);
   const changelogOpen = ref(false);
   const changelogStatus = ref('idle');
-  const changelogError = ref<any>(null);
-  const downloadedUpdate = ref<any>(restorePendingUpdate());
+  const changelogError = ref<unknown>(null);
+  const downloadedUpdate = ref<PendingUpdate | null>(restorePendingUpdate());
   const downloadState = ref(emptyDownloadState());
   let activeDownloadId = '';
   let updateRequestId = 0;
@@ -89,7 +102,7 @@ export const useUpdateStore = defineStore('updates', () => {
     return pending;
   }
 
-  function fillDownloadState(pending) {
+  function fillDownloadState(pending: PendingUpdate) {
     downloadState.value = {
       ...emptyDownloadState(),
       ...pending,
@@ -106,7 +119,7 @@ export const useUpdateStore = defineStore('updates', () => {
     updateStatus.value = 'downloaded';
   }
 
-  function syncPendingRelease(latest) {
+  function syncPendingRelease(latest: NormalizedRelease | null) {
     if (downloadedUpdate.value && downloadedUpdate.value.version !== latest?.version) {
       downloadedUpdate.value = null;
       clearPendingUpdate();
@@ -142,7 +155,7 @@ export const useUpdateStore = defineStore('updates', () => {
       }
 
       // 已经下载过同一版本时直接恢复到完成卡片，避免启动提示诱导重复下载。
-      if (downloadedUpdate.value?.version === latestRelease.value.version) {
+      if (downloadedUpdate.value?.version === latestRelease.value?.version) {
         openDownloadedUpdate();
       } else {
         updateStatus.value = 'available';
@@ -213,7 +226,7 @@ export const useUpdateStore = defineStore('updates', () => {
     downloadState.value = {
       ...emptyDownloadState(),
       fileName: asset.name,
-      version: release.version
+      version: String(release.version ?? '')
     };
     updateStatus.value = 'downloading';
 
@@ -223,7 +236,7 @@ export const useUpdateStore = defineStore('updates', () => {
         url: asset.url,
         fileName: asset.name,
         expectedSize: asset.size,
-        onProgress(progress) {
+        onProgress(progress: { fraction?: number; downloadedBytes?: number; totalBytes?: number }) {
           if (requestId !== downloadRequestId) return;
           downloadState.value = {
             ...downloadState.value,
@@ -250,9 +263,9 @@ export const useUpdateStore = defineStore('updates', () => {
         downloadedBytes: result.size
       };
       updateStatus.value = 'downloaded';
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (requestId !== downloadRequestId) return;
-      if (error?.code === 'CANCELLED') {
+      if ((error as { code?: string })?.code === 'CANCELLED') {
         updateStatus.value = 'available';
         return;
       }
@@ -291,7 +304,7 @@ export const useUpdateStore = defineStore('updates', () => {
     if (!downloadedUpdate.value) return;
     downloadError.value = null;
     try {
-      await launchDownloadedUpdate(downloadedUpdate.value);
+      await launchDownloadedUpdate(downloadedUpdate.value as unknown as { downloadId: string; path: string });
       updateDialogOpen.value = false;
     } catch (error) {
       console.warn('启动更新安装失败', error);

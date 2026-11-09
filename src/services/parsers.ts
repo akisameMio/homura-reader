@@ -5,6 +5,7 @@
    书籍对象；以及把散装图片按文件夹分组生成漫画书的 buildImageFolderBooks。
    ========================================================================== */
 
+import type { Book } from '../types.ts';
 import { escapeHtml } from './utils.ts';
 import { decodeTxtBytesAsync } from './textEncoding.ts';
 import { renderMarkdown } from './markdown.ts';
@@ -18,8 +19,8 @@ import {
 import { removeNativeBookDir } from './nativeStorage.ts';
 
 // 同名书被跳过时还未入架，及时释放解析阶段创建的位图 URL 与 PDF worker。
-export async function discardParsedBook(book) {
-  const urls = new Set([book.cover, ...(book.resourceUrls || []), ...(book.pageItems || []).map(item => item.url)]);
+export async function discardParsedBook(book: Book) {
+  const urls = new Set<unknown>([book.cover, ...((book.resourceUrls as unknown[]) || []), ...((book.pageItems as unknown[]) || []).map((item) => (item as { url?: unknown }).url)]);
   for (const url of urls) {
     if (typeof url === 'string' && url.startsWith('blob:')) URL.revokeObjectURL(url);
   }
@@ -31,7 +32,7 @@ export async function discardParsedBook(book) {
     await removeNativeBookDir(book.id).catch(() => {});
   }
   try {
-    await book.pdfDoc?.loadingTask.destroy();
+    await (book.pdfDoc as { loadingTask?: { destroy(): Promise<void> } } | null | undefined)?.loadingTask?.destroy();
   } catch (err) {
     console.warn('[HOMURA] 释放跳过的 PDF 失败', err);
   }
@@ -40,7 +41,7 @@ export async function discardParsedBook(book) {
 // ---- EPUB 解析：章节正文 + 图片型 EPUB 自动转漫画 ----
 // ---- TXT / Markdown 解析：按章节标题切分 ----
 
-export async function parseEpubFileLazy(file, options = {}) {
+export async function parseEpubFileLazy(file: File, options: Record<string, unknown> = {}) {
   try {
     return await parseEpubFile(file, options);
   } catch (err) {
@@ -51,7 +52,7 @@ export async function parseEpubFileLazy(file, options = {}) {
 
 // ---- PDF：每页按需渲染成位图，直接复用漫画渲染管道 ----
 
-export async function parsePdfFileLazy(file) {
+export async function parsePdfFileLazy(file: File) {
   try {
     const pdfDoc = await openPdfDocument(file);
     const pageCount = pdfDoc.numPages || 0;
@@ -77,10 +78,10 @@ export async function parsePdfFileLazy(file) {
   }
 }
 
-export async function parseTxtFile(txtFile) {
+export async function parseTxtFile(txtFile: File) {
   try {
     const rawText = await decodeTxtBytesAsync(await txtFile.arrayBuffer());
-    const lines = rawText.split(/\r\n?|\n/).map(l => l.trim()).filter(Boolean);
+    const lines = rawText.split(/\r\n?|\n/).map((l) => l.trim()).filter(Boolean);
     const title = txtFile.name.replace(/\.[^.]+$/, '');
     const chapters: { title: string; htmlContent: string }[] = [];
     let currentChapTitle = '开始';
@@ -125,17 +126,17 @@ export async function parseTxtFile(txtFile) {
 
 // ---- Markdown：按一/二级标题切章，正文交给 marked 转 HTML ----
 
-function stripMarkdownTitle(line) {
+function stripMarkdownTitle(line: string) {
   return line.replace(/[*_`]/g, '').trim();
 }
 
-function splitMarkdownChapters(text, fallbackTitle) {
+function splitMarkdownChapters(text: string, fallbackTitle: string) {
   const chapters: { title: string; htmlContent: string }[] = [];
   let buffer: string[] = [];
   let fence = '';
-  let currentTitle = null;
+  let currentTitle: string | null = null;
 
-  const flush = title => {
+  const flush = (title: string | null) => {
     const html = renderMarkdown(buffer.join('\n')).trim();
     buffer = [];
     if (!html) return;
@@ -170,11 +171,11 @@ function splitMarkdownChapters(text, fallbackTitle) {
   return chapters;
 }
 
-export function parseMarkdownFile(mdFile) {
-  return new Promise(resolve => {
+export function parseMarkdownFile(mdFile: File) {
+  return new Promise<unknown>((resolve) => {
     const reader = new FileReader();
-    reader.onload = (e: any) => {
-      const rawText = String(e.target.result || '').replace(/\r\n?/g, '\n');
+    reader.onload = (e: ProgressEvent<FileReader>) => {
+      const rawText = String(e.target?.result || '').replace(/\r\n?/g, '\n');
       const title = mdFile.name.replace(/\.[^.]+$/, '');
       const chapters = splitMarkdownChapters(rawText, title);
 
@@ -196,14 +197,14 @@ export function parseMarkdownFile(mdFile) {
 
 // ---- MOBI：PalmDOC 解压 + 正文净化，输出小说管道可用的章节 ----
 
-export async function parseMobiFileLazy(file) {
+export async function parseMobiFileLazy(file: File) {
   try {
     const fallbackTitle = file.name.replace(/\.(mobi|prc|azw)$/i, '');
     const data = await parseMobiFileData(file, fallbackTitle);
     let coverBlob = data.coverBlob;
     if (!coverBlob && data.type === 'manga') {
       const first = data.pages.find(page => page.start != null);
-      if (first) coverBlob = file.slice(first.start, first.end, first.mime || '');
+      if (first && first.start != null && first.end != null) coverBlob = file.slice(first.start, first.end, first.mime || '');
     }
     const coverUrl = coverBlob ? URL.createObjectURL(coverBlob) : null;
 
@@ -248,17 +249,24 @@ export async function parseMobiFileLazy(file) {
 
 // macOS 打包/压缩留下的元数据目录，里面的 “图片” 不是真正的页面。
 // 拖拽目录、文件夹句柄和旧存档都从这里进，必须在分组前统一滤掉。
-export function isJunkImagePath(path) {
+export function isJunkImagePath(path: unknown) {
   return String(path || '')
     .split(/[\\/]/)
     .some(segment => segment === '__MACOSX' || segment === '.DS_Store' || segment.startsWith('._'));
 }
 
 // 把散装图片按所在文件夹分组，每组生成一本书
-export function buildImageFolderBooks(imgFiles) {
+/** 散装图片文件（File 及导入链路附加的相对路径字段） */
+interface EpubImageFile extends Blob {
+  name: string;
+  webkitRelativePath?: string;
+  customRelativePath?: string;
+}
+
+export function buildImageFolderBooks(imgFiles: EpubImageFile[]) {
   if (!imgFiles || imgFiles.length === 0) return [];
-  const folderGroups = new Map();
-  imgFiles.forEach(f => {
+  const folderGroups = new Map<string, { folderName: string; files: EpubImageFile[] }>();
+  imgFiles.forEach((f) => {
     const rel = f.customRelativePath || f.webkitRelativePath || '';
     if (isJunkImagePath(rel)) return;
     const parts = rel.split('/').filter(Boolean);
@@ -270,7 +278,7 @@ export function buildImageFolderBooks(imgFiles) {
     }
     const folderPath = parts.length >= 2 ? parts.slice(0, -1).join('/') : groupName;
     if (!folderGroups.has(folderPath)) folderGroups.set(folderPath, { folderName: groupName, files: [] });
-    folderGroups.get(folderPath).files.push(f);
+    folderGroups.get(folderPath)!.files.push(f);
   });
 
   return [...folderGroups.values()].map(({ folderName, files: groupImgs }) => {

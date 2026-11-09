@@ -11,19 +11,38 @@ import {
   readNativeTextBatch
 } from './nativeArchive.ts';
 
-export function hasArchiveSource(book) {
+/** zipContent 的最小结构（JSZip 实例子集） */
+interface ZipContentLike {
+  file(path: string): { async(type: 'text'): Promise<string>; async(type: 'blob'): Promise<Blob> } | null;
+}
+
+/** 归档访问所需的书本字段 */
+interface ArchiveBookLike {
+  zipContent?: ZipContentLike | null;
+  nativeArchiveId?: string | null;
+  nativeEntryIndexByPath?: Map<string, number> | null;
+}
+
+/** 归档访问所需的阅读页字段 */
+interface ArchivePageLike {
+  nativeArchiveId?: string | null;
+  nativeIndex?: number;
+  zipEntry?: { async(type: 'blob'): Promise<Blob> } | null;
+}
+
+export function hasArchiveSource(book: ArchiveBookLike | null | undefined) {
   return !!(book?.zipContent || book?.nativeArchiveId != null);
 }
 
-export async function readArchiveText(book, paths) {
-  const requested = Array.isArray(paths) ? paths : [];
+export async function readArchiveText(book: ArchiveBookLike | null | undefined, paths: string[] | string | null | undefined) {
+  const requested: string[] = Array.isArray(paths) ? paths : [];
   if (requested.length === 0) return [];
 
   if (book?.nativeArchiveId != null) {
     await ensureNativeArchiveSession(book);
-    const entries = await readNativeTextBatch(book.nativeArchiveId, requested);
-    const byPath = new Map(entries.map(entry => [entry.path, entry.text]));
-    return requested.map(path => byPath.has(path) ? byPath.get(path) : null);
+    const entries = await readNativeTextBatch(book.nativeArchiveId, requested) as Array<{ path: string; text: string }>;
+    const byPath = new Map<string, string>(entries.map((entry: { path: string; text: string }) => [entry.path, entry.text]));
+    return requested.map((path: string) => byPath.has(path) ? byPath.get(path) : null);
   }
 
   if (book?.zipContent) {
@@ -46,7 +65,7 @@ export async function readArchiveText(book, paths) {
   return requested.map(() => null);
 }
 
-export async function readArchiveBlobByPath(book, path) {
+export async function readArchiveBlobByPath(book: ArchiveBookLike | null | undefined, path: string | null | undefined) {
   if (!book || !path) return null;
 
   if (book.nativeArchiveId != null) {
@@ -54,7 +73,7 @@ export async function readArchiveBlobByPath(book, path) {
     const index = book.nativeEntryIndexByPath instanceof Map
       ? book.nativeEntryIndexByPath.get(path)
       : null;
-    if (!Number.isInteger(index)) return null;
+    if (!Number.isInteger(index) || typeof index !== 'number') return null;
     const page = await readNativePageBlob(book.nativeArchiveId, index);
     return page.blob;
   }
@@ -64,11 +83,11 @@ export async function readArchiveBlobByPath(book, path) {
   return entry.async('blob');
 }
 
-export async function readArchivePageBlob(pageObj) {
+export async function readArchivePageBlob(pageObj: ArchivePageLike | null | undefined) {
   if (!pageObj) return null;
 
   if (pageObj.nativeArchiveId != null) {
-    if (!Number.isInteger(pageObj.nativeIndex)) return null;
+    if (!Number.isInteger(pageObj.nativeIndex) || typeof pageObj.nativeIndex !== 'number') return null;
     const page = await readNativePageBlob(pageObj.nativeArchiveId, pageObj.nativeIndex);
     return page.blob;
   }

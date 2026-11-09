@@ -29,6 +29,7 @@ import {
   upsertNativeBook,
   upsertNativeBooks
 } from './nativeMetadata.ts';
+import type { Book, BookSource, Collection, ReadingProgress } from '../types.ts';
 
 const nowMs = typeof performance !== 'undefined' && typeof performance.now === 'function'
   ? () => performance.now()
@@ -42,11 +43,29 @@ export const HomuraStore = (() => {
   const STORE_PROGRESS = 'progress';
   const STORE_COLLECTIONS = 'collections';
   const NATIVE_DIRTY_KEY = 'homura-native-metadata-dirty';
+  /** 逐本书维度写入的计时器（仅诊断用）；调用方可传任意数值字段 */
+  interface SaveTiming {
+    idbMs: number;
+    sqliteMs: number;
+    [key: string]: number;
+  }
+  /** SQLite 元数据的内存镜像快照 */
+  interface MetadataSnapshot {
+    books: Book[];
+    collections: Collection[];
+    progress: ReadingProgress[];
+    initialized?: boolean;
+  }
+  /** saveBooks 的整批条目 */
+  interface SaveEntry {
+    meta: Book;
+    source: BookSource;
+  }
   let dbPromise: Promise<IDBDatabase> | null = null;
   let disabled = false;
-  let nativeSnapshot: any = null;
-  let nativeSnapshotPromise: Promise<any> | null = null;
-  let nativeWriteQueue = Promise.resolve();
+  let nativeSnapshot: MetadataSnapshot | null = null;
+  let nativeSnapshotPromise: Promise<MetadataSnapshot | null> | null = null;
+  let nativeWriteQueue: Promise<unknown> = Promise.resolve();
   let pendingNativeWrites = 0;
   let nativeDirtyMemory = false;
   let nativeMirrorFailed = false;
@@ -88,9 +107,9 @@ export const HomuraStore = (() => {
     return dbPromise!;
   }
 
-  function run(storeName, mode, action) {
+  function run(storeName: string, mode: IDBTransactionMode, action: (store: IDBObjectStore) => IDBRequest | null | undefined) {
     if (disabled) return Promise.resolve(undefined);
-    return openDb().then(db => new Promise((resolve, reject) => {
+    return openDb().then(db => new Promise<unknown>((resolve, reject) => {
       const tx = db.transaction(storeName, mode);
       const req = action(tx.objectStore(storeName));
       tx.oncomplete = () => resolve(req ? req.result : undefined);
@@ -100,7 +119,7 @@ export const HomuraStore = (() => {
   }
 
   // 书籍元数据与源文件在同一次事务里写入，保证不会出现「有书没源」的孤儿记录
-  function idbSaveBook(meta, source) {
+  function idbSaveBook(meta: Book, source: BookSource) {
     if (disabled) return Promise.reject(new Error('IndexedDB 不可用'));
     return openDb().then(db => new Promise<void>((resolve, reject) => {
       const tx = db.transaction([STORE_BOOKS, STORE_SOURCES], 'readwrite');
@@ -113,7 +132,7 @@ export const HomuraStore = (() => {
   }
 
   // 批量导入时把整批书目与来源放进同一次事务，避免每本一次提交。
-  function idbSaveBooks(entries) {
+  function idbSaveBooks(entries: SaveEntry[]) {
     if (disabled) return Promise.reject(new Error('IndexedDB 不可用'));
     return openDb().then(db => new Promise<void>((resolve, reject) => {
       const tx = db.transaction([STORE_BOOKS, STORE_SOURCES], 'readwrite');
@@ -130,14 +149,14 @@ export const HomuraStore = (() => {
   }
 
   function idbListBooks() {
-    return run(STORE_BOOKS, 'readonly', store => store.getAll()).then(list => list || []);
+    return run(STORE_BOOKS, 'readonly', (store) => store.getAll()).then((list) => (list as Book[]) || []);
   }
 
-  function idbGetBook(id) {
-    return run(STORE_BOOKS, 'readonly', store => store.get(id));
+  function idbGetBook(id: string) {
+    return run(STORE_BOOKS, 'readonly', (store) => store.get(id)).then((meta) => (meta as Book | undefined) || null);
   }
 
-  function idbUpdateBookCover(id, customCoverBlob) {
+  function idbUpdateBookCover(id: string, customCoverBlob: Blob | null | undefined) {
     if (disabled) return Promise.reject(new Error('本地存储不可用，封面未保存'));
     return openDb().then(db => new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_BOOKS, 'readwrite');
@@ -156,7 +175,7 @@ export const HomuraStore = (() => {
   }
 
   // 只更新解析后可能变化的元数据，保留加入时间、收藏与自定义封面。
-  function idbUpdateBookMeta(id, patch) {
+  function idbUpdateBookMeta(id: string, patch: Partial<Book>) {
     if (disabled) return Promise.reject(new Error('本地存储不可用，书本信息未保存'));
     return openDb().then(db => new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_BOOKS, 'readwrite');
@@ -174,11 +193,11 @@ export const HomuraStore = (() => {
     }));
   }
 
-  function idbGetSource(id) {
-    return run(STORE_SOURCES, 'readonly', store => store.get(id));
+  function idbGetSource(id: string) {
+    return run(STORE_SOURCES, 'readonly', (store) => store.get(id));
   }
 
-  function idbUpdateSourceManifest(id, nativePageManifest) {
+  function idbUpdateSourceManifest(id: string, nativePageManifest: unknown) {
     if (disabled) return Promise.reject(new Error('本地存储不可用，书页清单未保存'));
     return openDb().then(db => new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_SOURCES, 'readwrite');
@@ -196,7 +215,7 @@ export const HomuraStore = (() => {
     }));
   }
 
-  function idbUpdateBookFavorite(id, favorite) {
+  function idbUpdateBookFavorite(id: string, favorite: boolean) {
     if (disabled) return Promise.reject(new Error('本地存储不可用，收藏未保存'));
     return openDb().then(db => new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_BOOKS, 'readwrite');
@@ -215,37 +234,37 @@ export const HomuraStore = (() => {
   }
 
   function idbListCollections() {
-    return run(STORE_COLLECTIONS, 'readonly', store => store.getAll()).then(list => list || []);
+    return run(STORE_COLLECTIONS, 'readonly', (store) => store.getAll()).then((list) => (list as Collection[]) || []);
   }
 
   // 整批写入归属，移动多个书本时不会留下同时属于两个书库的中间状态。
-  function idbSaveCollections(collections) {
+  function idbSaveCollections(collections: Collection[]) {
     if (disabled) return Promise.reject(new Error('IndexedDB 不可用，书库无法保存'));
     return openDb().then(db => new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_COLLECTIONS, 'readwrite');
       const store = tx.objectStore(STORE_COLLECTIONS);
       store.clear();
-      collections.forEach(item => store.put(item));
+      collections.forEach((item) => store.put(item));
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);
     }));
   }
 
-  function idbSaveProgress(record) {
-    return run(STORE_PROGRESS, 'readwrite', store => store.put(record));
+  function idbSaveProgress(record: ReadingProgress) {
+    return run(STORE_PROGRESS, 'readwrite', (store) => store.put(record));
   }
 
-  function idbGetProgress(id) {
-    return run(STORE_PROGRESS, 'readonly', store => store.get(id));
+  function idbGetProgress(id: string) {
+    return run(STORE_PROGRESS, 'readonly', (store) => store.get(id)).then((rec) => (rec as ReadingProgress | undefined) || null);
   }
 
   function idbListProgress() {
-    return run(STORE_PROGRESS, 'readonly', store => store.getAll()).then(list => list || []);
+    return run(STORE_PROGRESS, 'readonly', (store) => store.getAll()).then((list) => (list as ReadingProgress[]) || []);
   }
 
   function idbClearProgress() {
-    return run(STORE_PROGRESS, 'readwrite', store => store.clear());
+    return run(STORE_PROGRESS, 'readwrite', (store) => store.clear());
   }
 
   function setNativeDirtyMarker() {
@@ -275,16 +294,16 @@ export const HomuraStore = (() => {
     if (canUseNativeMetadata()) setNativeDirtyMarker();
   }
 
-  function disableBrokenNativeMetadata(error) {
+  function disableBrokenNativeMetadata(error: unknown) {
     console.warn('[HomuraStore] 原生元数据不可用，回退 IndexedDB', error);
     nativeMirrorFailed = true;
-    disableNativeFeature('metadata', error?.message || 'SQLite 元数据后端失败');
+    disableNativeFeature('metadata', (error as { message?: string } | null | undefined)?.message || 'SQLite 元数据后端失败');
     nativeSnapshot = null;
   }
 
   // 原生镜像写入串行执行，等最后一项落盘后才清除 dirty 标记。
   // 任一项失败会保留标记，下次启动从 IndexedDB 重建 SQLite。
-  function queueNativeMirror(task) {
+  function queueNativeMirror(task: () => Promise<unknown>) {
     if (!canUseNativeMetadata()) return Promise.resolve(false);
     pendingNativeWrites++;
     setNativeDirtyMarker();
@@ -304,32 +323,32 @@ export const HomuraStore = (() => {
     );
   }
 
-  function upsertCachedBook(meta) {
+  function upsertCachedBook(meta: Book) {
     if (!nativeSnapshot) return;
-    const books = nativeSnapshot.books.filter(book => book.id !== meta.id);
+    const books = nativeSnapshot.books.filter((book) => book.id !== meta.id);
     books.push(meta);
-    books.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+    books.sort((a, b) => (Number(b.addedAt) || 0) - (Number(a.addedAt) || 0));
     nativeSnapshot = { ...nativeSnapshot, books };
   }
 
-  function removeCachedBook(id) {
+  function removeCachedBook(id: string) {
     if (!nativeSnapshot) return;
     nativeSnapshot = {
       ...nativeSnapshot,
-      books: nativeSnapshot.books.filter(book => book.id !== id),
-      progress: nativeSnapshot.progress.filter(record => record.id !== id)
+      books: nativeSnapshot.books.filter((book) => book.id !== id),
+      progress: nativeSnapshot.progress.filter((record) => record.id !== id)
     };
   }
 
-  function replaceCachedCollections(collections) {
+  function replaceCachedCollections(collections: Collection[]) {
     if (nativeSnapshot) nativeSnapshot = { ...nativeSnapshot, collections };
   }
 
-  function upsertCachedProgress(record) {
+  function upsertCachedProgress(record: ReadingProgress) {
     if (!nativeSnapshot) return;
     nativeSnapshot = {
       ...nativeSnapshot,
-      progress: nativeSnapshot.progress.filter(item => item.id !== record.id).concat(record)
+      progress: nativeSnapshot.progress.filter((item) => item.id !== record.id).concat(record)
     };
   }
 
@@ -337,7 +356,7 @@ export const HomuraStore = (() => {
     if (nativeSnapshot) nativeSnapshot = { ...nativeSnapshot, progress: [] };
   }
 
-  async function readIndexedDbSnapshot() {
+  async function readIndexedDbSnapshot(): Promise<MetadataSnapshot> {
     return {
       books: await idbListBooks(),
       collections: await idbListCollections(),
@@ -347,7 +366,7 @@ export const HomuraStore = (() => {
 
   async function loadNativeOrMigrate() {
     try {
-      const loaded = await loadNativeMetadata();
+      const loaded = (await loadNativeMetadata()) as unknown as MetadataSnapshot;
       if (loaded.initialized) {
         nativeSnapshot = loaded;
         return nativeSnapshot;
@@ -383,24 +402,24 @@ export const HomuraStore = (() => {
     return nativeSnapshotPromise;
   }
 
-  async function readMetadataList(key, fallback) {
+  async function readMetadataList<K extends 'books' | 'collections' | 'progress'>(key: K, fallback: () => Promise<MetadataSnapshot[K]>) {
     const snapshot = await getNativeSnapshot();
-    return snapshot ? snapshot[key] || [] : fallback();
+    return snapshot ? snapshot[key] || ([] as MetadataSnapshot[K]) : fallback();
   }
 
-  async function mirrorBook(meta) {
+  async function mirrorBook(meta: Book) {
     if (!canUseNativeMetadata()) return;
     const written = await queueNativeMirror(() => upsertNativeBook(meta));
     if (written) upsertCachedBook(meta);
   }
 
-  async function mirrorBooks(metas) {
+  async function mirrorBooks(metas: Book[]) {
     if (!canUseNativeMetadata() || metas.length === 0) return;
     const written = await queueNativeMirror(() => upsertNativeBooks(metas));
     if (written) metas.forEach(upsertCachedBook);
   }
 
-  async function saveBook(meta: any, source: any, options: { timing?: any } = {}) {
+  async function saveBook(meta: Book, source: BookSource, options: { timing?: SaveTiming | null } = {}) {
     const timing = options.timing || null;
     markNativeDirty();
     const idbStarted = timing ? nowMs() : 0;
@@ -412,7 +431,7 @@ export const HomuraStore = (() => {
     if (timing) timing.sqliteMs += nowMs() - sqliteStarted;
   }
 
-  async function saveBooks(entries: any[], options: { timing?: any } = {}) {
+  async function saveBooks(entries: SaveEntry[], options: { timing?: SaveTiming | null } = {}) {
     if (!entries.length) return;
     const timing = options.timing || null;
     markNativeDirty();
@@ -429,7 +448,7 @@ export const HomuraStore = (() => {
     return readMetadataList('books', idbListBooks);
   }
 
-  async function updateBookCover(id, customCoverBlob) {
+  async function updateBookCover(id: string, customCoverBlob: Blob | null | undefined) {
     markNativeDirty();
     await idbUpdateBookCover(id, customCoverBlob);
     const meta = await idbGetBook(id);
@@ -439,7 +458,7 @@ export const HomuraStore = (() => {
     }
   }
 
-  async function updateBookMeta(id, patch) {
+  async function updateBookMeta(id: string, patch: Partial<Book>) {
     markNativeDirty();
     await idbUpdateBookMeta(id, patch);
     const meta = await idbGetBook(id);
@@ -449,15 +468,15 @@ export const HomuraStore = (() => {
     }
   }
 
-  function getSource(id) {
+  function getSource(id: string) {
     return idbGetSource(id);
   }
 
-  function updateSourceManifest(id, nativePageManifest) {
+  function updateSourceManifest(id: string, nativePageManifest: unknown) {
     return idbUpdateSourceManifest(id, nativePageManifest);
   }
 
-  async function updateBookFavorite(id, favorite) {
+  async function updateBookFavorite(id: string, favorite: boolean) {
     markNativeDirty();
     await idbUpdateBookFavorite(id, favorite);
     const meta = await idbGetBook(id);
@@ -471,7 +490,7 @@ export const HomuraStore = (() => {
     return readMetadataList('collections', idbListCollections);
   }
 
-  async function saveCollections(collections) {
+  async function saveCollections(collections: Collection[]) {
     markNativeDirty();
     await idbSaveCollections(collections);
     replaceCachedCollections(collections);
@@ -481,7 +500,7 @@ export const HomuraStore = (() => {
   }
 
   // ---- 阅读进度：按书籍 id 记录当前位置，翻页时高频写入 ----
-  async function saveProgress(record) {
+  async function saveProgress(record: ReadingProgress) {
     markNativeDirty();
     await idbSaveProgress(record);
     upsertCachedProgress(record);
@@ -490,9 +509,9 @@ export const HomuraStore = (() => {
     if (written) upsertCachedProgress(record);
   }
 
-  async function getProgress(id) {
+  async function getProgress(id: string) {
     const snapshot = await getNativeSnapshot();
-    if (snapshot) return snapshot.progress.find(record => record?.id === id);
+    if (snapshot) return snapshot.progress.find((record) => record?.id === id);
     return idbGetProgress(id);
   }
 
@@ -509,7 +528,7 @@ export const HomuraStore = (() => {
     if (written) clearCachedProgress();
   }
 
-  async function deleteBook(id) {
+  async function deleteBook(id: string) {
     markNativeDirty();
     // 先提交元数据删除，再回收原始文件；事务失败时不能留下「记录还在、源文件已删」的坏书。
     if (!disabled) {

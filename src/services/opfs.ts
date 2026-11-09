@@ -9,15 +9,15 @@
 
 const ROOT_DIR = 'homura-sources';
 
-function safeSegment(name) {
+function safeSegment(name: unknown) {
   return String(name || 'source').replace(/[\\/:*?"<>|]/g, '_').slice(0, 120) || 'source';
 }
 
-function splitPath(path) {
+function splitPath(path: unknown) {
   return String(path || '').split('/').filter(Boolean);
 }
 
-async function getRoot(create) {
+async function getRoot(create: boolean) {
   if (!navigator.storage || typeof navigator.storage.getDirectory !== 'function') {
     throw new Error('OPFS 不可用');
   }
@@ -25,7 +25,7 @@ async function getRoot(create) {
   return root.getDirectoryHandle(ROOT_DIR, { create });
 }
 
-async function resolveExistingParent(segments) {
+async function resolveExistingParent(segments: string[]) {
   const root = await getRoot(false);
   let dir = root;
   for (const segment of segments) {
@@ -35,7 +35,7 @@ async function resolveExistingParent(segments) {
 }
 
 // 逐级创建目录，最后一级当作文件名写盘
-async function resolveParent(segments) {
+async function resolveParent(segments: string[]) {
   const root = await getRoot(true);
   let dir = root;
   for (const segment of segments) {
@@ -44,7 +44,7 @@ async function resolveParent(segments) {
   return dir;
 }
 
-export async function putFile(path, blob) {
+export async function putFile(path: unknown, blob: Blob) {
   const segments = splitPath(path);
   if (segments.length < 2) throw new Error('OPFS 路径无效');
   const fileName = safeSegment(segments.pop());
@@ -56,7 +56,7 @@ export async function putFile(path, blob) {
   return [...segments, fileName].join('/');
 }
 
-export async function getFile(path) {
+export async function getFile(path: unknown) {
   const segments = splitPath(path);
   if (segments.length < 2) throw new Error('OPFS 路径无效');
   const fileName = safeSegment(segments.pop());
@@ -65,7 +65,7 @@ export async function getFile(path) {
   return handle.getFile();
 }
 
-export async function removeFile(path) {
+export async function removeFile(path: unknown) {
   try {
     const segments = splitPath(path);
     if (segments.length < 2) return;
@@ -75,7 +75,7 @@ export async function removeFile(path) {
   } catch (err) {}
 }
 
-export async function removeBookDir(bookId) {
+export async function removeBookDir(bookId: string | null | undefined) {
   if (!bookId) return;
   try {
     const root = await getRoot(false);

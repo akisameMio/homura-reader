@@ -7,7 +7,7 @@
 
 import { openUrl } from '@tauri-apps/plugin-opener';
 
-function isAllowedGithubUrl(value) {
+function isAllowedGithubUrl(value: string) {
   try {
     const url = new URL(value);
     const repositoryPath = '/Leon-Ning-san/HOMURA-reader';
@@ -19,7 +19,7 @@ function isAllowedGithubUrl(value) {
   }
 }
 
-export async function openGitHubUrl(value) {
+export async function openGitHubUrl(value: string) {
   if (!isAllowedGithubUrl(value)) throw new Error('拒绝打开非 HOMURA GitHub 地址');
 
   if (typeof window !== 'undefined' && window.__TAURI__) {

@@ -10,11 +10,23 @@ import { isAndroid } from './platform.ts';
 const PROGRESS_EVENT = 'update-download-progress';
 const PENDING_UPDATE_KEY = 'homura_pending_update_v1';
 
-function getTauriBridge(): any {
+/** Tauri 2 全局桥接对象；env.d.ts 已声明 window.__TAURI__。core 在运行时已校验存在。 */
+type TauriBridge = NonNullable<typeof window.__TAURI__> & { core: NonNullable<NonNullable<typeof window.__TAURI__>['core']> };
+
+/** 下载进度事件负载（Rust 侧 update-download-progress 事件）。 */
+interface DownloadProgressPayload {
+  downloadId?: string;
+  downloadedBytes?: number;
+  totalBytes?: number;
+  progress?: number;
+  [key: string]: unknown;
+}
+
+function getTauriBridge(): TauriBridge | null {
   if (typeof window === 'undefined') return null;
   const bridge = window.__TAURI__;
   if (!bridge || !bridge.core || typeof bridge.core.invoke !== 'function') return null;
-  return bridge;
+  return bridge as TauriBridge;
 }
 
 export function canDownloadUpdateInApp() {
@@ -47,7 +59,7 @@ export function loadPendingUpdate() {
   }
 }
 
-export function savePendingUpdate(update) {
+export function savePendingUpdate(update: Record<string, unknown> | null | undefined) {
   if (typeof localStorage === 'undefined' || !update) return;
   try {
     localStorage.setItem(PENDING_UPDATE_KEY, JSON.stringify({
@@ -73,18 +85,19 @@ export function clearPendingUpdate() {
   }
 }
 
-function normalizeDownloadError(error) {
+function normalizeDownloadError(error: unknown) {
   if (error && typeof error === 'object') {
+    const detail = error as { code?: unknown; message?: unknown; detail?: unknown };
     return {
-      code: String(error.code || 'DOWNLOAD_FAILED'),
-      message: String(error.message || error.detail || '下载更新失败。')
+      code: String(detail.code || 'DOWNLOAD_FAILED'),
+      message: String(detail.message || detail.detail || '下载更新失败。')
     };
   }
   const message = String(error || '下载更新失败。');
   return { code: message === 'cancelled' ? 'CANCELLED' : 'DOWNLOAD_FAILED', message };
 }
 
-export function getDownloadErrorMessage(error) {
+export function getDownloadErrorMessage(error: unknown) {
   const normalized = normalizeDownloadError(error);
   if (normalized.code === 'CANCELLED') return '下载已取消。';
   if (normalized.code === 'DOWNLOAD_IN_PROGRESS') return '已有更新正在下载，请稍候。';
@@ -100,13 +113,13 @@ export async function downloadUpdateAsset({
   fileName,
   expectedSize,
   onProgress
-}) {
-  const bridge: any = getTauriBridge();
+}: { downloadId: string; url: string; fileName: string; expectedSize: number; onProgress?: (payload: DownloadProgressPayload) => void }) {
+  const bridge = getTauriBridge();
   if (!bridge) throw new Error('当前环境不支持应用内下载。');
 
-  let unlisten: any = null;
+  let unlisten: (() => void) | null = null;
   if (bridge.event && typeof bridge.event.listen === 'function') {
-    unlisten = await bridge.event.listen(PROGRESS_EVENT, event => {
+    unlisten = await bridge.event.listen(PROGRESS_EVENT, (event: { payload?: DownloadProgressPayload }) => {
       const payload = event && event.payload;
       if (!payload || payload.downloadId !== downloadId) return;
       if (typeof onProgress === 'function') onProgress(payload);
@@ -127,13 +140,13 @@ export async function downloadUpdateAsset({
   }
 }
 
-export async function cancelUpdateDownload(downloadId) {
+export async function cancelUpdateDownload(downloadId: string) {
   const bridge = getTauriBridge();
   if (!bridge || !downloadId) return false;
   return bridge.core.invoke('cancel_update_download', { downloadId });
 }
 
-export async function installDownloadedUpdate({ downloadId, path }) {
+export async function installDownloadedUpdate({ downloadId, path }: { downloadId: string; path: string }) {
   const bridge = getTauriBridge();
   if (!bridge) throw new Error('当前环境不支持应用内安装。');
 

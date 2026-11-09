@@ -7,6 +7,7 @@
    ========================================================================== */
 
 import { isAndroid } from './platform.ts';
+import type { Release } from '../types.ts';
 
 export const REPOSITORY_URL = 'https://github.com/Leon-Ning-san/HOMURA-reader';
 export const RELEASES_PAGE_URL = `${REPOSITORY_URL}/releases`;
@@ -15,9 +16,52 @@ const RELEASES_API_URL = 'https://api.github.com/repos/Leon-Ning-san/HOMURA-read
 const REQUEST_TIMEOUT = 12000;
 const CACHE_TTL = 5 * 60 * 1000;
 
-let cachedReleases: any[] = [];
+/** 清洗后的发布说明分组 */
+interface ReleaseNotesGroup {
+  title: string;
+  items: string[];
+}
+
+/** 清洗后的发布说明（不含任何 HTML，组件可直接渲染） */
+interface ReleaseNotes {
+  intro: string;
+  groups: ReleaseNotesGroup[];
+  itemCount: number;
+}
+
+/** 归一化后的安装包；url 供内部下载使用，browser_download_url 满足公开 Release 契约 */
+type NormalizedAsset = {
+  name: string;
+  url: string;
+  browser_download_url: string;
+  size: number;
+  downloadCount: number;
+  [key: string]: unknown;
+};
+
+/** 归一化后的一条稳定版发布记录（结构化超集，可赋给公开 Release） */
+export type NormalizedRelease = {
+  id: unknown;
+  version: string;
+  tag: string;
+  title: string;
+  publishedAt: string;
+  dateLabel: string;
+  htmlUrl: string;
+  notes: ReleaseNotes;
+  assets: NormalizedAsset[];
+  [key: string]: unknown;
+};
+
+/** 解析出的语义化版本号 */
+interface ParsedVersion {
+  core: number[];
+  prerelease: string;
+}
+
+let cachedReleases: NormalizedRelease[] = [];
 let cachedAt = 0;
-let pendingRequest: Promise<any> | null = null;
+let pendingRequest: Promise<NormalizedRelease[]> | null = null;
 
 const GROUP_LABELS: [RegExp, string][] = [
   [/新功能|新增|features?/i, '新增'],
@@ -29,7 +73,7 @@ const GROUP_LABELS: [RegExp, string][] = [
   [/其他|chore|other/i, '其他']
 ];
 
-function cleanInlineMarkdown(value) {
+function cleanInlineMarkdown(value: unknown) {
   return String(value || '')
     .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
@@ -39,25 +83,25 @@ function cleanInlineMarkdown(value) {
     .trim();
 }
 
-function cleanListItem(value) {
+function cleanListItem(value: unknown) {
   return cleanInlineMarkdown(value)
     .replace(/\s*[（(]\s*[0-9a-f]{7,40}\s*[）)]\s*$/i, '')
     .trim();
 }
 
-function cleanHeading(value) {
+function cleanHeading(value: unknown) {
   return cleanInlineMarkdown(value)
     .replace(/^[^\p{L}\p{N}]+/u, '')
     .trim();
 }
 
-function normalizeGroupTitle(value) {
+function normalizeGroupTitle(value: unknown) {
   const title = cleanHeading(value);
   const match = GROUP_LABELS.find(([pattern]) => pattern.test(title));
   return match ? match[1] : title || '更新';
 }
 
-export function parseReleaseNotes(body) {
+export function parseReleaseNotes(body: unknown): ReleaseNotes {
   const markdown = String(body || '').replace(/\r\n?/g, '\n');
   const lines = markdown.split('\n');
   const start = lines.findIndex(line => /^##\s+.*更新日志/.test(line));
@@ -129,7 +173,7 @@ export function parseReleaseNotes(body) {
   };
 }
 
-function parseVersion(value) {
+function parseVersion(value: unknown): ParsedVersion | null {
   const match = String(value || '').trim().match(/^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+.*)?$/);
   if (!match) return null;
   return {
@@ -138,7 +182,7 @@ function parseVersion(value) {
   };
 }
 
-export function normalizeVersion(value) {
+export function normalizeVersion(value: unknown) {
   const parsed = parseVersion(value);
   if (!parsed) return String(value || '').trim().replace(/^v/i, '');
   return parsed.core.join('.') + (parsed.prerelease ? `-${parsed.prerelease}` : '');
@@ -159,12 +203,12 @@ export function compareVersions(left: string, right: string) {
   return a.prerelease.localeCompare(b.prerelease, 'en', { numeric: true });
 }
 
-export function isVersionNewer(candidate, current) {
-  return compareVersions(candidate, current) > 0;
+export function isVersionNewer(candidate: unknown, current: unknown) {
+  return compareVersions(String(candidate ?? ''), String(current ?? '')) > 0;
 }
 
-export function formatReleaseDate(value) {
-  const date = new Date(value);
+export function formatReleaseDate(value: unknown) {
+  const date = new Date(String(value ?? ''));
   if (Number.isNaN(date.getTime())) return '日期未知';
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -172,9 +216,9 @@ export function formatReleaseDate(value) {
   return `${year}-${month}-${day}`;
 }
 
-function isAllowedReleaseUrl(value) {
+function isAllowedReleaseUrl(value: unknown) {
   try {
-    const url = new URL(value);
+    const url = new URL(String(value));
     const repositoryPath = '/Leon-Ning-san/HOMURA-reader';
     return url.protocol === 'https:'
       && url.hostname === 'github.com'
@@ -184,50 +228,67 @@ function isAllowedReleaseUrl(value) {
   }
 }
 
-function normalizeAsset(asset) {
-  const name = String(asset && asset.name || '').trim();
-  const url = asset && asset.browser_download_url;
+function normalizeAsset(asset: unknown): NormalizedAsset | null {
+  const source = (asset || {}) as { name?: unknown; browser_download_url?: unknown; size?: unknown; download_count?: unknown };
+  const name = String(source.name || '').trim();
+  const url = typeof source.browser_download_url === 'string' ? source.browser_download_url : '';
   if (!name || !isAllowedReleaseUrl(url)) return null;
   return {
     name,
     url,
-    size: Number(asset.size) || 0,
-    downloadCount: Number(asset.download_count) || 0
+    browser_download_url: url,
+    size: Number(source.size) || 0,
+    downloadCount: Number(source.download_count) || 0
   };
 }
 
-export function normalizeReleases(payload) {
+/** GitHub Releases API 原始条目（未校验） */
+interface RawRelease {
+  id?: unknown;
+  tag_name?: unknown;
+  name?: unknown;
+  body?: unknown;
+  html_url?: unknown;
+  published_at?: unknown;
+  created_at?: unknown;
+  draft?: unknown;
+  prerelease?: unknown;
+  assets?: unknown[];
+}
+
+export function normalizeReleases(payload: unknown): NormalizedRelease[] {
   if (!Array.isArray(payload)) throw new Error('GitHub 返回了无法识别的发布数据。');
 
-  const seen = new Set();
-  return payload
-    .filter(release => release && !release.draft && !release.prerelease)
-    .map(release => {
+  const seen = new Set<string>();
+  return (payload as RawRelease[])
+    .filter((release): release is RawRelease => !!release && !release.draft && !release.prerelease)
+    .map((release): NormalizedRelease | null => {
       const version = normalizeVersion(release.tag_name);
       if (!parseVersion(version) || seen.has(version)) return null;
       seen.add(version);
       return {
         id: release.id,
         version,
-        tag: release.tag_name || `v${version}`,
+        tag: (typeof release.tag_name === 'string' && release.tag_name) || `v${version}`,
         title: cleanInlineMarkdown(release.name) || `HOMURA v${version}`,
-        publishedAt: release.published_at || release.created_at || '',
+        publishedAt: (release.published_at || release.created_at || '') as string,
         dateLabel: formatReleaseDate(release.published_at || release.created_at),
-        htmlUrl: isAllowedReleaseUrl(release.html_url) ? release.html_url : RELEASES_PAGE_URL,
+        htmlUrl: isAllowedReleaseUrl(release.html_url) && typeof release.html_url === 'string' ? release.html_url : RELEASES_PAGE_URL,
         notes: parseReleaseNotes(release.body),
-        assets: (release.assets || []).map(normalizeAsset).filter(Boolean)
+        assets: (Array.isArray(release.assets) ? release.assets : []).map(normalizeAsset).filter((asset): asset is NormalizedAsset => asset !== null)
       };
     })
-    .filter(Boolean)
-    .sort((left: any, right: any) => compareVersions(right.version, left.version));
+    .filter((release): release is NormalizedRelease => release !== null)
+    .sort((left, right) => compareVersions(right.version, left.version));
 }
 
 export function detectUpdatePlatform() {
   if (isAndroid) return 'android';
   const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-  const platform = typeof navigator !== 'undefined'
-    ? (navigator as any).userAgentData?.platform || navigator.platform || ''
-    : '';
+  const nav = typeof navigator !== 'undefined'
+    ? (navigator as Navigator & { userAgentData?: { platform?: string } })
+    : null;
+  const platform = nav ? nav.userAgentData?.platform || nav.platform || '' : '';
   const descriptor = `${platform} ${userAgent}`;
 
   if (/Win/i.test(descriptor)) return 'windows';
@@ -236,7 +297,7 @@ export function detectUpdatePlatform() {
   return 'unknown';
 }
 
-function assetScore(asset, platform) {
+function assetScore(asset: NormalizedAsset, platform: string) {
   const name = asset.name.toLowerCase();
   if (platform === 'android' && /\.apk$/.test(name)) {
     return /arm64/.test(name) ? 30 : 20;
@@ -254,7 +315,7 @@ function assetScore(asset, platform) {
   return 0;
 }
 
-function platformPackageCopy(asset, platform) {
+function platformPackageCopy(asset: NormalizedAsset, platform: string) {
   if (platform === 'android') {
     return {
       label: 'Android · arm64 APK',
@@ -279,11 +340,13 @@ function platformPackageCopy(asset, platform) {
   return { label: 'GitHub Releases', note: '选择适合当前系统的安装包' };
 }
 
-export function selectReleaseAsset(release, platform = detectUpdatePlatform()) {
-  const assets = release && Array.isArray(release.assets) ? release.assets : [];
+export function selectReleaseAsset(release: Release | null | undefined, platform = detectUpdatePlatform()) {
+  const assets: NormalizedAsset[] = release && Array.isArray(release.assets)
+    ? (release.assets as NormalizedAsset[])
+    : [];
   const selected = assets
-    .map(asset => ({ asset, score: assetScore(asset, platform) }))
-    .filter(candidate => candidate.score > 0)
+    .map((asset) => ({ asset, score: assetScore(asset, platform) }))
+    .filter((candidate) => candidate.score > 0)
     .sort((left, right) => right.score - left.score)[0]?.asset;
 
   if (!selected) {
@@ -291,7 +354,7 @@ export function selectReleaseAsset(release, platform = detectUpdatePlatform()) {
       platform,
       label: 'GitHub Releases',
       note: '选择适合当前系统的安装包',
-      url: release && release.htmlUrl || RELEASES_PAGE_URL,
+      url: (release && typeof release.htmlUrl === 'string' && release.htmlUrl) || RELEASES_PAGE_URL,
       asset: null
     };
   }
@@ -310,11 +373,12 @@ function updateError(code: string, message: string) {
   return error;
 }
 
-export function getUpdateErrorMessage(error) {
-  if (error && error.name === 'AbortError') return '连接 GitHub 超时，请检查网络后重试。';
-  if (error && error.code === 'RATE_LIMIT') return 'GitHub 暂时限制了更新查询，请稍后再试。';
-  if (error && error.code === 'NO_RELEASES') return '目前没有可用的稳定版本记录。';
-  if (error && error.code === 'HTTP_ERROR') return error.message;
+export function getUpdateErrorMessage(error: unknown) {
+  const detail = error as { name?: unknown; code?: unknown; message?: unknown } | null | undefined;
+  if (detail && detail.name === 'AbortError') return '连接 GitHub 超时，请检查网络后重试。';
+  if (detail && detail.code === 'RATE_LIMIT') return 'GitHub 暂时限制了更新查询，请稍后再试。';
+  if (detail && detail.code === 'NO_RELEASES') return '目前没有可用的稳定版本记录。';
+  if (detail && detail.code === 'HTTP_ERROR' && typeof detail.message === 'string') return detail.message;
   return '无法连接 GitHub，请检查网络后重试。';
 }
 
@@ -345,7 +409,7 @@ async function requestReleases() {
   }
 }
 
-export async function fetchStableReleases({ force = false } = {}) {
+export async function fetchStableReleases({ force = false }: { force?: boolean } = {}): Promise<NormalizedRelease[]> {
   const now = Date.now();
   if (!force && cachedReleases.length > 0 && now - cachedAt < CACHE_TTL) {
     return cachedReleases;

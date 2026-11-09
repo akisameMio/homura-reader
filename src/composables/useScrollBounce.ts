@@ -23,35 +23,45 @@ function prefersReducedMotion() {
     window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 }
 
-function rubberBand(distance) {
+function rubberBand(distance: number) {
   if (!distance) return 0;
   const magnitude = Math.abs(distance);
   const resisted = MAX_PULL * (1 - 1 / (magnitude * RESISTANCE / MAX_PULL + 1));
   return Math.sign(distance) * resisted;
 }
 
-function isIgnoredTarget(target) {
+function isIgnoredTarget(target: EventTarget | null) {
   return !!(target instanceof Element && target.closest(IGNORE_TARGET));
 }
 
-function wheelDistance(event) {
+function wheelDistance(event: WheelEvent) {
   const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
   return Math.min(MAX_WHEEL_STEP, Math.abs(event.deltaY * unit));
 }
 
-export function useScrollBounce(targetRef) {
-  let target: any = null;
-  let touchState: any = null;
+interface TouchState {
+  scroller: Element;
+  lastX: number;
+  lastY: number;
+  totalX: number;
+  totalY: number;
+  direction: number;
+  pulling: boolean;
+}
+
+export function useScrollBounce(targetRef: { value: HTMLElement | null }) {
+  let target: HTMLElement | null = null;
+  let touchState: TouchState | null = null;
   let rawPull = 0;
   let offset = 0;
   let wheelDirection = 0;
   let wheelActive = false;
-  let settleTimer: any = null;
-  let wheelTimer: any = null;
-  let clickTimer: any = null;
+  let settleTimer: number | null = null;
+  let wheelTimer: number | null = null;
+  let clickTimer: number | null = null;
   let suppressClick = false;
 
-  function clearTimer(timer) {
+  function clearTimer(timer: number | null) {
     if (timer) window.clearTimeout(timer);
     return null;
   }
@@ -68,7 +78,7 @@ export function useScrollBounce(targetRef) {
     return document.scrollingElement || document.documentElement;
   }
 
-  function boundaryOf(scroller) {
+  function boundaryOf(scroller: Element | null) {
     if (!scroller) return { scrollable: false, top: false, bottom: false };
     return {
       scrollable: scroller.scrollHeight > scroller.clientHeight + 1,
@@ -84,7 +94,7 @@ export function useScrollBounce(targetRef) {
     target.style.willChange = 'transform';
   }
 
-  function writeOffset(value) {
+  function writeOffset(value: number) {
     offset = value;
     if (!target) return;
     if (!value) {
@@ -133,7 +143,7 @@ export function useScrollBounce(targetRef) {
     }, CLICK_GUARD_MS);
   }
 
-  function onDocumentClick(event) {
+  function onDocumentClick(event: MouseEvent) {
     if (!suppressClick) return;
     suppressClick = false;
     clickTimer = clearTimer(clickTimer);
@@ -141,11 +151,11 @@ export function useScrollBounce(targetRef) {
     event.stopPropagation();
   }
 
-  function onTouchStart(event) {
+  function onTouchStart(event: TouchEvent) {
     touchState = null;
     if (event.touches.length !== 1 || prefersReducedMotion() || isIgnoredTarget(event.target)) return;
     const scroller = resolveScroller();
-    if (!boundaryOf(scroller).scrollable) return;
+    if (!scroller || !boundaryOf(scroller).scrollable) return;
 
     resetVisual();
     const touch = event.touches[0];
@@ -160,7 +170,7 @@ export function useScrollBounce(targetRef) {
     };
   }
 
-  function onTouchMove(event) {
+  function onTouchMove(event: TouchEvent) {
     if (!touchState) return;
     if (event.touches.length !== 1) {
       onTouchCancel();
@@ -231,7 +241,7 @@ export function useScrollBounce(targetRef) {
     settle();
   }
 
-  function onTouchEnd(event) {
+  function onTouchEnd(event: TouchEvent) {
     if (!touchState) return;
     const pulled = touchState.pulling && Math.abs(offset) >= 0.5;
     if (pulled && event.cancelable) event.preventDefault();
@@ -243,7 +253,7 @@ export function useScrollBounce(targetRef) {
     finishTouch(false);
   }
 
-  function onWheel(event) {
+  function onWheel(event: WheelEvent) {
     if (event.ctrlKey || event.metaKey || !event.cancelable || prefersReducedMotion()) return;
     if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || isIgnoredTarget(event.target)) return;
 
@@ -302,7 +312,7 @@ export function useScrollBounce(targetRef) {
     target = null;
   }
 
-  function bind(element) {
+  function bind(element: HTMLElement | null) {
     unbind();
     if (!element) return;
     target = element;
@@ -314,6 +324,6 @@ export function useScrollBounce(targetRef) {
     document.addEventListener('click', onDocumentClick, true);
   }
 
-  watch(targetRef, bind, { immediate: true, flush: 'post' });
+  watch(() => targetRef.value, bind, { immediate: true, flush: 'post' });
   onBeforeUnmount(unbind);
 }

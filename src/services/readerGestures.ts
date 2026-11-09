@@ -5,12 +5,12 @@
 export const TAP_MAX_DURATION = 300;
 export const TAP_MAX_DISTANCE = 8;
 
-export function readerTapZone(x, width) {
+export function readerTapZone(x: number, width: number) {
   const ratio = x / Math.max(1, width);
   return ratio < 0.3 ? 'left' : ratio >= 0.7 ? 'right' : 'center';
 }
 
-export function classifyReaderGesture({ dx, dy, duration, maxDistance, width, x }) {
+export function classifyReaderGesture({ dx, dy, duration, maxDistance, width, x }: { dx: number; dy: number; duration: number; maxDistance?: number; width: number; x: number }) {
   const absX = Math.abs(dx);
   const absY = Math.abs(dy);
   const distance = Math.max(maxDistance || 0, absX, absY);

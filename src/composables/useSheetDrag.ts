@@ -14,10 +14,18 @@ function prefersReducedMotion() {
   return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 }
 
-export function useSheetDrag({ isCompact, isOpen, onClose }) {
-  const sheetRef = shallowRef<any>(null);
-  let drag: any = null;
-  let motionTimer: any = null;
+interface DragState {
+  pointerId: number;
+  captureTarget: HTMLElement;
+  startY: number;
+  startedAt: number;
+  offset: number;
+}
+
+export function useSheetDrag({ isCompact, isOpen, onClose }: { isCompact: { value: boolean }; isOpen: { value: boolean }; onClose: () => void }) {
+  const sheetRef = shallowRef<HTMLElement | null>(null);
+  let drag: DragState | null = null;
+  let motionTimer: ReturnType<typeof setTimeout> | null = null;
   let closeAfterDrag = false;
 
   function clearMotionTimer() {
@@ -43,7 +51,7 @@ export function useSheetDrag({ isCompact, isOpen, onClose }) {
     el.style.willChange = '';
   }
 
-  function onDragStart(event) {
+  function onDragStart(event: PointerEvent) {
     if (!isCompact.value || (event.pointerType === 'mouse' && event.button !== 0)) return;
     if (drag) return;
     const el = sheetRef.value;
@@ -52,7 +60,7 @@ export function useSheetDrag({ isCompact, isOpen, onClose }) {
     clearMotionTimer();
     drag = {
       pointerId: event.pointerId,
-      captureTarget: event.currentTarget,
+      captureTarget: event.currentTarget as HTMLElement,
       startY: event.clientY,
       startedAt: performance.now(),
       offset: 0
@@ -60,11 +68,11 @@ export function useSheetDrag({ isCompact, isOpen, onClose }) {
     el.style.transition = 'none';
     el.style.transform = 'translate3d(0, 0, 0)';
     el.style.willChange = 'transform';
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    (event.currentTarget as Element | null)?.setPointerCapture?.(event.pointerId);
     event.preventDefault();
   }
 
-  function onDragMove(event) {
+  function onDragMove(event: PointerEvent) {
     if (!drag || event.pointerId !== drag.pointerId) return;
     const el = sheetRef.value;
     if (!el) return;
@@ -74,7 +82,7 @@ export function useSheetDrag({ isCompact, isOpen, onClose }) {
     event.preventDefault();
   }
 
-  function onDragEnd(event) {
+  function onDragEnd(event: PointerEvent) {
     if (!drag || event.pointerId !== drag.pointerId) return;
     const el = sheetRef.value;
     const activeDrag = drag;
@@ -115,7 +123,7 @@ export function useSheetDrag({ isCompact, isOpen, onClose }) {
       el.style.transform = '';
       el.style.willChange = '';
     };
-    const onTransitionEnd = transitionEvent => {
+    const onTransitionEnd = (transitionEvent: TransitionEvent) => {
       if (transitionEvent.target === el && transitionEvent.propertyName === 'transform') finish();
     };
 
@@ -127,7 +135,7 @@ export function useSheetDrag({ isCompact, isOpen, onClose }) {
     motionTimer = setTimeout(finish, settleMs + 40);
   }
 
-  function onDragCancel(event) {
+  function onDragCancel(event: PointerEvent) {
     if (!drag || event.pointerId !== drag.pointerId) return;
     const { pointerId, captureTarget } = drag;
     drag = null;

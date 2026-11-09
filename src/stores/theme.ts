@@ -49,14 +49,14 @@ function readTransitionStyle() {
 }
 
 // 同步原生窗口与系统栏外观，避免夜间模式下标题栏、状态栏与内容底色不同步
-function applyNativeWindowChrome(modeName) {
+function applyNativeWindowChrome(modeName: string) {
   applyAndroidSystemBars(modeName === 'dark');
 
   const tauriWindow = window.__TAURI__ && window.__TAURI__.window;
   if (!tauriWindow || typeof tauriWindow.getCurrentWindow !== 'function') return;
   const win = tauriWindow.getCurrentWindow();
   const theme = modeName === 'dark' ? 'dark' : 'light';
-  const canvas = SURFACE_CANVAS[modeName] || SURFACE_CANVAS.light;
+  const canvas = (SURFACE_CANVAS as Record<string, any>)[modeName] || SURFACE_CANVAS.light;
   if (win.setTheme) win.setTheme(theme).catch(() => {});
   if (win.setBackgroundColor) win.setBackgroundColor(canvas).catch(() => {});
 }
@@ -69,7 +69,7 @@ export const useThemeStore = defineStore('theme', () => {
   let surfaceRevealFrame = 0;
   let surfaceRevealEl: HTMLDivElement | null = null;
 
-  function setThemeColor(colorName) {
+  function setThemeColor(colorName: string) {
     themeColor.value = colorName;
     document.documentElement.setAttribute('data-theme', colorName);
     try { localStorage.setItem('homura_theme_color', colorName); } catch (e) {}
@@ -92,7 +92,7 @@ export const useThemeStore = defineStore('theme', () => {
       }
       // 移动端浏览器地址栏 / 状态栏跟随阅读表面底色
       const meta = document.getElementById('homuraThemeColor');
-      if (meta) meta.setAttribute('content', SURFACE_CANVAS[modeName] || SURFACE_CANVAS.light);
+      if (meta) meta.setAttribute('content', (SURFACE_CANVAS as Record<string, any>)[modeName] || SURFACE_CANVAS.light);
       try { localStorage.setItem('homura_surface_mode', modeName); } catch (e) {}
     };
 
@@ -145,7 +145,7 @@ export const useThemeStore = defineStore('theme', () => {
     reveal.style.backgroundColor = oldCanvas;
     surfaceRevealEl = reveal;
 
-    const renderCircle = (radius) => {
+    const renderCircle = (radius: number) => {
       const mask = `radial-gradient(circle at ${centerX}px ${centerY}px, transparent ${radius}px, var(--md-on-surface) ${radius + 1}px)`;
       reveal.style.webkitMaskImage = mask;
       reveal.style.maskImage = mask;
@@ -158,7 +158,7 @@ export const useThemeStore = defineStore('theme', () => {
     applyNativeWindowChrome(modeName);
 
     const startedAt = performance.now();
-    const animate = (now) => {
+    const animate = (now: number) => {
       if (token !== surfaceModeToken) return;
       const progress = Math.min(1, (now - startedAt) / SURFACE_REVEAL_DURATION);
       const eased = 1 - Math.pow(1 - progress, 4);
@@ -172,7 +172,7 @@ export const useThemeStore = defineStore('theme', () => {
     surfaceRevealFrame = requestAnimationFrame(animate);
   }
 
-  function setTransitionStyle(style) {
+  function setTransitionStyle(style: string | null) {
     if (style === null || !TRANSITION_ORDER.includes(style)) return;
     transitionStyle.value = style;
     try { localStorage.setItem('homura_transition_style', style); } catch (e) {}

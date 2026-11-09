@@ -5,6 +5,7 @@
    ========================================================================== */
 
 import { HomuraStore } from './storage.ts';
+import type { Book, BookSource, SourceFileHandle } from '../types.ts';
 import { canUseOPFS, isAndroid } from './platform.ts';
 import { putFile, getFile, removeFile, removeBookDir } from './opfs.ts';
 import {
@@ -37,8 +38,17 @@ const nowMs = typeof performance !== 'undefined' && typeof performance.now === '
   ? () => performance.now()
   : () => Date.now();
 
-export function makeFileSource(file) {
-  const source: Record<string, any> = {
+/** 已存档来源条目（文件夹内的单张图片/文件） */
+type StoredEntry = BookSource;
+
+/** 已存档来源：kind / name / blob / handle / 原生与 OPFS 路径等 */
+type StoredSource = BookSource;
+
+/** 解析/暂存过程中携带运行时字段的书本对象 */
+type BookLike = Book;
+
+export function makeFileSource(file: File & { customHandle?: FileSystemFileHandle | null }) {
+  const source: StoredSource = {
     kind: 'file',
     name: file.name,
     size: file.size,
@@ -52,13 +62,13 @@ export function makeFileSource(file) {
 // 原生 EPUB 在解析前先流式落到 AppData，Android 插件或桌面 Rust
 // 随后直接按路径随机读取。
 // source.preStaged 让 persistBook 复用这份已写好的文件，避免导入后再整本复制一次。
-export async function stageNativeFileSource(bookId, file) {
+export async function stageNativeFileSource(bookId: string, file: File & { customHandle?: FileSystemFileHandle | null }) {
   if (!canUseNativeStorage()) throw new Error('原生存档不可用');
   const nativePath = await putNativeFile(
     nativeFilePath(bookId, `source/${file.name || 'source'}`),
     file
   );
-  const source: Record<string, any> = {
+  const source: StoredSource = {
     kind: 'file',
     name: file.name,
     size: file.size,
@@ -73,11 +83,12 @@ export async function stageNativeFileSource(bookId, file) {
 
 // 系统选择器给出真实路径或 Android content:// URI 时，由原生侧直接复制，
 // 不再把整本书先读成 WebView Blob。
-export async function stageNativePathSource(bookId, file) {
+export async function stageNativePathSource(bookId: string, file: { nativePath?: string; name: string; lastModified?: number }) {
   if (!canUseNativeStorage()) throw new Error('原生存档不可用');
-  const staged = isAndroidContentUri(file.nativePath)
-    ? await stageNativeImportUri(bookId, file.nativePath, file.name)
-    : await stageNativeImportPath(bookId, file.nativePath);
+  const nativePath = file.nativePath as string;
+  const staged = isAndroidContentUri(nativePath)
+    ? await stageNativeImportUri(bookId, nativePath, file.name)
+    : await stageNativeImportPath(bookId, nativePath);
   const source = {
     kind: 'file',
     name: file.name,
@@ -89,11 +100,11 @@ export async function stageNativePathSource(bookId, file) {
   return source;
 }
 
-export function makeFolderSource(folderName, files) {
+export function makeFolderSource(folderName: string, files: Array<File & { customRelativePath?: string; webkitRelativePath?: string }>) {
   return {
     kind: 'folder',
     name: folderName,
-    entries: files.map(f => ({
+    entries: files.map((f) => ({
       path: f.customRelativePath || f.webkitRelativePath || (folderName + '/' + f.name),
       size: f.size,
       lastModified: f.lastModified || Date.now(),
@@ -102,16 +113,16 @@ export function makeFolderSource(folderName, files) {
   };
 }
 
-function basename(path) {
+function basename(path: unknown) {
   return String(path || '').split('/').pop() || 'source';
 }
 
-function withoutBlob(source) {
+function withoutBlob(source: StoredSource) {
   const { blob, ...rest } = source;
   return rest;
 }
 
-async function readSourceBlob(source) {
+async function readSourceBlob(source: StoredSource) {
   if (source.blob) return source.blob;
   if (!source.handle || !(await ensureReadPermission(source.handle))) return null;
   try {
@@ -121,7 +132,7 @@ async function readSourceBlob(source) {
   }
 }
 
-async function sourceWithBlobCopy(source) {
+async function sourceWithBlobCopy(source: StoredSource) {
   const blob = await readSourceBlob(source);
   if (!blob) return source;
   return {
@@ -133,7 +144,7 @@ async function sourceWithBlobCopy(source) {
   };
 }
 
-async function stageBlob(path, blob) {
+async function stageBlob(path: unknown, blob: Blob) {
   const opfsPath = await putFile(path, blob);
   try {
     const stored = await getFile(opfsPath);
@@ -149,7 +160,7 @@ async function stageBlob(path, blob) {
 
 // Android 优先落原生 AppData；桌面普通文件继续走句柄 / OPFS。
 // EPUB 已在导入前预存到 AppData，上面会直接复用，不重复复制。
-async function stageSource(bookId, source) {
+async function stageSource(bookId: string, source: StoredSource) {
   // 桌面端句柄是零拷贝引用，跨重启可用；Android 的 content:// 句柄不可靠。
   if (source.preStaged && source.nativePath) {
     const { preStaged, ...staged } = source;
@@ -160,7 +171,7 @@ async function stageSource(bookId, source) {
   if (isAndroid && canUseNativeStorage()) {
     try {
       if (source.kind === 'folder') {
-        const entries: any[] = [];
+        const entries: StoredEntry[] = [];
         const list = source.entries || [];
         for (let i = 0; i < list.length; i++) {
           const entry = list[i];
@@ -220,7 +231,7 @@ async function stageSource(bookId, source) {
   if (!canUseOPFS) return source;
   try {
     if (source.kind === 'folder') {
-      const entries: any[] = [];
+      const entries: StoredEntry[] = [];
       const list = source.entries || [];
       for (let i = 0; i < list.length; i++) {
         const entry = list[i];
@@ -262,7 +273,7 @@ async function stageSource(bookId, source) {
   return source;
 }
 
-function createBookMeta(book) {
+function createBookMeta(book: BookLike): Book {
   return {
     id: book.id,
     type: book.type,
@@ -271,20 +282,20 @@ function createBookMeta(book) {
     favorite: !!book.favorite,
     pageCount: book.pageCount,
     addedAt: Date.now(),
-    coverBlob: book.coverBlob || null
-  };
+    coverBlob: (book.coverBlob || null) as Blob | null
+  } as unknown as Book;
 }
 
 // 失败时抛错，由调用方（shelf store）统一提示
-interface PersistTiming { stageMs: number; coverMs: number; writeMs: number; [key: string]: number; }
+interface PersistTiming { stageMs: number; coverMs: number; writeMs: number; idbMs: number; sqliteMs: number; [key: string]: number; }
 
-export async function persistBook(book: any, source: any, options: { timing?: PersistTiming | null; coverThumb?: unknown; [key: string]: any } = {}) {
+export async function persistBook(book: BookLike, source: StoredSource, options: { timing?: PersistTiming | null; coverThumb?: unknown; [key: string]: unknown } = {}) {
   const timing = options.timing || null;
   // 封面解码和原文件暂存可以并行，避免导入多等一次缩略图生成。
   // 导入流水线会预先并发生成缩略图，这里直接复用结果，避免重复解码。
   const coverThumbTask = options.coverThumb !== undefined
     ? Promise.resolve(options.coverThumb)
-    : createCoverThumbnail(book.coverBlob, undefined, book.coverNative).catch(() => null);
+    : createCoverThumbnail((book.coverBlob instanceof Blob ? book.coverBlob : null), undefined, (book.coverNative as { archivePath?: string; entryPath?: string } | null | undefined)).catch(() => null);
   const meta = createBookMeta(book);
   // 在用户触发导入时申请持久存储，避免配额压力下先清掉小体积的书架记录
   try {
@@ -297,8 +308,8 @@ export async function persistBook(book: any, source: any, options: { timing?: Pe
       if (timing) timing.stageMs += nowMs() - stageStarted;
     }
     const coverThumb = await coverThumbTask;
-    if (coverThumb) meta.coverBlob = coverThumb;
-    await HomuraStore.saveBook(meta, Object.assign({ id: book.id }, staged), { timing });
+    if (coverThumb) meta.coverBlob = coverThumb as Blob;
+    await HomuraStore.saveBook(meta, Object.assign({ id: book.id }, staged) as unknown as BookSource, { timing });
     return { persistence };
   } catch (err) {
     // 元数据没有提交成功时，OPFS / AppData 里已暂存的文件都属于失败导入，必须一并回收。
@@ -309,27 +320,27 @@ export async function persistBook(book: any, source: any, options: { timing?: Pe
 
 // 批量导入的提交层：一次申请持久存储、一次 IndexedDB 事务、一次 SQLite 镜像。
 // 单本暂存失败只影响该本；整批事务失败时清掉已暂存目录，由调用方逐本重试。
-export async function persistBooks(items: any[], options: { timing?: PersistTiming | null; [key: string]: any } = {}) {
+export async function persistBooks(items: Array<{ book: BookLike; source: StoredSource; coverThumb?: unknown }>, options: { timing?: PersistTiming | null; [key: string]: unknown } = {}) {
   const timing = options.timing || null;
   if (!items.length) return { persistence: null, saved: [], failed: [] };
 
-  let persistence: any = null;
+  let persistence: unknown = null;
   try {
     persistence = await HomuraStore.requestPersistence();
   } catch (err) {
     console.warn('[HOMURA] 无法申请持久存储', err);
   }
 
-  const entries: any[] = [];
-  const failed: any[] = [];
+  const entries: Array<{ book: BookLike; meta: Book; source: BookSource; preStaged: boolean }> = [];
+  const failed: Array<{ book: BookLike; error: unknown }> = [];
   for (const item of items) {
     const { book, source } = item;
     try {
       const coverThumb = item.coverThumb !== undefined
         ? await Promise.resolve(item.coverThumb)
-        : await createCoverThumbnail(book.coverBlob, undefined, book.coverNative).catch(() => null);
+        : await createCoverThumbnail((book.coverBlob instanceof Blob ? book.coverBlob : null), undefined, (book.coverNative as { archivePath?: string; entryPath?: string } | null | undefined)).catch(() => null);
       const meta = createBookMeta(book);
-      if (coverThumb) meta.coverBlob = coverThumb;
+      if (coverThumb) meta.coverBlob = coverThumb as Blob;
       const stageStarted = timing ? nowMs() : 0;
       let staged;
       try {
@@ -340,7 +351,7 @@ export async function persistBooks(items: any[], options: { timing?: PersistTimi
       entries.push({
         book,
         meta,
-        source: Object.assign({ id: book.id }, staged),
+        source: Object.assign({ id: book.id }, staged) as BookSource,
         preStaged: !!source?.preStaged
       });
     } catch (err) {
@@ -375,7 +386,7 @@ export async function persistBooks(items: any[], options: { timing?: PersistTimi
 
 // 返回按添加时间倒序的书架数组；IndexedDB 不可用时返回 null
 export async function restoreLibrary() {
-  let metas: any[] = [];
+  let metas: Book[] = [];
   try {
     metas = await HomuraStore.listBooks();
   } catch (err) {
@@ -389,32 +400,33 @@ export async function restoreLibrary() {
     title: meta.title,
     favorite: !!meta.favorite,
     pageCount: meta.pageCount,
-    cover: (meta.customCoverBlob || meta.coverBlob) ? URL.createObjectURL(meta.customCoverBlob || meta.coverBlob) : null,
+    cover: (meta.customCoverBlob || meta.coverBlob) ? URL.createObjectURL((meta.customCoverBlob || meta.coverBlob) as Blob) : null,
     coverBlob: meta.coverBlob || null,
     customCoverBlob: meta.customCoverBlob || null,
     restored: true
   }));
 }
 
-async function ensureReadPermission(handle) {
+async function ensureReadPermission(handle: SourceFileHandle) {
   try {
     const opts = { mode: 'read' };
-    if (await handle.queryPermission(opts) === 'granted') return true;
-    if (await handle.requestPermission(opts) === 'granted') return true;
+    if (await handle.queryPermission?.(opts) === 'granted') return true;
+    if (await handle.requestPermission?.(opts) === 'granted') return true;
   } catch (err) {}
   return false;
 }
 
-function errorSummary(err) {
+function errorSummary(err: unknown) {
   if (!err) return '未知错误';
-  return err.name ? `${err.name}: ${err.message || ''}` : String(err.message || err);
+  const detail = err as { name?: string; message?: string };
+  return detail.name ? `${detail.name}: ${detail.message || ''}` : String(detail.message || err);
 }
 
-function logSourceFailures(bookId, failures) {
+function logSourceFailures(bookId: string, failures: Array<{ kind?: string; path?: string; error?: unknown }>) {
   if (!failures.length) return;
   console.warn('[HOMURA] 原文件恢复失败明细', {
     bookId,
-    failures: failures.map(item => ({
+    failures: failures.map((item) => ({
       kind: item.kind,
       path: item.path || undefined,
       error: errorSummary(item.error)
@@ -422,24 +434,24 @@ function logSourceFailures(bookId, failures) {
   });
 }
 
-function makeRestoredFile(blob, name, lastModified, type) {
+function makeRestoredFile(blob: Blob, name: string, lastModified: number, type?: string) {
   return new File([blob], name, {
     type: type || blob.type || '',
-    lastModified: lastModified || blob.lastModified || Date.now()
+    lastModified: lastModified || Date.now()
   });
 }
 
-function releaseParsedCover(parsed) {
+function releaseParsedCover(parsed: { cover?: string; pageItems?: Array<{ url?: string }> }) {
   const cover = parsed?.cover;
   if (!cover || !cover.startsWith('blob:')) return;
   // 漫画 EPUB 的第一页与封面共用同一个 Blob URL，不能直接释放。
-  if ((parsed.pageItems || []).some(item => item.url === cover)) return;
+  if ((parsed.pageItems || []).some((item) => item.url === cover)) return;
   URL.revokeObjectURL(cover);
 }
 
 // 依次尝试原生 AppData、OPFS、原文件句柄、内嵌 Blob；前一层失效时继续用后一层。
-async function resolveStoredFile(source, displayName) {
-  const failures: any[] = [];
+async function resolveStoredFile(source: StoredSource, displayName: string) {
+  const failures: Array<{ kind: string; path?: string; error: unknown }> = [];
   if (source.nativePath) {
     try {
       const stored = await getNativeFile(source.nativePath);
@@ -447,7 +459,7 @@ async function resolveStoredFile(source, displayName) {
         throw new Error(`原生存档文件大小不一致：${stored.size} / ${source.size}`);
       }
       return {
-        file: makeRestoredFile(stored, displayName, source.lastModified, stored.type),
+        file: makeRestoredFile(stored, displayName, source.lastModified || 0, stored.type),
         failures
       };
     } catch (err) {
@@ -461,7 +473,7 @@ async function resolveStoredFile(source, displayName) {
         throw new Error(`OPFS 文件大小不一致：${stored.size} / ${source.size}`);
       }
       return {
-        file: makeRestoredFile(stored, displayName, source.lastModified, stored.type),
+        file: makeRestoredFile(stored, displayName, source.lastModified || 0, stored.type),
         failures
       };
     } catch (err) {
@@ -489,7 +501,7 @@ async function resolveStoredFile(source, displayName) {
         file: makeRestoredFile(
           source.blob,
           displayName,
-          source.lastModified || source.blob.lastModified,
+          source.lastModified || 0,
           source.blob.type
         ),
         failures
@@ -501,7 +513,7 @@ async function resolveStoredFile(source, displayName) {
   return { file: null, failures };
 }
 
-function parseStoredFile(file, options = {}) {
+function parseStoredFile(file: File, options: Record<string, unknown> = {}) {
   if (/\.epub$/i.test(file.name)) return parseEpubFileLazy(file, options);
   if (/\.pdf$/i.test(file.name)) return parsePdfFileLazy(file);
   if (/\.(mobi|prc|azw)$/i.test(file.name)) return parseMobiFileLazy(file);
@@ -510,18 +522,18 @@ function parseStoredFile(file, options = {}) {
   return null;
 }
 
-function isStoredFileFormatSupported(file) {
+function isStoredFileFormatSupported(file: File) {
   return /\.(epub|pdf|mobi|prc|azw|md|txt)$/i.test(file.name);
 }
 
-async function resolveFolderFiles(source) {
-  const files: any[] = [];
-  const failures: any[] = [];
+async function resolveFolderFiles(source: StoredSource) {
+  const files: File[] = [];
+  const failures: Array<{ kind: string; path?: string; error: unknown }> = [];
   for (const entry of source.entries || []) {
-    const resolved = await resolveStoredFile(entry, basename(entry.path));
+    const resolved = await resolveStoredFile(entry as StoredSource, basename(entry.path));
     const file = resolved.file;
     if (!file) {
-      failures.push(...resolved.failures.map(item => ({ ...item, path: entry.path })));
+      failures.push(...resolved.failures.map(item => ({ ...item, path: typeof entry.path === 'string' ? entry.path : undefined })));
       continue;
     }
     if (resolved.failures.length > 0) {
@@ -535,8 +547,8 @@ async function resolveFolderFiles(source) {
   return { files, failures };
 }
 
-function sourceFailureMessage(source, failures, isFolder) {
-  const kinds = new Set(failures.map(item => item.kind));
+function sourceFailureMessage(source: StoredSource, failures: Array<{ kind?: string }>, isFolder: boolean) {
+  const kinds = new Set(failures.map((item) => item.kind));
   const hasNative = kinds.has('native') || !!source.nativePath;
   const hasOpfs = kinds.has('opfs') || !!source.opfsPath;
   const hasHandle = kinds.has('handle') || !!source.handle;
@@ -561,10 +573,10 @@ function sourceFailureMessage(source, failures, isFolder) {
   return `本地存档中的原${subject}不存在，请重新导入该作品`;
 }
 
-function restoreNativeMangaManifest(book, source, manifest) {
+function restoreNativeMangaManifest(book: BookLike, source: StoredSource, manifest: { items: Array<{ index: number; width?: number; height?: number }> }) {
   const nativeArchiveId = book.nativeArchiveId || book.id;
   const nativeArchivePath = source.nativePath;
-  const pageItems = manifest.items.map(item => ({
+  const pageItems = manifest.items.map((item) => ({
     nativeArchiveId,
     nativeArchivePath,
     nativeIndex: item.index,
@@ -585,11 +597,11 @@ function restoreNativeMangaManifest(book, source, manifest) {
 }
 
 // 书架里只有元数据；第一次点开时才回到存档里取原始文件重新解析
-export async function hydrateBook(book) {
-  let source: any = null;
-  let sourceError: any = null;
+export async function hydrateBook(book: BookLike) {
+  let source: StoredSource | null = null;
+  let sourceError: unknown = null;
   try {
-    source = await HomuraStore.getSource(book.id);
+    source = (await HomuraStore.getSource(book.id)) as StoredSource | null;
   } catch (err) {
     sourceError = err;
   }
@@ -602,7 +614,7 @@ export async function hydrateBook(book) {
     return false;
   }
 
-  let parsed: any = null;
+  let parsed: Book | null = null;
   if (source.kind === 'folder') {
     const { files, failures } = await resolveFolderFiles(source);
     logSourceFailures(book.id, failures);
@@ -614,7 +626,7 @@ export async function hydrateBook(book) {
       console.warn(`[HOMURA] 有 ${failures.length} 张图片未从本地存档恢复`);
     }
     const groups = buildImageFolderBooks(files);
-    parsed = groups.length > 0 ? groups[0].book : null;
+    parsed = groups.length > 0 ? (groups[0].book as unknown as Book) : null;
   } else {
     // 原生 EPUB 不需要把整个原文件读回 JS；允许恢复的失败才回退 Blob 解析。
     if (source.nativePath && canUseNativeArchive()) {
@@ -627,7 +639,7 @@ export async function hydrateBook(book) {
               nativeArchivePath: source.nativePath
             });
             // 漫画页清单已包含页序与尺寸，恢复书架时不需要读正文。
-            parsed = restoreNativeMangaManifest(book, source, source.nativePageManifest);
+            parsed = restoreNativeMangaManifest(book, source, source.nativePageManifest as { items: Array<{ index: number; width?: number; height?: number }> }) as unknown as Book;
           } catch (err) {
             if (!shouldFallbackNativeArchive(err)) {
               console.warn('[HOMURA] 漫画页清单对应的原生会话被安全或限额规则拒绝', err);
@@ -637,10 +649,10 @@ export async function hydrateBook(book) {
           }
         } else {
           try {
-            parsed = await parseEpubNativeArchive(source.nativePath, {
+            parsed = (await parseEpubNativeArchive(source.nativePath, {
               id: book.id,
               name: source.name
-            });
+            })) as unknown as Book;
           } catch (err) {
             if (!shouldFallbackNativeArchive(err)) {
               console.warn('[HOMURA] 原生 EPUB 被安全或限额规则拒绝，不再回退', err);
@@ -660,7 +672,7 @@ export async function hydrateBook(book) {
         return false;
       }
       try {
-        parsed = await parseStoredFile(file, { id: book.id });
+        parsed = (await parseStoredFile(file, { id: book.id })) as unknown as Book;
       } catch (err) {
         console.error('[HOMURA] 本地存档解析失败', err);
         return false;
@@ -693,19 +705,19 @@ export async function hydrateBook(book) {
   book.format = parsed.format;
   book.pageCount = parsed.pageCount;
   book.pageItems = parsed.pageItems;
-  book.readingDirection = parsed.readingDirection || null;
+  book.readingDirection = (parsed.readingDirection || undefined) as string | undefined;
   book.zipContent = parsed.zipContent;
   book.pdfDoc = parsed.pdfDoc;
   book.chapters = parsed.chapters;
-  book.nativeArchiveId = parsed.nativeArchiveId || null;
+  book.nativeArchiveId = (parsed.nativeArchiveId || undefined) as string | undefined;
   book.nativeArchivePath = parsed.nativeArchiveId
     ? (parsed.nativeArchivePath || source.nativePath || null)
-    : null;
+    : (null as string | null);
   book.nativeEntryIndexByPath = parsed.nativeEntryIndexByPath || null;
   book.nativeArchiveStaged = false;
   // 书架元数据里保存的是小封面，重新解析出的大图不应覆盖它；
   // 只有旧存档没有封面时才回退到解析结果。
-  if (book.customCoverBlob || book.coverBlob || book.cover) releaseParsedCover(parsed);
+  if (book.customCoverBlob || book.coverBlob || book.cover) releaseParsedCover(parsed as unknown as { cover?: string; pageItems?: Array<{ url?: string }> });
   else {
     book.cover = parsed.cover || book.cover;
     book.coverBlob = parsed.coverBlob;
@@ -720,7 +732,7 @@ export async function hydrateBook(book) {
     try {
       await HomuraStore.updateBookMeta(book.id, {
         type: book.type,
-        format: book.format || null,
+        format: (book.format || undefined) as string | undefined,
         pageCount: book.pageCount
       });
     } catch (err) {

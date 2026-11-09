@@ -52,12 +52,12 @@ const SVG_ATTRS = new Set([
   'patterncontentunits', 'patterntransform'
 ]);
 
-function svgUrlIsSafe(value) {
+function svgUrlIsSafe(value: unknown) {
   const matches = String(value || '').match(/url\(\s*(['"]?)(.*?)\1\s*\)/gi) || [];
   return matches.every(item => /url\(\s*(['"]?)#[^)]+\1\s*\)/i.test(item));
 }
 
-function cleanUrlValue(value) {
+function cleanUrlValue(value: unknown) {
   return String(value || '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
 }
 
@@ -106,7 +106,7 @@ function sanitizeAttributes(el: Element, tagName: string) {
   }
 }
 
-function unwrap(el) {
+function unwrap(el: Element) {
   const parent = el.parentNode;
   if (!parent) return;
   while (el.firstChild) parent.insertBefore(el.firstChild, el);
@@ -114,14 +114,14 @@ function unwrap(el) {
 }
 
 // 就地净化任意元素子树。EPUB 与 MOBI 共用，避免两条路径的标签清单各自演化。
-export function sanitizeElement(root) {
+export function sanitizeElement(root: Element) {
   if (!root) return;
 
   const elements: Element[] = [];
   const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
   let node = walker.nextNode();
   while (node) {
-    elements.push(node);
+    elements.push(node as Element);
     node = walker.nextNode();
   }
 
@@ -142,7 +142,7 @@ export function sanitizeElement(root) {
   }
 }
 
-export function sanitizeEpubHtml(html) {
+export function sanitizeEpubHtml(html: string) {
   if (!html) return '';
   const doc = new DOMParser().parseFromString(String(html), 'text/html');
   if (!doc.body) return '';

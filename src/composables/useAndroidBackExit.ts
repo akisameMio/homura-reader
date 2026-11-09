@@ -7,17 +7,21 @@
 
 import { onMounted, onBeforeUnmount, watch } from 'vue';
 import { isAndroid } from '../services/platform.ts';
+import type { useReaderStore } from '../stores/reader.ts';
+
+type ReaderStore = ReturnType<typeof useReaderStore>;
+type BackListener = (() => void) | { unregister: () => void } | null;
 
 const EXIT_CONFIRM_WINDOW = 2000;
 const EXIT_TOAST_TEXT = '再按一次退出';
 
-export function useAndroidBackExit(reader, dismissOverlay) {
-  let backListener = null;
+export function useAndroidBackExit(reader: ReaderStore, dismissOverlay: () => boolean) {
+  let backListener: BackListener = null;
   let backListenerToken = 0;
   let lastBackAt = 0;
   let exitRequested = false;
 
-  function unregisterBackListener(listener) {
+  function unregisterBackListener(listener: BackListener) {
     if (typeof listener === 'function') return listener();
     if (listener && typeof listener.unregister === 'function') return listener.unregister();
   }

@@ -32,15 +32,15 @@ export function estimateImportEtaSeconds({ total = 0, done = 0, elapsedMs = 0 } 
   return Math.max(1, Math.round((perTaskMs * (total - done)) / 1000));
 }
 
-export function formatEta(seconds) {
-  if (!Number.isFinite(seconds) || seconds <= 0) return '';
+export function formatEta(seconds: number | null) {
+  if (seconds === null || !Number.isFinite(seconds) || seconds <= 0) return '';
   if (seconds < 60) return `约 ${Math.round(seconds)} 秒`;
   const minutes = Math.floor(seconds / 60);
   const rest = Math.round(seconds % 60);
   return rest ? `约 ${minutes} 分 ${rest} 秒` : `约 ${minutes} 分钟`;
 }
 
-export function formatImportBytes(bytes) {
+export function formatImportBytes(bytes: number) {
   const value = Number(bytes) || 0;
   if (value <= 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -54,22 +54,23 @@ export function formatImportBytes(bytes) {
   return `${amount.toFixed(digits)} ${units[index]}`;
 }
 
-export function importPhaseLabel(phase) {
-  return IMPORT_PHASE_LABELS[phase] || IMPORT_PHASE_LABELS.read;
+export function importPhaseLabel(phase: string) {
+  return (IMPORT_PHASE_LABELS as Record<string, string>)[phase] || IMPORT_PHASE_LABELS.read;
 }
 
-export function importFailureReason(error) {
+export function importFailureReason(error: unknown) {
   if (!error) return '无法读取这个文件';
   if (typeof error === 'string') return error;
-  if (error.code === 'NATIVE_SECURITY_LIMIT') return '文件触发原生安全限制';
-  if (error.code === 'NATIVE_LIMIT_EXCEEDED') return '文件超出原生解析限额';
-  const message = error.message || error.name || '';
+  const err = error as { code?: string; message?: string; name?: string };
+  if (err.code === 'NATIVE_SECURITY_LIMIT') return '文件触发原生安全限制';
+  if (err.code === 'NATIVE_LIMIT_EXCEEDED') return '文件超出原生解析限额';
+  const message = err.message || err.name || '';
   if (/end of central directory|not a zip|invalid zip/i.test(message)) return '文件不是有效的 EPUB 压缩包';
   if (/password|encrypted|drm/i.test(message)) return '文件受密码或 DRM 保护';
   return message || '无法读取这个文件';
 }
 
-function normalizeRetryFiles(files) {
+function normalizeRetryFiles(files: FileList | File[] | null) {
   if (!files) return [];
   return Array.from(files).filter(Boolean);
 }
@@ -85,14 +86,14 @@ export const useImportProgressStore = defineStore('importProgress', () => {
   const saved = ref(0);
   const skipped = ref(0);
   const failed = ref(0);
-  const failures = ref<any[]>([]);
+  const failures = ref<{ name: string; reason: string; kind: string }[]>([]);
   const targetLabel = ref('全部作品');
   const targetId = ref('');
   const startedAt = ref(0);
   const finishedAt = ref(0);
   const expanded = ref(false);
   const cancelRequested = ref(false);
-  const retryFiles = shallowRef<any[]>([]);
+  const retryFiles = shallowRef<File[]>([]);
 
   const isRunning = computed(() => status.value === 'running');
   const percent = computed(() => importPercent({
@@ -135,23 +136,23 @@ export const useImportProgressStore = defineStore('importProgress', () => {
     retryFiles.value = [];
   }
 
-  function taskStarted(task, name = '') {
+  function taskStarted(_task: unknown, name = '') {
     if (status.value !== 'running') return;
     if (name) currentName.value = name;
   }
 
-  function taskSettled(task, bytes = 0) {
+  function taskSettled(_task: unknown, bytes = 0) {
     if (status.value !== 'running') return;
     done.value = Math.min(total.value, done.value + 1);
     bytesDone.value = Math.min(bytesTotal.value, bytesDone.value + Math.max(0, Number(bytes) || 0));
   }
 
-  function setPhase(nextPhase) {
-    if (status.value !== 'running' || !IMPORT_PHASE_LABELS[nextPhase]) return;
+  function setPhase(nextPhase: string) {
+    if (status.value !== 'running' || !(IMPORT_PHASE_LABELS as Record<string, string>)[nextPhase]) return;
     phase.value = nextPhase;
   }
 
-  function setCurrentName(name) {
+  function setCurrentName(name: string) {
     if (status.value !== 'running') return;
     currentName.value = name || '';
   }
@@ -164,7 +165,7 @@ export const useImportProgressStore = defineStore('importProgress', () => {
     skipped.value += Math.max(0, Number(count) || 0);
   }
 
-  function recordFailure({ name = '', reason = '无法读取这个文件', kind = '', files = null } = {}) {
+  function recordFailure({ name = '', reason = '无法读取这个文件', kind = '', files = null }: { name?: string; reason?: string; kind?: string; files?: FileList | File[] | null } = {}) {
     if (status.value !== 'running') return;
     failures.value = [...failures.value, {
       name: name || currentName.value || '未命名文件',
@@ -189,7 +190,7 @@ export const useImportProgressStore = defineStore('importProgress', () => {
     expanded.value = true;
   }
 
-  function toggleExpanded(nextValue) {
+  function toggleExpanded(nextValue: boolean | undefined) {
     if (status.value === 'idle') return;
     expanded.value = typeof nextValue === 'boolean' ? nextValue : !expanded.value;
   }

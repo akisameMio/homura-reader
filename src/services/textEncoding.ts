@@ -23,7 +23,7 @@ const TEXT_FALLBACK_CODES = [
   NativeErrorCode.INVALID_DATA
 ];
 
-function guessUtf16(bytes) {
+function guessUtf16(bytes: Uint8Array) {
   const pairs = Math.floor(Math.min(bytes.length, 65536) / 2);
   if (!pairs) return null;
   let evenZeros = 0;
@@ -38,7 +38,7 @@ function guessUtf16(bytes) {
   return null;
 }
 
-export function decodeTxtBytes(input) {
+export function decodeTxtBytes(input: Uint8Array | ArrayBuffer) {
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
   if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return new TextDecoder('utf-8').decode(bytes);
   if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder('utf-16le').decode(bytes);
@@ -53,14 +53,16 @@ export function decodeTxtBytes(input) {
   }
 }
 
-function textFromNativeResult(result) {
-  if (result && typeof result.text === 'string') return result.text;
+function textFromNativeResult(result: unknown) {
+  if (result && typeof result === 'object' && typeof (result as { text?: unknown }).text === 'string') {
+    return (result as { text: string }).text;
+  }
   return null;
 }
 
 // Tauri 环境优先让 Rust 识别编码；没有桥接、文件过大或原生失败时继续使用
 // 同步的浏览器解码路径。返回值始终是字符串，调用方不感知后端差异。
-export async function decodeTxtBytesAsync(input) {
+export async function decodeTxtBytesAsync(input: Uint8Array | ArrayBuffer) {
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
   if (bytes.length === 0 || bytes.length > NATIVE_TEXT_MAX_BYTES || !canUseNativeBridge()) {
     return decodeTxtBytes(bytes);

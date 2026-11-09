@@ -17,17 +17,17 @@ export function canUseNativeStorage() {
   return canUseNativeBridge();
 }
 
-function safeSegment(name) {
+function safeSegment(name: unknown) {
   const segment = String(name || 'source').replace(/[\\/:*?"<>|]/g, '_').slice(0, 160);
   return !segment || segment === '.' || segment === '..' ? 'source' : segment;
 }
 
-function dirname(path) {
+function dirname(path: string) {
   const index = path.lastIndexOf('/');
   return index > 0 ? path.slice(0, index) : ROOT_DIR;
 }
 
-export function nativeFilePath(bookId, relativePath) {
+export function nativeFilePath(bookId: unknown, relativePath: unknown) {
   const bookDir = safeSegment(bookId);
   const segments = String(relativePath || 'source')
     .split('/')
@@ -36,7 +36,7 @@ export function nativeFilePath(bookId, relativePath) {
   return [ROOT_DIR, bookDir, ...segments].join('/');
 }
 
-export async function putNativeFile(path, blob) {
+export async function putNativeFile(path: string, blob: Blob) {
   if (!canUseNativeStorage()) throw new Error('原生文件存档不可用');
   if (!(blob instanceof Blob)) throw new Error('原文件不是 Blob');
 
@@ -51,16 +51,16 @@ export async function putNativeFile(path, blob) {
   return path;
 }
 
-export async function getNativeFile(path) {
+export async function getNativeFile(path: string) {
   const bytes = await readFile(path, { baseDir: BASE_DIR });
   return new Blob([bytes]);
 }
 
-export async function removeNativeFile(path) {
+export async function removeNativeFile(path: string) {
   await remove(path, { baseDir: BASE_DIR }).catch(() => {});
 }
 
-export async function removeNativeBookDir(bookId) {
+export async function removeNativeBookDir(bookId: string | null | undefined) {
   if (!canUseNativeStorage() || !bookId) return;
   await clearNativeArchiveBookCache(bookId).catch(() => {});
   await remove(`${ROOT_DIR}/${safeSegment(bookId)}`, {

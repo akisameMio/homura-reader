@@ -8,7 +8,7 @@
 export function createMutationQueue() {
   let tail = Promise.resolve();
 
-  return function runMutation(task) {
+  return function runMutation(task: () => any) {
     const current = tail.then(task);
     tail = current.catch(() => {});
     return current;

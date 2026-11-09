@@ -30,31 +30,31 @@ export const DEFAULT_READER_SETTINGS = Object.freeze({
   pageMargin: 'normal'
 });
 
-function normalizeReaderDefaults(value) {
-  const source = value && typeof value === 'object' ? value : {};
+function normalizeReaderDefaults(value: unknown) {
+  const source = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
   const rawFontSize = Number(source.fontSize);
   const fontSize = Number.isFinite(rawFontSize)
     ? Math.min(28, Math.max(14, Math.round(rawFontSize / 2) * 2))
     : DEFAULT_READER_SETTINGS.fontSize;
 
   return {
-    direction: DIRECTIONS.includes(source.direction)
-      ? source.direction
+    direction: DIRECTIONS.includes(source.direction as string)
+      ? (source.direction as string)
       : DEFAULT_READER_SETTINGS.direction,
     spread: source.spread === 1 ? 1 : 2,
     coverOffset: typeof source.coverOffset === 'boolean'
       ? source.coverOffset
       : DEFAULT_READER_SETTINGS.coverOffset,
     fontSize,
-    webtoonFit: WEBTOON_FITS.includes(source.webtoonFit)
-      ? source.webtoonFit
+    webtoonFit: WEBTOON_FITS.includes(source.webtoonFit as string)
+      ? (source.webtoonFit as string)
       : DEFAULT_READER_SETTINGS.webtoonFit,
     fontFamily: resolveFontValue(source.fontFamily),
-    lineHeight: LINE_HEIGHTS.includes(source.lineHeight)
-      ? source.lineHeight
+    lineHeight: LINE_HEIGHTS.includes(source.lineHeight as string)
+      ? (source.lineHeight as string)
       : DEFAULT_READER_SETTINGS.lineHeight,
-    pageMargin: PAGE_MARGINS.includes(source.pageMargin)
-      ? source.pageMargin
+    pageMargin: PAGE_MARGINS.includes(source.pageMargin as string)
+      ? (source.pageMargin as string)
       : DEFAULT_READER_SETTINGS.pageMargin
   };
 }
@@ -68,7 +68,7 @@ function readReaderDefaults() {
   }
 }
 
-function writeReaderDefaults(value) {
+function writeReaderDefaults(value: unknown) {
   try {
     localStorage.setItem(READER_DEFAULTS_KEY, JSON.stringify(value));
   } catch (err) {
@@ -111,7 +111,7 @@ export const useSettingsStore = defineStore('settings', () => {
     writeReaderDefaults(readerDefaults);
   }
 
-  function setReaderDefault(key, value) {
+  function setReaderDefault(key: string, value: unknown) {
     const next = normalizeReaderDefaults({ ...readerDefaults, [key]: value });
     Object.assign(readerDefaults, next);
     persistReaderDefaults();
@@ -122,7 +122,7 @@ export const useSettingsStore = defineStore('settings', () => {
     persistReaderDefaults();
   }
 
-  function setDebugForceFullscreen(value) {
+  function setDebugForceFullscreen(value: unknown) {
     const next = !!value;
     debugForceFullscreen.value = next;
     try {
@@ -132,7 +132,7 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  function setDebugAutoUpdateCheck(value) {
+  function setDebugAutoUpdateCheck(value: unknown) {
     const next = !!value;
     debugAutoUpdateCheck.value = next;
     try {
@@ -142,7 +142,7 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  function setImportCollectionPrompt(value) {
+  function setImportCollectionPrompt(value: unknown) {
     const next = !!value;
     importCollectionPrompt.value = next;
     try {

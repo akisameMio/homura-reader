@@ -50,6 +50,29 @@ const MIME_BY_EXTENSION = {
   bmp: 'image/bmp'
 };
 
+/** 原生导入文件条目 */
+interface NativeImportEntry {
+  name?: string;
+  size?: number;
+  modifiedMs?: number;
+  path?: string;
+  uri?: string;
+  relativePath?: string;
+  mime?: string;
+  [key: string]: unknown;
+}
+
+/** 带相对路径/原生路径的类 File 对象 */
+interface NativeImportFile {
+  name: string;
+  size: number;
+  lastModified: number;
+  type: string;
+  nativePath?: string;
+  customRelativePath?: string;
+  [key: string]: unknown;
+}
+
 const NATIVE_IMPORT_FALLBACK_CODES: Set<string> = new Set([
   NativeErrorCode.UNAVAILABLE,
   NativeErrorCode.UNSUPPORTED,
@@ -62,12 +85,12 @@ export function canUseNativeImport() {
   return canUseNativeBridge();
 }
 
-export function nativeImportMime(name) {
+export function nativeImportMime(name: unknown) {
   const extension = String(name || '').split('.').pop()?.toLowerCase() || '';
-  return MIME_BY_EXTENSION[extension] || '';
+  return (MIME_BY_EXTENSION as Record<string, string>)[extension] || '';
 }
 
-function withRelativePath(file, relativePath) {
+function withRelativePath<T extends object>(file: T, relativePath: string | undefined): T {
   if (!relativePath) return file;
   try {
     Object.defineProperty(file, 'customRelativePath', {
@@ -75,14 +98,14 @@ function withRelativePath(file, relativePath) {
       writable: false
     });
   } catch (err) {
-    file.customRelativePath = relativePath;
+    (file as { customRelativePath?: string }).customRelativePath = relativePath;
   }
   return file;
 }
 
-export function makeNativeImportFile(entry) {
-  const file = {
-    name: entry.name,
+export function makeNativeImportFile(entry: NativeImportEntry): NativeImportFile {
+  const file: NativeImportFile = {
+    name: entry.name || 'source',
     size: entry.size || 0,
     lastModified: entry.modifiedMs || Date.now(),
     type: nativeImportMime(entry.name),
@@ -91,32 +114,32 @@ export function makeNativeImportFile(entry) {
   return withRelativePath(file, entry.relativePath);
 }
 
-export function isNativeImportFile(file) {
-  return !!file?.nativePath && !(typeof Blob !== 'undefined' && file instanceof Blob);
+export function isNativeImportFile(file: { nativePath?: string } | Blob | File | null | undefined): boolean {
+  return !!(file as { nativePath?: string })?.nativePath && !(typeof Blob !== 'undefined' && file instanceof Blob);
 }
 
-export function isAndroidContentUri(path) {
+export function isAndroidContentUri(path: unknown) {
   return isAndroid && typeof path === 'string' && path.startsWith('content://');
 }
 
-export function shouldFallbackNativeImport(error) {
+export function shouldFallbackNativeImport(error: unknown) {
   const normalized = normalizeNativeError(error, { feature: 'native-import' });
   return NATIVE_IMPORT_FALLBACK_CODES.has(normalized.code);
 }
 
-export function isNativeImportCancelled(error) {
+export function isNativeImportCancelled(error: unknown) {
   return normalizeNativeError(error, { feature: 'native-import' }).code
     === NativeErrorCode.CANCELLED;
 }
 
-function fileFromBytes(bytes, file) {
+function fileFromBytes(bytes: ArrayBuffer | Uint8Array | Blob, file: NativeImportFile): NativeImportFile {
   try {
-    return withRelativePath(new File([bytes], file.name, {
+    return withRelativePath(new File([bytes as BlobPart], file.name, {
       type: file.type || nativeImportMime(file.name),
       lastModified: file.lastModified || Date.now()
-    }), file.customRelativePath);
+    }) as unknown as NativeImportFile, file.customRelativePath);
   } catch (err) {
-    const blob = new Blob([bytes], { type: file.type || nativeImportMime(file.name) });
+    const blob = new Blob([bytes as BlobPart], { type: file.type || nativeImportMime(file.name) });
     try {
       Object.defineProperty(blob, 'name', { value: file.name, writable: false });
       Object.defineProperty(blob, 'lastModified', {
@@ -124,19 +147,28 @@ function fileFromBytes(bytes, file) {
         writable: false
       });
     } catch (defineError) {}
-    return withRelativePath(blob, file.customRelativePath);
+    return withRelativePath(blob as unknown as NativeImportFile, file.customRelativePath);
   }
 }
 
-export async function materializeNativeImportFile(file) {
-  if (!isNativeImportFile(file)) return file;
-  const bytes = await readFile(file.nativePath);
-  return fileFromBytes(bytes, file);
+/** 原生导入函数接受的最小文件结构（File 与 NativeImportFile 都满足） */
+interface NativeFileLike {
+  name: string;
+  lastModified?: number;
+  type?: string;
+  nativePath?: string;
+  customRelativePath?: string;
 }
 
-export async function materializeStagedNativeImportFile(file, nativePath) {
+export async function materializeNativeImportFile<T extends NativeFileLike>(file: T): Promise<T> {
+  if (!isNativeImportFile(file)) return file;
+  const bytes = await readFile(file.nativePath as string);
+  return fileFromBytes(bytes, file as unknown as NativeImportFile) as unknown as T;
+}
+
+export async function materializeStagedNativeImportFile<T extends NativeFileLike>(file: T, nativePath: string): Promise<T> {
   const blob = await getNativeFile(nativePath);
-  return fileFromBytes(blob, file);
+  return fileFromBytes(blob, file as unknown as NativeImportFile) as unknown as T;
 }
 
 export async function pickNativeImportPaths({ directory = false, multiple = false, title = '导入作品' } = {}) {
@@ -160,33 +192,34 @@ export async function pickNativeImportPaths({ directory = false, multiple = fals
       ? result.files
       : [result];
   return paths
-    .map(entry => typeof entry === 'string' ? entry : entry?.path)
-    .filter(path => typeof path === 'string' && path.length > 0);
+    .map((entry: unknown) => typeof entry === 'string' ? entry : (entry as { path?: string })?.path)
+    .filter((path: unknown) => typeof path === 'string' && path.length > 0);
 }
 
-export async function inspectNativeImportUris(uris) {
+export async function inspectNativeImportUris(uris: unknown[]) {
   if (!Array.isArray(uris) || uris.length === 0) return [];
   const result = await invokeNativeCommand('android-archive', 'inspectImportUris', { uris }, {
     feature: 'native-import'
   });
-  const entries = Array.isArray(result)
+  const entries: unknown[] = Array.isArray(result)
     ? result
     : Array.isArray(result?.files)
       ? result.files
       : [];
   return entries
-    .map(entry => {
-      const path = entry?.uri || entry?.path;
-      const name = entry?.name || String(path || '').split('/').pop() || 'source';
+    .map((raw) => {
+      const entry = raw as { uri?: string; path?: string; name?: string; size?: unknown; modifiedMs?: unknown; mime?: string };
+      const path = entry.uri || entry.path;
+      const name = entry.name || String(path || '').split('/').pop() || 'source';
       return {
         name,
         path,
-        size: Number(entry?.size) || 0,
-        modifiedMs: Number(entry?.modifiedMs) || 0,
-        mime: entry?.mime || nativeImportMime(name)
+        size: Number(entry.size) || 0,
+        modifiedMs: Number(entry.modifiedMs) || 0,
+        mime: entry.mime || nativeImportMime(name)
       };
     })
-    .filter(entry => typeof entry.path === 'string' && entry.path.length > 0);
+    .filter((entry) => typeof entry.path === 'string' && entry.path.length > 0);
 }
 
 export async function pickNativeUriImportFiles({ multiple = true } = {}) {
@@ -207,7 +240,7 @@ export async function pickNativeUriImportFiles({ multiple = true } = {}) {
   return entries.map(makeNativeImportFile);
 }
 
-export async function scanNativeImportPaths(paths) {
+export async function scanNativeImportPaths(paths: unknown[]) {
   if (!Array.isArray(paths) || paths.length === 0) return [];
   const result = await invokeNativeCommand(null, 'scanImportPaths', { paths }, {
     feature: 'native-import'
@@ -215,7 +248,7 @@ export async function scanNativeImportPaths(paths) {
   return Array.isArray(result?.files) ? result.files : [];
 }
 
-export async function stageNativeImportPath(bookId, sourcePath) {
+export async function stageNativeImportPath(bookId: string, sourcePath: string) {
   return invokeNativeCommand(null, 'stageImportPath', {
     bookId,
     sourcePath
@@ -224,8 +257,8 @@ export async function stageNativeImportPath(bookId, sourcePath) {
   });
 }
 
-export async function stageNativeImportUri(bookId, uri, name = '') {
-  const args: Record<string, any> = { bookId, uri };
+export async function stageNativeImportUri(bookId: string, uri: string, name = '') {
+  const args: Record<string, unknown> = { bookId, uri };
   if (name) args.name = name;
   return invokeNativeCommand('android-archive', 'stageImportUri', args, {
     feature: 'native-import'

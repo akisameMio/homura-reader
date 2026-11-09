@@ -12,7 +12,8 @@ import {
   bytesToBase64,
   canUseNativeBridge,
   disableNativeFeature,
-  invokeNativeCommand
+  invokeNativeCommand,
+  type NativeErrorCodeValue
 } from './nativeRuntime.ts';
 
 const COVER_MAX_EDGE = 480;
@@ -20,14 +21,14 @@ const WEBP_QUALITY = 0.84;
 const FEATURE = 'cover-thumb';
 const MAX_NATIVE_COVER_BYTES = 20 * 1024 * 1024;
 
-function encodeCanvas(canvas) {
-  if (typeof canvas.convertToBlob === 'function') {
+function encodeCanvas(canvas: OffscreenCanvas | HTMLCanvasElement) {
+  if ('convertToBlob' in canvas) {
     return canvas.convertToBlob({ type: 'image/webp', quality: WEBP_QUALITY });
   }
-  return new Promise(resolve => canvas.toBlob(resolve, 'image/webp', WEBP_QUALITY));
+  return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', WEBP_QUALITY));
 }
 
-function base64ToBlob(value, mime) {
+function base64ToBlob(value: string, mime: string) {
   const binary = atob(value);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index++) {
@@ -36,22 +37,25 @@ function base64ToBlob(value, mime) {
   return new Blob([bytes], { type: mime || 'image/webp' });
 }
 
-function resultToBlob(result, original) {
+function resultToBlob(result: unknown, original: Blob) {
   if (!result || typeof result !== 'object') return null;
-  if (!result.changed) return original;
-  if (typeof result.bytesBase64 !== 'string' || !result.bytesBase64) return null;
-  return base64ToBlob(result.bytesBase64, result.mime);
+  const detail = result as { changed?: unknown; bytesBase64?: unknown; mime?: string };
+  if (!detail.changed) return original;
+  if (typeof detail.bytesBase64 !== 'string' || !detail.bytesBase64) return null;
+  return base64ToBlob(detail.bytesBase64, detail.mime || 'image/webp');
 }
 
-function handleNativeFailure(err) {
-  if ([NativeErrorCode.UNAVAILABLE, NativeErrorCode.DISABLED].includes(err?.code)) {
-    disableNativeFeature(FEATURE, err.message);
+function handleNativeFailure(err: unknown) {
+  const detail = err as { code?: NativeErrorCodeValue; message?: string };
+  const code = detail?.code;
+  if (code === NativeErrorCode.UNAVAILABLE || code === NativeErrorCode.DISABLED) {
+    disableNativeFeature(FEATURE, String(detail?.message || ''));
   }
   // 安全上限不能交给 JS 再试一次；普通格式不支持或解码失败则继续兜底。
-  if ([NativeErrorCode.SECURITY_LIMIT, NativeErrorCode.LIMIT_EXCEEDED].includes(err?.code)) throw err;
+  if (code === NativeErrorCode.SECURITY_LIMIT || code === NativeErrorCode.LIMIT_EXCEEDED) throw err;
 }
 
-async function createWithNative(blob, maxEdge) {
+async function createWithNative(blob: Blob, maxEdge: number) {
   if (!canUseNativeBridge() || blob.size > MAX_NATIVE_COVER_BYTES) return null;
   try {
     const base64 = bytesToBase64(new Uint8Array(await blob.arrayBuffer()));
@@ -71,7 +75,7 @@ async function createWithNative(blob, maxEdge) {
 
 // 原生压缩包已经在 AppData 里，直接按条目路径读取封面，避免大图从 Blob
 // 转成 Base64 再走一遍 IPC。输出仍用 Base64 返回，缩略图只有几十 KB。
-async function createWithNativeArchive(blob, maxEdge, nativeCover: any) {
+async function createWithNativeArchive(blob: Blob, maxEdge: number, nativeCover: { archivePath?: string; entryPath?: string } | null) {
   if (
     !canUseNativeBridge()
     || !nativeCover?.archivePath
@@ -97,7 +101,7 @@ async function createWithNativeArchive(blob, maxEdge, nativeCover: any) {
 }
 
 // 返回 null 表示当前环境无法处理；返回原 Blob 表示无需缩小。
-export async function createCoverThumbnailWithCanvas(blob, maxEdge = COVER_MAX_EDGE) {
+export async function createCoverThumbnailWithCanvas(blob: Blob | null, maxEdge = COVER_MAX_EDGE) {
   // JSZip 解出的图片 Blob 常常没有 MIME type，交给 createImageBitmap 按内容判断。
   if (!blob || typeof blob.size !== 'number' || (blob.type && !String(blob.type).startsWith('image/'))) return null;
   if (typeof createImageBitmap !== 'function') return null;
@@ -127,7 +131,7 @@ export async function createCoverThumbnailWithCanvas(blob, maxEdge = COVER_MAX_E
     context.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
 
     const thumbnail = await encodeCanvas(canvas);
-    if (!thumbnail || thumbnail.size >= blob.size * 0.92) return blob;
+    if (!thumbnail || thumbnail.size >= (blob as Blob).size * 0.92) return blob;
     return thumbnail;
   } catch (err) {
     return null;
@@ -136,14 +140,14 @@ export async function createCoverThumbnailWithCanvas(blob, maxEdge = COVER_MAX_E
   }
 }
 
-export async function createCoverThumbnail(blob, maxEdge = COVER_MAX_EDGE, nativeCover: any = null) {
+export async function createCoverThumbnail(blob: Blob | null, maxEdge = COVER_MAX_EDGE, nativeCover: { archivePath?: string; entryPath?: string } | null = null) {
   const validBlob = !!blob
     && typeof blob.size === 'number'
     && (!blob.type || String(blob.type).startsWith('image/'));
   if (!validBlob && !(nativeCover?.archivePath && nativeCover?.entryPath)) return null;
   if (nativeCover) {
     try {
-      const viaArchive = await createWithNativeArchive(blob, maxEdge, nativeCover);
+      const viaArchive = await createWithNativeArchive(blob as Blob, maxEdge, nativeCover);
       if (viaArchive) return viaArchive;
     } catch (err) {
       return null;

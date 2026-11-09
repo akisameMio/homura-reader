@@ -4,9 +4,10 @@
    首次使用时放进书架的示例漫画（内联 SVG）与示例轻小说。
    纯工厂函数：只返回书籍对象，入架动作由 shelf store 完成。
    ========================================================================== */
+import type { Book } from '../types.ts';
 
 
-function createDemoMangaSvg(pageNumber, title, subtitle) {
+function createDemoMangaSvg(pageNumber: number, title: string, subtitle: string) {
   const isRightSide = pageNumber % 2 === 1;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 1200" width="850" height="1200">
     <rect width="850" height="1200" fill="#ffffff"/>
@@ -26,7 +27,7 @@ function createDemoMangaSvg(pageNumber, title, subtitle) {
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
 
-export function createDemoManga() {
+export function createDemoManga(): Book {
   const pages = [
     createDemoMangaSvg(1, '第1页  封面 (Cover)', '双页模式下首页单独对齐'),
     createDemoMangaSvg(2, '第2页  苍穹启航', '日漫模式下位于右侧先读'),
@@ -45,7 +46,7 @@ export function createDemoManga() {
   };
 }
 
-export function createDemoNovel() {
+export function createDemoNovel(): Book {
   const chapters = [
     {
       title: '序章 双缓冲丝滑翻页与智能分页',

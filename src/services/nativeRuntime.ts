@@ -65,14 +65,14 @@ function nativeCore() {
   return typeof window !== 'undefined' ? window.__TAURI__?.core : null;
 }
 
-function errorMessage(error) {
+function errorMessage(error: unknown) {
   if (typeof error === 'string') return error;
-  if (error && typeof error.message === 'string' && error.message) return error.message;
+  if (error && typeof error === 'object' && typeof (error as { message?: unknown }).message === 'string' && (error as { message: string }).message) return (error as { message: string }).message;
   if (error === null || error === undefined) return '原生调用失败';
   return String(error);
 }
 
-function classifyMessage(message) {
+function classifyMessage(message: unknown) {
   const text = String(message || '');
   if (!text) return NativeErrorCode.COMMAND_FAILED;
 
@@ -128,9 +128,9 @@ export function canUseNativeBridge() {
   return !!core && typeof core.invoke === 'function';
 }
 
-export function bytesToBase64(input) {
+export function bytesToBase64(input: ArrayBuffer | ArrayBufferView | Uint8Array) {
   if (typeof btoa !== 'function') return null;
-  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input as ArrayBuffer);
   let binary = '';
   const chunkSize = 0x8000;
   for (let offset = 0; offset < bytes.length; offset += chunkSize) {
@@ -139,15 +139,15 @@ export function bytesToBase64(input) {
   return btoa(binary);
 }
 
-export function isNativeFeatureAvailable(feature) {
+export function isNativeFeatureAvailable(feature: string | null | undefined) {
   return canUseNativeBridge() && (!feature || !disabledFeatures.has(feature));
 }
 
-export function disableNativeFeature(feature, reason = '') {
+export function disableNativeFeature(feature: string, reason = '') {
   if (feature) disabledFeatures.set(feature, reason);
 }
 
-export function enableNativeFeature(feature) {
+export function enableNativeFeature(feature: string) {
   disabledFeatures.delete(feature);
 }
 
@@ -155,7 +155,7 @@ export function resetNativeRuntimeState() {
   disabledFeatures.clear();
 }
 
-function fallbackCodeSet(value) {
+function fallbackCodeSet(value: Set<string> | string[] | string) {
   if (value instanceof Set) return value;
   if (Array.isArray(value)) return new Set(value);
   if (typeof value === 'string') return new Set([value]);
@@ -227,7 +227,7 @@ export async function runNativeWithFallback({
     throw new TypeError('runNativeWithFallback 需要 fallback 函数');
   }
 
-  const runFallback = (error, shouldLog = true) => {
+  const runFallback = (error: NativeBridgeError, shouldLog = true) => {
     if (shouldLog && error && logger?.warn) {
       logger.warn(`[HOMURA] 原生能力 ${feature} 回退 JS`, error);
     }

@@ -20,7 +20,7 @@ export function useViewport() {
   const width = ref(typeof window !== 'undefined' ? window.innerWidth || 1280 : 1280);
   const isTouch = ref(false);
 
-  let resizeTimer: any = null;
+  let resizeTimer: number | null = null;
   let coarseQuery: MediaQueryList | null = null;
 
   function syncWidth() {
@@ -28,8 +28,8 @@ export function useViewport() {
   }
 
   function onResize() {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(syncWidth, RESIZE_DEBOUNCE_MS);
+    window.clearTimeout(resizeTimer ?? undefined);
+    resizeTimer = window.setTimeout(syncWidth, RESIZE_DEBOUNCE_MS);
   }
 
   // 有任意粗指针，或系统报告存在触摸点，即视为触屏设备
@@ -53,7 +53,7 @@ export function useViewport() {
   });
 
   onBeforeUnmount(() => {
-    clearTimeout(resizeTimer);
+    window.clearTimeout(resizeTimer ?? undefined);
     if (coarseQuery && coarseQuery.removeEventListener) {
       coarseQuery.removeEventListener('change', onCoarseChange);
     }

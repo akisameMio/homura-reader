@@ -39,6 +39,6 @@ marked.use({
   }
 });
 
-export function renderMarkdown(source) {
+export function renderMarkdown(source: string) {
   return marked.parse(source, { async: false });
 }

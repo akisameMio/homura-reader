@@ -14,15 +14,16 @@ import {
   invokeNativeCommand,
   isNativeFeatureAvailable
 } from './nativeRuntime.ts';
+import type { Book, Collection } from '../types.ts';
 
 const FEATURE = 'metadata';
 const MAX_COVER_BYTES = 24 * 1024 * 1024;
 
-function invalidResponse(message) {
+function invalidResponse(message: string) {
   return new NativeBridgeError(NativeErrorCode.INVALID_DATA, message, { feature: FEATURE });
 }
 
-function requireArray(value, label) {
+function requireArray(value: unknown, label: string): unknown[] {
   if (!Array.isArray(value)) throw invalidResponse(`原生元数据缺少 ${label}`);
   return value;
 }
@@ -31,7 +32,7 @@ export function canUseNativeMetadata() {
   return canUseNativeBridge() && isNativeFeatureAvailable(FEATURE);
 }
 
-async function blobToBase64(blob) {
+async function blobToBase64(blob: Blob | null | undefined) {
   if (!blob || typeof blob.arrayBuffer !== 'function' || typeof blob.size !== 'number') return null;
   if (blob.size > MAX_COVER_BYTES) {
     throw new NativeBridgeError(
@@ -46,7 +47,7 @@ async function blobToBase64(blob) {
   return encoded;
 }
 
-function base64ToBlob(value, mime) {
+function base64ToBlob(value: unknown, mime: unknown) {
   if (typeof value !== 'string' || !value) return null;
   let binary;
   try {
@@ -58,35 +59,37 @@ function base64ToBlob(value, mime) {
   for (let index = 0; index < binary.length; index++) {
     bytes[index] = binary.charCodeAt(index);
   }
-  return new Blob([bytes], { type: mime || '' });
+  return new Blob([bytes], { type: typeof mime === 'string' ? mime : '' });
 }
 
-function normalizeBook(record) {
-  if (!record || typeof record.id !== 'string') throw invalidResponse('SQLite 中存在无效书目');
+function normalizeBook(record: unknown) {
+  if (!record || typeof record !== 'object' || typeof (record as { id?: unknown }).id !== 'string') throw invalidResponse('SQLite 中存在无效书目');
+  const rec = record as Record<string, unknown>;
   return {
-    id: record.id,
-    type: record.type || 'novel',
-    format: record.format || null,
-    title: record.title || '',
-    favorite: !!record.favorite,
-    pageCount: Number(record.pageCount) || 0,
-    addedAt: Number(record.addedAt) || 0,
-    coverBlob: base64ToBlob(record.coverBase64, record.coverMime),
-    customCoverBlob: base64ToBlob(record.customCoverBase64, record.customCoverMime)
+    id: rec.id,
+    type: rec.type || 'novel',
+    format: rec.format || null,
+    title: rec.title || '',
+    favorite: !!rec.favorite,
+    pageCount: Number(rec.pageCount) || 0,
+    addedAt: Number(rec.addedAt) || 0,
+    coverBlob: base64ToBlob(rec.coverBase64, rec.coverMime),
+    customCoverBlob: base64ToBlob(rec.customCoverBase64, rec.customCoverMime)
   };
 }
 
-function normalizeCollection(record) {
-  if (!record || typeof record.id !== 'string') throw invalidResponse('SQLite 中存在无效书库');
+function normalizeCollection(record: unknown) {
+  if (!record || typeof record !== 'object' || typeof (record as { id?: unknown }).id !== 'string') throw invalidResponse('SQLite 中存在无效书库');
+  const rec = record as Record<string, unknown>;
   return {
-    id: record.id,
-    title: String(record.title || ''),
-    createdAt: Number(record.createdAt) || 0,
-    bookIds: Array.isArray(record.bookIds) ? record.bookIds.filter(id => typeof id === 'string') : []
+    id: rec.id,
+    title: String(rec.title || ''),
+    createdAt: Number(rec.createdAt) || 0,
+    bookIds: Array.isArray(rec.bookIds) ? rec.bookIds.filter((id): id is string => typeof id === 'string') : []
   };
 }
 
-async function serializeBook(book) {
+async function serializeBook(book: Book): Promise<Record<string, unknown>> {
   return {
     id: String(book.id || ''),
     type: String(book.type || 'novel'),
@@ -95,21 +98,21 @@ async function serializeBook(book) {
     favorite: !!book.favorite,
     pageCount: Number(book.pageCount) || 0,
     addedAt: Number(book.addedAt) || 0,
-    coverBase64: await blobToBase64(book.coverBlob),
-    coverMime: book.coverBlob?.type || null,
-    customCoverBase64: await blobToBase64(book.customCoverBlob),
-    customCoverMime: book.customCoverBlob?.type || null
+    coverBase64: await blobToBase64(book.coverBlob instanceof Blob ? book.coverBlob : null),
+    coverMime: book.coverBlob instanceof Blob ? book.coverBlob.type || null : null,
+    customCoverBase64: await blobToBase64(book.customCoverBlob instanceof Blob ? book.customCoverBlob : null),
+    customCoverMime: book.customCoverBlob instanceof Blob ? book.customCoverBlob.type || null : null
   };
 }
 
-async function serializeSnapshot(snapshot) {
-  const books: any[] = [];
+async function serializeSnapshot(snapshot: { books?: Book[]; collections?: Collection[]; progress?: unknown[] }) {
+  const books: Promise<Record<string, unknown>>[] = [];
   for (const book of snapshot.books || []) {
-    books.push(await serializeBook(book));
+    books.push(serializeBook(book));
   }
   return {
-    books,
-    collections: (snapshot.collections || []).map(item => ({
+    books: await Promise.all(books),
+    collections: (snapshot.collections || []).map((item: Collection) => ({
       id: item.id,
       title: item.title,
       createdAt: Number(item.createdAt) || 0,
@@ -130,12 +133,12 @@ export async function loadNativeMetadata() {
   };
 }
 
-export async function replaceNativeMetadata(snapshot) {
+export async function replaceNativeMetadata(snapshot: { books?: Book[]; collections?: Collection[]; progress?: unknown[] }) {
   const payload = await serializeSnapshot(snapshot);
   await invokeNativeCommand(null, 'metadata_replace_all', { snapshot: payload }, { feature: FEATURE });
 }
 
-export async function upsertNativeBook(book) {
+export async function upsertNativeBook(book: Book) {
   await invokeNativeCommand(
     null,
     'metadata_upsert_book',
@@ -144,26 +147,26 @@ export async function upsertNativeBook(book) {
   );
 }
 
-export async function upsertNativeBooks(books) {
+export async function upsertNativeBooks(books: Book[] | null | undefined) {
   if (!Array.isArray(books) || books.length === 0) return;
-  const payload: any[] = [];
+  const payload: Promise<Record<string, unknown>>[] = [];
   for (const book of books) {
-    payload.push(await serializeBook(book));
+    payload.push(serializeBook(book));
   }
   await invokeNativeCommand(
     null,
     'metadata_upsert_books',
-    { books: payload },
+    { books: await Promise.all(payload) },
     { feature: FEATURE }
   );
 }
 
-export async function saveNativeCollections(collections) {
+export async function saveNativeCollections(collections: Collection[] | null | undefined) {
   await invokeNativeCommand(
     null,
     'metadata_save_collections',
     {
-      collections: (collections || []).map(item => ({
+      collections: (collections || []).map((item: Collection) => ({
         id: item.id,
         title: item.title,
         createdAt: Number(item.createdAt) || 0,
@@ -174,11 +177,11 @@ export async function saveNativeCollections(collections) {
   );
 }
 
-export async function saveNativeProgress(record) {
+export async function saveNativeProgress(record: unknown) {
   await invokeNativeCommand(null, 'metadata_save_progress', { record }, { feature: FEATURE });
 }
 
-export async function deleteNativeBook(bookId) {
+export async function deleteNativeBook(bookId: string) {
   await invokeNativeCommand(null, 'metadata_delete_book', { bookId }, { feature: FEATURE });
 }
 

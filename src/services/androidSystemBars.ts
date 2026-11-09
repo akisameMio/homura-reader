@@ -10,7 +10,7 @@ import { isAndroid } from './platform.ts';
 const SET_APPEARANCE_COMMAND = 'plugin:android-system-bars|setAppearance';
 let lastDark: boolean | null = null;
 
-export function applyAndroidSystemBars(dark) {
+export function applyAndroidSystemBars(dark: boolean) {
   if (!isAndroid) return;
 
   const core = window.__TAURI__ && window.__TAURI__.core;

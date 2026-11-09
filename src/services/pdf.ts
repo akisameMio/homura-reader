@@ -7,6 +7,7 @@
    走 LRU 缓存，避免来回翻页把内存吃满。
    ========================================================================== */
 
+import type { PdfPageItem } from '../types.ts';
 import PdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 
 // 正文页按 1600px 宽渲染：桌面全屏显示足够清晰，缩放阅读也不糊
@@ -18,7 +19,17 @@ const MAX_UPSCALE = 2.5;
 // 缓存上限按页数算，约等于 20~50MB 位图，够翻几个来回了
 const MAX_CACHED_PAGES = 24;
 
-let pdfjsPromise: Promise<any> | null = null;
+/** pdf.js 文档的最小结构 */
+interface PdfDocLike {
+  numPages?: number;
+  getPage(pageNumber: number): Promise<{
+    getViewport(params: { scale: number }): { width: number; height: number };
+    render(params: { canvasContext: CanvasRenderingContext2D; viewport: unknown }): { promise: Promise<void> };
+    cleanup(): void;
+  }>;
+}
+
+let pdfjsPromise: Promise<typeof import('pdfjs-dist/legacy/build/pdf.mjs')> | null = null;
 
 function loadPdfjs() {
   if (!pdfjsPromise) {
@@ -35,9 +46,9 @@ function loadPdfjs() {
 
 // ---- 渲染位图缓存：超出上限时释放最久未用过的页 ----
 
-const renderedUrls: { pageItem: any; url: string }[] = [];
+const renderedUrls: { pageItem: PdfPageItem; url: string }[] = [];
 
-function rememberRenderedUrl(pageItem, url) {
+function rememberRenderedUrl(pageItem: PdfPageItem, url: string) {
   renderedUrls.push({ pageItem, url });
   while (renderedUrls.length > MAX_CACHED_PAGES) {
     const evicted = renderedUrls.shift()!;
@@ -47,7 +58,7 @@ function rememberRenderedUrl(pageItem, url) {
   }
 }
 
-async function renderPageBlob(pdfDoc, pageIndex, targetWidth) {
+async function renderPageBlob(pdfDoc: PdfDocLike, pageIndex: number, targetWidth: number): Promise<Blob> {
   const page = await pdfDoc.getPage(pageIndex + 1);
   const baseViewport = page.getViewport({ scale: 1 });
   const scale = Math.min(targetWidth / baseViewport.width, MAX_UPSCALE);
@@ -64,7 +75,7 @@ async function renderPageBlob(pdfDoc, pageIndex, targetWidth) {
   await page.render({ canvasContext: ctx, viewport }).promise;
   page.cleanup();
 
-  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
   if (!blob) throw new Error('页面位图生成失败');
   return blob;
 }
@@ -72,7 +83,7 @@ async function renderPageBlob(pdfDoc, pageIndex, targetWidth) {
 // ---- 对外接口 ----
 
 // 打开 PDF：只做文档装载，页数等信息由调用方读取
-export async function openPdfDocument(file) {
+export async function openPdfDocument(file: { arrayBuffer(): Promise<ArrayBuffer> }): Promise<PdfDocLike> {
   const pdfjs = (await loadPdfjs())!;
   const data = await file.arrayBuffer();
   // CMap / 标准字体 / wasm 解码器由 vite-static-copy 放在 dist/pdfjs 下：
@@ -87,14 +98,14 @@ export async function openPdfDocument(file) {
     standardFontDataUrl: assetBase + 'standard_fonts/',
     wasmUrl: assetBase + 'wasm/',
     iccUrl: assetBase + 'iccs/'
-  }).promise;
+  } as Parameters<typeof pdfjs.getDocument>[0]).promise as Promise<PdfDocLike>;
 }
 
 // 生成漫画管道可用的 pageItems：每项自带 render()，首次显示时才真正渲染
-export function createPdfPageItems(pdfDoc, pageCount) {
-  const items: any[] = [];
+export function createPdfPageItems(pdfDoc: PdfDocLike, pageCount: number): PdfPageItem[] {
+  const items: PdfPageItem[] = [];
   for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
-    const item: any = { pdfPageIndex: pageIndex };
+    const item: PdfPageItem = { render: async () => '', pdfPageIndex: pageIndex };
     item.render = async () => {
       try {
         const blob = await renderPageBlob(pdfDoc, pageIndex, RENDER_TARGET_WIDTH);
@@ -112,6 +123,6 @@ export function createPdfPageItems(pdfDoc, pageCount) {
 }
 
 // 封面取第一页的缩略渲染，返回值由调用方转成 Blob URL
-export function renderPdfCoverBlob(pdfDoc) {
+export function renderPdfCoverBlob(pdfDoc: PdfDocLike): Promise<Blob> {
   return renderPageBlob(pdfDoc, 0, COVER_TARGET_WIDTH);
 }
