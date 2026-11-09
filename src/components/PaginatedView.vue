@@ -115,6 +115,7 @@ function applyReaderGeometry() {
   el.style.setProperty('--reader-pad-bottom', metrics.padBottom + 'px');
   el.style.setProperty('--reader-gutter', metrics.gutter + 'px');
   el.style.setProperty('--reader-page-width', metrics.textWidth + 'px');
+  el.style.setProperty('--reader-flow-height', metrics.textHeight + 'px');
   // 双页几何下的单页（章首页 / 封面单排）靠 CSS 占位补出另一栏，保持与苹果图书一致的右栏起始
   el.dataset.readerSpread = metrics.isDouble ? 'double' : 'single';
   el.dataset.readerDirection = reader.layoutConfig.direction;

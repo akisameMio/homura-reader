@@ -120,6 +120,62 @@ test('容器内混有直接文本时保留原容器，避免丢字', () => {
   assert.match(blocks[0].html, /后置文字/);
 });
 
+test('纯插图章节不生成空白章首页，插图独占一页', () => {
+  const originalWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+  const originalHeight = Object.getOwnPropertyDescriptor(document.documentElement, 'clientHeight');
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+  Object.defineProperty(document.documentElement, 'clientHeight', { configurable: true, value: 710 });
+
+  const measurer = document.createElement('div');
+  Object.defineProperty(measurer, 'scrollHeight', {
+    get() {
+      let total = 0;
+      for (const child of this.children) {
+        total += child.querySelector('svg, img') ? 600 : 80;
+      }
+      return total;
+    }
+  });
+  const book = {
+    type: 'novel',
+    chapters: [
+      {
+        title: '封面',
+        htmlContent: '<figure><svg viewBox="0 0 705 1000"><image href="cover.jpg"></image></svg></figure>'
+      },
+      {
+        title: '插圖',
+        htmlContent: '<section><h1>插圖</h1>'
+          + '<p><img src="one.jpg" width="1443" height="2048" alt=""></p>'
+          + '<p><img src="two.jpg" width="4096" height="2200" alt=""></p>'
+          + '</section>'
+      },
+      { title: '序章', htmlContent: '<h1>序章</h1><p>正文开始。</p>' }
+    ]
+  };
+
+  try {
+    const pages = buildActivePages(book, { direction: 'ltr', spread: 1, fontSize: 18 }, measurer);
+
+    // 封面 1 页 + 两张插图各 1 页 + 序章 1 页，没有标题空页。
+    assert.equal(pages.length, 4);
+    assert.match(pages[0].html, /cover\.jpg/);
+    assert.match(pages[1].html, /one\.jpg/);
+    assert.match(pages[2].html, /two\.jpg/);
+    for (const page of pages.slice(0, 3)) {
+      assert.doesNotMatch(page.html, /reader-chapter/);
+    }
+    // 书内自带的「插圖」标题块也一并省略，不再单独占一页。
+    assert.doesNotMatch(pages[1].html, /<h1>/);
+    // 有正文的章节仍保留章首页。
+    assert.match(pages[3].html, /reader-chapter/);
+    assert.match(pages[3].html, /正文开始/);
+  } finally {
+    if (originalWidth) Object.defineProperty(window, 'innerWidth', originalWidth);
+    if (originalHeight) Object.defineProperty(document.documentElement, 'clientHeight', originalHeight);
+  }
+});
+
 test('并发章节复用同一张 EPUB 插图，不重复解包', async () => {
   let blobRequests = 0;
   const entry = {

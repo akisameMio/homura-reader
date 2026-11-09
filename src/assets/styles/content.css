@@ -210,6 +210,26 @@
     .md-reader-prose > :first-child {
       margin-top: 0;
     }
+    /* 插图按纸页正文流高度收缩。--reader-flow-height 由舞台与测量器同时下发，
+       避免 SVG 的百分比高度在两侧解析成不同尺寸，把整页插图撑出纸面。 */
+    .md-reader-prose figure {
+      margin: 0;
+    }
+    .md-reader-prose svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+      max-height: var(--reader-flow-height, calc(100vh - 192px));
+      margin: 0 auto;
+    }
+    .md-reader-prose img {
+      display: block;
+      max-width: 100%;
+      max-height: var(--reader-flow-height, calc(100vh - 192px));
+      object-fit: contain;
+      margin: 0 auto;
+    }
     .md-reader-prose a {
       color: var(--md-primary);
     }

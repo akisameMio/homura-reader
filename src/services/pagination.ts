@@ -525,7 +525,26 @@ export function splitLongParagraph(html: string, measurer: HTMLElement, maxHeigh
 }
 
 const NOVEL_CONTAINER_TAGS = new Set(['body', 'main', 'section', 'article', 'div', 'header', 'footer', 'aside']);
+// 纯插图章节（封面 / 彩页 / 插圖）没有正文段落，章名多半来自 XHTML <title>，
+// 再注入章首页只会把图片挤到下一页，留下只有标题的空白页。
+const MEDIA_BLOCK_TAGS = new Set(['img', 'image', 'svg', 'figure', 'picture']);
+const HEADING_BLOCK_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr']);
+const PROSE_BLOCK_TAGS = new Set([
+  'p', 'li', 'dd', 'dt', 'td', 'th', 'blockquote', 'pre', 'code',
+  'div', 'section', 'article', 'main', 'header', 'footer', 'aside',
+  'span', 'a', 'em', 'strong', 'b', 'i', 'u', 'small', 'sub', 'sup'
+]);
 const novelPageCache = new WeakMap();
+
+// 有的 EPUB 把插图包在 <p><img></p> 里，块类型不是 img，需要看内容。
+function blockContainsMedia(block: { type: string; html: string }) {
+  return MEDIA_BLOCK_TAGS.has(block.type) || /<(?:img|svg|image|figure|picture)\b/i.test(block.html);
+}
+
+function isIllustrationChapter(blocks: Array<{ type: string; html: string; text?: string }>) {
+  if (!blocks.some(blockContainsMedia)) return false;
+  return !blocks.some(block => PROSE_BLOCK_TAGS.has(block.type) && (block.text || '').trim());
+}
 
 // 分页只关心“这一页最后一行的底部”，不应把最后一段的 margin-bottom
 // 也算成溢出。否则 1px 的下边距就会把整段拆到下一页，页数翻倍且大幅变慢。
@@ -662,10 +681,16 @@ function paginateNovelChapter(chap: ChapterItem, chapterIndex: number, measurer:
     return chapterPages;
   }
 
+  // 插图章节直接展示图片：不注入章首页，也丢掉书内自带的「插圖」标题块。
+  const illustration = isIllustrationChapter(blocks);
+  const contentBlocks = illustration
+    ? blocks.filter(block => !HEADING_BLOCK_TAGS.has(block.type))
+    : blocks;
+
   // 章首页作为整章第一块参与测量：标题、分隔线、章序号都被算进页高。
   const openerHtml = buildChapterOpener(title, chapterIndex);
-  let currentPageParts = [openerHtml];
-  measurer.innerHTML = openerHtml;
+  let currentPageParts = illustration ? [] : [openerHtml];
+  measurer.innerHTML = illustration ? '' : openerHtml;
 
   const flushCurrentPage = () => {
     const currentPageHtml = currentPageParts.join('');
@@ -680,8 +705,8 @@ function paginateNovelChapter(chap: ChapterItem, chapterIndex: number, measurer:
     measurer.innerHTML = '';
   };
 
-  for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
-    const blk = blocks[bIdx];
+  for (let bIdx = 0; bIdx < contentBlocks.length; bIdx++) {
+    const blk = contentBlocks[bIdx];
     const previousChildCount = measurer.childNodes.length;
     measurer.insertAdjacentHTML('beforeend', blk.html);
 
@@ -741,6 +766,9 @@ export function createNovelPaginator(book: Book, layoutConfig: ReaderLayoutConfi
   measurer.style.lineHeight = proseStyle['--reader-line-height'];
   measurer.style.letterSpacing = '0.01em';
   measurer.style.setProperty('--reader-para-gap', proseStyle['--reader-para-gap']);
+  // 与纸页正文流同高，保证插图、百分比高度在测量与渲染两侧解析到同一尺寸。
+  measurer.style.height = metrics.availableTextHeight + 'px';
+  measurer.style.setProperty('--reader-flow-height', metrics.availableTextHeight + 'px');
   measurer.innerHTML = '';
 
   const chapterPages = new Array(chapters.length);
