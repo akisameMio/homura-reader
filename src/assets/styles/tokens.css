@@ -374,6 +374,14 @@
       --md-elevation-level1:
         0 1px 2px 0 color-mix(in oklab, var(--md-shadow-color-soft) 30%, transparent),
         0 1px 3px 1px color-mix(in oklab, var(--md-shadow-color-soft) 15%, transparent);
+      /* 书架卡轻拟物投影：低 elevation、大模糊、扩散收窄、透明度极淡，
+         贴近悬浮的柔光而非厚重黑边。三层都用负 spread 收窄，让边缘自然消失，
+         不额外加 inset 描边，避免卡片四周出现一圈灰边。
+         投影统一走 soft token，夜间不泛白。 */
+      --md-elevation-card-soft:
+        0 1px 2px -1px color-mix(in oklab, var(--md-shadow-color-soft) 18%, transparent),
+        0 4px 12px -4px color-mix(in oklab, var(--md-shadow-color-soft) 14%, transparent),
+        0 10px 28px -10px color-mix(in oklab, var(--md-shadow-color-soft) 10%, transparent);
     }
 
     /* ==========================================================================

@@ -63,7 +63,7 @@
     >
       <span
         class="mobile-nav-indicator"
-        :class="{ 'is-ready': mobileReady, 'is-dragging': indicatorDragging }"
+        :class="{ 'is-ready': mobileReady, 'is-pressed': indicatorPressed, 'is-dragging': indicatorDragging }"
         :style="{ transform: mobileIndicatorTransform }"
         aria-hidden="true"
       ></span>
@@ -117,6 +117,7 @@ const desktopReady = ref(false);
 const mobileReady = ref(false);
 const desktopIndicatorY = ref(0);
 const indicatorDragging = ref(false);
+const indicatorPressed = ref(false);
 const mobileIndicatorTransform = ref('translate3d(0, 4px, 0)');
 
 let measureFrame = 0;
@@ -241,32 +242,35 @@ const mobileDrag = {
   down: false, dragging: false, pid: -1,
   startX: 0, startIndicatorX: 0, lastX: 0, lastT: 0, vx: 0
 };
-let mobileHoldTimer: ReturnType<typeof setTimeout> | null = null;
+// 轻点（按下到抬起常不足 100ms）也要让玻璃气泡亮一下，否则实机只看到一闪而过或干脆没有。
+const PRESS_MIN_VISIBLE_MS = 180;
+let pressStartedAt = 0;
+let pressReleaseTimer: ReturnType<typeof setTimeout> | null = null;
 
 function onMobilePointerDown(e: PointerEvent) {
   if (e.button !== undefined && e.button !== 0) return;
   measureMobileMetrics();
   if (!metrics.tabCenters.length) return;
+  if (pressReleaseTimer) { clearTimeout(pressReleaseTimer); pressReleaseTimer = null; }
+  pressStartedAt = performance.now();
   mobileDrag.down = true;
   mobileDrag.dragging = false;
+  indicatorDragging.value = false;
   mobileDrag.pid = e.pointerId;
   mobileDrag.startX = e.clientX;
   mobileDrag.lastX = e.clientX;
   mobileDrag.lastT = performance.now();
   mobileDrag.vx = 0;
   mobileDrag.startIndicatorX = springs.x.pos;
+  indicatorPressed.value = true; // 一按下就切中性玻璃，无需拖动
+  // 立即同步一次 transform：清掉上一次拖拽留下的上浮位移，气泡从贴合槽位的位置开始膨胀
+  renderMobileIndicator();
   mobileNavRef.value?.classList.add('is-interacting');
-  // 按下蓄力：轻微压扁
-  springs.sx.stiffness = 90; springs.sy.stiffness = 90;
-  springs.sx.target = 1.03; springs.sy.target = 0.95;
-  springs.sy.vel -= 1.2; springs.sx.vel += 1.2;
-  if (mobileHoldTimer) clearTimeout(mobileHoldTimer);
-  mobileHoldTimer = setTimeout(() => {
-    if (!mobileDrag.down || mobileDrag.dragging) return;
-    springs.sx.stiffness = 40; springs.sy.stiffness = 40;
-    springs.sx.target = 1.12; springs.sy.target = 1.28;
-    springs.sx.vel += 1.0; springs.sy.vel += 2.0;
-  }, 90);
+  // 按下即膨胀：点击与拖动都从第一帧开始鼓起来，不再等长按
+  springs.sx.stiffness = 120; springs.sy.stiffness = 120;
+  springs.sx.target = 1.12; springs.sy.target = 1.28;
+  springs.sx.vel += 3.2; springs.sy.vel += 3.6;
+  vibrateMobile(12); // 落到槽位上的触感
   try { mobileNavRef.value?.setPointerCapture(e.pointerId); } catch (err) {}
   window.addEventListener('pointermove', onMobilePointerMove);
   window.addEventListener('pointerup', onMobilePointerUp);
@@ -281,8 +285,7 @@ function onMobilePointerMove(e: PointerEvent) {
   const dt = now - mobileDrag.lastT;
   if (!mobileDrag.dragging && Math.abs(dx) > 4) {
     mobileDrag.dragging = true;
-    indicatorDragging.value = true; // 进入拖拽：切中性玻璃、去掉主题色
-    if (mobileHoldTimer) { clearTimeout(mobileHoldTimer); mobileHoldTimer = null; }
+    indicatorDragging.value = true; // 进入拖拽：气泡上浮溢出导航栏
     springs.x.stiffness = 160;
     springs.sx.stiffness = 46;
     springs.sy.stiffness = 46;
@@ -301,12 +304,12 @@ function onMobilePointerMove(e: PointerEvent) {
   const progress = (clampedX - metrics.minX) / metrics.step;
   const dist = Math.abs(progress - Math.round(progress));
   const bulge = Math.sin(dist * Math.PI);
-  springs.sx.target = 1.08 + bulge * 0.1;
-  springs.sy.target = 1.26 - bulge * 0.06;
-  // 拖过槽位震动
+  springs.sx.target = 1.12 + bulge * 0.12;
+  springs.sy.target = 1.3 - bulge * 0.08;
+  // 每拖过一个槽位震一下
   const nearest = mobileNearestIndexAt(clampedX);
   if (nearest !== mobileActiveIndex) {
-    vibrateMobile(5);
+    vibrateMobile(9);
     mobileActiveIndex = nearest;
   }
   startSpringLoop();
@@ -315,8 +318,18 @@ function onMobilePointerMove(e: PointerEvent) {
 function onMobilePointerUp(e: PointerEvent) {
   if (!mobileDrag.down || e.pointerId !== mobileDrag.pid) return;
   mobileDrag.down = false;
-  indicatorDragging.value = false; // 松手恢复主题色
-  if (mobileHoldTimer) { clearTimeout(mobileHoldTimer); mobileHoldTimer = null; }
+  indicatorDragging.value = false;
+  // 松手恢复主题色；轻点时延后到最短可见时长，避免玻璃来不及出现就被收回
+  const remain = PRESS_MIN_VISIBLE_MS - (performance.now() - pressStartedAt);
+  if (pressReleaseTimer) { clearTimeout(pressReleaseTimer); pressReleaseTimer = null; }
+  if (remain > 0) {
+    pressReleaseTimer = setTimeout(() => {
+      indicatorPressed.value = false;
+      pressReleaseTimer = null;
+    }, remain);
+  } else {
+    indicatorPressed.value = false;
+  }
   const nav = mobileNavRef.value;
   try { if (nav?.hasPointerCapture(e.pointerId)) nav.releasePointerCapture(e.pointerId); } catch (err) {}
   window.removeEventListener('pointermove', onMobilePointerMove);
@@ -409,7 +422,7 @@ onBeforeUnmount(() => {
   cancelAnimationFrame(measureFrame);
   cancelAnimationFrame(springRaf);
   springRaf = 0;
-  if (mobileHoldTimer) clearTimeout(mobileHoldTimer);
+  if (pressReleaseTimer) clearTimeout(pressReleaseTimer);
   window.removeEventListener('pointermove', onMobilePointerMove);
   window.removeEventListener('pointerup', onMobilePointerUp);
   window.removeEventListener('pointercancel', onMobilePointerUp);
@@ -663,6 +676,9 @@ onBeforeUnmount(() => {
       transform 400ms cubic-bezier(0.25, 1, 0.5, 1),
       box-shadow 400ms cubic-bezier(0.25, 1, 0.5, 1);
     will-change: transform;
+    /* 底栏自己吃掉触摸手势：否则轻微滑动会被浏览器判成滚动并派发 pointercancel，
+       按下态立刻被取消，实机就只剩「用力按住」才看得到玻璃 */
+    touch-action: none;
     /* 允许拖拽时气泡溢出上沿 */
     overflow: visible;
   }
@@ -703,33 +719,38 @@ onBeforeUnmount(() => {
     border-radius: 28px 28px 60% 60%;
     background: linear-gradient(
       180deg,
-      color-mix(in oklab, #fff 68%, transparent) 0%,
-      color-mix(in oklab, #fff 0%, transparent) 100%
+      color-mix(in oklab, var(--md-surface) 68%, transparent) 0%,
+      color-mix(in oklab, var(--md-surface) 0%, transparent) 100%
     );
     pointer-events: none;
     opacity: 0;
-    transition: opacity 200ms ease;
+    transition: opacity 120ms ease;
   }
 
-  /* 拖拽中：去主题色，切换为中性玻璃质感 */
+  /* 按下 / 拖拽：去主题色，切换为中性玻璃质感（按住即生效，不需拖动） */
+  .mobile-nav-indicator.is-pressed,
   .mobile-nav-indicator.is-dragging {
+    /* 轻点只有几十毫秒，220ms 的底色过渡还没走到位就抬起了，玻璃看起来只有半透明；
+       按下瞬间直接切到完整玻璃，松手再走回过渡 */
+    transition: background 0s, box-shadow 90ms ease;
     background:
       radial-gradient(
         125% 82% at 50% 10%,
-        color-mix(in oklab, #fff 66%, transparent) 0%,
-        color-mix(in oklab, #fff 30%, transparent) 42%,
-        color-mix(in oklab, #cfd6de 20%, transparent) 100%
+        color-mix(in oklab, var(--md-surface) 66%, transparent) 0%,
+        color-mix(in oklab, var(--md-surface) 30%, transparent) 42%,
+        color-mix(in oklab, var(--md-outline-variant) 22%, transparent) 100%
       ),
-      color-mix(in oklab, #eef1f5 16%, transparent);
+      color-mix(in oklab, var(--md-surface-container) 16%, transparent);
     backdrop-filter: blur(9px) saturate(165%) contrast(1.02) brightness(1.02);
     -webkit-backdrop-filter: blur(9px) saturate(165%) contrast(1.02) brightness(1.02);
-    border: 1px solid color-mix(in oklab, #ffffff 82%, transparent);
+    border: 1px solid color-mix(in oklab, var(--md-surface) 82%, transparent);
     box-shadow:
       inset 0 2px 3px color-mix(in oklab, var(--md-surface) 96%, transparent),
       inset 0 -2.5px 4px color-mix(in oklab, var(--md-shadow-color) 30%, transparent),
       0 14px 30px -8px color-mix(in oklab, var(--md-shadow-color) 22%, transparent);
   }
 
+  .mobile-nav-indicator.is-pressed::after,
   .mobile-nav-indicator.is-dragging::after {
     opacity: 1;
   }
@@ -754,6 +775,7 @@ onBeforeUnmount(() => {
     font-weight: 600;
     background: transparent;
     color: var(--md-on-surface-variant);
+    touch-action: none; /* 槽位按钮上也不要让浏览器抢走按压手势 */
     transition:
       color 260ms cubic-bezier(0.22, 1, 0.36, 1),
       transform 360ms cubic-bezier(0.22, 1, 0.36, 1);

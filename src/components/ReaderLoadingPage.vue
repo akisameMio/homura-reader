@@ -143,13 +143,12 @@ onBeforeUnmount(stopTicker);
   gap: 24px;
 }
 .rlp-cover {
-  width: 128px;
+  /* 与 readerTransition 的 TARGET_COVER_WIDTH / min(176px, 42vw) 保持一致 */
+  width: min(176px, 42vw);
   aspect-ratio: 3 / 4;
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow:
-    var(--md-shadow-color-soft) 0 12px 32px,
-    var(--md-shadow-color) 0 0 0 0.5px;
+  box-shadow: var(--md-elevation-card-soft);
   display: flex;
   flex-direction: column;
   justify-content: space-between;

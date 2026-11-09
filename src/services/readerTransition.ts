@@ -31,7 +31,7 @@ interface SplashOptions {
 }
 
 // 加载页居中封面的稳定宽度（与 ReaderLoadingPage 的 .rlp-cover 宽度一致）
-const TARGET_COVER_WIDTH = 128;
+const TARGET_COVER_WIDTH = 176;
 const COVER_RATIO = 4 / 3;
 // 弹簧刚度：越大越快、越"急"。ζ=1 临界阻尼下，90 的刚度飞行约 0.65s，
 // 起步柔和、匀速感更好；150 会显得太冲。觉得还不够从容可继续降到 70。
@@ -68,7 +68,7 @@ export function playShelfToReaderSplash({ rect, cover }: SplashOptions) {
     `left:${rect.left}px`, `top:${rect.top}px`,
     `width:${rect.width}px`, `height:${rect.height}px`,
     'border-radius:12px',
-    'box-shadow:var(--md-shadow-color-soft) 0 10px 30px'
+    'box-shadow:var(--md-elevation-card-soft)'
   ].join(';');
   document.body.appendChild(node);
 
