@@ -6,10 +6,10 @@
     class="md-card md-card--featured continue-card md-featured-cell"
     :title="`${started ? '继续阅读' : '开始阅读'}：${featured.book.title}`"
     :aria-label="`${started ? '继续阅读' : '开始阅读'}：${featured.book.title}`"
-    @click="$emit('open', featured.book.id)"
+    @click="onOpen"
   >
     <!-- 39% 封面：优先真实书封，缺失时使用主题色书封 -->
-    <span class="cover-shell">
+    <span class="cover-shell" :data-book-cover-id="featured.book.id">
       <img
         v-if="featured.book.cover"
         :src="featured.book.cover"
@@ -72,8 +72,10 @@ import { computed, type PropType } from 'vue';
 import { useShelfStore } from '../stores/shelf.ts';
 import { resolveBookFormat } from '../services/utils.ts';
 import MdIcon from './MdIcon.vue';
+import { readBookCoverRect } from '../services/bookCover.ts';
+import { playShelfToReaderSplash } from '../services/readerTransition.ts';
 
-defineEmits(['open']);
+const emit = defineEmits(['open']);
 import type { Book } from '../types.ts';
 const props = defineProps({ books: { type: Array as PropType<Book[] | null>, default: null } });
 
@@ -98,6 +100,15 @@ const featured = computed(() => {
   const total = book.pageCount || (book.pageItems && book.pageItems.length) || (book.chapters && book.chapters.length) || 0;
   return { book, progress: { index: 0, total, percent: 0, updatedAt: 0 } };
 });
+
+// 点击特色卡：若拿到封面起点矩形，就播共享元素飞行封面，再通知父级打开
+function onOpen() {
+  const item = featured.value;
+  if (!item) return;
+  const rect = readBookCoverRect(item.book.id);
+  if (rect) playShelfToReaderSplash({ rect, cover: item.book.cover || '', title: item.book.title });
+  emit('open', item.book.id);
+}
 
 const typeLabel = computed(() => {
   const book = featured.value && featured.value.book;

@@ -794,3 +794,15 @@
         animation: none;
       }
     }
+
+/* 书架 → 阅读器：共享元素飞行封面（JS 创建、动画结束后自删） */
+.md-shelf-splash-cover {
+  overflow: hidden;
+  pointer-events: none;
+}
+.md-shelf-splash-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}

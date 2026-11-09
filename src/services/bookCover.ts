@@ -24,3 +24,17 @@ export async function prepareBookCover(file: File) {
     URL.revokeObjectURL(url);
   }
 }
+
+/**
+ * 读取某本书封面卡片在视口中的位置，作为共享元素展开动画的起点。
+ * 返回 null 表示当前屏幕上没有对应封面（例如从"最近阅读"首屏点进来）。
+ */
+export function readBookCoverRect(id: string): { left: number; top: number; width: number; height: number } | null {
+  if (typeof document === 'undefined') return null;
+  const safe = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id;
+  const el = document.querySelector(`[data-book-cover-id="${safe}"]`) as HTMLElement | null;
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  if (!r.width || !r.height) return null;
+  return { left: r.left, top: r.top, width: r.width, height: r.height };
+}

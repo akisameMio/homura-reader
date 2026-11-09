@@ -1,7 +1,7 @@
 <template>
   <article class="md-card md-card--filled md-shelf-card relative flex flex-col min-w-0" :class="{ 'md-book-selected': selected, 'is-touch-dragging': dragging }" draggable="true" @dragstart="$emit('drag', $event, book.id)" @contextmenu.prevent>
-    <button class="absolute inset-0 z-10 rounded-[12px]" :aria-label="selecting ? `选择书本：${book.title}` : `阅读：${book.title}`" :aria-pressed="selecting ? selected : undefined" @click="$emit('open', book.id)"></button>
-    <div class="aspect-[3/4] w-full relative overflow-hidden bg-[var(--md-surface-high)]">
+    <button class="absolute inset-0 z-10 rounded-[12px]" :aria-label="selecting ? `选择书本：${book.title}` : `阅读：${book.title}`" :aria-pressed="selecting ? selected : undefined" @click="onOpen"></button>
+    <div class="aspect-[3/4] w-full relative overflow-hidden bg-[var(--md-surface-high)]" :data-book-cover-id="selecting ? undefined : book.id">
       <img
         v-if="book.cover"
         :src="book.cover"
@@ -63,6 +63,8 @@ import { computed } from 'vue';
 import type { PropType } from 'vue';
 import type { Book } from '../types.ts';
 import { resolveBookFormat } from '../services/utils.ts';
+import { readBookCoverRect } from '../services/bookCover.ts';
+import { playShelfToReaderSplash } from '../services/readerTransition.ts';
 import MdIcon from './MdIcon.vue';
 
 const props = defineProps({
@@ -74,7 +76,17 @@ const props = defineProps({
   dragging: { type: Boolean, default: false }
 });
 
-defineEmits(['open', 'remove', 'drag']);
+const emit = defineEmits(['open', 'remove', 'drag']);
+
+// 点击封面：若拿到起点矩形，就让飞行封面从卡片位置展开（共享元素感），
+// 同时立刻通知父级开始 openBook；真实加载进度由 ReaderLoadingPage 承接。
+function onOpen() {
+  if (!props.selecting) {
+    const rect = readBookCoverRect(props.book.id);
+    if (rect) playShelfToReaderSplash({ rect, cover: props.book.cover || '', title: props.book.title });
+  }
+  emit('open', props.book.id);
+}
 
 const badgeText = computed(() => {
   const format = resolveBookFormat(props.book);

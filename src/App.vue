@@ -52,7 +52,7 @@
           data-app-scroll
         >
           <p v-if="shelf.error || (!reader.currentBook && reader.openError)" role="alert" class="mx-4 min-[900px]:mx-7 mt-3 text-[13px] text-[var(--md-error)]">{{ shelf.error || reader.openError }}</p>
-          <BookShelf v-if="favoritesOnly || shelf.library.length || shelf.collections.length" :books="visibleBooks" :favorites-only="favoritesOnly" :sort-key="sortKey" :query="query" :has-filter="!!query.trim() || typeFilter !== 'all'" :home-request="shelfHomeRequest" @open="reader.openBook" @browse="query = ''; typeFilter = 'all'" />
+          <BookShelf v-if="favoritesOnly || shelf.library.length || shelf.collections.length" :books="visibleBooks" :favorites-only="favoritesOnly" :sort-key="sortKey" :query="query" :has-filter="!!query.trim() || typeFilter !== 'all'" :home-request="shelfHomeRequest" @open="openBookWithTransition" @browse="query = ''; typeFilter = 'all'" />
           <EmptyShelf v-else @pick-file="openFilePicker" @pick-folder="openFolderPicker" />
         </main>
       </template>
@@ -81,6 +81,15 @@
   />
   <ImportProgressSheet v-if="isCompact" @retry="retryFailedImport" />
   <DragOverlay />
+  <ReaderLoadingPage
+    :visible="readerLoadingVisible"
+    :phase="readerLoadingPhase"
+    :title="readerLoadingBook?.title || ''"
+    :cover="readerLoadingBook?.cover || ''"
+    :message="reader.openError || '无法加载这本书，请重试。'"
+    @retry="retryReaderOpen"
+    @cancel="cancelReaderOpen"
+  />
   <div v-if="reader.currentBook" class="reader-back-scrim md-scrim" aria-hidden="true"></div>
   <ReaderModal />
   <UpdateDialog
@@ -156,6 +165,7 @@ import EmptyShelf from './components/EmptyShelf.vue';
 import SettingsView from './components/SettingsView.vue';
 import DragOverlay from './components/DragOverlay.vue';
 import ReaderModal from './components/ReaderModal.vue';
+import ReaderLoadingPage from './components/ReaderLoadingPage.vue';
 import UpdateDialog from './components/UpdateDialog.vue';
 import ChangelogSheet from './components/ChangelogSheet.vue';
 import DuplicateImportDialog from './components/DuplicateImportDialog.vue';
@@ -182,6 +192,117 @@ const appearanceOpen = ref(false);
 const activeNav = ref('shelf');
 
 useScrollBounce(libraryScrollRef);
+
+// ── 书架 → 阅读器 转场状态机 ──────────────────────────────────────────
+// 'shelf' 书架 / 'loading' 加载页 / 'reader' 阅读器。
+// 加载成功后立刻置 'reader' 并用 v-if 卸载加载页组件，返回监听只认 'reader'，
+// 因此安卓返回会直接退回书架，不会回到加载页（返回栈里已无加载页）。
+const readerPhase = ref('shelf'); // 'shelf' | 'loading' | 'reader'
+const readerLoadingBook = shallowRef(null);
+
+function bookById(id) { return shelf.library.find(item => item.id === id) || null; }
+
+const INLINE_LOADING_TIMEOUT = 15000;
+// 加载页最短展示时长：本地解析常常几十毫秒就返回，太短会看不到转场。
+// 保证封面飞入、封面居中、进度条至少演完一轮，再淡入阅读器（含自身淡出约需 ~600ms）。
+const LOADING_MIN_VISIBLE = 900;
+// 独立的「最短可见」计时 Promise：在加载页真正显示（visible=true 的下一帧）时挂起，
+// 数据就绪后无论 openBook 返回多快，都先 await 它补齐，保证加载页演满。
+// 不依赖 openBook 返回时机算差值——桌面端解析/原生通道过快时也能稳定兜住。
+let loadingMinTimer = null;
+let loadingMinResolve = null;
+function startLoadingMinTimer() {
+  abortLoadingMinTimer();
+  return new Promise(resolve => {
+    loadingMinResolve = resolve;
+    loadingMinTimer = setTimeout(() => {
+      loadingMinTimer = null;
+      loadingMinResolve = null;
+      resolve();
+    }, LOADING_MIN_VISIBLE);
+  });
+}
+function abortLoadingMinTimer() {
+  if (loadingMinTimer) { clearTimeout(loadingMinTimer); loadingMinTimer = null; }
+  if (loadingMinResolve) { const r = loadingMinResolve; loadingMinResolve = null; r(); }
+}
+let loadingGuardTimer = null;
+function armLoadingGuard() {
+  clearLoadingGuard();
+  loadingGuardTimer = setTimeout(() => {
+    if (readerPhase.value === 'loading') {
+      readerLoadingVisible.value = false;
+      readerPhase.value = 'shelf';
+    }
+  }, INLINE_LOADING_TIMEOUT);
+}
+function clearLoadingGuard() {
+  if (loadingGuardTimer) { clearTimeout(loadingGuardTimer); loadingGuardTimer = null; }
+}
+
+const readerLoadingVisible = ref(false);
+const readerLoadingPhase = computed(() => (reader.openError ? 'error' : 'loading'));
+
+// 真正的打开动作：带转场的封装，是书架 open 事件的唯一入口
+async function openBookWithTransition(id) {
+  const book = bookById(id);
+  if (!book) { await reader.openBook(id); return; }
+  readerLoadingBook.value = book;
+  readerPhase.value = 'loading';
+  readerLoadingVisible.value = true;
+  const minVisible = startLoadingMinTimer();
+  armLoadingGuard();
+  try {
+    await reader.openBook(id);
+  } catch (err) {
+    // openBook 内部一般已把错误写进 openError；这里兜住意外抛出，避免 timer 泄漏。
+    console.warn('[HOMURA] 打开书籍失败', err);
+  }
+  clearLoadingGuard();
+  if (reader.currentBook && !reader.openError) {
+    // 数据已就绪：先补齐最短展示时长，让加载页体面演完，再卸载加载页 → 阅读器淡入。
+    // await 独立计时器，不依赖 openBook 返回快慢（桌面端过快也能兜住）。
+    await minVisible;
+    if (readerPhase.value !== 'loading') return; // 期间被返回/新点击打断
+    readerPhase.value = 'reader';
+    readerLoadingVisible.value = false;
+  } else {
+    abortLoadingMinTimer();
+  }
+  // 失败时保留加载页显示错误态，交由用户重试或返回。
+}
+
+// 加载页「重试」：再跑一次同一本书
+async function retryReaderOpen() {
+  const book = readerLoadingBook.value;
+  if (!book) { readerPhase.value = 'shelf'; readerLoadingVisible.value = false; return; }
+  const minVisible = startLoadingMinTimer();
+  armLoadingGuard();
+  try {
+    await reader.openBook(book.id);
+  } catch (err) {
+    console.warn('[HOMURA] 重新加载书籍失败', err);
+  }
+  clearLoadingGuard();
+  if (reader.currentBook && !reader.openError) {
+    await minVisible;
+    if (readerPhase.value !== 'loading') return;
+    readerPhase.value = 'reader';
+    readerLoadingVisible.value = false;
+  } else {
+    abortLoadingMinTimer();
+  }
+}
+
+// 加载页「返回书架」：清干净回到书架
+function cancelReaderOpen() {
+  clearLoadingGuard();
+  abortLoadingMinTimer();
+  readerLoadingVisible.value = false;
+  readerPhase.value = 'shelf';
+  readerLoadingBook.value = null;
+  reader.clearOpenError();
+}
 
 // 书架视图状态
 const query = ref('');
@@ -233,6 +354,11 @@ let previousUpdateBodyOverflow = '';
 let updateBodyLocked = false;
 
 useAndroidBackExit(reader, () => {
+  // 加载页期间按返回 → 取消加载、退回书架（此时阅读器还没接管返回）
+  if (readerPhase.value === 'loading' && !reader.currentBook) {
+    cancelReaderOpen();
+    return true;
+  }
   if (pendingShelfDialog.value) { resolveShelfDialog(); return true; }
   if (pendingDuplicate.value) {
     resolveImport();
@@ -286,7 +412,15 @@ watch(() => importProgress.status, status => {
 
 // 进入阅读器时收起外观浮层，避免它悬在阅读舞台之上
 watch(() => reader.currentBook, book => {
-  if (book) appearanceOpen.value = false;
+  if (book) {
+    appearanceOpen.value = false;
+    return;
+  }
+  // 阅读器被关掉后，转场状态机与加载页一并归零，下次从书架重新开始
+  if (readerPhase.value === 'reader') {
+    readerPhase.value = 'shelf';
+    readerLoadingBook.value = null;
+  }
 });
 
 async function createCollection() {
