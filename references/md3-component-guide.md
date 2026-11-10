@@ -28,7 +28,7 @@
 | 漫画页码 | `.md-toc-grid` + `.md-toc-page` | 五颜六色的页码按钮 |
 | 右侧设置 / 目录面板 | `.md-drawer` + `ReaderDrawerHeader.vue` | 新写一套 sheet 外壳 |
 | 遮罩 | `.md-scrim` | 新建半透明黑色 |
-| 进度 / 字号滑条 | `MdRange.vue` + `.md-range` | 原生蓝轨道、圆形小拇指、手写活动轨道 |
+| 进度 / 字号滑条 | `MdRange.vue` + `.md-range` | 原生蓝轨道、圆形小拇指、手写活动轨道、另写 range 皮肤 |
 | 书架内容卡 | `.md-card` + `.md-shelf-card` / `.md-collection-card` | 私有圆角、私有阴影 |
 | 书架网格 | `.md-shelf-grid` | 组件内另写 `grid-cols-*` |
 | 筛选 chip | `.md-filter-chip` | 实心彩色胶囊 |

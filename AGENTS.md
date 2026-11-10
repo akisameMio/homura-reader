@@ -202,7 +202,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 10. **PDF 资源必须随包分发**：`vite.config.js` 的 `pdfjsAssets` 插件会把 `cmaps / standard_fonts / wasm / iccs` 同步到 `public/pdfjs`。删掉插件会导致 PDF 白屏。`public/pdfjs` 已 gitignore，不要提交。
 11. **PDF 渲染约束**：按页懒加载，`MAX_CACHED_PAGES = 24`；首次打开默认单页（`applyLayoutForBook` 里 `if (book.format === 'pdf') next.spread = 1`）；不支持字号调整与重排。
 12. **Markdown 安全**：输出会进 `v-html`，原始 HTML 必须经 `sanitize.ts` 的 `ALLOWED_TAGS` 白名单校验，链接/图片只放行 `http/https/mailto/tel` 与相对路径。章节按一级/二级标题切分，并排除代码块内的标题标记。
-13. **进度与排版记忆**：翻页、滚轮、条漫滚动、拖进度条都要按书保存，包含方向 / 单双页 / 首页单排 / 字号（12–28）/ 字体（宋 / 黑 / 楷）/ 行距 / 页边距 / 条漫尺寸。目录展开状态与书签目前**没有**持久化，书签功能尚未实现，这是已知限制，不要假装已支持。
+13. **进度与排版记忆**：翻页、滚轮、条漫滚动、拖进度条都要按书保存，包含方向 / 单双页 / 首页单排 / 字号（14–28，偶数档）/ 字体（宋 / 黑 / 楷）/ 行距 / 页边距 / 条漫尺寸。目录展开状态与书签目前**没有**持久化，书签功能尚未实现，这是已知限制，不要假装已支持。
 14. **重对象不进响应式深度代理**：见第 4 节。`PaginatedView` 的双缓冲动画对象尤其不能变成 `ref` 深层代理。
 15. **桌面原生压缩包会话**：EPUB 只从 `homura-native-sources` 读取，Rust 按 ZIP 中央目录随机读取条目到 AppCache；路径越界、条目过多、解压超限必须直接失败。JSZip 只对不可用、暂不支持或普通解析失败回退，不能吞掉 `NATIVE_SECURITY_LIMIT` / `NATIVE_LIMIT_EXCEEDED`。
 16. **封面与元数据原生兜底**：封面缩略图优先走 Rust `create_cover_thumbnail` / `create_cover_thumbnail_from_archive`，格式不支持、命令不可用或没有 Tauri 时才回退 Canvas；原生像素 / 输入大小上限不得继续交给 JS 重试。SQLite 元数据失败时回退 IndexedDB，但 `dirty` 标记与删除顺序不能删，否则旧镜像可能复活已删除书本。

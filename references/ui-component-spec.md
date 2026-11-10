@@ -484,12 +484,12 @@ Hover 规则：
 | 项目 | 规范 |
 | --- | --- |
 | 触控高度 | 48px |
-| 轨道 | 16px 胶囊 |
-| 活动轨道 | `primary` |
-| 未活动轨道 | `secondary-container` |
-| 手柄 | 4 × 44px 胶囊，`primary`，2px 圆角 |
-| 手柄留白 | 视觉 6px；CSS 用 8px 偏移补偿 4px 手柄的半宽 |
-| 焦点 | 2px `primary` 外环 + 2px surface 间隔 |
+| 轨道 | 16px 胶囊，内嵌 3.2px 点阵，点距 16px、首点距端 6px |
+| 活动轨道 | `primary`，点阵为 `on-primary` |
+| 未活动轨道 | `secondary-container`，点阵为 `primary` |
+| 手柄 | 4 × 36px 竖条，`primary`，2px 圆角 |
+| 手柄留白 | 4px 表面色光环（抽屉内用 `surface-container`）切开轨道 |
+| 焦点 | 4px `primary` 外环 + 2px 表面色间隔 |
 | 禁用 | 整体透明度 0.38 |
 
 - 所有滑条统一使用 `MdRange`，保留原生 `input[type="range"]` 的键盘、触控和读屏行为。
@@ -497,6 +497,7 @@ Hover 规则：
 - 活动轨道宽度由组件按 `min/max` 自动计算，不要在调用处手写渐变或进度宽度。
 - RTL 翻页传入 `:rtl="inverted"`，活动轨道会从右往左填充，不要反转整个底栏。
 - 拖动时持续更新视觉进度，持久化仍由现有节流机制负责。
+- 阅读设置里的字号滑条使用 `variant="bubble"`：28px 轨道、40px 数值圆钮、每个可选档位一个 4px 点阵，活动段使用 `primary` 与 `on-primary` 点阵；两端 `A−` / `A+` 为 44px 按钮。字号只提供 14–28px 偶数档。
 
 ## 7. 卡片与内容展示
 

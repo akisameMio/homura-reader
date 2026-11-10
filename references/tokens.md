@@ -96,7 +96,7 @@
 | `.md-bottom-nav-space` | 手机底部导航留白 `calc(5.5rem + env(safe-area-inset-bottom))` |
 | `.md-scrim` / `.md-scrim-soft` | 遮罩：shadow-color 32% / 30% |
 | `.md-sheet-enter-active` 等 | sheet/浮层动效：0.2s cubic-bezier(.2,0,0,1)，含 fade 版 `.md-fade-*` |
-| `.md-range` | 滑条：4px 轨道、14px 拇指（触屏 18px）、3px 表面色光环 |
+| `.md-range` | 滑条：16px 点阵胶囊轨道、4×36px 竖条手柄、4px 表面色光环，48px 触控高度 |
 | `.md-icon-button` | 48px 圆形图标按钮；支持 `is-outlined` / `is-filled` / `is-desktop-only` / `is-favorite` |
 | `.md-text-button` / `.md-filled-button` / `.md-tonal-button` | 48px 胶囊按钮三档：低强调 / 主行动 / 次要行动 |
 | `.md-filter-chip` | 筛选 chip：32px 视觉高度、48px 命中区，选中态 secondary-container |
