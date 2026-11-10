@@ -73,6 +73,9 @@ export const useReaderStore = defineStore('reader', () => {
   const webtoonBounds = shallowRef({ atStart: true, atEnd: false });
   let openRequestToken = 0;
   const currentIndex = ref(0);
+  // 「回到上次位置」：目录跳读前记下起点（锚点 + 页码），左下角出现 ↺ 页码 圆钮，
+  // 点击回到跳读前的那一屏。锚点让字号 / 窗口重排后也能落回原章节位置。
+  const previousLocation = shallowRef<{ index: number; anchor: { chapterIndex: number; ratio: number } | null; pageNumber: number } | null>(null);
   const activePages = shallowRef<ReaderPage[]>([]);
   const renderToken = ref(0);
   const webtoonObserver = shallowRef<ResizeObserver | null>(null);
@@ -127,6 +130,17 @@ export const useReaderStore = defineStore('reader', () => {
     return layoutConfig.direction === 'vertical'
       ? webtoonBounds.value.atEnd
       : activePages.value.length > 0 && spreadBounds(currentIndex.value, activePages.value.length, effectiveDouble.value, layoutConfig.coverOffset).end === activePages.value.length - 1;
+  });
+
+  // 跳读后才有返回目标；已经回到原来的那一屏（单双页同屏）时按钮自动消失
+  const canReturnToPreviousLocation = computed(() => {
+    const target = previousLocation.value;
+    if (!target || !currentBook.value || layoutConfig.direction === 'vertical') return false;
+    const total = activePages.value.length;
+    if (!total) return false;
+    const from = spreadBounds(target.index, total, effectiveDouble.value, layoutConfig.coverOffset).start;
+    const now = spreadBounds(currentIndex.value, total, effectiveDouble.value, layoutConfig.coverOffset).start;
+    return from !== now;
   });
 
   // ---- 纯派生逻辑（原 reader.js 的查询函数） ----
@@ -472,6 +486,7 @@ export const useReaderStore = defineStore('reader', () => {
       collectionOrderIds.value = order;
       webtoonBounds.value = { atStart: currentIndex.value === 0, atEnd: false };
       currentBook.value = book;
+      previousLocation.value = null;
       activeNovelPaginationKey = pagePlan.key || '';
       beginNovelPagination(pagePlan.job);
       if (previousBook && previousBook.id !== id) {
@@ -515,6 +530,7 @@ export const useReaderStore = defineStore('reader', () => {
     openError.value = '';
     readingCollectionId.value = null;
     collectionOrderIds.value = [];
+    previousLocation.value = null;
     cancelNovelPagination();
     activeNovelPaginationKey = '';
     const shelf = useShelfStore();
@@ -746,6 +762,59 @@ export const useReaderStore = defineStore('reader', () => {
     else goNextPage();
   }
 
+  // 记录当前屏的位置快照，供目录跳读后回退
+  function captureLocation() {
+    const page = activePages.value[currentIndex.value];
+    if (!page) return null;
+    return {
+      index: currentIndex.value,
+      anchor: novelAnchorFromPages(activePages.value, currentIndex.value),
+      pageNumber: Number(page.pageNumber) || currentIndex.value + 1
+    };
+  }
+
+  // 目录 / 页码跳读：先记住起点，跳完若仍在同一屏就不显示返回按钮
+  function jumpToPage(index: number) {
+    if (!currentBook.value) return;
+    const total = activePages.value.length;
+    if (!total) return;
+    const target = Math.max(0, Math.min(total - 1, parseInt(String(index), 10) || 0));
+    const origin = captureLocation();
+    onSliderInput(target);
+    if (!origin) return;
+    const from = spreadBounds(origin.index, total, effectiveDouble.value, layoutConfig.coverOffset).start;
+    const now = spreadBounds(currentIndex.value, total, effectiveDouble.value, layoutConfig.coverOffset).start;
+    previousLocation.value = from !== now ? origin : null;
+  }
+
+  // 回到跳读前的那一屏：优先按锚点还原，排版变化后也不会漂到别的章节
+  function returnToPreviousLocation() {
+    const target = previousLocation.value;
+    if (!target || !currentBook.value) return;
+    const total = activePages.value.length;
+    if (!total) return;
+    previousLocation.value = null;
+    let index = target.index;
+    if (target.anchor) {
+      const resolved = findAnchorIndex(activePages.value, target.anchor);
+      if (resolved >= 0) index = resolved;
+    }
+    index = Math.max(0, Math.min(total - 1, index));
+    if (layoutConfig.direction === 'vertical') {
+      currentIndex.value = index;
+      if (webtoonScrollTo.value) webtoonScrollTo.value(index);
+      touchProgress();
+      return;
+    }
+    const forward = index > currentIndex.value;
+    const slideDir = forward
+      ? (layoutConfig.direction === 'rtl' ? 'enter-from-left' : 'enter-from-right')
+      : (layoutConfig.direction === 'rtl' ? 'enter-from-right' : 'enter-from-left');
+    currentIndex.value = index;
+    requestRender(slideDir);
+    touchProgress();
+  }
+
   function onSliderInput(val: string | number) {
     currentIndex.value = parseInt(String(val), 10) || 0;
     if (layoutConfig.direction === 'vertical') {
@@ -816,6 +885,10 @@ export const useReaderStore = defineStore('reader', () => {
     toggleRtlTapInvert,
     onLeftButtonClick,
     onRightButtonClick,
-    onSliderInput
+    onSliderInput,
+    previousLocation,
+    canReturnToPreviousLocation,
+    jumpToPage,
+    returnToPreviousLocation
   };
 });

@@ -220,3 +220,78 @@
         transition: none;
       }
     }
+
+    /* 纸面左下角：跳读后「回到上次位置」，深色圆钮 + 上次位置的页码 */
+    .reader-jump-back {
+      position: absolute;
+      left: var(--reader-pad-x, 120px);
+      bottom: calc(var(--reader-pad-bottom, 76px) - 24px);
+      /* 与「本章还剩」同一层：压在纸页底色之上，工具栏与抽屉之下 */
+      z-index: 25;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--md-reader-ink, var(--md-on-surface));
+      font-family: var(--font-sans, system-ui, sans-serif);
+      font-size: 13px;
+      letter-spacing: 0.01em;
+      line-height: 1;
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 200ms var(--md-ease-standard, ease);
+    }
+    .reader-stage-shell:hover .reader-jump-back,
+    .reader-stage-shell.is-chrome .reader-jump-back {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .reader-jump-back-icon {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: color-mix(in oklab, var(--md-reader-ink) 88%, var(--md-reader-paper));
+      color: var(--md-reader-paper);
+      transition: transform 200ms var(--md-ease-standard, ease);
+    }
+    .reader-jump-back:hover .reader-jump-back-icon,
+    .reader-jump-back:focus-visible .reader-jump-back-icon {
+      transform: scale(1.06);
+    }
+    .reader-jump-back:hover .reader-jump-back-page,
+    .reader-jump-back:focus-visible .reader-jump-back-page {
+      color: var(--md-reader-ink);
+    }
+    .reader-jump-back:focus-visible {
+      outline: 2px solid var(--md-primary);
+      outline-offset: 3px;
+      border-radius: 999px;
+    }
+    /* 触屏没有 hover，返回按钮一旦出现就常驻，避免用户永远点不到 */
+    @media (hover: none) {
+      .reader-jump-back {
+        opacity: 1;
+        pointer-events: auto;
+      }
+    }
+    .reader-stage-shell.is-obscured .reader-jump-back {
+      opacity: 0;
+      pointer-events: none;
+    }
+    @media (max-width: 899px) {
+      .reader-jump-back {
+        left: var(--reader-pad-x, 22px);
+        bottom: calc(var(--reader-pad-bottom, 104px) - 22px);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .reader-jump-back,
+      .reader-jump-back-icon {
+        transition: none;
+      }
+    }

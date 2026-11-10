@@ -135,7 +135,7 @@ function isCurrentChapter(group: { index: number; end: number }) {
 }
 
 function jumpTo(index: number) {
-  reader.onSliderInput(index);
+  reader.jumpToPage(index);
   ui.closeToc();
 }
 </script>

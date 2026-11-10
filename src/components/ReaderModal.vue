@@ -55,6 +55,19 @@
               <MdIcon name="chevron_right" />
             </button>
           </template>
+
+          <!-- 跳读后回到上次位置：深色圆钮 + 上次页码，跟纸面事件一起出现 -->
+          <button
+            v-if="reader.canReturnToPreviousLocation"
+            type="button"
+            class="reader-jump-back md-hit-target"
+            :title="`回到上次位置（第 ${reader.previousLocation?.pageNumber} 页）`"
+            :aria-label="`回到上次位置，第 ${reader.previousLocation?.pageNumber} 页`"
+            @click="reader.returnToPreviousLocation()"
+          >
+            <span class="reader-jump-back-icon" aria-hidden="true"><MdIcon name="undo" :size="13" /></span>
+            <span class="reader-jump-back-page" aria-hidden="true">{{ reader.previousLocation?.pageNumber }}</span>
+          </button>
         </div>
       </template>
 
