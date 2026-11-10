@@ -226,8 +226,8 @@
       position: absolute;
       left: var(--reader-pad-x, 120px);
       bottom: calc(var(--reader-pad-bottom, 76px) - 24px);
-      /* 与「本章还剩」同一层：压在纸页底色之上，工具栏与抽屉之下 */
-      z-index: 25;
+      /* 必须盖过 PaginatedView 手势层的 z-30，否则点击会被手势层吃掉 */
+      z-index: 30;
       display: inline-flex;
       align-items: center;
       gap: 8px;
