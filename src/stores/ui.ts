@@ -16,6 +16,8 @@ export const useUiStore = defineStore('ui', () => {
   const collectionTocOpen = ref(false);
   // 字体浮层：贴顶栏的小菜单，打开期间等同抽屉，钉住工具栏并收起箭头
   const fontMenuOpen = ref(false);
+  // 拖动阅读滑条等连续操作期间钉住工具栏，避免 2.2 秒自动隐藏打断手指
+  const chromePinned = ref(false);
   const readerDrawerOpen = computed(() => settingsOpen.value || tocOpen.value || collectionTocOpen.value || fontMenuOpen.value);
   const fullscreen = ref(false);
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
@@ -32,7 +34,7 @@ export const useUiStore = defineStore('ui', () => {
   function showChrome() {
     readerChromeVisible.value = true;
     clearHideTimer();
-    if (!readerDrawerOpen.value) {
+    if (!readerDrawerOpen.value && !chromePinned.value) {
       hideTimer = setTimeout(() => {
         readerChromeVisible.value = false;
         hideTimer = null;
@@ -41,8 +43,20 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   function hideChrome() {
+    if (chromePinned.value) return;
     clearHideTimer();
     if (!readerDrawerOpen.value) readerChromeVisible.value = false;
+  }
+
+  function pinChrome() {
+    chromePinned.value = true;
+    readerChromeVisible.value = true;
+    clearHideTimer();
+  }
+
+  function unpinChrome() {
+    chromePinned.value = false;
+    showChrome();
   }
 
   function toggleChrome() {
@@ -113,6 +127,7 @@ export const useUiStore = defineStore('ui', () => {
   function resetReaderUi() {
     fontMenuOpen.value = false;
     collectionTocOpen.value = false;
+    chromePinned.value = false;
     clearHideTimer();
     settingsOpen.value = false;
     tocOpen.value = false;
@@ -166,6 +181,8 @@ export const useUiStore = defineStore('ui', () => {
     showChrome,
     hideChrome,
     toggleChrome,
+    pinChrome,
+    unpinChrome,
     openSettings,
     closeSettings,
     openToc,

@@ -1,28 +1,29 @@
 <template>
-  <div class="surface-mode-preview" role="group" aria-label="阅读模式">
+  <div class="surface-mode-preview" role="group" :aria-label="isReader ? '阅读模式' : '表面'">
     <button
-      v-for="option in SURFACE_MODE_OPTIONS"
+      v-for="option in options"
       :key="option.value"
       type="button"
       class="surface-mode-option"
-      :class="{ 'is-selected': theme.surfaceMode === option.value }"
+      :class="{ 'is-selected': selectedValue === option.value }"
       :title="option.title"
       :aria-label="`${option.label}：${option.note}`"
-      :aria-pressed="theme.surfaceMode === option.value"
+      :aria-pressed="selectedValue === option.value"
       @click="selectMode(option.value, $event)"
     >
       <span
         class="surface-mode-card"
-        :class="{ 'is-selected': theme.surfaceMode === option.value }"
-        :data-theme="theme.themeColor"
-        :data-mode="option.value"
+        :class="{ 'is-selected': selectedValue === option.value }"
+        :data-theme="previewTheme(option)"
+        :data-mode="previewMode(option)"
       >
-        <span class="surface-mode-sheet" aria-hidden="true">
+        <span class="surface-mode-sheet" :class="sheetClass(option)" aria-hidden="true">
           <span class="surface-mode-palette"><i></i><i></i><i></i></span>
           <span class="surface-mode-copy-block"><i></i><i></i><i></i></span>
           <span class="surface-mode-footer"><i></i><i></i></span>
+          <span v-if="isReader && option.value === 'settings'" class="surface-mode-badge">跟随</span>
         </span>
-        <span v-if="theme.surfaceMode === option.value" class="surface-mode-check" aria-hidden="true">
+        <span v-if="selectedValue === option.value" class="surface-mode-check" aria-hidden="true">
           <MdIcon name="check" />
         </span>
       </span>
@@ -31,19 +32,64 @@
         <span class="surface-mode-icon" aria-hidden="true">
           <MdIcon :name="option.icon" />
         </span>
-        <span class="surface-mode-note">{{ option.note }}</span>
+        <span class="surface-mode-note">{{ option.label }}</span>
       </span>
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
-import { SURFACE_MODE_OPTIONS, useThemeStore } from '../stores/theme.ts';
+import { computed } from 'vue';
+import {
+  READER_SURFACE_MODE_OPTIONS,
+  SURFACE_MODE_OPTIONS,
+  useThemeStore
+} from '../stores/theme.ts';
 import MdIcon from './MdIcon.vue';
 
+type PreviewOption = {
+  value: string;
+  label: string;
+  note: string;
+  title: string;
+  icon: string;
+  theme?: string;
+};
+
+const props = defineProps({
+  surface: { type: String, default: 'appearance' }
+});
+
 const theme = useThemeStore();
+const isReader = computed(() => props.surface === 'reader');
+const options = computed<PreviewOption[]>(() => (
+  isReader.value ? READER_SURFACE_MODE_OPTIONS : SURFACE_MODE_OPTIONS
+) as PreviewOption[]);
+const selectedValue = computed(() => (isReader.value ? theme.readerSurfaceMode : theme.surfaceMode));
+
+function previewMode(option: PreviewOption) {
+  if (isReader.value) {
+    return option.value === 'settings' ? theme.effectiveSurfaceMode : 'light';
+  }
+  return option.value === 'auto' ? 'light' : option.value;
+}
+
+function previewTheme(option: PreviewOption) {
+  return option.theme || theme.themeColor;
+}
+
+function sheetClass(option: PreviewOption) {
+  if (!isReader.value && option.value === 'auto') return 'is-auto-split';
+  if (isReader.value && option.value === 'parchment') return 'is-preview-parchment';
+  if (isReader.value && option.value === 'green') return 'is-preview-green';
+  return '';
+}
 
 function selectMode(mode: string, event: MouseEvent) {
+  if (isReader.value) {
+    if (mode !== theme.readerSurfaceMode) theme.setReaderSurfaceMode(mode);
+    return;
+  }
   if (mode === theme.surfaceMode) return;
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
   theme.setSurfaceMode(mode, false, {
@@ -100,6 +146,22 @@ function selectMode(mode: string, event: MouseEvent) {
   border-radius: 7px;
   background: var(--md-surface);
   box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--md-outline-variant) 58%, transparent);
+}
+
+.surface-mode-sheet.is-auto-split {
+  background: linear-gradient(
+    135deg,
+    var(--md-canvas-light) 0 49.4%,
+    var(--md-canvas-dark) 50.6% 100%
+  );
+}
+
+.surface-mode-sheet.is-preview-parchment {
+  background: var(--md-parchment-paper);
+}
+
+.surface-mode-sheet.is-preview-green {
+  background: var(--md-reader-green-paper);
 }
 
 .surface-mode-palette {
@@ -190,6 +252,19 @@ function selectMode(mode: string, event: MouseEvent) {
 .surface-mode-check svg {
   width: 10px;
   height: 10px;
+}
+
+.surface-mode-badge {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--md-surface-container) 82%, transparent);
+  color: var(--md-on-surface-variant);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 7px;
+  letter-spacing: 0.04em;
 }
 
 .surface-mode-card.is-selected {

@@ -39,6 +39,19 @@
         @drag-cancel="onSheetDragCancel"
       />
 
+      <!-- 字号预览：固定顶在控件上方，改字号 / 字体 / 行距时即时反馈 -->
+      <div v-if="!isManga" class="reader-type-preview-wrap">
+        <div class="reader-type-preview" :style="{ '--reader-preview-pad': previewPadX }" aria-hidden="true">
+          <div class="reader-type-preview-head">
+            <span class="reader-type-preview-glyph"><b>大</b><span>小</span></span>
+            <span class="reader-type-preview-meta">{{ config.fontSize }} px · {{ fontLabel }}</span>
+          </div>
+          <p class="reader-type-preview-text" :style="previewTextStyle">
+            吃完晚饭，沿着海滩散步，找一个完美地点来读完目前看的书并开始新书。夜色漫上来，海风把纸页吹得沙沙作响。
+          </p>
+        </div>
+      </div>
+
       <div
         ref="scrollRef"
         class="md-drawer-body reader-settings-scroll px-5 min-[900px]:px-6"
@@ -52,38 +65,35 @@
             <span class="md-drawer-group-label">字号</span>
             <b class="md-drawer-group-value">{{ config.fontSize }} px</b>
           </div>
-          <div class="grid grid-cols-[48px_minmax(0,1fr)_48px] items-center gap-3">
+          <div class="reader-font-control">
             <button
               type="button"
-              @click="reader.changeFontSize(-1)"
+              class="reader-font-step"
+              @click="reader.changeFontSize(-NOVEL_FONT_STEP)"
               :disabled="config.fontSize <= NOVEL_FONT_MIN"
-              class="md-icon-button is-outlined"
               title="减小字号"
               aria-label="减小字号"
-            >
-              <MdIcon name="remove" />
-            </button>
-            <input class="reader-font-number" type="number" :min="NOVEL_FONT_MIN" :max="NOVEL_FONT_MAX" step="1" :value="config.fontSize" aria-label="小说字号数值" @change="onFontNumberChange" />
+            >A−</button>
+            <MdRange
+              class="reader-font-range"
+              variant="bubble"
+              :model-value="config.fontSize"
+              :min="NOVEL_FONT_MIN"
+              :max="NOVEL_FONT_MAX"
+              :step="NOVEL_FONT_STEP"
+              :value-label="String(config.fontSize)"
+              aria-label="小说字号滑块"
+              @update:model-value="reader.setFontSize"
+            />
             <button
               type="button"
-              @click="reader.changeFontSize(1)"
+              class="reader-font-step"
+              @click="reader.changeFontSize(NOVEL_FONT_STEP)"
               :disabled="config.fontSize >= NOVEL_FONT_MAX"
-              class="md-icon-button is-outlined"
               title="增大字号"
               aria-label="增大字号"
-            >
-              <MdIcon name="add" />
-            </button>
+            >A+</button>
           </div>
-          <MdRange
-            class="mt-3 w-full"
-            :model-value="config.fontSize"
-            :min="NOVEL_FONT_MIN"
-            :max="NOVEL_FONT_MAX"
-            :step="1"
-            aria-label="小说字号滑块"
-            @update:model-value="reader.setFontSize"
-          />
           <p class="mt-2 text-[11px] leading-relaxed text-[var(--md-on-surface-variant)]">{{ NOVEL_FONT_MIN }}–{{ NOVEL_FONT_MAX }} px · 每页行数随字号和窗口自动调整，按书记忆。</p>
         </section>
 
@@ -203,7 +213,7 @@
             <span class="md-drawer-group-label">阅读模式</span>
             <b class="md-drawer-group-value">{{ modeLabel }}</b>
           </div>
-          <SurfaceModePreview />
+          <SurfaceModePreview surface="reader" />
 
           <div class="md-drawer-group-head mt-4">
             <span class="md-drawer-group-label">主题色</span>
@@ -262,13 +272,19 @@
 
 <script setup lang="ts">
 import { computed, ref, shallowRef, watch, nextTick } from 'vue';
-import { useReaderStore, WEBTOON_FIT_LABELS, NOVEL_FONT_MIN, NOVEL_FONT_MAX } from '../stores/reader.ts';
-import { READER_LINE_HEIGHT_OPTIONS, READER_MARGIN_OPTIONS } from '../services/readerLayout.ts';
+import { useReaderStore, WEBTOON_FIT_LABELS, NOVEL_FONT_MIN, NOVEL_FONT_MAX, NOVEL_FONT_STEP } from '../stores/reader.ts';
+import {
+  READER_FONT_OPTIONS,
+  READER_LINE_HEIGHT_OPTIONS,
+  READER_MARGIN_OPTIONS,
+  resolveFontStack,
+  resolveLineHeight
+} from '../services/readerLayout.ts';
 import { isAndroid } from '../services/platform.ts';
 import { useSettingsStore } from '../stores/settings.ts';
 import { useShelfStore } from '../stores/shelf.ts';
 import {
-  SURFACE_MODE_OPTIONS,
+  READER_SURFACE_MODE_OPTIONS,
   THEME_OPTIONS,
   TRANSITION_LABELS,
   TRANSITION_OPTIONS,
@@ -278,7 +294,6 @@ import { useUiStore } from '../stores/ui.ts';
 import { useViewport } from '../composables/useViewport.ts';
 import { useSheetDrag } from '../composables/useSheetDrag.ts';
 import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
-import MdIcon from './MdIcon.vue';
 import MdRange from './MdRange.vue';
 import MdSegmentedControl from './MdSegmentedControl.vue';
 import MdSwitch from './MdSwitch.vue';
@@ -306,12 +321,6 @@ watch([scrollRef, contentRef], ([scroll, content], _previous, onCleanup) => {
   nextTick(update);
   onCleanup(() => observer.disconnect());
 }, { flush: 'post' });
-
-function onFontNumberChange(event: Event) {
-  const input = event.target as HTMLInputElement;
-  if (input.value !== '') reader.setFontSize(Number(input.value));
-  input.value = String(config.fontSize);
-}
 
 async function saveCover(file: File | null) {
   if (coverBusy.value) return;
@@ -341,6 +350,13 @@ const lineHeightOptions = READER_LINE_HEIGHT_OPTIONS.map(option => ({ value: opt
 const pageMarginOptions = READER_MARGIN_OPTIONS.map(option => ({ value: option.value, label: option.label }));
 const lineHeightLabel = computed(() => (READER_LINE_HEIGHT_OPTIONS.find(option => option.value === config.lineHeight) || READER_LINE_HEIGHT_OPTIONS[1]).label);
 const pageMarginLabel = computed(() => (READER_MARGIN_OPTIONS.find(option => option.value === config.pageMargin) || READER_MARGIN_OPTIONS[1]).label);
+const fontLabel = computed(() => (READER_FONT_OPTIONS.find(option => option.value === config.fontFamily) || READER_FONT_OPTIONS[0]).label);
+const previewTextStyle = computed(() => ({
+  fontFamily: resolveFontStack(config.fontFamily),
+  fontSize: `${config.fontSize}px`,
+  lineHeight: String(resolveLineHeight(config.lineHeight))
+}));
+const previewPadX = computed(() => (config.pageMargin === 'narrow' ? '16px' : config.pageMargin === 'wide' ? '32px' : '24px'));
 const settingsOpen = computed(() => ui.settingsOpen);
 const {
   onDragStart: onSheetDragStart,
@@ -377,7 +393,7 @@ const webtoonFits = [
 
 const directionLabel = computed(() => (directions.find(d => d.value === config.direction) || directions[0]).label);
 const spreadLabel = computed(() => (isVertical.value ? '长卷' : (!isPhone.value && config.spread === 2 ? '双页' : '单页')));
-const modeLabel = computed(() => (SURFACE_MODE_OPTIONS.find(option => option.value === theme.surfaceMode) || SURFACE_MODE_OPTIONS[0]).label);
+const modeLabel = computed(() => (READER_SURFACE_MODE_OPTIONS.find(option => option.value === theme.readerSurfaceMode) || READER_SURFACE_MODE_OPTIONS[2]).label);
 const themeLabel = computed(() => (THEME_OPTIONS.find(option => option.name === theme.themeColor) || THEME_OPTIONS[0]).title.replace(' (默认)', ''));
 
 // 恢复默认：全部走 store 已有的公开动作，不改动 store API
@@ -398,34 +414,37 @@ function resetDefaults() {
 .reader-settings-scroll:not(.has-overflow) { scrollbar-width: none; }
 .reader-settings-scroll:not(.has-overflow)::-webkit-scrollbar { display: none; }
 .reader-settings-scroll::-webkit-scrollbar-thumb { background: var(--md-outline); }
-.reader-font-number {
-  width: 100%;
+.reader-font-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.reader-font-range {
   min-width: 0;
-  height: 48px;
-  appearance: textfield;
-  border: 1px solid var(--md-outline-variant);
-  border-radius: 16px;
+  flex: 1;
+}
+.reader-font-step {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
   background: transparent;
   color: var(--md-on-surface);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
-  transition:
-    border-color var(--md-duration-short) var(--md-ease-emphasized),
-    box-shadow var(--md-duration-short) var(--md-ease-emphasized);
+  font-family: inherit;
+  font-size: 21px;
+  font-weight: 420;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  transition: background-color var(--md-duration-short) var(--md-ease-emphasized);
 }
-.reader-font-number::-webkit-inner-spin-button,
-.reader-font-number::-webkit-outer-spin-button {
-  margin: 0;
-  -webkit-appearance: none;
+.reader-font-step:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 @media (hover: hover) and (pointer: fine) {
-  .reader-font-number:hover { border-color: var(--md-on-surface-variant); }
-}
-.reader-font-number:focus {
-  border-color: var(--md-primary);
-  box-shadow: inset 0 0 0 1px var(--md-primary);
+  .reader-font-step:hover:not(:disabled) { background: var(--md-surface-high); }
 }
 .reader-cover-preview {
   display: grid;

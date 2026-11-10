@@ -1,6 +1,10 @@
 <template>
   <!-- Reader Fullscreen Modal · 沉浸式：工具栏浮在画布上，默认自动隐藏 -->
-  <div v-show="!!reader.currentBook" class="reader-dismiss-layer fixed inset-0 bg-[var(--md-reader-paper)] z-50 flex flex-col transition-colors duration-200">
+  <div
+    v-show="!!reader.currentBook"
+    class="reader-dismiss-layer fixed inset-0 bg-[var(--md-reader-paper)] z-50 flex flex-col transition-colors duration-200"
+    :data-reader-mode="theme.readerSurfaceMode"
+  >
     <div
       v-if="isCompact && !!reader.currentBook && !nativePredictiveBackSupported"
       class="reader-back-edge"
@@ -56,18 +60,6 @@
             </button>
           </template>
 
-          <!-- 跳读后回到上次位置：深色圆钮 + 上次页码，跟纸面事件一起出现 -->
-          <button
-            v-if="reader.canReturnToPreviousLocation"
-            type="button"
-            class="reader-jump-back md-hit-target"
-            :title="`回到上次位置（第 ${reader.previousLocation?.pageNumber} 页）`"
-            :aria-label="`回到上次位置，第 ${reader.previousLocation?.pageNumber} 页`"
-            @click="reader.returnToPreviousLocation()"
-          >
-            <span class="reader-jump-back-icon" aria-hidden="true"><MdIcon name="undo" :size="13" /></span>
-            <span class="reader-jump-back-page" aria-hidden="true">{{ reader.previousLocation?.pageNumber }}</span>
-          </button>
         </div>
       </template>
 
@@ -85,6 +77,7 @@
         />
       </Transition>
 
+      <ReaderFooter />
       <ReaderTocDrawer />
       <ReaderSettingsDrawer />
       <ReaderCollectionDrawer />
@@ -125,12 +118,14 @@ import { shallowRef, watch, onBeforeUnmount } from 'vue';
 import { classifyReaderGesture } from '../services/readerGestures.ts';
 import { useReaderStore } from '../stores/reader.ts';
 import { useUiStore } from '../stores/ui.ts';
+import { useThemeStore } from '../stores/theme.ts';
 import { useViewport } from '../composables/useViewport.ts';
 import { useShortcuts } from '../composables/useShortcuts.ts';
 import { useReaderBackDismiss } from '../composables/useReaderBackDismiss.ts';
 import { useVolumeKeys } from '../composables/useVolumeKeys.ts';
 import MdIcon from './MdIcon.vue';
 import ReaderTopBar from './ReaderTopBar.vue';
+import ReaderFooter from './ReaderFooter.vue';
 import ReaderTocDrawer from './ReaderTocDrawer.vue';
 import ReaderSettingsDrawer from './ReaderSettingsDrawer.vue';
 import ReaderCollectionDrawer from './ReaderCollectionDrawer.vue';
@@ -139,6 +134,7 @@ import WebtoonView from './WebtoonView.vue';
 
 const reader = useReaderStore();
 const ui = useUiStore();
+const theme = useThemeStore();
 const { isCompact } = useViewport();
 const viewportRef = shallowRef<HTMLElement | null>(null);
 const {

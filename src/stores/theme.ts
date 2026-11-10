@@ -6,11 +6,17 @@
    ========================================================================== */
 
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { computed, onScopeDispose, ref } from 'vue';
 import { applyAndroidSystemBars } from '../services/androidSystemBars.ts';
 
 // 原生窗口 / 浏览器地址栏底色，与 homura.css 的 --md-surface 保持一致
-const SURFACE_CANVAS = { light: '#F8FAFC', warm: '#FAF6EE', dark: '#0F1115' };
+const SURFACE_CANVAS = { light: '#F8FAFC', dark: '#0F1115' };
+const SURFACE_MODE_ORDER = ['light', 'dark', 'auto'];
+const READER_SURFACE_MODE_ORDER = ['parchment', 'green', 'settings'];
+const LEGACY_SURFACE_MODES: Record<string, string> = { warm: 'light' };
+type SurfaceMode = 'light' | 'dark' | 'auto';
+type EffectiveSurfaceMode = 'light' | 'dark';
+type ReaderSurfaceMode = 'parchment' | 'green' | 'settings';
 export const THEME_OPTIONS = Object.freeze([
   { name: 'green', title: '森系绿', tones: ['#BEF0A7', '#A3D48D', '#6F9D5C'] },
   { name: 'mint', title: '薄荷青', tones: ['#98F4D7', '#7BD7BC', '#42A087'] },
@@ -25,8 +31,13 @@ export const THEME_OPTIONS = Object.freeze([
 ]);
 export const SURFACE_MODE_OPTIONS = Object.freeze([
   { value: 'light', label: '白昼', note: '清透纸白', title: '白昼清爽模式', icon: 'light_mode' },
-  { value: 'warm', label: '护眼', note: '暖纸降蓝', title: '暖色护眼模式', icon: 'visibility' },
-  { value: 'dark', label: '夜间', note: '深褐低光', title: '夜间深邃模式', icon: 'dark_mode' }
+  { value: 'dark', label: '夜间', note: '深褐低光', title: '夜间深邃模式', icon: 'dark_mode' },
+  { value: 'auto', label: '跟随系统设置', note: '随系统切换', title: '跟随系统深浅色', icon: 'contrast' }
+]);
+export const READER_SURFACE_MODE_OPTIONS = Object.freeze([
+  { value: 'parchment', label: '羊皮纸', note: '暖调低蓝', title: '羊皮纸阅读模式', icon: 'auto_stories', theme: 'amber' },
+  { value: 'green', label: '护眼绿', note: '柔绿降噪', title: '护眼绿阅读模式', icon: 'light_mode', theme: 'green' },
+  { value: 'settings', label: '跟随设置外观', note: '沿用全局表面', title: '跟随设置外观', icon: 'update' }
 ]);
 const SURFACE_REVEAL_DURATION = 720;
 const TRANSITION_ORDER = ['slide', 'fade', 'none'];
@@ -48,23 +59,61 @@ function readTransitionStyle() {
   }
 }
 
+function readReaderSurfaceMode(): ReaderSurfaceMode {
+  try {
+    const saved = localStorage.getItem('homura_reader_surface_mode');
+    return saved !== null && READER_SURFACE_MODE_ORDER.includes(saved)
+      ? saved as ReaderSurfaceMode
+      : 'settings';
+  } catch (err) {
+    return 'settings';
+  }
+}
+
+function normalizeSurfaceMode(value: unknown): SurfaceMode {
+  if (typeof value !== 'string') return 'light';
+  const normalized = LEGACY_SURFACE_MODES[value] || value;
+  return SURFACE_MODE_ORDER.includes(normalized) ? normalized as SurfaceMode : 'light';
+}
+
+function normalizeReaderSurfaceMode(value: unknown): ReaderSurfaceMode {
+  return typeof value === 'string' && READER_SURFACE_MODE_ORDER.includes(value)
+    ? value as ReaderSurfaceMode
+    : 'settings';
+}
+
+function systemPrefersDark() {
+  return typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function resolveEffectiveSurfaceMode(mode: SurfaceMode): EffectiveSurfaceMode {
+  if (mode === 'auto') return systemPrefersDark() ? 'dark' : 'light';
+  return mode;
+}
+
 // 同步原生窗口与系统栏外观，避免夜间模式下标题栏、状态栏与内容底色不同步
-function applyNativeWindowChrome(modeName: string) {
+function applyNativeWindowChrome(modeName: EffectiveSurfaceMode) {
   applyAndroidSystemBars(modeName === 'dark');
 
   const tauriWindow = window.__TAURI__ && window.__TAURI__.window;
   if (!tauriWindow || typeof tauriWindow.getCurrentWindow !== 'function') return;
   const win = tauriWindow.getCurrentWindow();
   const theme = modeName === 'dark' ? 'dark' : 'light';
-  const canvas = (SURFACE_CANVAS as Record<string, any>)[modeName] || SURFACE_CANVAS.light;
+  const canvas = SURFACE_CANVAS[modeName];
   if (win.setTheme) win.setTheme(theme).catch(() => {});
   if (win.setBackgroundColor) win.setBackgroundColor(canvas).catch(() => {});
 }
 
 export const useThemeStore = defineStore('theme', () => {
   const themeColor = ref('orchid');
-  const surfaceMode = ref('light');
+  const surfaceMode = ref<SurfaceMode>('light');
+  const readerSurfaceMode = ref<ReaderSurfaceMode>(readReaderSurfaceMode());
+  const systemDark = ref(systemPrefersDark());
   const transitionStyle = ref(readTransitionStyle());
+  const effectiveSurfaceMode = computed<EffectiveSurfaceMode>(() => (
+    surfaceMode.value === 'auto' ? (systemDark.value ? 'dark' : 'light') : surfaceMode.value
+  ));
   let surfaceModeToken = 0;
   let surfaceRevealFrame = 0;
   let surfaceRevealEl: HTMLDivElement | null = null;
@@ -76,24 +125,27 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   function setSurfaceMode(modeName: string, silent = false, origin: { x: number; y: number } | null = null) {
-    surfaceMode.value = modeName;
+    const nextMode = normalizeSurfaceMode(modeName);
+    const effectiveMode = resolveEffectiveSurfaceMode(nextMode);
+    surfaceMode.value = nextMode;
     const html = document.documentElement;
     const token = ++surfaceModeToken;
+    const currentMode = html.getAttribute('data-mode');
 
     const applyMode = () => {
       // 关闭过渡并强制回流，避免页面颜色渐变而标题栏瞬间换色造成的不同步
       html.classList.add('surface-switching');
       void html.offsetWidth;
-      html.setAttribute('data-mode', modeName);
-      if (modeName === 'dark') {
+      html.setAttribute('data-mode', effectiveMode);
+      if (effectiveMode === 'dark') {
         html.classList.add('dark');
       } else {
         html.classList.remove('dark');
       }
       // 移动端浏览器地址栏 / 状态栏跟随阅读表面底色
       const meta = document.getElementById('homuraThemeColor');
-      if (meta) meta.setAttribute('content', (SURFACE_CANVAS as Record<string, any>)[modeName] || SURFACE_CANVAS.light);
-      try { localStorage.setItem('homura_surface_mode', modeName); } catch (e) {}
+      if (meta) meta.setAttribute('content', SURFACE_CANVAS[effectiveMode]);
+      try { localStorage.setItem('homura_surface_mode', nextMode); } catch (e) {}
     };
 
     const finish = () => {
@@ -109,10 +161,10 @@ export const useThemeStore = defineStore('theme', () => {
       requestAnimationFrame(() => requestAnimationFrame(finish));
     };
 
-    // 启动恢复模式（silent）不做动画，直接落色
-    if (silent) {
+    // 启动恢复、自动模式跟随系统或目标颜色没变时，直接落色不做展开动画
+    if (silent || currentMode === effectiveMode) {
       applyMode();
-      applyNativeWindowChrome(modeName);
+      applyNativeWindowChrome(effectiveMode);
       finishNextFrame();
       return;
     }
@@ -121,7 +173,7 @@ export const useThemeStore = defineStore('theme', () => {
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reducedMotion) {
       applyMode();
-      applyNativeWindowChrome(modeName);
+      applyNativeWindowChrome(effectiveMode);
       finishNextFrame();
       return;
     }
@@ -155,7 +207,7 @@ export const useThemeStore = defineStore('theme', () => {
     document.body.appendChild(reveal);
     applyMode();
     // 标题栏与窗口底色和内容区在同一帧切到新色
-    applyNativeWindowChrome(modeName);
+    applyNativeWindowChrome(effectiveMode);
 
     const startedAt = performance.now();
     const animate = (now: number) => {
@@ -172,6 +224,12 @@ export const useThemeStore = defineStore('theme', () => {
     surfaceRevealFrame = requestAnimationFrame(animate);
   }
 
+  function setReaderSurfaceMode(modeName: string) {
+    const nextMode = normalizeReaderSurfaceMode(modeName);
+    readerSurfaceMode.value = nextMode;
+    try { localStorage.setItem('homura_reader_surface_mode', nextMode); } catch (e) {}
+  }
+
   function setTransitionStyle(style: string | null) {
     if (style === null || !TRANSITION_ORDER.includes(style)) return;
     transitionStyle.value = style;
@@ -183,12 +241,30 @@ export const useThemeStore = defineStore('theme', () => {
     setTransitionStyle(TRANSITION_ORDER[nextIdx]);
   }
 
+  if (typeof window.matchMedia === 'function') {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const onSystemModeChange = () => {
+      systemDark.value = media.matches;
+      if (surfaceMode.value === 'auto') setSurfaceMode('auto', true);
+    };
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', onSystemModeChange);
+      onScopeDispose(() => media.removeEventListener('change', onSystemModeChange));
+    } else if (typeof media.addListener === 'function') {
+      media.addListener(onSystemModeChange);
+      onScopeDispose(() => media.removeListener(onSystemModeChange));
+    }
+  }
+
   return {
     themeColor,
     surfaceMode,
+    readerSurfaceMode,
+    effectiveSurfaceMode,
     transitionStyle,
     setThemeColor,
     setSurfaceMode,
+    setReaderSurfaceMode,
     setTransitionStyle,
     toggleTransitionStyle
   };

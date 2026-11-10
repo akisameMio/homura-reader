@@ -250,6 +250,19 @@
        2. MD3 Surface Scales（白昼 / 暖色护眼 / 夜间）
        --md-shadow-color 专供投影与遮罩；夜间保持深色，避免白色泛光。
        ========================================================================== */
+    :root {
+      --md-canvas-light: #F8FAFC;
+      --md-canvas-dark: #0F1115;
+      --md-parchment-paper: #F4E8D3;
+      --md-parchment-ink: #2E2418;
+      --md-parchment-ink-soft: #695946;
+      --md-parchment-rule: #D3C09E;
+      --md-reader-green-paper: #E8F0E1;
+      --md-reader-green-ink: #1E2A18;
+      --md-reader-green-ink-soft: #56664B;
+      --md-reader-green-rule: #C4D4B7;
+    }
+
     [data-mode="light"] {
       color-scheme: light;
       --md-surface: #F8FAFC;
@@ -267,26 +280,6 @@
       --md-outline-variant: #CBD5E1;
       --md-shadow-color: var(--md-on-surface);
       --manga-filter: none;
-    }
-
-    /* Warm Eye-Care Mode (Sepia / Warm Paper) */
-    [data-mode="warm"] {
-      color-scheme: light;
-      --md-surface: #FAF6EE;
-      --md-surface-low: #F5F0E5;
-      --md-surface-container: #EFE9DC;
-      --md-surface-high: #E8E1D2;
-      --md-surface-highest: #E1D9C8;
-      --md-on-surface: #221E17;
-      --md-on-surface-variant: #57503F;
-      --md-error: #B3261E;
-      --md-on-error: #FFFFFF;
-      --md-error-container: #F9DEDC;
-      --md-on-error-container: #410E0B;
-      --md-outline: #8A7F68;
-      --md-outline-variant: #D8CDB6;
-      --md-shadow-color: var(--md-on-surface);
-      --manga-filter: sepia(0.18) brightness(0.97) contrast(0.98);
     }
 
     /* Dark Mode */
@@ -324,19 +317,28 @@
       --md-reader-ink-faint: color-mix(in oklab, var(--md-on-surface) 40%, var(--md-surface));
       --md-reader-rule: var(--md-outline-variant);
     }
-    [data-mode="warm"] {
-      --md-reader-paper: var(--md-surface);
-      --md-reader-ink: var(--md-on-surface);
-      --md-reader-ink-soft: var(--md-on-surface-variant);
-      --md-reader-ink-faint: color-mix(in oklab, var(--md-on-surface) 42%, var(--md-surface));
-      --md-reader-rule: var(--md-outline-variant);
-    }
     [data-mode="dark"] {
       --md-reader-paper: var(--md-surface);
       --md-reader-ink: color-mix(in oklab, var(--md-on-surface) 94%, var(--md-surface));
       --md-reader-ink-soft: var(--md-on-surface-variant);
       --md-reader-ink-faint: color-mix(in oklab, var(--md-on-surface) 42%, var(--md-surface));
       --md-reader-rule: var(--md-outline-variant);
+    }
+    .reader-dismiss-layer[data-reader-mode="parchment"] {
+      --md-reader-paper: var(--md-parchment-paper);
+      --md-reader-ink: var(--md-parchment-ink);
+      --md-reader-ink-soft: var(--md-parchment-ink-soft);
+      --md-reader-ink-faint: color-mix(in oklab, var(--md-parchment-ink) 42%, var(--md-parchment-paper));
+      --md-reader-rule: var(--md-parchment-rule);
+      --manga-filter: none;
+    }
+    .reader-dismiss-layer[data-reader-mode="green"] {
+      --md-reader-paper: var(--md-reader-green-paper);
+      --md-reader-ink: var(--md-reader-green-ink);
+      --md-reader-ink-soft: var(--md-reader-green-ink-soft);
+      --md-reader-ink-faint: color-mix(in oklab, var(--md-reader-green-ink) 42%, var(--md-reader-green-paper));
+      --md-reader-rule: var(--md-reader-green-rule);
+      --manga-filter: none;
     }
 
     /* ==========================================================================

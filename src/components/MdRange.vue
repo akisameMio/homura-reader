@@ -1,18 +1,38 @@
 <template>
-  <input
+  <div
     class="md-range"
-    type="range"
-    :class="{ 'rtl-slider': rtl }"
-    :min="min"
-    :max="max"
-    :step="step"
-    :value="modelValue"
-    :disabled="disabled"
-    :aria-label="ariaLabel || undefined"
-    :aria-valuetext="ariaValueText || undefined"
-    :style="{ '--md-range-progress': `${progress}%` }"
-    @input="onInput"
-  />
+    :class="{ 'is-rtl': rtl, 'is-disabled': disabled, 'is-bubble': variant === 'bubble' }"
+    :style="{ '--md-range-progress': `${progress}%`, '--md-range-ratio': progress / 100 }"
+  >
+    <input
+      class="md-range-input"
+      type="range"
+      :min="min"
+      :max="max"
+      :step="step"
+      :value="modelValue"
+      :disabled="disabled"
+      :aria-label="ariaLabel || undefined"
+      :aria-valuetext="ariaValueText || undefined"
+      @input="onInput"
+    />
+    <!-- 点阵胶囊轨道 + 竖条手柄；原生 input 透明覆盖，保留键盘与触控语义 -->
+    <div class="md-range-track" aria-hidden="true">
+      <span class="md-range-fill"></span>
+      <template v-if="variant === 'bubble'">
+        <span
+          v-for="tick in ticks"
+          :key="tick.value"
+          class="md-range-tick"
+          :class="{ 'is-filled': tick.value <= currentValue }"
+          :style="{ left: `calc(20px + (100% - 40px) * ${tick.ratio})` }"
+        ></span>
+      </template>
+      <span class="md-range-thumb">
+        <template v-if="variant === 'bubble'">{{ valueLabel || modelValue }}</template>
+      </span>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -25,6 +45,8 @@ const props = defineProps({
   step: { type: [Number, String], default: 1 },
   disabled: { type: Boolean, default: false },
   rtl: { type: Boolean, default: false },
+  variant: { type: String, default: 'dots' },
+  valueLabel: { type: String, default: '' },
   ariaLabel: { type: String, default: '' },
   ariaValueText: { type: String, default: '' }
 });
@@ -48,6 +70,19 @@ const progress = computed(() => {
   const max = toNumber(props.max);
   if (max <= min) return 0;
   return Math.min(100, Math.max(0, ((currentValue.value - min) / (max - min)) * 100));
+});
+
+// 字号圆钮滑条按可取值打点；位置与手柄共用 20px 端点留白。
+const ticks = computed(() => {
+  const min = toNumber(props.min);
+  const max = toNumber(props.max);
+  const step = toNumber(props.step);
+  if (max <= min || step <= 0) return [];
+  const count = Math.floor((max - min) / step);
+  return Array.from({ length: count + 1 }, (_, index) => {
+    const value = min + index * step;
+    return { value, ratio: (value - min) / (max - min) };
+  });
 });
 
 function onInput(event: Event) {

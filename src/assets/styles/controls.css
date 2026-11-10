@@ -19,92 +19,186 @@
       }
     }
 
-    /* MD3 Slider：16px 胶囊轨道 + 4×44px 手柄，48px 触控高度 */
+    /* MD3 Slider：点阵胶囊轨道 + 4×36px 竖条手柄，48px 触控高度 */
     .md-range {
       --md-range-progress: 0%;
-      --md-range-direction: to right;
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 100%;
+      height: 48px;
+      margin: 0;
+      padding: 0;
+      cursor: pointer;
+    }
+    .md-range.is-rtl .md-range-track {
+      transform: scaleX(-1);
+    }
+    .md-range.is-rtl .md-range-input {
+      direction: rtl;
+    }
+
+    /* 轨道底色 = 未活动段；点阵与活动段共用 16px 栅格，首点距轨道端 6px */
+    .md-range-track {
+      position: relative;
+      width: 100%;
+      height: 16px;
+      border-radius: 999px;
+      background: var(--md-secondary-container);
+      pointer-events: none;
+    }
+    .md-range-track::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(circle, var(--md-primary) 0 1.6px, transparent 1.8px);
+      background-size: 16px 100%;
+      background-position: -2px center;
+      background-repeat: repeat-x;
+    }
+
+    /* 活动段与轨道共用同一套 16px 点阵栅格，颜色反转为 on-primary */
+    .md-range-fill {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: var(--md-range-progress);
+      border-radius: 999px;
+      background-color: var(--md-primary);
+      background-image: radial-gradient(circle, var(--md-on-primary) 0 1.6px, transparent 1.8px);
+      background-size: 16px 100%;
+      background-position: -2px center;
+      background-repeat: repeat-x;
+      overflow: hidden;
+    }
+
+    /* 手柄用表面色光环在轨道上切出视觉留白，不参与命中 */
+    .md-range-thumb {
+      position: absolute;
+      top: 50%;
+      left: clamp(2px, var(--md-range-progress), calc(100% - 2px));
+      width: 4px;
+      height: 36px;
+      border-radius: 2px;
+      background: var(--md-primary);
+      box-shadow: 0 0 0 4px var(--md-range-halo, var(--md-surface));
+      transform: translate(-50%, -50%);
+    }
+
+    /* 原生 input 只保留交互与读屏语义，视觉全部由轨道绘制 */
+    .md-range-input {
       -webkit-appearance: none;
       appearance: none;
-      display: block;
+      position: absolute;
+      inset: 0;
+      z-index: 2;
       width: 100%;
       height: 48px;
       margin: 0;
       padding: 0;
       border: 0;
       background: transparent;
+      opacity: 0;
       cursor: pointer;
     }
-    .md-range.rtl-slider {
-      --md-range-direction: to left;
-      direction: rtl;
-    }
-    .md-range:focus-visible {
-      outline: none;
-    }
-    /* 8px = 6dp 视觉留白 + 4dp 手柄的半宽，保证活动/未活动轨道不贴住手柄 */
-    .md-range::-webkit-slider-runnable-track {
-      height: 16px;
-      border-radius: 999px;
-      background:
-        linear-gradient(
-          var(--md-range-direction),
-          var(--md-primary) 0,
-          var(--md-primary) calc(var(--md-range-progress) - 8px),
-          transparent calc(var(--md-range-progress) - 8px),
-          transparent calc(var(--md-range-progress) + 8px),
-          var(--md-secondary-container) calc(var(--md-range-progress) + 8px),
-          var(--md-secondary-container) 100%
-        );
-    }
-    .md-range::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 4px;
-      height: 44px;
-      margin-top: -14px;
+    .md-range-input::-webkit-slider-runnable-track {
+      height: 48px;
       border: 0;
-      border-radius: 2px;
-      background: var(--md-primary);
-    }
-    .md-range:focus-visible::-webkit-slider-thumb {
-      box-shadow:
-        0 0 0 2px var(--md-range-focus-gap, var(--md-surface)),
-        0 0 0 4px var(--md-primary);
-    }
-    .md-range::-moz-range-track {
-      height: 16px;
-      border: 0;
-      border-radius: 999px;
-      background:
-        linear-gradient(
-          var(--md-range-direction),
-          var(--md-primary) 0,
-          var(--md-primary) calc(var(--md-range-progress) - 8px),
-          transparent calc(var(--md-range-progress) - 8px),
-          transparent calc(var(--md-range-progress) + 8px),
-          var(--md-secondary-container) calc(var(--md-range-progress) + 8px),
-          var(--md-secondary-container) 100%
-        );
-    }
-    .md-range::-moz-range-progress {
-      height: 16px;
       background: transparent;
     }
-    .md-range::-moz-range-thumb {
+    .md-range-input::-webkit-slider-thumb {
+      -webkit-appearance: none;
       width: 4px;
-      height: 44px;
+      height: 48px;
+      margin-top: 0;
       border: 0;
-      border-radius: 2px;
-      background: var(--md-primary);
+      background: transparent;
     }
-    .md-range:focus-visible::-moz-range-thumb {
+    .md-range-input::-moz-range-track {
+      height: 48px;
+      border: 0;
+      background: transparent;
+    }
+    .md-range-input::-moz-range-thumb {
+      width: 4px;
+      height: 48px;
+      border: 0;
+      background: transparent;
+    }
+
+    .md-range-input:focus-visible {
+      outline: none;
+    }
+    .md-range-input:focus-visible + .md-range-track .md-range-thumb {
       box-shadow:
-        0 0 0 2px var(--md-range-focus-gap, var(--md-surface)),
+        0 0 0 2px var(--md-range-halo, var(--md-surface)),
         0 0 0 4px var(--md-primary);
     }
-    .md-range:disabled {
+
+    .md-range.is-disabled {
       cursor: default;
       opacity: 0.38;
     }
+    .md-range.is-disabled .md-range-input {
+      cursor: default;
+    }
+
+    /* 字号滑条：厚胶囊轨道 + 内嵌数值圆钮（阅读设置专用） */
+    .md-range.is-bubble .md-range-track {
+      height: 28px;
+      background: color-mix(in oklab, var(--md-on-surface) 16%, var(--md-surface-container));
+    }
+    .md-range.is-bubble .md-range-track::before {
+      display: none;
+    }
+    .md-range.is-bubble .md-range-fill {
+      width: calc(20px + (100% - 40px) * var(--md-range-ratio));
+      background: var(--md-primary);
+      background-image: none;
+    }
+    .md-range.is-bubble .md-range-tick {
+      position: absolute;
+      top: 50%;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: color-mix(in oklab, var(--md-primary) 52%, transparent);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    .md-range.is-bubble .md-range-tick.is-filled {
+      background: var(--md-on-primary);
+    }
+    .md-range.is-bubble .md-range-thumb {
+      left: calc(20px + (100% - 40px) * var(--md-range-ratio));
+      display: grid;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      place-items: center;
+      background: var(--md-on-surface);
+      color: var(--md-surface);
+      font-size: 14px;
+      font-weight: 620;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+      box-shadow:
+        0 3px 10px -2px var(--md-shadow-color-soft),
+        0 0 0 1px color-mix(in oklab, var(--md-shadow-color-soft) 26%, transparent);
+    }
+    .md-range.is-bubble .md-range-input::-webkit-slider-thumb {
+      width: 40px;
+    }
+    .md-range.is-bubble .md-range-input::-moz-range-thumb {
+      width: 40px;
+    }
+    .md-range.is-bubble .md-range-input:focus-visible + .md-range-track .md-range-thumb {
+      box-shadow:
+        0 0 0 2px var(--md-range-halo, var(--md-surface)),
+        0 0 0 4px var(--md-primary),
+        0 3px 10px -2px var(--md-shadow-color-soft);
+    }
     .md-drawer {
-      --md-range-focus-gap: var(--md-surface-container);
+      --md-range-halo: var(--md-surface-container);
     }

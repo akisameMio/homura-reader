@@ -56,8 +56,15 @@ const WEBTOON_FITS = ['screen', 'medium', 'wide'];
 const LINE_HEIGHTS = READER_LINE_HEIGHT_OPTIONS.map(option => option.value);
 const PAGE_MARGINS = READER_MARGIN_OPTIONS.map(option => option.value);
 export const WEBTOON_FIT_LABELS = { screen: '完整单张', medium: '适中宽幅', wide: '超宽满屏' };
-export const NOVEL_FONT_MIN = 12;
+export const NOVEL_FONT_MIN = 14;
 export const NOVEL_FONT_MAX = 28;
+export const NOVEL_FONT_STEP = 2;
+
+// 字号只提供 14–28px 的偶数档；旧记录里的奇数先归一到最近偶数。
+function clampNovelFontSize(value: number) {
+  return Math.min(NOVEL_FONT_MAX, Math.max(NOVEL_FONT_MIN, Math.round(value / NOVEL_FONT_STEP) * NOVEL_FONT_STEP));
+}
+
 const NOVEL_INCREMENTAL_MIN_CHAPTERS = 6;
 const NOVEL_INCREMENTAL_MIN_CHARS = 60000;
 const NOVEL_PAGINATION_SLICE_MS = 6;
@@ -220,7 +227,7 @@ export const useReaderStore = defineStore('reader', () => {
     if (LAYOUT_DIRECTIONS.includes(saved.direction)) next.direction = saved.direction;
     if (saved.spread === 1 || saved.spread === 2) next.spread = saved.spread;
     if (typeof saved.coverOffset === 'boolean') next.coverOffset = saved.coverOffset;
-    if (Number.isFinite(saved.fontSize)) next.fontSize = Math.min(NOVEL_FONT_MAX, Math.max(NOVEL_FONT_MIN, saved.fontSize));
+    if (Number.isFinite(saved.fontSize)) next.fontSize = clampNovelFontSize(saved.fontSize);
     if (WEBTOON_FITS.includes(saved.webtoonFit)) next.webtoonFit = saved.webtoonFit;
     if (saved.fontFamily) next.fontFamily = resolveFontValue(saved.fontFamily);
     if (LINE_HEIGHTS.includes(saved.lineHeight as string)) next.lineHeight = saved.lineHeight;
@@ -645,7 +652,7 @@ export const useReaderStore = defineStore('reader', () => {
 
   function setFontSize(value: number) {
     if (!currentBook.value || currentBook.value.type === 'manga' || !Number.isFinite(Number(value))) return;
-    const size = Math.min(NOVEL_FONT_MAX, Math.max(NOVEL_FONT_MIN, Math.round(Number(value))));
+    const size = clampNovelFontSize(Number(value));
     if (size === layoutConfig.fontSize) {
       // 拖动回到原字号时，取消尚未执行的整本重排即可，当前页仍然有效。
       window.clearTimeout(fontPaginationTimer);
@@ -663,7 +670,9 @@ export const useReaderStore = defineStore('reader', () => {
     }, 140);
   }
 
+  // delta 即像素步长，由调用方决定（组件传 ±NOVEL_FONT_STEP），store 不再二次归一步长。
   function changeFontSize(delta: number) {
+    if (!delta) return;
     setFontSize(layoutConfig.fontSize + delta);
   }
 

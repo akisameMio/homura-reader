@@ -15,15 +15,18 @@ document.documentElement.classList.add('homura-splashing');
   try {
     var theme = localStorage.getItem('homura_theme_color');
     if (theme) document.documentElement.setAttribute('data-theme', theme);
-    var mode = localStorage.getItem('homura_surface_mode');
-    if (mode) {
-      document.documentElement.setAttribute('data-mode', mode);
-      if (mode === 'dark') document.documentElement.classList.add('dark');
+    var savedMode = localStorage.getItem('homura_surface_mode');
+    var mode = savedMode === 'dark' ? 'dark' : 'light';
+    if (savedMode === 'auto') {
+      mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? 'dark'
+        : 'light';
     }
+    document.documentElement.setAttribute('data-mode', mode);
+    document.documentElement.classList.toggle('dark', mode === 'dark');
     // 移动端浏览器地址栏跟随阅读表面底色，避免启动瞬间白条
-    var canvases = { light: '#F8FAFC', warm: '#FAF6EE', dark: '#0F1115' };
+    var canvases = { light: '#F8FAFC', dark: '#0F1115' };
     var meta = document.getElementById('homuraThemeColor');
-    if (meta && !mode) meta.setAttribute('content', canvases.light);
-    if (meta && mode && canvases[mode]) meta.setAttribute('content', canvases[mode]);
+    if (meta) meta.setAttribute('content', canvases[mode]);
   } catch (e) {}
 })();

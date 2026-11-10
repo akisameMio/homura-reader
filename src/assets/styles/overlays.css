@@ -136,25 +136,21 @@
       background: color-mix(in oklab, var(--md-primary) 86%, var(--md-on-primary));
     }
 
-    /* 阅读器书眉：悬浮的 MD3 表面（28 圆角 + elevation-2），不再透光 */
+    /* 阅读器书眉：通栏平铺在纸面上，不抢正文的注意力 */
     .md-reader-topbar {
       position: absolute;
       z-index: 30;
-      top: calc(env(safe-area-inset-top, 0px) + 10px);
-      right: 12px;
-      left: 12px;
+      top: calc(env(safe-area-inset-top, 0px));
+      right: 0;
+      left: 0;
       display: grid;
       grid-template-columns: 1fr auto 1fr;
       align-items: center;
       gap: 12px;
-      min-height: 56px;
-      padding: 8px 10px 8px 6px;
-      border-radius: 28px;
+      min-height: 64px;
+      padding: 10px 20px;
       color: var(--md-reader-ink);
-      background: var(--md-surface-container);
-      box-shadow:
-        0 1px 2px 0 color-mix(in oklab, var(--md-shadow-color-soft) 24%, transparent),
-        0 2px 6px 2px color-mix(in oklab, var(--md-shadow-color-soft) 14%, transparent);
+      background: transparent;
     }
     .md-reader-topbar-side {
       display: flex;
@@ -196,15 +192,25 @@
     .md-reader-topbar-group {
       display: flex;
       align-items: center;
-      margin-left: 2px;
-      padding: 2px;
+      margin-left: 0;
+      padding: 4px;
       border-radius: 999px;
-      background: color-mix(in oklab, var(--md-reader-ink) 4%, transparent);
-      box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--md-reader-ink) 8%, transparent);
+      background: color-mix(in oklab, var(--md-reader-ink) 6%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--md-reader-ink) 7%, transparent);
     }
     .md-reader-topbar-group .md-icon-button {
       width: 36px;
       height: 36px;
+    }
+    /* 顶栏图标比常规按钮收一档，保持书眉轻盈 */
+    .md-reader-topbar .md-icon-button {
+      width: 40px;
+      height: 40px;
+      color: var(--md-reader-ink);
+    }
+    .md-reader-topbar .md-icon-button svg {
+      width: 20px;
+      height: 20px;
     }
     .md-reader-topbar-divider {
       width: 1px;
@@ -225,17 +231,283 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    /* Aa 用衬线字形，和正文宋体同源；选中时染上主题色 */
-    .md-reader-type-button {
-      font-family: "New York", "Iowan Old Style", "Songti SC", Georgia, serif;
-      font-size: 17px;
+    /* 字号入口：用文字胶囊代替 Aa 字形，和左侧工具组保持同一套圆角 */
+    .md-reader-topbar .md-reader-type-button {
+      width: auto;
+      padding: 0 16px;
+      border-radius: 999px;
+      font-family: var(--font-sans, system-ui, sans-serif);
+      font-size: 13px;
       font-weight: 500;
-      letter-spacing: 0;
+      letter-spacing: 0.04em;
       line-height: 1;
+      white-space: nowrap;
+      background: color-mix(in oklab, var(--md-reader-ink) 6%, transparent);
     }
-    .md-reader-type-button.is-active {
-      color: var(--md-primary);
-      background: color-mix(in oklab, var(--md-primary) 10%, transparent);
+    .md-reader-topbar .md-reader-type-button.is-active {
+      color: var(--md-reader-ink);
+      background: color-mix(in oklab, var(--md-reader-ink) 10%, transparent);
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .md-reader-topbar .md-icon-button:hover:not(:disabled):not(.is-filled) {
+        background: color-mix(in oklab, var(--md-reader-ink) 8%, transparent);
+      }
+    }
+    .md-reader-topbar .md-icon-button:active:not(:disabled):not(.is-filled) {
+      background: color-mix(in oklab, var(--md-reader-ink) 12%, transparent);
+    }
+
+    /* 阅读器底栏：页脚直接浮在纸面上，不铺底、不描边，避免和正文分成两块 */
+    .md-reader-footer {
+      position: absolute;
+      z-index: 35;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      padding: 6px 24px calc(8px + env(safe-area-inset-bottom, 0px));
+      color: var(--md-reader-ink);
+      background: transparent;
+      font-family: var(--font-sans, system-ui, sans-serif);
+      user-select: none;
+    }
+    .md-reader-footer-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      align-items: center;
+      gap: 16px;
+      min-height: 30px;
+    }
+    .md-reader-footer-side {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+    }
+    .md-reader-footer-side.is-end {
+      justify-content: flex-end;
+    }
+    .md-reader-footer-history {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 2px 10px 2px 2px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--md-reader-ink);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+      transition: background-color var(--md-duration-short) var(--md-ease-emphasized);
+    }
+    .md-reader-footer-history-icon {
+      display: grid;
+      width: 26px;
+      height: 26px;
+      place-items: center;
+      border-radius: 50%;
+      color: var(--md-reader-paper);
+      background: color-mix(in oklab, var(--md-reader-ink) 88%, var(--md-reader-paper));
+      transition: transform var(--md-duration-short) var(--md-ease-emphasized);
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .md-reader-footer-history:hover {
+        background: color-mix(in oklab, var(--md-reader-ink) 6%, transparent);
+      }
+      .md-reader-footer-history:hover .md-reader-footer-history-icon {
+        transform: scale(1.06);
+      }
+    }
+    .md-reader-footer-history:focus-visible {
+      outline: 2px solid var(--md-primary);
+      outline-offset: 2px;
+    }
+    .md-reader-footer-pages {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(64px, 24vw, 360px);
+      white-space: nowrap;
+    }
+    .md-reader-footer-page-label,
+    .md-reader-footer-remaining {
+      color: var(--md-reader-ink-soft);
+      font-size: 11.5px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      line-height: 1.2;
+    }
+    .md-reader-footer-remaining {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    /* 滑条：透明原生 input 负责键盘 / 触控语义，视觉轨道单独绘制 */
+    .md-reader-footer-track {
+      position: relative;
+      height: 14px;
+      margin-top: 1px;
+      cursor: pointer;
+      touch-action: none;
+    }
+    /* 命中区抬到 30px（视觉轨道仍 14px），手机上手指更容易按中 */
+    .md-reader-footer-range {
+      position: absolute;
+      z-index: 2;
+      top: 50%;
+      right: 0;
+      left: 0;
+      width: 100%;
+      height: 30px;
+      transform: translateY(-50%);
+      margin: 0;
+      opacity: 0;
+      appearance: none;
+      -webkit-appearance: none;
+      background: transparent;
+      cursor: pointer;
+      touch-action: none;
+    }
+    .md-reader-footer-track-rail,
+    .md-reader-footer-track-fill {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      height: 3px;
+      border-radius: 999px;
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+    .md-reader-footer-track-rail {
+      right: 0;
+      background: color-mix(in oklab, var(--md-reader-ink) 11%, transparent);
+    }
+    .md-reader-footer-track-fill {
+      width: var(--reader-footer-progress, 0%);
+      background: color-mix(in oklab, var(--md-reader-ink) 32%, transparent);
+      transition: background-color var(--md-duration-short) var(--md-ease-emphasized);
+    }
+    .md-reader-footer-thumb {
+      position: absolute;
+      top: 50%;
+      left: var(--reader-footer-progress, 0%);
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--md-reader-ink);
+      box-shadow: 0 1px 4px color-mix(in oklab, var(--md-shadow-color-soft) 35%, transparent);
+      transform: translate(-50%, -50%);
+      opacity: 0.7;
+      pointer-events: none;
+      transition:
+        width var(--md-duration-short) var(--md-ease-emphasized),
+        height var(--md-duration-short) var(--md-ease-emphasized),
+        opacity var(--md-duration-short) var(--md-ease-emphasized);
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .md-reader-footer-track:hover .md-reader-footer-thumb {
+        width: 13px;
+        height: 13px;
+        opacity: 1;
+      }
+      .md-reader-footer-track:hover .md-reader-footer-track-fill {
+        background: color-mix(in oklab, var(--md-reader-ink) 42%, transparent);
+      }
+    }
+    .md-reader-footer-track.is-scrubbing .md-reader-footer-thumb {
+      width: 14px;
+      height: 14px;
+      opacity: 1;
+    }
+    .md-reader-footer-track.is-scrubbing .md-reader-footer-track-fill {
+      background: color-mix(in oklab, var(--md-reader-ink) 46%, transparent);
+    }
+    .md-reader-footer-range:focus-visible ~ .md-reader-footer-thumb {
+      width: 14px;
+      height: 14px;
+      opacity: 1;
+      box-shadow:
+        0 0 0 4px color-mix(in oklab, var(--md-primary) 26%, transparent),
+        0 1px 4px color-mix(in oklab, var(--md-shadow-color-soft) 35%, transparent);
+    }
+    /* 拖动气泡：跟随手柄，显示目标章节与页码 */
+    .md-reader-footer-bubble {
+      position: absolute;
+      z-index: 3;
+      bottom: calc(100% + 8px);
+      left: clamp(150px, var(--reader-footer-progress, 0%), calc(100% - 150px));
+      min-width: 168px;
+      max-width: min(72vw, 300px);
+      padding: 9px 18px 8px;
+      border-radius: 12px;
+      color: var(--md-reader-ink);
+      background: color-mix(in oklab, var(--md-reader-ink) 7%, var(--md-reader-paper));
+      box-shadow:
+        0 10px 28px -18px var(--md-shadow-color-soft),
+        0 1px 3px color-mix(in oklab, var(--md-shadow-color-soft) 22%, transparent);
+      text-align: center;
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+    .md-reader-footer-bubble-title {
+      margin: 0;
+      overflow: hidden;
+      font-size: 12.5px;
+      font-weight: 600;
+      line-height: 1.35;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .md-reader-footer-bubble-page {
+      margin: 3px 0 0;
+      color: var(--md-reader-ink-soft);
+      font-size: 11px;
+      line-height: 1.2;
+    }
+    @media (max-width: 899px) {
+      .md-reader-footer {
+        padding: 5px 16px calc(7px + env(safe-area-inset-bottom, 0px));
+      }
+      .md-reader-footer-row {
+        gap: 10px;
+        min-height: 28px;
+      }
+      .md-reader-footer-pages {
+        gap: clamp(28px, 13vw, 150px);
+      }
+      .md-reader-footer-page-label,
+      .md-reader-footer-remaining {
+        font-size: 11px;
+      }
+      .md-reader-footer-history {
+        gap: 7px;
+        font-size: 13px;
+      }
+      .md-reader-footer-history-icon {
+        width: 24px;
+        height: 24px;
+      }
+      .md-reader-footer-bubble {
+        left: clamp(130px, var(--reader-footer-progress, 0%), calc(100% - 130px));
+        max-width: min(80vw, 260px);
+      }
+    }
+    @media (max-width: 560px) {
+      .md-reader-footer-remaining {
+        display: none;
+      }
+      .md-reader-footer-pages {
+        gap: 22px;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .md-reader-footer-history,
+      .md-reader-footer-history-icon,
+      .md-reader-footer-track-fill,
+      .md-reader-footer-thumb {
+        transition: none;
+      }
     }
 
     /* 左右翻页箭头：鼠标落在纸面上时浮现，离开淡出；触屏保留手势，不占画面 */
@@ -310,19 +582,37 @@
 
     @media (max-width: 899px) {
       .md-reader-topbar {
-        top: calc(env(safe-area-inset-top, 0px) + 8px);
-        right: 8px;
-        left: 8px;
-        min-height: 48px;
+        top: calc(env(safe-area-inset-top, 0px));
+        right: 0;
+        left: 0;
+        min-height: 56px;
         gap: 8px;
-        padding: 6px 8px 6px 4px;
-        border-radius: 24px;
+        padding: 8px 12px;
       }
       .md-reader-topbar-title {
         max-width: 34vw;
         font-size: 13px;
-        letter-spacing: 0.06em;
-        text-indent: 0.06em;
+        letter-spacing: 0.05em;
+        text-indent: 0.05em;
+      }
+      .md-reader-topbar .md-icon-button {
+        width: 36px;
+        height: 36px;
+      }
+      .md-reader-topbar-group {
+        padding: 3px;
+      }
+      .md-reader-topbar-group .md-icon-button {
+        width: 32px;
+        height: 32px;
+      }
+      .md-reader-topbar .md-icon-button svg {
+        width: 19px;
+        height: 19px;
+      }
+      .md-reader-topbar .md-reader-type-button {
+        padding: 0 12px;
+        font-size: 13px;
       }
       /* 手机侧栏位已经被 Aa / 设置 / 收藏占满，书眉再挤只会被按钮压住 */
       @media (max-width: 479px) {
@@ -421,6 +711,86 @@
       .md-drawer-header {
         min-height: 72px;
         padding: 16px 16px 12px 24px;
+      }
+    }
+
+    /* 阅读设置顶部预览：贴边通栏的一页纸，字号 / 字体 / 行距 / 页边距即时反馈 */
+    .reader-type-preview-wrap {
+      flex: none;
+      padding: 0;
+    }
+    .reader-type-preview {
+      position: relative;
+      height: 208px;
+      overflow: hidden;
+      padding-top: 18px;
+      border-bottom: 1px solid color-mix(in oklab, var(--md-outline-variant) 70%, transparent);
+      background: var(--md-reader-paper, var(--md-surface));
+    }
+    /* 底部渐隐，字号再大也不会把文字硬切一刀 */
+    .reader-type-preview::after {
+      content: '';
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      height: 42px;
+      background: linear-gradient(to bottom, transparent, var(--md-reader-paper, var(--md-surface)));
+      pointer-events: none;
+    }
+    .reader-type-preview-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 var(--reader-preview-pad, 20px);
+    }
+    .reader-type-preview-glyph {
+      display: flex;
+      align-items: baseline;
+      gap: 2px;
+      color: var(--md-reader-ink);
+    }
+    .reader-type-preview-glyph b {
+      font-family: var(--font-sans, system-ui, sans-serif);
+      font-size: 30px;
+      font-weight: 600;
+      line-height: 1;
+    }
+    .reader-type-preview-glyph span {
+      font-family: var(--font-sans, system-ui, sans-serif);
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1;
+    }
+    .reader-type-preview-meta {
+      flex: none;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 10.5px;
+      letter-spacing: 0.02em;
+      color: var(--md-reader-ink-faint);
+    }
+    .reader-type-preview-text {
+      margin: 10px 0 0;
+      padding: 0 var(--reader-preview-pad, 20px);
+      color: var(--md-reader-ink);
+      letter-spacing: 0.01em;
+      text-align: justify;
+      text-justify: inter-ideograph;
+    }
+    @media (max-width: 899px) {
+      .reader-type-preview {
+        height: 168px;
+        padding-top: 14px;
+      }
+      .reader-type-preview-glyph b {
+        font-size: 24px;
+      }
+      .reader-type-preview-glyph span {
+        font-size: 12px;
+      }
+      .reader-type-preview-text {
+        margin-top: 6px;
       }
     }
 

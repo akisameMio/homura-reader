@@ -2,16 +2,16 @@
   <!-- 阅读器顶栏：通栏书眉，左工具组 / 中书眉 / 右排版与收藏 -->
   <header class="md-reader-topbar" aria-label="阅读器工具栏">
     <div class="md-reader-topbar-side">
-      <button
-        type="button"
-        @click="emit('back')"
-        class="md-icon-button"
-        title="返回书架 (Esc)"
-        aria-label="返回书架"
-      >
-        <MdIcon name="arrow_back" />
-      </button>
       <div class="md-reader-topbar-group">
+        <button
+          type="button"
+          @click="emit('back')"
+          class="md-icon-button md-hit-target"
+          title="返回书架 (Esc)"
+          aria-label="返回书架"
+        >
+          <MdIcon name="arrow_back" />
+        </button>
         <button
           type="button"
           @click="ui.openToc()"
@@ -57,7 +57,7 @@
         :aria-expanded="ui.fontMenuOpen"
         @click="ui.toggleFontMenu()"
       >
-        <span class="md-reader-type-glyph" aria-hidden="true">Aa</span>
+        <span class="md-reader-type-glyph" aria-hidden="true">字号</span>
       </button>
       <button
         type="button"
