@@ -1635,6 +1635,7 @@ dependencies = [
  "encoding_rs",
  "flate2",
  "image",
+ "libc",
  "reqwest",
  "rusqlite",
  "serde",
@@ -1652,6 +1653,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tokio",
  "webpki-root-certs",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

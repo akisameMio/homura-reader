@@ -223,7 +223,75 @@
         >
           <div class="settings-section-heading">
             <h2>存储与数据</h2>
-            <span>WebView 本地数据</span>
+            <span>{{ diskSegments ? '磁盘空间' : 'WebView 本地数据' }}</span>
+          </div>
+
+          <div class="settings-block">
+            <template v-if="diskSegments">
+              <div class="storage-disk-head">
+                <div class="storage-disk-total">
+                  <strong>{{ storageTotalText }}</strong>
+                  <span>磁盘总容量</span>
+                </div>
+                <div class="storage-disk-meta">
+                  已用 {{ storageUsedText }}<template v-if="storageUsedPercentText"> · {{ storageUsedPercentText }}</template>
+                </div>
+              </div>
+              <div
+                class="storage-stack"
+                :class="{ 'is-revealing': storageRevealing }"
+                role="img"
+                :aria-label="storageAriaLabel"
+              >
+                <i class="storage-seg storage-seg-app" :style="{ width: segmentWidth(diskSegments.appRatio) }"></i>
+                <i class="storage-seg storage-seg-other" :style="{ width: segmentWidth(diskSegments.otherRatio) }"></i>
+                <i class="storage-seg storage-seg-free" :style="{ width: segmentWidth(diskSegments.freeRatio) }"></i>
+              </div>
+              <div class="storage-legend">
+                <div class="storage-legend-item">
+                  <span class="storage-dot storage-seg-app"></span>
+                  <b>HOMURA</b>
+                  <em>{{ formatBytes(diskSegments.appBytes) }}</em>
+                </div>
+                <div class="storage-legend-item">
+                  <span class="storage-dot storage-seg-other"></span>
+                  <b>其他应用</b>
+                  <em>{{ formatBytes(diskSegments.otherBytes) }}</em>
+                </div>
+                <div class="storage-legend-item">
+                  <span class="storage-dot storage-seg-free"></span>
+                  <b>剩余可用</b>
+                  <em>{{ formatBytes(diskSegments.freeBytes) }}</em>
+                </div>
+              </div>
+              <div class="storage-detail-row">
+                <span>书库原始文件与缓存</span>
+                <b>{{ storageNativeText }}</b>
+              </div>
+              <div class="storage-detail-row">
+                <span>WebView 本地数据</span>
+                <b>{{ storageWebviewText }}</b>
+              </div>
+              <p class="storage-hint">原始文件存入本地 AppData，容量只受磁盘剩余空间限制。</p>
+            </template>
+            <div v-else class="storage-overview">
+              <strong>{{ storageUsageText }}</strong>
+              <span>{{ storageQuotaText }}</span>
+              <div
+                class="storage-bar"
+                :class="{ 'is-revealing': storageRevealing }"
+                role="progressbar"
+                aria-label="本地存储用量"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                :aria-valuenow="storagePercent"
+              >
+                <i :style="{ width: storageBarWidth }"></i>
+              </div>
+              <p v-if="nativeStorageEnabled" class="storage-hint">
+                原始文件存入本地 AppData，导入容量受磁盘剩余空间限制。
+              </p>
+            </div>
           </div>
 
           <div class="settings-block">
@@ -241,23 +309,6 @@
                 <span>默认直接导入；开启后，目录导入会先询问是否按目录创建一级书库。</span>
               </span>
             </MdSwitch>
-          </div>
-
-          <div class="settings-block">
-            <div class="storage-overview">
-              <strong>{{ storageUsageText }}</strong>
-              <span>{{ storageQuotaText }}</span>
-              <div
-                class="storage-bar"
-                role="progressbar"
-                aria-label="本地存储用量"
-                aria-valuemin="0"
-                aria-valuemax="100"
-                :aria-valuenow="storagePercent"
-              >
-                <i :style="{ width: storagePercent + '%' }"></i>
-              </div>
-            </div>
           </div>
 
           <div class="settings-block settings-data-list">
@@ -510,6 +561,9 @@ import { storeToRefs } from 'pinia';
 import packageInfo from '../../package.json';
 import { createDemoManga, createDemoNovel } from '../services/demo.ts';
 import { HomuraStore } from '../services/storage.ts';
+import { canUseNativeStorage } from '../services/nativeStorage.ts';
+import { buildStorageSegments, readDiskStorageStats } from '../services/storageStats.ts';
+import type { DiskStorageStats } from '../services/storageStats.ts';
 import { formatBytes, isAndroid, isWindows } from '../services/platform.ts';
 import { openGitHubUrl } from '../services/external.ts';
 import { REPOSITORY_URL } from '../services/updates.ts';
@@ -631,6 +685,9 @@ const previewCopyStyle = computed(() => ({
 }));
 
 const storageInfo = ref<{ usage: number; quota: number; ratio: number } | null>(null);
+const diskStats = ref<DiskStorageStats | null>(null);
+const storageRevealing = ref(false);
+const nativeStorageEnabled = canUseNativeStorage();
 const storageLoading = ref(true);
 const actionNote = ref('');
 const pendingAction = ref<string | null>(null);
@@ -657,6 +714,40 @@ const storagePercent = computed(() => {
   const ratio = (storageInfo.value && storageInfo.value.ratio) || 0;
   return Number.isFinite(ratio) ? Math.min(100, Math.max(0, Math.round(ratio * 100))) : 0;
 });
+const storageBarWidth = computed(() => {
+  const ratio = storageInfo.value?.ratio || 0;
+  if (!Number.isFinite(ratio) || ratio <= 0) return '0%';
+  return `max(3px, ${(Math.min(1, ratio) * 100).toFixed(3)}%)`;
+});
+// 应用总占用 = AppData / AppCache + WebView 本地数据，两者不在同一个目录。
+const diskSegments = computed(() => {
+  if (!diskStats.value) return null;
+  return buildStorageSegments({
+    ...diskStats.value,
+    appBytes: diskStats.value.appBytes + (storageInfo.value?.usage || 0)
+  });
+});
+const storageTotalText = computed(() =>
+  diskSegments.value ? formatBytes(diskSegments.value.totalBytes) : ''
+);
+const storageUsedText = computed(() => {
+  const segments = diskSegments.value;
+  return segments ? formatBytes(segments.totalBytes - segments.freeBytes) : '';
+});
+const storageUsedPercentText = computed(() => {
+  const segments = diskSegments.value;
+  if (!segments || !segments.totalBytes) return '';
+  return formatPercent((segments.totalBytes - segments.freeBytes) / segments.totalBytes);
+});
+const storageNativeText = computed(() =>
+  diskStats.value ? formatBytes(diskStats.value.appBytes) : '0 B'
+);
+const storageWebviewText = computed(() => formatBytes(storageInfo.value?.usage || 0));
+const storageAriaLabel = computed(() => {
+  const segments = diskSegments.value;
+  if (!segments) return '磁盘存储用量';
+  return `HOMURA 使用 ${formatBytes(segments.appBytes)}，其他应用使用 ${formatBytes(segments.otherBytes)}，磁盘剩余 ${formatBytes(segments.freeBytes)}`;
+});
 const progressCount = computed(() => Object.keys(shelf.progressMap || {}).length);
 const dataDialogTitle = computed(() =>
   pendingAction.value === 'shelf' ? '清空书架与原始文件？' : '清空阅读进度？'
@@ -672,6 +763,18 @@ function setDirection(value: string) {
   settings.setReaderDefault('direction', value);
 }
 
+function formatPercent(ratio: number) {
+  if (!Number.isFinite(ratio)) return '0%';
+  const pct = Math.round(Math.max(0, Math.min(1, ratio)) * 1000) / 10;
+  return `${pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1)}%`;
+}
+
+// 占比极小时仍保留 3px，避免本应用的使用量在进度条上完全消失。
+function segmentWidth(ratio: number) {
+  if (!Number.isFinite(ratio) || ratio <= 0) return '0%';
+  return `max(3px, ${(Math.min(1, ratio) * 100).toFixed(3)}%)`;
+}
+
 function setSpread(value: number | string) {
   settings.setReaderDefault('spread', Number(value));
 }
@@ -685,9 +788,17 @@ function changeDefaultFont(delta: number) {
 }
 
 async function refreshStorage() {
+  storageRevealing.value = false;
   storageLoading.value = true;
-  storageInfo.value = await HomuraStore.estimateStorage();
+  const [info, disk] = await Promise.all([
+    HomuraStore.estimateStorage(),
+    readDiskStorageStats()
+  ]);
+  storageInfo.value = info;
+  diskStats.value = disk;
   storageLoading.value = false;
+  await nextTick();
+  storageRevealing.value = true;
 }
 
 async function openRepository() {
@@ -805,7 +916,7 @@ watch(activeSection, () => nextTick(measureSectionIndicator));
 watch(isCompact, () => nextTick(scheduleSectionMeasure));
 
 onMounted(() => {
-  refreshStorage();
+  if (activeSection.value === 'storage') refreshStorage();
   measureSectionIndicator();
   document.fonts?.ready.then(measureSectionIndicator);
   window.addEventListener('resize', scheduleSectionMeasure);
@@ -1201,6 +1312,170 @@ onBeforeUnmount(() => {
   border-radius: inherit;
   background: var(--md-primary);
   transition: width var(--md-duration-medium) var(--md-ease-emphasized);
+}
+
+.storage-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.storage-disk-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.storage-disk-total {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.storage-disk-total strong {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.storage-disk-total span,
+.storage-disk-meta {
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+}
+
+.storage-disk-meta {
+  white-space: nowrap;
+}
+
+.storage-stack {
+  display: flex;
+  gap: 3px;
+  height: 12px;
+  margin-top: 14px;
+  padding: 2px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--md-surface-container);
+  box-shadow: inset 0 0 0 1px var(--md-outline-variant);
+}
+
+.storage-seg {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.storage-seg-app {
+  background: var(--md-primary);
+}
+
+.storage-seg-other {
+  background: color-mix(in oklab, var(--md-on-surface-variant) 58%, var(--md-surface-container));
+}
+
+.storage-seg-free {
+  background: color-mix(in oklab, var(--md-outline-variant) 78%, var(--md-surface-container));
+}
+
+.storage-stack.is-revealing,
+.storage-bar.is-revealing {
+  animation: storage-reveal var(--md-duration-medium) var(--md-ease-emphasized) both;
+}
+
+@keyframes storage-reveal {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .storage-stack.is-revealing,
+  .storage-bar.is-revealing {
+    animation: none;
+  }
+}
+
+.storage-legend {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 18px;
+  margin-top: 14px;
+}
+
+.storage-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.storage-dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 999px;
+}
+
+.storage-dot.storage-seg-free {
+  box-shadow: inset 0 0 0 1px var(--md-outline-variant);
+}
+
+.storage-legend-item b {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.storage-legend-item em {
+  margin-left: auto;
+  color: var(--md-on-surface-variant);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.storage-detail-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+}
+
+.storage-detail-row b {
+  color: var(--md-on-surface);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .storage-disk-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .storage-legend {
+    grid-template-columns: 1fr;
+  }
 }
 
 .settings-data-list {

@@ -11,6 +11,7 @@ mod desktop_archive;
 mod metadata_store;
 mod mobi_parser;
 mod native_import;
+mod storage_stats;
 mod text_decoder;
 mod update_downloader;
 #[cfg(desktop)]
@@ -123,6 +124,7 @@ pub fn run() {
             metadata_store::metadata_save_progress,
             metadata_store::metadata_clear_progress,
             metadata_store::metadata_clear_all,
+            storage_stats::storage_stats,
             desktop_archive::open_document,
             desktop_archive::extract,
             desktop_archive::read_text_batch,
