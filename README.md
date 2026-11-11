@@ -1,6 +1,13 @@
+<table align="center" border="0">
+  <tr>
+    <td align="center"><img src="GIF地址" height="240" alt="动图" /></td>
+    <td align="center"><img src="静态图标地址" height="240" alt="图标" /></td>
+  </tr>
+</table>
+
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/049e7a11-e0af-4a94-a77e-8f8c72cb50e7" width="250" alt="HOMURA 截图 1" />
-  <img src="https://github.com/user-attachments/assets/818e7aba-f12a-49e1-8640-8852cb852b8b" width="400" alt="HOMURA 截图 2" />
+  <h1>HOMURA</h1>
+  <p><b>本地漫画与轻小说阅读器</b></p>
 </div>
 # HOMURA — 本地漫画与轻小说阅读器
 
