@@ -158,7 +158,7 @@ async function stageBlob(path: unknown, blob: Blob) {
   }
 }
 
-// Android 优先落原生 AppData；桌面普通文件继续走句柄 / OPFS。
+// Tauri 平台优先落原生 AppData，容量只受磁盘限制；桌面句柄仍是零拷贝引用。
 // EPUB 已在导入前预存到 AppData，上面会直接复用，不重复复制。
 async function stageSource(bookId: string, source: StoredSource) {
   // 桌面端句柄是零拷贝引用，跨重启可用；Android 的 content:// 句柄不可靠。
@@ -168,7 +168,7 @@ async function stageSource(bookId: string, source: StoredSource) {
   }
   if (source.handle && !isAndroid) return withoutBlob(source);
 
-  if (isAndroid && canUseNativeStorage()) {
+  if (canUseNativeStorage()) {
     try {
       if (source.kind === 'folder') {
         const entries: StoredEntry[] = [];
