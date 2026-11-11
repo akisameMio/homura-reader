@@ -30,7 +30,7 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 | 命令 | 作用 |
 | --- | --- |
 | `npm install` | 安装前端依赖；Tauri 命令找不到时先跑这个 |
-| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 31 个测试文件、218 条用例全绿，约 1 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
+| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 31 个测试文件、220 条用例全绿，约 1 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
 | `npm run typecheck` | `vue-tsc --noEmit`，类型检查 |
 | `npm run dev:vite` | 只起 Vite 开发服务器，固定端口 **5173**（strictPort），带 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`（最常用的快速验证） |
@@ -85,7 +85,7 @@ public/homura-boot.js      首帧前的同步引导脚本（CSP 禁止内联脚�
 public/vendor/             开发环境运行时 Tailwind；生产构建转静态 CSS 并从 dist 删除
 public/pdfjs/              pdf.js 运行时资源，由 vite 插件生成，已 gitignore
 src-tauri/src/             lib.rs 命令注册 + desktop_archive / native_import / metadata_store /
-                           mobi_parser / text_decoder / cover_thumb / update_downloader
+                           mobi_parser / text_decoder / cover_thumb / update_downloader / window_state
 src-tauri/plugins/         6 个本地 Android 插件：android-archive / android-installer /
                            android-predictive-back / android-system-bars / android-toast /
                            android-volume-keys
@@ -194,7 +194,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 2. **首帧不许闪主题**：`public/homura-boot.js` 在 `<head>` 里以普通脚本同步加载，首帧前读 `homura_theme_color` / `homura_surface_mode` 并写 `data-theme` / `data-mode` / `dark`，同时改 theme-color meta。不要挪进 Vue 里异步恢复，也不要退回 `index.html` 内联写法（CSP 的 `script-src` 不含 `'unsafe-inline'`）。
 3. **标题栏跟内容一起换色**：模式切换时，原生窗口 `setTheme` / `setBackgroundColor` 必须在动画**开始时**调用，不能等动画结束。逻辑在 `stores/theme.ts` 的 `setSurfaceMode`。
 4. **模式切换动画**：从被点击的「白昼 / 护眼 / 夜间」按钮中心圆形展开新配色。`stores/theme.ts` 用旧表面色遮罩与透明遮罩孔实现，`SURFACE_REVEAL_DURATION = 720`；按钮坐标由 `MdSegmentedControl` 通过 `update:modelValue` 的第二个参数传入。WebKit 下 View Transitions API 不可靠，不要换回去。切换期间 `html.surface-switching` 会抑制全局过渡，别加冲突的全局 transition。
-5. **工具栏自动隐藏 2.2 秒**：`stores/ui.ts` 的 `AUTO_HIDE_DELAY = 2200`；点击阅读画布 / 轻点可唤出。抽屉打开时不自动隐藏。
+5. **顶部工具栏自动隐藏 2.2 秒**：`stores/ui.ts` 的 `AUTO_HIDE_DELAY = 2200`；点击阅读画布 / 轻点可唤出。抽屉打开时不自动隐藏。底部页脚常驻纸面，不跟随顶栏隐藏。
 6. **移动端手势**：横向滑动跟手翻页，带阻尼与回弹；轻点左 30% 上一页、右 30% 下一页、中间切换工具栏（`readerGestures.ts`：`ratio < 0.3 → left`、`>= 0.7 → right`，轻点判定 `TAP_MAX_DURATION = 300` / `TAP_MAX_DISTANCE = 8`）。手势层 z-index 必须高于阅读舞台，否则会被图片层拦截。
 7. **窄屏强制单页**：`DOUBLE_SPREAD_MIN_WIDTH = 768`，`<768` 即使设置里选了双页也只按单页渲染。
 8. **存储降级**：Android Tauri 包优先把原文件写入应用私有 AppData（`homura-native-sources`），失败再保留 IndexedDB Blob；桌面普通文件走 FileSystemFileHandle → OPFS（`homura-sources`）→ IndexedDB Blob，EPUB 解析前会先 staging 到 AppData。读取时逐层回退，不能因为前一层失效就判定整本书丢失。导入后检查配额，已用 ≥85% 或剩余 <200MB 时提示。不要删掉这套备份方案。
