@@ -13,6 +13,8 @@ mod mobi_parser;
 mod native_import;
 mod text_decoder;
 mod update_downloader;
+#[cfg(desktop)]
+mod window_state;
 
 // 全屏退出（macOS 的 Space 切换动画、Windows 的窗口样式重设）会让 WebView 丢掉键盘焦点，
 // 导致 F 键失灵。这里用一个常驻工作线程监听窗口尺寸变化：每次「全屏 → 窗口」后持续 2s
@@ -132,6 +134,8 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 if let Some(window) = app.get_webview_window("main") {
+                    window_state::restore(&window);
+                    window_state::attach(window.clone());
                     spawn_focus_worker(window);
                 }
             }
@@ -144,14 +148,26 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 if payload.event() == tauri::webview::PageLoadEvent::Finished {
-                    if let Err(err) = webview.window().show() {
+                    let window = webview.window();
+                    let position = window_state::position_before_show(&window);
+                    if let Err(err) = window.show() {
                         eprintln!("显示主窗口失败: {err}");
+                    } else {
+                        window_state::reapply_position(&window, position);
                     }
                 }
             }
             #[cfg(not(desktop))]
             let _ = (webview, payload);
         })
-        .run(tauri::generate_context!())
-        .expect("error while running HOMURA");
+        .build(tauri::generate_context!())
+        .expect("error while building HOMURA")
+        .run(|app, event| {
+            #[cfg(desktop)]
+            if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+                if let Some(window) = app.get_webview_window("main") {
+                    window_state::save_current(&window);
+                }
+            }
+        })
 }
