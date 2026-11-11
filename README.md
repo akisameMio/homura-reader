@@ -255,6 +255,17 @@ CI 只在推送 `v*` 标签或手动触发 `workflow_dispatch` 时运行，不�
 
 推送版本标签会创建草稿 Release，并把桌面安装包与 APK 一并上传；手动触发只保留构建产物 14 天。Release 说明由 `scripts/release-notes.mjs` 按提交类别自动生成。
 
+## Star 趋势
+
+<a href="https://star-history.com/#Leon-Ning-san/HOMURA-reader&amp;Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=leon-ning-san/homura-reader&amp;type=Date&amp;theme=dark">
+    <img alt="HOMURA Star 趋势图" src="https://api.star-history.com/svg?repos=leon-ning-san/homura-reader&amp;type=Date&amp;theme=light" width="800">
+  </picture>
+</a>
+
+不想让本鱼饿肚子的话，顺手点个 Star 吧 🐋 图表由 [star-history.com](https://star-history.com) 实时生成，显示当前仓库的累计 Star 增长曲线。
+
 ## 反馈
 
 发现 bug、格式兼容问题或有功能建议，请到 [Issues](https://github.com/Leon-Ning-san/HOMURA-reader/issues) 提交。反馈解析问题时可附上格式、复现步骤和必要的脱敏样本，别把带版权或隐私的原书直接扔进公开仓库。
