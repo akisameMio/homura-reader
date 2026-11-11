@@ -25,8 +25,8 @@ HOMURA是一个**本地优先**的阅读器：漫画、轻小说、PDF 和图集
 | 移动平台 | Android arm64-v8a APK |
 | 核心链路 | 导入、本地存档、恢复、分页/滚动阅读、目录跳转、进度记忆、一级书库、收藏、自定义封面、导入进度与失败重试、应用内更新均可用 |
 | 尚未完成 | 标签功能尚未实现；书签功能尚未实现 |
-| 质量保障 | 有 `node:test` + jsdom 单元测试（220 条）与 `vue-tsc` 类型检查；没有 ESLint 或 E2E，关键阅读流程仍需手动回归 |
-| 许可 | 尚未添加 `LICENSE` 文件 |
+| 质量保障 | 有 `node:test` + jsdom 单元测试（224 条）与 `vue-tsc` 类型检查；没有 ESLint 或 E2E，关键阅读流程仍需手动回归 |
+| 许可 | MIT，完整条款见 [`LICENSE`](LICENSE) |
 
 ## 功能概览
 
@@ -144,7 +144,7 @@ npm run build      # tauri build，Tauri 会先构建前端再打包安装包
 
 | 命令 | 作用 |
 | --- | --- |
-| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，220 条用例，覆盖解析、书名排序、同名识别、书库归属、目录分组和阅读手势规则 |
+| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，224 条用例，覆盖解析、书名排序、同名识别、书库归属、目录分组和阅读手势规则 |
 | `npm run typecheck` | `vue-tsc --noEmit`，类型检查（当前 0 报错） |
 | `npm run dev:vite` | 只启动 Vite 开发服务器，端口固定为 `5173`，支持 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`，是最快的构建验证 |
@@ -192,7 +192,7 @@ homura-reader/
 │   │                           # useReaderBackDismiss / useAndroidBackExit / useVolumeKeys
 │   └── components/             # 41 个 SFC：SideNav、LibraryHeader、BookShelf、BookCard、
 │                               # ReaderModal、PaginatedView、WebtoonView、DesktopIsland、SettingsView 等
-├── tests/                      # 31 个 .test.mjs（node:test + jsdom）
+├── tests/                      # 32 个 .test.mjs（node:test + jsdom）
 ├── scripts/                    # check-dark-glow / generate-icons / release-notes / sync-android-icons /
 │                               # patch-android-manifest
 ├── references/                 # MD3 组件写法、token、系统布局、桌面灵动胶囊状态机
@@ -210,8 +210,9 @@ services / stores / composables 三层已全部迁移为 TypeScript（`component
 - IndexedDB 数据库名为 `homura_shelf`，包含 `books`、`sources`、`progress`、`collections` 四个对象仓库，分别保存书籍元数据/封面、原始文件来源、阅读进度以及书库与书本归属；旧书架会自动升级。
 - Tauri 包会把书目、封面缩略图、书库归属与阅读进度镜像到 `$APPDATA/homura-metadata/homura.sqlite3`（WAL）。启动优先读 SQLite；首次启用或发现 `homura-native-metadata-dirty` 时，会从 IndexedDB 完整重建镜像。IndexedDB 仍是数据存在性与原始文件来源的最终兜底，SQLite 清理失败不会让已删除的书复活。
 - 书架封面优先由 Rust `image` 解码并缩到最长边 480px；AVIF 等原生不支持的格式、旧安装缺少命令或非 Tauri 环境会回退 Canvas / OffscreenCanvas。原生安全上限与像素上限不会继续交给 JS 重试。
-- Android Tauri 包优先把原文件写入应用私有 AppData，失败再保留 IndexedDB Blob；桌面普通文件优先保存 `FileSystemFileHandle`，无句柄时写入 OPFS，OPFS 不可用才回落到 IndexedDB Blob。桌面 EPUB 会在解析前 staging 到 AppData，让 Rust 直接随机读取 ZIP 条目；原生失败时仍按 AppData、OPFS、句柄、Blob 逐层恢复或回退 JSZip。
+- Tauri 平台（含桌面）优先把原文件写入应用私有 AppData，容量只受磁盘剩余空间限制；桌面普通文件仍保留 `FileSystemFileHandle` 零拷贝引用，无句柄或原生写入失败才回退 OPFS 与 IndexedDB Blob。桌面 EPUB 会在解析前 staging 到 AppData，让 Rust 直接随机读取 ZIP 条目；原生失败时仍按 AppData、OPFS、句柄、Blob 逐层恢复或回退 JSZip。
 - 桌面原生 ZIP 通道只接受 `homura-native-sources` 下的路径，EPUB 条目按需解到 AppCache，并按最近访问时间保留 24 个文件 / 192MB；安全限制与资源超限错误不会回退到 JSZip。
+- 设置页的「存储与数据」在原生环境显示磁盘总容量、HOMURA / 其他应用 / 剩余可用三段占用，并单独列出书库原始文件与缓存、WebView 本地数据；浏览器调试环境回退到 WebView 配额估算。
 - 导入后会检查存储配额；已用空间达到 85% 或剩余不足 200 MB 时会提示。
 - 阅读进度写入做了 350 ms 防抖，并在关闭阅读器、页面卸载或切到后台时补写。
 - 应用内更新会从 GitHub Releases 读取最新版本，下载安装包后交给系统安装；下载只校验字节数是否完整，没有签名/哈希校验，请以官方仓库发布为准。
@@ -227,14 +228,14 @@ services / stores / composables 三层已全部迁移为 TypeScript（`component
 - 目录可以跳转，但目录状态不保存；书签功能尚未实现。
 - 书架搜索只匹配书名与书库名，不支持作者搜索或标签筛选。
 - macOS 安装包尚未签名/公证，首次启动需要手动放行。
-- 项目提供书名排序、同名识别、书库归属、目录分组和手势判定等单元测试（`npm test`，220 条），配合 `npm run typecheck` 做类型检查；但没有 E2E、覆盖不到完整阅读流程，也没有 ESLint，改动后仍需执行构建并手动回归关键阅读流程。
+- 项目提供书名排序、同名识别、书库归属、目录分组和手势判定等单元测试（`npm test`，224 条），配合 `npm run typecheck` 做类型检查；但没有 E2E、覆盖不到完整阅读流程，也没有 ESLint，改动后仍需执行构建并手动回归关键阅读流程。
 
 ## 开发与发布
 
 开发和代码约束以仓库根目录的 [`AGENTS.md`](AGENTS.md) 为准。提交前至少运行：
 
 ```bash
-npm test          # 单元测试（220 条）
+npm test          # 单元测试（224 条）
 npm run typecheck # vue-tsc 类型检查
 npm run build:vite
 ```
@@ -260,7 +261,9 @@ CI 只在推送 `v*` 标签或手动触发 `workflow_dispatch` 时运行，不�
 
 ## 许可
 
-仓库目前没有附带 `LICENSE` 文件，不能默认视为开源授权。使用、修改或分发前请先联系作者确认。
+本项目以 **MIT License** 授权，完整条款见 [`LICENSE`](LICENSE)。
+
+可以自由使用、修改、分发，包括商业用途，只需保留版权声明与许可声明。软件按「原样」提供，不附带任何明示或暗示的担保。
 
 ---
 

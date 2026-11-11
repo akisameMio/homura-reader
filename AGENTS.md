@@ -30,7 +30,7 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 | 命令 | 作用 |
 | --- | --- |
 | `npm install` | 安装前端依赖；Tauri 命令找不到时先跑这个 |
-| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 31 个测试文件、220 条用例全绿，约 1 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
+| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 32 个测试文件、224 条用例全绿，约 1 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
 | `npm run typecheck` | `vue-tsc --noEmit`，类型检查 |
 | `npm run dev:vite` | 只起 Vite 开发服务器，固定端口 **5173**（strictPort），带 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`（最常用的快速验证） |
@@ -77,7 +77,7 @@ src/
                            useScrollBounce / useDuplicateImport / useReaderBackDismiss / useAndroidBackExit /
                            useVolumeKeys
   components/              41 个 SFC（视图与交互）
-tests/                     31 个 .test.mjs（node:test + assert/strict + jsdom）
+tests/                     32 个 .test.mjs（node:test + assert/strict + jsdom）
 scripts/                   5 个：check-dark-glow / generate-icons / release-notes / sync-android-icons /
                            patch-android-manifest
 references/                4 份规范：md3-component-guide / tokens / ui-component-spec / desktop-island
@@ -85,7 +85,8 @@ public/homura-boot.js      首帧前的同步引导脚本（CSP 禁止内联脚�
 public/vendor/             开发环境运行时 Tailwind；生产构建转静态 CSS 并从 dist 删除
 public/pdfjs/              pdf.js 运行时资源，由 vite 插件生成，已 gitignore
 src-tauri/src/             lib.rs 命令注册 + desktop_archive / native_import / metadata_store /
-                           mobi_parser / text_decoder / cover_thumb / update_downloader / window_state
+                           mobi_parser / text_decoder / cover_thumb / update_downloader /
+                           window_state / storage_stats
 src-tauri/plugins/         6 个本地 Android 插件：android-archive / android-installer /
                            android-predictive-back / android-system-bars / android-toast /
                            android-volume-keys
@@ -197,7 +198,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 5. **顶部工具栏自动隐藏 2.2 秒**：`stores/ui.ts` 的 `AUTO_HIDE_DELAY = 2200`；点击阅读画布 / 轻点可唤出。抽屉打开时不自动隐藏。底部页脚常驻纸面，不跟随顶栏隐藏。
 6. **移动端手势**：横向滑动跟手翻页，带阻尼与回弹；轻点左 30% 上一页、右 30% 下一页、中间切换工具栏（`readerGestures.ts`：`ratio < 0.3 → left`、`>= 0.7 → right`，轻点判定 `TAP_MAX_DURATION = 300` / `TAP_MAX_DISTANCE = 8`）。手势层 z-index 必须高于阅读舞台，否则会被图片层拦截。
 7. **窄屏强制单页**：`DOUBLE_SPREAD_MIN_WIDTH = 768`，`<768` 即使设置里选了双页也只按单页渲染。
-8. **存储降级**：Android Tauri 包优先把原文件写入应用私有 AppData（`homura-native-sources`），失败再保留 IndexedDB Blob；桌面普通文件走 FileSystemFileHandle → OPFS（`homura-sources`）→ IndexedDB Blob，EPUB 解析前会先 staging 到 AppData。读取时逐层回退，不能因为前一层失效就判定整本书丢失。导入后检查配额，已用 ≥85% 或剩余 <200MB 时提示。不要删掉这套备份方案。
+8. **存储降级**：Tauri 平台（含桌面）优先把原文件写入应用私有 AppData（`homura-native-sources`），容量只受磁盘剩余空间限制；桌面普通文件若有 FileSystemFileHandle 仍保留零拷贝句柄，无句柄或原生写入失败再回退 OPFS（`homura-sources`）与 IndexedDB Blob。EPUB 解析前会先 staging 到 AppData。读取时逐层回退，不能因为前一层失效就判定整本书丢失。导入后检查配额，已用 ≥85% 或剩余 <200MB 时提示。不要删掉这套备份方案。
 9. **全屏走 Tauri 原生窗口 API**：Windows WebView2 不接管 F11，`stores/ui.ts` 的 `toggleFullscreen` 已处理；浏览器调试环境才回退 Fullscreen API。快捷键 `f`。
 10. **PDF 资源必须随包分发**：`vite.config.js` 的 `pdfjsAssets` 插件会把 `cmaps / standard_fonts / wasm / iccs` 同步到 `public/pdfjs`。删掉插件会导致 PDF 白屏。`public/pdfjs` 已 gitignore，不要提交。
 11. **PDF 渲染约束**：按页懒加载，`MAX_CACHED_PAGES = 24`；首次打开默认单页（`applyLayoutForBook` 里 `if (book.format === 'pdf') next.spread = 1`）；不支持字号调整与重排。
@@ -228,7 +229,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 - `.trae/` 是本地 agent 配置，已被 gitignore；不要把其中的 skill / 文档当作仓库内容。
 - `.trae-html-share-packages/` 与历史遗留的 `homura-ultra.html.zip` 已在 `b5284af` 清理，不要再提交同类产物。
 - `design-preview/` 是可交互设计原型和截图，不是生产代码。它在 `.gitignore` 里，但**历史提交仍跟踪 60 个文件**；要改真实界面请改 `src/`，不要把原型当发布物，也不要继续往里加新文件。
-- 仓库**没有 LICENSE 文件**；README 的「许可」段落不代表已有授权文件，涉及再分发时先问维护者。
+- 仓库使用 **MIT License**（`LICENSE` 根目录文件，版权方 `Leo NING` 与 `AkisameRin`）；改动依赖或捆绑第三方代码时，注意其许可与本协议兼容，并把必要声明保留在新的打包产物里。
 
 ## 8. 提交与发布
 
