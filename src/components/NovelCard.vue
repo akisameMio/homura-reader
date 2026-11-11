@@ -3,8 +3,7 @@
   <article class="reader-page">
     <div class="reader-page-flow md-reader-prose" v-html="page.html"></div>
     <footer class="reader-page-folio" aria-hidden="true">
-      <span class="reader-folio-plain">{{ page.pageNumber }}</span>
-      <span class="reader-folio-full">{{ page.pageNumber }}/{{ total }}页</span>
+      <span>{{ page.pageNumber }}</span>
     </footer>
   </article>
 </template>
@@ -14,7 +13,6 @@ import { type PropType } from 'vue';
 import type { ReaderPage } from '../types.ts';
 
 defineProps({
-  page: { type: Object as PropType<ReaderPage>, required: true },
-  total: { type: Number, required: true }
+  page: { type: Object as PropType<ReaderPage>, required: true }
 });
 </script>

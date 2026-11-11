@@ -1,98 +1,89 @@
 <template>
-  <Transition
-    enter-active-class="md-reader-bar-enter-active"
-    enter-from-class="translate-y-3 opacity-0"
-    enter-to-class="translate-y-0 opacity-100"
-    leave-active-class="md-reader-bar-leave-active"
-    leave-from-class="translate-y-0 opacity-100"
-    leave-to-class="translate-y-3 opacity-0"
+  <footer
+    v-if="reader.currentBook"
+    class="md-reader-footer"
+    aria-label="阅读进度"
+    :style="{ '--reader-footer-progress': `${progress}%` }"
+    @pointerdown.stop
+    @click.stop
   >
-    <footer
-      v-if="ui.readerChromeVisible && reader.currentBook"
-      class="md-reader-footer"
-      aria-label="阅读进度"
-      :style="{ '--reader-footer-progress': `${progress}%` }"
-      @pointerdown.stop
-      @click.stop
+    <div class="md-reader-footer-row">
+      <div class="md-reader-footer-side is-start">
+        <button
+          v-if="previousPageNumber"
+          type="button"
+          class="md-reader-footer-history"
+          :title="`回到上次位置（第 ${previousPageNumber} 页）`"
+          :aria-label="`回到上次位置，第 ${previousPageNumber} 页`"
+          @click="reader.returnToPreviousLocation()"
+        >
+          <span class="md-reader-footer-history-icon" aria-hidden="true">
+            <MdIcon name="history" :size="18" />
+          </span>
+          <span>{{ previousPageNumber }}</span>
+        </button>
+      </div>
+
+      <div class="md-reader-footer-pages">
+        <span
+          v-for="(page, index) in visiblePages"
+          :key="index"
+          class="md-reader-footer-page-label"
+        >{{ pageLabel(page) }}</span>
+      </div>
+
+      <div class="md-reader-footer-side is-end">
+        <span v-if="showChapterRemaining" class="md-reader-footer-remaining">本章还剩 {{ chapterRemaining }} 页</span>
+      </div>
+    </div>
+
+    <div class="md-reader-footer-track" :class="{ 'is-scrubbing': scrubbing }">
+      <input
+        ref="rangeEl"
+        class="md-reader-footer-range"
+        type="range"
+        min="0"
+        :max="maxIndex"
+        step="any"
+        :value="sliderValue"
+        :disabled="maxIndex === 0"
+        aria-label="阅读进度"
+        :aria-valuetext="`${previewChapterTitle}，第 ${previewPageNumber} 页`"
+        @input="onInput"
+        @change="commit"
+        @pointerdown="onPointerDown"
+        @pointerup="onPointerUp"
+        @pointercancel="onPointerCancel"
+        @focus="onFocus"
+        @blur="onBlur"
+        @keydown="onKeydown"
+      />
+      <span class="md-reader-footer-track-rail" aria-hidden="true"></span>
+      <span class="md-reader-footer-track-fill" aria-hidden="true"></span>
+      <span class="md-reader-footer-thumb" aria-hidden="true"></span>
+    </div>
+
+    <Transition
+      enter-active-class="md-fade-enter-active"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="md-fade-leave-active"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
     >
-      <div class="md-reader-footer-row">
-        <div class="md-reader-footer-side is-start">
-          <button
-            v-if="previousPageNumber"
-            type="button"
-            class="md-reader-footer-history"
-            :title="`回到上次位置（第 ${previousPageNumber} 页）`"
-            :aria-label="`回到上次位置，第 ${previousPageNumber} 页`"
-            @click="reader.returnToPreviousLocation()"
-          >
-            <span class="md-reader-footer-history-icon" aria-hidden="true">
-              <MdIcon name="history" :size="18" />
-            </span>
-            <span>{{ previousPageNumber }}</span>
-          </button>
-        </div>
-
-        <div class="md-reader-footer-pages">
-          <span
-            v-for="(page, index) in visiblePages"
-            :key="index"
-            class="md-reader-footer-page-label"
-          >{{ pageLabel(page) }}</span>
-        </div>
-
-        <div class="md-reader-footer-side is-end">
-          <span v-if="showChapterRemaining" class="md-reader-footer-remaining">本章还剩 {{ chapterRemaining }} 页</span>
-        </div>
+      <div v-if="bubbleVisible" class="md-reader-footer-bubble" aria-hidden="true">
+        <p class="md-reader-footer-bubble-title">{{ previewChapterTitle }}</p>
+        <p class="md-reader-footer-bubble-page">第 {{ previewPageNumber }} 页</p>
       </div>
-
-      <div class="md-reader-footer-track" :class="{ 'is-scrubbing': scrubbing }">
-        <input
-          ref="rangeEl"
-          class="md-reader-footer-range"
-          type="range"
-          min="0"
-          :max="maxIndex"
-          step="any"
-          :value="sliderValue"
-          :disabled="maxIndex === 0"
-          aria-label="阅读进度"
-          :aria-valuetext="`${previewChapterTitle}，第 ${previewPageNumber} 页`"
-          @input="onInput"
-          @change="commit"
-          @pointerdown="onPointerDown"
-          @pointerup="onPointerUp"
-          @pointercancel="onPointerCancel"
-          @focus="onFocus"
-          @blur="onBlur"
-          @keydown="onKeydown"
-        />
-        <span class="md-reader-footer-track-rail" aria-hidden="true"></span>
-        <span class="md-reader-footer-track-fill" aria-hidden="true"></span>
-        <span class="md-reader-footer-thumb" aria-hidden="true"></span>
-      </div>
-
-      <Transition
-        enter-active-class="md-fade-enter-active"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
-        leave-active-class="md-fade-leave-active"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-      >
-        <div v-if="bubbleVisible" class="md-reader-footer-bubble" aria-hidden="true">
-          <p class="md-reader-footer-bubble-title">{{ previewChapterTitle }}</p>
-          <p class="md-reader-footer-bubble-page">第 {{ previewPageNumber }} 页</p>
-        </div>
-      </Transition>
-    </footer>
-  </Transition>
+    </Transition>
+  </footer>
 </template>
 
 <script setup lang="ts">
 /* ============================================================================
    HOMURA · 阅读器底栏
    ----------------------------------------------------------------------------
-   仿纸书页脚：左侧回跳历史、中央当前页 / 双页页码、右侧本章剩余；
+   常驻在翻页舞台内部的纸书页脚：左侧回跳历史、中央当前页 / 双页页码、右侧本章剩余；
    底部一条通栏滑条，拖动时只更新气泡预览，松手才交给 store 翻页，
    避免一路 pointermove 都触发图片解码和双缓冲重渲染。
    ========================================================================== */

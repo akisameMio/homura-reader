@@ -1,58 +1,62 @@
 <template>
-  <!-- Manga: 纵向条漫瀑布流，图片懒加载 -->
-  <div
-    v-if="isManga"
-    ref="scrollRoot"
-    data-reader-scroll
-    class="no-scrollbar w-full h-full overflow-y-auto overscroll-contain touch-pan-y flex flex-col items-center py-2 gap-2"
-    style="scroll-padding-top: calc(3.5rem + env(safe-area-inset-top)); scroll-padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));"
-  >
+  <div class="relative w-full h-full">
+    <!-- Manga: 纵向条漫瀑布流，图片懒加载 -->
     <div
-      v-for="(p, idx) in reader.activePages"
-      :key="idx"
-      :id="'webtoon-page-' + idx"
-      class="webtoon-page w-full flex flex-col items-center justify-center shrink-0"
-      :style="webtoonPageStyle(p)"
+      v-if="isManga"
+      ref="scrollRoot"
+      data-reader-scroll
+      class="no-scrollbar w-full h-full overflow-y-auto overscroll-contain touch-pan-y flex flex-col items-center py-2 gap-2"
+      style="scroll-padding-top: calc(3.5rem + env(safe-area-inset-top)); scroll-padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));"
     >
-      <img
-        :data-lazy-index="idx"
-        :width="p.imageWidth || undefined"
-        :height="p.imageHeight || undefined"
-        class="manga-page-img bg-[var(--bg-card)] shadow-[0_1px_3px_color-mix(in_oklab,var(--md-shadow-color-soft)_24%,transparent)] rounded-sm select-none"
-        :class="webtoonImageClass(p)"
-        :alt="'第 ' + p.pageNumber + ' 页'"
-        decoding="async"
-        draggable="false"
-      />
-    </div>
-    <div class="shrink-0" style="height: calc(4.5rem + env(safe-area-inset-bottom));" aria-hidden="true"></div>
-  </div>
-
-  <!-- Novel: 长卷连续滚动 -->
-  <div
-    v-else
-    ref="scrollRoot"
-    data-reader-scroll
-    class="no-scrollbar w-full h-full overflow-y-auto overscroll-contain touch-pan-y py-4 px-3 sm:px-2"
-    style="scroll-padding-top: calc(3.5rem + env(safe-area-inset-top)); scroll-padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));"
-  >
-    <div ref="novelContent" :style="novelProseStyle" class="max-w-[660px] mx-auto bg-[var(--md-surface-low)] border-[0.5px] border-[var(--md-outline-variant)] rounded-[16px] p-5 sm:p-12 space-y-8">
-      <section
-        v-for="p in reader.activePages"
-        :key="p.pageNumber"
-        :id="'webtoon-page-' + ((p.pageNumber ?? 0) - 1)"
-        data-novel-section
-        class="webtoon-chapter border-b-[0.5px] border-[var(--border-line)] pb-6 last:border-none"
+      <div
+        v-for="(p, idx) in reader.activePages"
+        :key="idx"
+        :id="'webtoon-page-' + idx"
+        class="webtoon-page w-full flex flex-col items-center justify-center shrink-0"
+        :style="webtoonPageStyle(p)"
       >
-        <div class="text-xs font-bold text-[var(--brand-primary)] mb-4 flex items-center gap-2">
-          <span class="truncate">{{ p.title }}</span>
-          <i class="block w-[0.5px] h-3 shrink-0 bg-current opacity-30"></i>
-          <span class="shrink-0">第 {{ p.pageNumber }} 章</span>
-        </div>
-        <div class="epub-content md-reader-prose" v-html="p.html"></div>
-      </section>
+        <img
+          :data-lazy-index="idx"
+          :width="p.imageWidth || undefined"
+          :height="p.imageHeight || undefined"
+          class="manga-page-img bg-[var(--bg-card)] shadow-[0_1px_3px_color-mix(in_oklab,var(--md-shadow-color-soft)_24%,transparent)] rounded-sm select-none"
+          :class="webtoonImageClass(p)"
+          :alt="'第 ' + p.pageNumber + ' 页'"
+          decoding="async"
+          draggable="false"
+        />
+      </div>
+      <div class="shrink-0" style="height: calc(4.5rem + env(safe-area-inset-bottom));" aria-hidden="true"></div>
     </div>
-    <div class="shrink-0" style="height: calc(4.5rem + env(safe-area-inset-bottom));" aria-hidden="true"></div>
+
+    <!-- Novel: 长卷连续滚动 -->
+    <div
+      v-else
+      ref="scrollRoot"
+      data-reader-scroll
+      class="no-scrollbar w-full h-full overflow-y-auto overscroll-contain touch-pan-y py-4 px-3 sm:px-2"
+      style="scroll-padding-top: calc(3.5rem + env(safe-area-inset-top)); scroll-padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));"
+    >
+      <div ref="novelContent" :style="novelProseStyle" class="max-w-[660px] mx-auto bg-[var(--md-surface-low)] border-[0.5px] border-[var(--md-outline-variant)] rounded-[16px] p-5 sm:p-12 space-y-8">
+        <section
+          v-for="p in reader.activePages"
+          :key="p.pageNumber"
+          :id="'webtoon-page-' + ((p.pageNumber ?? 0) - 1)"
+          data-novel-section
+          class="webtoon-chapter border-b-[0.5px] border-[var(--border-line)] pb-6 last:border-none"
+        >
+          <div class="text-xs font-bold text-[var(--brand-primary)] mb-4 flex items-center gap-2">
+            <span class="truncate">{{ p.title }}</span>
+            <i class="block w-[0.5px] h-3 shrink-0 bg-current opacity-30"></i>
+            <span class="shrink-0">第 {{ p.pageNumber }} 章</span>
+          </div>
+          <div class="epub-content md-reader-prose" v-html="p.html"></div>
+        </section>
+      </div>
+      <div class="shrink-0" style="height: calc(4.5rem + env(safe-area-inset-bottom));" aria-hidden="true"></div>
+    </div>
+
+    <ReaderFooter />
   </div>
 </template>
 
@@ -69,6 +73,7 @@ import { useReaderStore } from '../stores/reader.ts';
 import { decodePageImage, releaseDistantPageUrls, type MangaPageItem } from '../services/pagination.ts';
 import { resolveProseStyle } from '../services/readerLayout.ts';
 import type { ReaderPage } from '../types.ts';
+import ReaderFooter from './ReaderFooter.vue';
 
 const MANGA_DECODE_CONCURRENCY = 2;
 const MANGA_VISIBLE_MARGIN = 2;

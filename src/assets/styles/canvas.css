@@ -171,24 +171,6 @@
       letter-spacing: 0.16em;
       color: var(--md-reader-ink-faint, var(--md-on-surface-variant));
       user-select: none;
-    }
-    /* 页脚两种形态：静止只留页码，鼠标落在纸面或工具栏可见时补上 /总页 */
-    .reader-folio-full {
-      display: none;
-    }
-    .reader-stage-shell:hover .reader-folio-plain,
-    .reader-stage-shell.is-chrome .reader-folio-plain {
-      display: none;
-    }
-    .reader-stage-shell:hover .reader-folio-full,
-    .reader-stage-shell.is-chrome .reader-folio-full {
-      display: inline;
-    }
-    .reader-stage-shell:hover .reader-folio,
-    .reader-stage-shell.is-chrome .reader-folio {
-      letter-spacing: 0.08em;
-    }
-    /* 底栏出现时页码已经落在通栏页脚里，纸面内的页码让位，避免同一个数字出现两遍 */
-    .reader-stage-shell.is-chrome .reader-page-folio {
+      /* 底栏常驻且已经显示页码，纸面内页码只保留占位，避免重排与重复 */
       visibility: hidden;
     }

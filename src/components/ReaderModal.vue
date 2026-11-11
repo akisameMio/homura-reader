@@ -29,7 +29,7 @@
         <!-- 纸面铺满整块画布：设置抽屉浮在纸面上，不再挤压正文重排 -->
         <div
           class="reader-stage-shell"
-          :class="{ 'is-obscured': ui.readerDrawerOpen, 'is-chrome': ui.readerChromeVisible }"
+          :class="{ 'is-obscured': ui.readerDrawerOpen }"
         >
           <WebtoonView
             v-if="reader.layoutConfig.direction === 'vertical'"
@@ -77,7 +77,6 @@
         />
       </Transition>
 
-      <ReaderFooter />
       <ReaderTocDrawer />
       <ReaderSettingsDrawer />
       <ReaderCollectionDrawer />
@@ -108,9 +107,9 @@
 /* ============================================================================
    HOMURA · 阅读器整屏遮罩
    ----------------------------------------------------------------------------
-   画布铺满窗口，顶部/底部工具栏以浮层形式出现并自动隐藏；
-   鼠标靠近上/下边缘、点击画布或按 Esc 唤出，2.2 秒无操作淡出；
-   触屏点中间区域切换工具栏，条漫模式轻点画布切换。
+   画布铺满窗口，顶部工具栏以浮层形式出现并自动隐藏，底部页脚常驻纸面；
+   鼠标靠近上边缘、点击画布或按 Esc 唤出顶栏，2.2 秒无操作淡出；
+   触屏点中间区域切换顶栏，条漫模式轻点画布切换。
    设置与目录改为左右抽屉，不再占用顶栏。
    ========================================================================== */
 
@@ -125,7 +124,6 @@ import { useReaderBackDismiss } from '../composables/useReaderBackDismiss.ts';
 import { useVolumeKeys } from '../composables/useVolumeKeys.ts';
 import MdIcon from './MdIcon.vue';
 import ReaderTopBar from './ReaderTopBar.vue';
-import ReaderFooter from './ReaderFooter.vue';
 import ReaderTocDrawer from './ReaderTocDrawer.vue';
 import ReaderSettingsDrawer from './ReaderSettingsDrawer.vue';
 import ReaderCollectionDrawer from './ReaderCollectionDrawer.vue';
@@ -147,11 +145,11 @@ const {
   nativePredictiveBackSupported
 } = useReaderBackDismiss(reader, ui);
 
-// 桌面：鼠标贴近上下边缘唤出工具栏；工具栏可见时，移动鼠标会重新计时
+// 桌面：鼠标贴近上边缘唤出顶栏；顶栏可见时，移动鼠标会重新计时
 function onMouseMove(e: PointerEvent) {
   if (e.pointerType !== 'mouse' || e.buttons) return;
   if (!reader.currentBook) return;
-  const nearEdge = e.clientY <= 88 || e.clientY >= window.innerHeight - 88;
+  const nearEdge = e.clientY <= 88;
   if (nearEdge || ui.readerChromeVisible) ui.showChrome();
 }
 

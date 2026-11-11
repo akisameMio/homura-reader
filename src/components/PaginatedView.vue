@@ -46,18 +46,18 @@
       <template v-else>
         <div class="reader-spread" :class="{ 'is-single': slotVMs[slot] && slotVMs[slot].mode === 'single' }">
           <template v-if="slotVMs[slot] && slotVMs[slot].mode === 'double'">
-            <NovelCard :page="slotVMs[slot].left!" :total="reader.activePages.length" />
-            <NovelCard :page="slotVMs[slot].right!" :total="reader.activePages.length" />
+            <NovelCard :page="slotVMs[slot].left!" />
+            <NovelCard :page="slotVMs[slot].right!" />
           </template>
           <NovelCard
             v-else-if="slotVMs[slot] && slotVMs[slot].single"
             :page="slotVMs[slot].single!"
-            :total="reader.activePages.length"
           />
         </div>
       </template>
     </div>
 
+    <ReaderFooter />
   </div>
 </template>
 
@@ -81,6 +81,7 @@ import { ensurePageUrlLoaded, decodePageImage, releaseDistantPageUrls, type Mang
 import { resolveProseStyle, resolveReaderMetrics } from '../services/readerLayout.ts';
 import { classifyReaderGesture } from '../services/readerGestures.ts';
 import NovelCard from './NovelCard.vue';
+import ReaderFooter from './ReaderFooter.vue';
 import type { ReaderPage } from '../types.ts';
 
 interface SlotVM {
