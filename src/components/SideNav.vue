@@ -345,10 +345,12 @@ function onMobilePointerUp(e: PointerEvent) {
     }
   } else {
     const projected = springs.x.pos + mobileDrag.vx * 105;
-    mobileSnapTo(
-      mobileNearestIndexAt(Math.max(metrics.minX, Math.min(metrics.maxX, projected))),
-      'snap'
-    );
+    const targetIndex = e.type === 'pointerup'
+      ? mobileNearestIndexAt(Math.max(metrics.minX, Math.min(metrics.maxX, projected)))
+      : Math.max(0, navItems.findIndex((item) => item.key === props.active));
+    mobileSnapTo(targetIndex, 'snap');
+    // 拖拽果冻到新槽位时同步切换导航项；否则胶囊会停在新位置，图标仍保留旧选中态。
+    if (e.type === 'pointerup') select(navItems[targetIndex].key);
   }
   mobileDrag.dragging = false;
   setTimeout(() => nav?.classList.remove('is-interacting'), 120);

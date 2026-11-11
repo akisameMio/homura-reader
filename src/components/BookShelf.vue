@@ -67,19 +67,6 @@
     <p v-if="!displayBooks.length && !displayCollections.length" class="col-span-full py-16 text-center text-[13px] text-[var(--md-on-surface-variant)]">{{ emptyShelfHint }}</p>
   </section>
 
-  <Teleport to="body">
-    <div v-if="touchDrag.active" class="md-touch-drag-ghost" :style="touchGhostStyle" aria-hidden="true">
-      <span class="md-touch-drag-cover">
-        <img v-if="touchDrag.cover" :src="touchDrag.cover" alt="" draggable="false" />
-        <span v-else class="md-touch-drag-mark">H</span>
-        <b v-if="touchDrag.count > 1" class="md-touch-drag-count">{{ touchDrag.count }}</b>
-      </span>
-      <span class="md-touch-drag-copy">
-        <b>{{ touchDrag.count > 1 ? `${touchDrag.count} 本作品` : touchDrag.title }}</b>
-        <small>{{ touchDragHint }}</small>
-      </span>
-    </div>
-  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -148,9 +135,6 @@ const touchDrag = reactive({
   x: 0,
   y: 0,
   ids: [] as string[],
-  title: '',
-  cover: '',
-  count: 0,
   overId: null as string | null,
   home: false
 });
@@ -163,20 +147,6 @@ let swallowClick = false;
 let swallowClickTimer: number | null = null;
 
 const canTouchMoveBooks = computed(() => !props.favoritesOnly && (displayCollections.value.length > 0 || !!currentCollection.value));
-const touchGhostStyle = computed(() => {
-  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 390;
-  const left = Math.min(Math.max(12, touchDrag.x - 34), Math.max(12, viewportWidth - 232));
-  return { transform: `translate3d(${left}px, ${Math.max(18, touchDrag.y - 108)}px, 0)` };
-});
-const touchDragHint = computed(() => {
-  if (touchDrag.overId) {
-    const collection = shelf.collections.find(item => item.id === touchDrag.overId);
-    return collection ? `松手移入「${collection.title}」` : '松手移入书库';
-  }
-  if (touchDrag.home) return '松手移回主页';
-  return '拖到书库上松手';
-});
-
 const displayCollections = computed(() => {
   if (props.favoritesOnly || currentCollection.value) return [];
   const visible = new Set(props.books.map(book => book.id));
@@ -335,15 +305,11 @@ function beginTouchDrag() {
   if (!touchContext || touchDrag.active) return;
   const ctx = touchContext;
   const ids = selectedIds.value.includes(ctx.id) ? [...selectedIds.value] : [ctx.id];
-  const book = shelf.library.find(item => item.id === ctx.id);
   autoScrollEl = ctx.scrollEl;
   touchDrag.active = true;
   touchDrag.x = ctx.x;
   touchDrag.y = ctx.y;
   touchDrag.ids = ids;
-  touchDrag.title = book?.title || '';
-  touchDrag.cover = book?.cover || '';
-  touchDrag.count = ids.length;
   document.body.classList.add('md-touch-dragging');
   try { navigator.vibrate?.(12); } catch (err) {}
   updateTouchDropTarget();
@@ -419,9 +385,6 @@ function resetTouchDrag() {
   stopAutoScroll();
   touchDrag.active = false;
   touchDrag.ids = [];
-  touchDrag.title = '';
-  touchDrag.cover = '';
-  touchDrag.count = 0;
   touchDrag.overId = null;
   touchDrag.home = false;
   autoScrollEl = null;

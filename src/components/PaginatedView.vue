@@ -4,7 +4,7 @@
   <div
     ref="gestureEl"
     class="reader-gesture-layer absolute inset-0 z-30 select-none"
-    @click.stop.prevent
+    @click.stop.prevent="onClick"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
@@ -368,6 +368,9 @@ const drag: {
   axis: null,
   maxDistance: 0
 };
+let lastPointerType: string | null = null;
+let allowMouseClick = false;
+let suppressMouseClick = false;
 
 function activeStageEl() {
   return stageEls[reader.activeBufferSlot];
@@ -391,6 +394,9 @@ function onPointerDown(e: PointerEvent) {
   if (!reader.currentBook || reader.openingBook || ui.readerDrawerOpen || document.querySelector('dialog[open]')) return;
   if (e.isPrimary === false) { onPointerCancel(undefined); return; }
   if (drag.active || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  lastPointerType = e.pointerType;
+  allowMouseClick = false;
+  suppressMouseClick = false;
   // 打断进行中的翻页动画，避免手势与动画争抢同一层的 transform
   reader.activeTransitionAnims.forEach(anim => {
     try { anim.cancel(); } catch (err) {}
@@ -445,6 +451,13 @@ function onPointerUp(e: PointerEvent) {
 
   if (result.type === 'swipe' || result.type === 'tap') {
     resetStageTransform();
+    // 鼠标点击由原生 click 事件处理，避免 pointerup 的严格手势阈值吞掉普通点击。
+    // 鼠标拖拽仍在这里翻页，并拦截浏览器随后合成的 click，防止重复翻页。
+    if (e.pointerType === 'mouse' && result.type === 'tap') {
+      allowMouseClick = true;
+      return;
+    }
+    if (e.pointerType === 'mouse') suppressMouseClick = true;
     if (result.zone === 'left') reader.onLeftButtonClick();
     else if (result.zone === 'right') reader.onRightButtonClick();
     else ui.toggleChrome();
@@ -460,7 +473,28 @@ function onPointerUp(e: PointerEvent) {
         ],
         { duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
       );
-  } else resetStageTransform();
+  } else {
+    if (e.pointerType === 'mouse') suppressMouseClick = true;
+    resetStageTransform();
+  }
+}
+
+function onClick(e: MouseEvent) {
+  if (suppressMouseClick) {
+    suppressMouseClick = false;
+    allowMouseClick = false;
+    lastPointerType = null;
+    return;
+  }
+  if (lastPointerType !== 'mouse' || !allowMouseClick || e.detail === 0 || !reader.currentBook || reader.openingBook || ui.readerDrawerOpen) return;
+  allowMouseClick = false;
+  lastPointerType = null;
+  const bounds = gestureEl.value?.getBoundingClientRect();
+  if (!bounds || bounds.width <= 0) return;
+  const zone = classifyReaderGesture({ dx: 0, dy: 0, duration: 0, width: bounds.width, x: e.clientX - bounds.left }).zone;
+  if (zone === 'left') reader.onLeftButtonClick();
+  else if (zone === 'right') reader.onRightButtonClick();
+  else ui.toggleChrome();
 }
 
 function onPointerCancel(event?: PointerEvent) {

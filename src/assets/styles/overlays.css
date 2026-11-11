@@ -299,7 +299,10 @@
       font-weight: 600;
       line-height: 1;
       cursor: pointer;
-      transition: background-color var(--md-duration-short) var(--md-ease-emphasized);
+      transform: translateY(-5px);
+      transition:
+        background-color var(--md-duration-short) var(--md-ease-emphasized),
+        opacity 180ms var(--md-ease-emphasized);
     }
     .md-reader-footer-history-icon {
       display: grid;
@@ -329,6 +332,7 @@
       justify-content: center;
       gap: clamp(64px, 24vw, 360px);
       white-space: nowrap;
+      transform: translateY(-4px);
     }
     .md-reader-footer-page-label,
     .md-reader-footer-remaining {
@@ -347,7 +351,7 @@
     .md-reader-footer-track {
       position: relative;
       height: 14px;
-      margin-top: 1px;
+      margin: 8px 12px 0;
       cursor: pointer;
       touch-action: none;
     }
@@ -378,6 +382,9 @@
       border-radius: 999px;
       transform: translateY(-50%);
       pointer-events: none;
+      transition:
+        height 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        opacity 180ms var(--md-ease-emphasized);
     }
     .md-reader-footer-track-rail {
       right: 0;
@@ -403,7 +410,13 @@
       transition:
         width var(--md-duration-short) var(--md-ease-emphasized),
         height var(--md-duration-short) var(--md-ease-emphasized),
-        opacity var(--md-duration-short) var(--md-ease-emphasized);
+        transform var(--md-duration-short) var(--md-ease-emphasized),
+        opacity 180ms var(--md-ease-emphasized);
+    }
+    .md-reader-footer-track.is-hidden .md-reader-footer-track-rail,
+    .md-reader-footer-track.is-hidden .md-reader-footer-track-fill,
+    .md-reader-footer-track.is-hidden .md-reader-footer-thumb {
+      opacity: 0;
     }
     @media (hover: hover) and (pointer: fine) {
       .md-reader-footer-track:hover .md-reader-footer-thumb {
@@ -420,8 +433,23 @@
       height: 14px;
       opacity: 1;
     }
+    .md-reader-footer-track.is-dragging .md-reader-footer-track-rail,
+    .md-reader-footer-track.is-dragging .md-reader-footer-track-fill {
+      height: 7px;
+    }
     .md-reader-footer-track.is-scrubbing .md-reader-footer-track-fill {
       background: color-mix(in oklab, var(--md-reader-ink) 46%, transparent);
+      transition:
+        height 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        background-color 180ms var(--md-ease-emphasized),
+        opacity 180ms var(--md-ease-emphasized);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .md-reader-footer-track.is-dragging .md-reader-footer-track-rail,
+      .md-reader-footer-track.is-dragging .md-reader-footer-track-fill {
+        transition: none;
+        height: 7px;
+      }
     }
     .md-reader-footer-range:focus-visible ~ .md-reader-footer-thumb {
       width: 14px;
@@ -467,6 +495,7 @@
     }
     @media (max-width: 899px) {
       .md-reader-footer {
+        bottom: 10px;
         padding: 5px 16px calc(7px + env(safe-area-inset-bottom, 0px));
       }
       .md-reader-footer-row {
@@ -611,6 +640,8 @@
         height: 19px;
       }
       .md-reader-topbar .md-reader-type-button {
+        width: auto;
+        min-width: 56px;
         padding: 0 12px;
         font-size: 13px;
       }

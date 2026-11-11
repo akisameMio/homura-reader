@@ -478,62 +478,8 @@
     .md-book-selected,
     .md-collection-selected { outline: 3px solid var(--md-primary); outline-offset: 2px; }
 
-    /* 触摸长按拖动：浮层跟随指尖，只负责显示，不拦截命中测试 */
+    /* 触摸长按拖动时保持拖动光标 */
     .md-touch-dragging { cursor: grabbing; }
-    .md-touch-drag-ghost {
-      position: fixed;
-      top: 0;
-      left: 0;
-      z-index: 65;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      width: max-content;
-      max-width: min(220px, calc(100vw - 24px));
-      padding: 7px 12px 7px 7px;
-      border-radius: 18px;
-      background: var(--md-surface-high);
-      color: var(--md-on-surface);
-      box-shadow:
-        0 18px 40px -18px color-mix(in oklab, var(--md-shadow-color-soft) 46%, transparent),
-        0 0 0 0.5px color-mix(in oklab, var(--md-outline-variant) 70%, transparent);
-      pointer-events: none;
-      will-change: transform;
-    }
-    .md-touch-drag-cover {
-      position: relative;
-      display: grid;
-      flex: none;
-      width: 38px;
-      height: 50px;
-      overflow: hidden;
-      place-items: center;
-      border-radius: 9px;
-      background: var(--md-primary-container);
-      color: var(--md-on-primary-container);
-    }
-    .md-touch-drag-cover img { width: 100%; height: 100%; object-fit: cover; }
-    .md-touch-drag-mark { font-family: var(--font-display); font-size: 16px; font-weight: 800; }
-    .md-touch-drag-count {
-      position: absolute;
-      top: -4px;
-      right: -4px;
-      display: grid;
-      min-width: 18px;
-      height: 18px;
-      padding: 0 4px;
-      place-items: center;
-      border-radius: 9px;
-      background: var(--md-primary);
-      color: var(--md-on-primary);
-      font-family: var(--font-mono);
-      font-size: 10px;
-      font-weight: 700;
-    }
-    .md-touch-drag-copy { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
-    .md-touch-drag-copy b { overflow: hidden; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-    .md-touch-drag-copy small { overflow: hidden; color: var(--md-primary); font-size: 10px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-
     /* MD3 状态层：hover 8%，focus / pressed 10%，不做位移与悬浮投影。 */
     .md-card::after {
       content: '';

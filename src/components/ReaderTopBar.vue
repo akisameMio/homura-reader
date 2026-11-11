@@ -57,7 +57,7 @@
         :aria-expanded="ui.fontMenuOpen"
         @click="ui.toggleFontMenu()"
       >
-        <span class="md-reader-type-glyph" aria-hidden="true">字号</span>
+        <span class="md-reader-type-glyph" aria-hidden="true">字体</span>
       </button>
       <button
         type="button"

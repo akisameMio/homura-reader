@@ -1384,9 +1384,21 @@ onBeforeUnmount(() => {
   background: color-mix(in oklab, var(--md-outline-variant) 78%, var(--md-surface-container));
 }
 
-.storage-stack.is-revealing,
 .storage-bar.is-revealing {
   animation: storage-reveal var(--md-duration-medium) var(--md-ease-emphasized) both;
+}
+
+.storage-stack.is-revealing .storage-seg {
+  transform-origin: left center;
+  animation: storage-seg-grow var(--md-duration-medium) var(--md-ease-emphasized) both;
+}
+
+.storage-stack.is-revealing .storage-seg-other {
+  animation-delay: 90ms;
+}
+
+.storage-stack.is-revealing .storage-seg-free {
+  animation-delay: 180ms;
 }
 
 @keyframes storage-reveal {
@@ -1399,9 +1411,22 @@ onBeforeUnmount(() => {
   }
 }
 
+@keyframes storage-seg-grow {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .storage-stack.is-revealing,
   .storage-bar.is-revealing {
+    animation: none;
+  }
+
+  .storage-stack.is-revealing .storage-seg {
     animation: none;
   }
 }
