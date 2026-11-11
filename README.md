@@ -1,5 +1,10 @@
-<img width="400" height="400" alt="Untitled-1 - 02-11-2026 19-19-50" src="https://github.com/user-attachments/assets/818e7aba-f12a-49e1-8640-8852cb852b8b" />
+<div align="center">
+  <img src="https://github.com/user-attachments/assets/818e7aba-f12a-49e1-8640-8852cb852b8b" width="160" alt="HOMURA Logo" />
+</div>
 
+<div align="center">
+  <img src="https://github.com/user-attachments/assets/049e7a11-e0af-4a94-a77e-8f8c72cb50e7" width="300" alt="HOMURA 截图" />
+</div>
 # HOMURA — 本地漫画与轻小说阅读器
 
 > 本鱼只负责把书塞进你的本地书架；上传云端那种事，想都别想。🐋
