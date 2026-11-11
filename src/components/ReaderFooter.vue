@@ -260,13 +260,17 @@ function onPointerDown(event: PointerEvent) {
 }
 
 function onTrackPointerEnter(event: PointerEvent) {
-  if (event.pointerType === 'mouse') trackVisible.value = true;
+  if (event.pointerType === 'mouse' && canHoverTrack()) trackVisible.value = true;
 }
 
 function onTrackPointerLeave(event: PointerEvent) {
-  if (event.pointerType === 'mouse' && !pointerActive.value && !keyboardFocus.value) {
+  if (event.pointerType === 'mouse' && canHoverTrack() && !pointerActive.value && !keyboardFocus.value) {
     trackVisible.value = false;
   }
+}
+
+function canHoverTrack() {
+  return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 }
 
 function onPointerMove(event: PointerEvent) {
