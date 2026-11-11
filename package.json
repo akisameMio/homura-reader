@@ -2,6 +2,7 @@
   "name": "homura-reader",
   "version": "2.2.5",
   "private": true,
+  "license": "MIT",
   "description": "HOMURA — ACGN GO 本地漫画与轻小说阅读器",
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
