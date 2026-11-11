@@ -39,7 +39,7 @@ test('目录逐层展平为独立书库，不合并同名子目录', () => {
     { name: 'notes.exe', customRelativePath: '书籍/notes.exe' }
   ];
   const plan = planFolderCollections(files);
-  assert.equal(plan.bookCount, 3);
+  assert.equal(plan.bookCount, 4);
   assert.deepEqual(plan.groups.map(item => item.path), ['书籍/甲/同名', '书籍/乙/同名', '书籍']);
   assert.equal(plan.hasDirectories, true);
 });

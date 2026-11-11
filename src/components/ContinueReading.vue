@@ -115,6 +115,7 @@ const typeLabel = computed(() => {
   if (!book) return '';
   const format = resolveBookFormat(book);
   if (format === 'pdf') return 'PDF';
+  if (format === 'cbz') return 'CBZ';
   if (format === 'mobi') return 'MOBI';
   if (format === 'markdown') return 'MD';
   if (format === 'txt') return 'TXT';

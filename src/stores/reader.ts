@@ -439,7 +439,7 @@ export const useReaderStore = defineStore('reader', () => {
         if (token !== openRequestToken) return false;
         shelf.touchBook(book);
       }
-      // 页面项只持有压缩包 id；关书会释放 ZipFile，再开时在这里恢复句柄。
+      // CBZ 页面项只持有压缩包 id；关书会释放 ZipFile，再开时在这里恢复句柄。
       if (book.nativeArchiveId) {
         await ensureNativeArchiveSession(book as unknown as { nativeArchiveId?: string | null; nativeArchivePath?: string | null; pageItems?: { nativeArchiveId?: string; nativeArchivePath?: string }[] | null });
         if (token !== openRequestToken) return false;

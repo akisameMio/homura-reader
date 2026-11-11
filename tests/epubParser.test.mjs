@@ -58,6 +58,31 @@ test('漫画 EPUB 页清单只保存原生条目索引与尺寸', () => {
   }), null);
 });
 
+test('CBZ 也生成原生页清单，JSZip 回退页没有索引时返回 null', () => {
+  const manifest = createNativeMangaManifest({
+    type: 'manga',
+    format: 'cbz',
+    pageItems: [
+      { nativeIndex: 0, imageWidth: 1200, imageHeight: 1800, url: 'blob:page' },
+      { nativeIndex: 1, imageWidth: 0, imageHeight: 0 }
+    ]
+  });
+
+  assert.deepEqual(manifest, {
+    version: 1,
+    pageCount: 2,
+    items: [
+      { index: 0, width: 1200, height: 1800 },
+      { index: 1, width: 0, height: 0 }
+    ]
+  });
+  assert.equal(createNativeMangaManifest({
+    type: 'manga',
+    format: 'cbz',
+    pageItems: [{ zipEntry: {}, url: 'blob:page' }]
+  }), null);
+});
+
 function escapeXml(value) {
   return String(value || '').replace(/[&<>"']/g, char => ({
     '&': '&amp;',
@@ -314,6 +339,7 @@ test('原生文档条目映射为可恢复的漫画页索引', async () => {
     assert.deepEqual(archive.makePageItem('OEBPS/Images/001.jpg', null), {
       nativeArchiveId: archiveId,
       nativeArchivePath: nativePath,
+      nativeArchiveMode: 'document',
       nativeIndex: 1,
       url: null
     });
@@ -369,6 +395,7 @@ test('Android 原生 EPUB 可用时优先使用原生解析', async () => {
   });
   try {
     assert.equal(book.nativeArchiveId, id);
+    assert.equal(book.nativeArchiveMode, 'document');
     assert.equal(book.chapters[0].title, '原生章节');
     assert.equal(book.zipContent, undefined);
   } finally {
@@ -578,6 +605,7 @@ test('原生 EPUB 解析与 JSZip 保持相同的章节结果', async () => {
     });
     assert.deepEqual(shape(nativeBook), shape(jsZipBook));
     assert.equal(nativeBook.nativeArchiveId, nativeId);
+    assert.equal(nativeBook.nativeArchiveMode, 'document');
     assert.equal(nativeBook.nativeArchivePath, 'homura-native-sources/epub-native-parity/source/book.epub');
     assert.equal(nativeBook.nativeEntryIndexByPath instanceof Map, true);
     assert.equal(nativeBook.nativeEntryIndexByPath.get('OEBPS/Text/chapter1.xhtml'), 3);

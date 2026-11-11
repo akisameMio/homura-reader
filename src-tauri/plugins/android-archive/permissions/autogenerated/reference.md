@@ -1,9 +1,10 @@
 ## Default Permission
 
-Allows HOMURA to read EPUB document entries through the Android archive cache.
+Allows HOMURA to read CBZ/ZIP pages and EPUB document entries through the Android archive cache.
 
 #### This default permission set includes the following:
 
+- `allow-open`
 - `allow-openDocument`
 - `allow-readTextBatch`
 - `allow-extract`
@@ -149,6 +150,32 @@ Enables the inspectImportUris command without any pre-configured scope.
 <td>
 
 Denies the inspectImportUris command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-archive:allow-open`
+
+</td>
+<td>
+
+Enables the open command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-archive:deny-open`
+
+</td>
+<td>
+
+Denies the open command without any pre-configured scope.
 
 </td>
 </tr>

@@ -355,6 +355,18 @@
           "markdownDescription": "Denies the inspectImportUris command without any pre-configured scope."
         },
         {
+          "description": "Enables the open command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open",
+          "markdownDescription": "Enables the open command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open",
+          "markdownDescription": "Denies the open command without any pre-configured scope."
+        },
+        {
           "description": "Enables the openDocument command without any pre-configured scope.",
           "type": "string",
           "const": "allow-openDocument",
@@ -403,10 +415,10 @@
           "markdownDescription": "Denies the stageImportUri command without any pre-configured scope."
         },
         {
-          "description": "Allows HOMURA to read EPUB document entries through the Android archive cache.\n#### This default permission set includes:\n\n- `allow-openDocument`\n- `allow-readTextBatch`\n- `allow-extract`\n- `allow-close`\n- `allow-clearBook`\n- `allow-clearAll`\n- `allow-inspectImportUris`\n- `allow-pickImportUris`\n- `allow-stageImportUri`",
+          "description": "Allows HOMURA to read CBZ/ZIP pages and EPUB document entries through the Android archive cache.\n#### This default permission set includes:\n\n- `allow-open`\n- `allow-openDocument`\n- `allow-readTextBatch`\n- `allow-extract`\n- `allow-close`\n- `allow-clearBook`\n- `allow-clearAll`\n- `allow-inspectImportUris`\n- `allow-pickImportUris`\n- `allow-stageImportUri`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Allows HOMURA to read EPUB document entries through the Android archive cache.\n#### This default permission set includes:\n\n- `allow-openDocument`\n- `allow-readTextBatch`\n- `allow-extract`\n- `allow-close`\n- `allow-clearBook`\n- `allow-clearAll`\n- `allow-inspectImportUris`\n- `allow-pickImportUris`\n- `allow-stageImportUri`"
+          "markdownDescription": "Allows HOMURA to read CBZ/ZIP pages and EPUB document entries through the Android archive cache.\n#### This default permission set includes:\n\n- `allow-open`\n- `allow-openDocument`\n- `allow-readTextBatch`\n- `allow-extract`\n- `allow-close`\n- `allow-clearBook`\n- `allow-clearAll`\n- `allow-inspectImportUris`\n- `allow-pickImportUris`\n- `allow-stageImportUri`"
         }
       ]
     }

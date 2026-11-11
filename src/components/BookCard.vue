@@ -91,6 +91,7 @@ function onOpen() {
 const badgeText = computed(() => {
   const format = resolveBookFormat(props.book);
   if (format === 'pdf') return 'PDF';
+  if (format === 'cbz') return 'CBZ';
   if (format === 'mobi') return 'MOBI';
   if (format === 'markdown') return 'MD';
   if (format === 'txt') return 'TXT';

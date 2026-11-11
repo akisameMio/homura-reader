@@ -55,6 +55,7 @@ export function isSafeImageUrl(url: unknown) {
 // 书籍格式：优先读 format 字段；旧存档没有该字段时按 id 前缀推断，避免老书筛选失效。
 const FORMAT_BY_ID_PREFIX = [
   ['epub_', 'epub'],
+  ['cbz_', 'cbz'],
   ['pdf_', 'pdf'],
   ['mobi_', 'mobi'],
   ['md_', 'markdown'],

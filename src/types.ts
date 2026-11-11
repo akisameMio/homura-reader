@@ -5,7 +5,7 @@
 export type BookType = 'manga' | 'novel';
 
 /** 书籍来源格式 */
-export type BookFormat = 'epub' | 'pdf' | 'mobi' | 'txt' | 'markdown' | 'images';
+export type BookFormat = 'epub' | 'pdf' | 'mobi' | 'txt' | 'markdown' | 'images' | 'cbz';
 
 /** 阅读页：漫画为图片页，小说为分页后的文本片段，EPUB 为章节片段 */
 export interface ReaderPage {
@@ -62,6 +62,8 @@ export interface Book {
   pdfRange?: unknown;
   nativePath?: string;
   nativeArchiveId?: string;
+  nativeArchivePath?: string | null;
+  nativeArchiveMode?: string | null;
   nativeArchive?: unknown;
   nativeArchiveStaged?: boolean;
   collectionId?: string | null;

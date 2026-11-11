@@ -13,7 +13,7 @@ import { planFolderCollections, availableCollectionName, collectionNameError } f
 import { findSameTitleBook, normalizeBookTitle } from '../services/bookTitles.ts';
 import { HomuraStore } from '../services/storage.ts';
 import { formatBytes, isAndroid } from '../services/platform.ts';
-import { parseTxtFile, parseMobiFileLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks, discardParsedBook, isJunkImagePath } from '../services/parsers.ts';
+import { parseCbzFileLazy, parseTxtFile, parseMobiFileLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks, discardParsedBook, isJunkImagePath } from '../services/parsers.ts';
 import { createNativeMangaManifest, makeEpubId, parseEpubFile } from '../services/epubParser.ts';
 import {
   makeFileSource,
@@ -226,6 +226,7 @@ function buildImportTasks(files: File[]) {
   // EPUB / MOBI 的书名来自容器元数据，不能拿文件名直接断定同名。
   addFileTasks(files.filter((f: File) => /\.epub$/i.test(f.name)), 'epub', false);
   addFileTasks(files.filter((f: File) => /\.pdf$/i.test(f.name)), 'pdf');
+  addFileTasks(files.filter((f: File) => /\.(cbz|zip)$/i.test(f.name)), 'archive');
   addFileTasks(files.filter((f: File) => /\.(mobi|prc|azw)$/i.test(f.name)), 'mobi', false);
   addFileTasks(files.filter((f: File) => /\.md$/i.test(f.name)), 'markdown');
   addFileTasks(files.filter((f: File) => /\.txt$/i.test(f.name)), 'txt');
@@ -592,6 +593,86 @@ export function useImporter() {
     return { book, source };
   }
 
+  async function prepareArchiveTask(task: ImportTask, metrics: ImportMetrics): Promise<Prepared | null> {
+    let file = task.file!;
+    const bookId = `cbz_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    let source: BookSource = makeFileSource(file);
+    let nativePath = '';
+    importProgress.setPhase('read');
+
+    // 先把原文件流式落到 AppData，再让原生后端从路径随机读取；
+    // 这样不会先用 JSZip 把整本压缩包读进 WebView。
+    if (canUseNativeArchive()) {
+      const started = now();
+      const viaNativePath = isNativeImportFile(file);
+      try {
+        const staged = viaNativePath
+          ? await stageNativePathSource(bookId, file)
+          : await stageNativeFileSource(bookId, file);
+        source = staged as BookSource;
+        nativePath = staged.nativePath as string;
+        if (viaNativePath) metrics.nativeStageMs += now() - started;
+      } catch (err) {
+        if (!shouldFallbackNativeImport(err)) {
+          console.warn('[HOMURA] 原生压缩包预存被拒绝', err);
+          await removeNativeBookDir(bookId).catch(() => {});
+          markTaskFailure(task, err);
+          return null;
+        }
+        if (isAndroidContentUri(file.nativePath)) {
+          await removeNativeBookDir(bookId).catch(() => {});
+          (err as { nativeImportFallback?: boolean }).nativeImportFallback = true;
+          throw err;
+        }
+        console.warn('[HOMURA] 原生压缩包预存失败，沿用 JSZip', err);
+        await removeNativeBookDir(bookId).catch(() => {});
+        if (isNativeImportFile(file)) {
+          const readStarted = now();
+          try {
+            file = await materializeNativeImportFile(file);
+          } catch (readError) {
+            console.warn('[HOMURA] 读取原生压缩包失败', readError);
+            markTaskFailure(task, readError);
+            return null;
+          } finally {
+            metrics.readMs += now() - readStarted;
+          }
+          source = makeFileSource(file);
+        }
+      } finally {
+        metrics.stageMs += now() - started;
+      }
+    }
+
+    const parseStarted = now();
+    let book: Book | null = null;
+    importProgress.setPhase('parse');
+    try {
+      book = await parseCbzFileLazy(file, {
+        id: bookId,
+        name: file.name,
+        nativePath,
+        staged: !!nativePath,
+        loadFallbackFile: nativePath
+          ? () => materializeStagedNativeImportFile(file, nativePath)
+          : undefined
+      });
+    } catch (err) {
+      console.warn('[HOMURA] 压缩包解析失败', err);
+      markTaskFailure(task, err);
+    } finally {
+      metrics.parseMs += now() - parseStarted;
+    }
+    if (!book) {
+      if (nativePath) await removeNativeBookDir(bookId).catch(() => {});
+      return null;
+    }
+    book.nativeArchiveStaged = !!nativePath;
+    const pageManifest = createNativeMangaManifest(book);
+    if (pageManifest) source = { ...source, nativePageManifest: pageManifest } as BookSource;
+    return { book, source };
+  }
+
   async function prepareParsedTask(task: ImportTask, parser: (file: File) => Promise<unknown>, metrics: ImportMetrics, label: string): Promise<Prepared | null> {
     const started = now();
     let file = task.file!;
@@ -654,6 +735,7 @@ export function useImporter() {
   async function prepareImportTask(task: ImportTask, metrics: ImportMetrics): Promise<Prepared | null> {
     let prepared: Prepared | null = null;
     if (task.kind === 'epub') prepared = await prepareEpubTask(task, metrics);
+    else if (task.kind === 'archive') prepared = await prepareArchiveTask(task, metrics);
     else if (task.kind === 'pdf') prepared = await prepareParsedTask(task, parsePdfFileLazy, metrics, 'PDF');
     else if (task.kind === 'mobi') prepared = await prepareParsedTask(task, parseMobiFileLazy, metrics, 'MOBI');
     else if (task.kind === 'markdown') prepared = await prepareParsedTask(task, parseMarkdownFile, metrics, 'Markdown');
@@ -765,7 +847,7 @@ export function useImporter() {
     try {
       await releaseNativeArchiveSession(book as unknown as { nativeArchiveId?: string | null; nativeArchivePath?: string | null; pageItems?: { nativeArchiveId?: string; nativeArchivePath?: string }[] | null });
     } catch (err) {
-      console.warn('[HOMURA] 释放导入后的原生 EPUB 会话失败', book.title, err);
+      console.warn('[HOMURA] 释放导入后的原生 EPUB / CBZ 会话失败', book.title, err);
     }
 
     if (coverThumb && coverThumb !== book.coverBlob) {
@@ -785,6 +867,7 @@ export function useImporter() {
     book.pdfDoc = null;
     (book as { nativeArchiveId?: unknown }).nativeArchiveId = null;
     (book as { nativeArchivePath?: unknown }).nativeArchivePath = null;
+    (book as { nativeArchiveMode?: unknown }).nativeArchiveMode = null;
     book.nativeEntryIndexByPath = null;
     book.nativeArchiveStaged = false;
     book.coverNative = null;

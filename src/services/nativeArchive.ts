@@ -1,7 +1,7 @@
 /* ============================================================================
    HOMURA · 原生压缩包通道
    ----------------------------------------------------------------------------
-   处理 Android WebView 上最费内存的 EPUB 压缩包：Kotlin 通过
+   处理 Android WebView 上最费内存的 CBZ/ZIP 与 EPUB 文档：Kotlin 通过
    ZipFile 随机读取条目；桌面端由 Rust 从 AppData 读取 ZIP 中央目录。
    图片写入有上限的页面缓存，文本批量返回给 JS。原生通道不可用或允许恢复
    的普通失败可以回退 JSZip，安全限制与超限错误必须原样抛出。
@@ -32,12 +32,14 @@ interface NativeFileResult {
 interface PageItemLike {
   nativeArchiveId?: string;
   nativeArchivePath?: string;
+  nativeArchiveMode?: string;
 }
 
 /** 会话所需的书本字段 */
 interface ArchiveSessionBook {
   nativeArchiveId?: string | null;
   nativeArchivePath?: string | null;
+  nativeArchiveMode?: string | null;
   pageItems?: PageItemLike[] | null;
 }
 
@@ -92,6 +94,25 @@ function nativeArchivePathFor(book: ArchiveSessionBook | null | undefined) {
   return book?.nativeArchivePath
     || (book?.pageItems || []).find((item) => item?.nativeArchivePath)?.nativeArchivePath
     || '';
+}
+
+function nativeArchiveModeFor(book: ArchiveSessionBook | null | undefined) {
+  // 旧存档没有模式字段时按 EPUB 文档处理，保持升级前的行为；
+  // CBZ 的书籍与页项都会显式写 'pages'。
+  return book?.nativeArchiveMode
+    || (book?.pageItems || []).find((item) => item?.nativeArchiveMode)?.nativeArchiveMode
+    || 'document';
+}
+
+// 漫画压缩包按图片条目顺序打开；EPUB 文档需要全部条目与路径索引。
+export function openNativeArchive(archiveId: string, path: string, options: { scanDimensions?: boolean } = {}) {
+  return enqueueLifecycle(archiveId, async () => {
+    const args: Record<string, unknown> = { archiveId, path };
+    if (isAndroid) args.scanDimensions = options.scanDimensions !== false;
+    const result = await invokeNative('open', args);
+    openArchives.add(archiveId);
+    return result;
+  });
 }
 
 export function openNativeDocument(archiveId: string, path: string, options: { scanDimensions?: boolean; includeEntries?: boolean; [key: string]: unknown } = {}) {
@@ -168,10 +189,12 @@ export function ensureNativeArchiveSession(book: ArchiveSessionBook | null | und
   const path = nativeArchivePathFor(book);
   if (!path) return Promise.reject(new Error('原生压缩包路径缺失'));
 
-  const openTask = openNativeDocument(archiveId, path, {
-    scanDimensions: false,
-    includeEntries: false
-  });
+  const openTask = nativeArchiveModeFor(book) === 'document'
+    ? openNativeDocument(archiveId, path, {
+      scanDimensions: false,
+      includeEntries: false
+    })
+    : openNativeArchive(archiveId, path, { scanDimensions: false });
   const task = openTask
     .then(() => true)
     .finally(() => {

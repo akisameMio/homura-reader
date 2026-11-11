@@ -2,7 +2,7 @@
    HOMURA · 原生导入
    ----------------------------------------------------------------------------
    桌面 Tauri 用系统选择器拿真实路径，Android 用系统文件选择器拿 content:// URI，
-   再交给原生侧直接复制到 AppData。原文件全程不经过 WebView Blob，
+   再交给原生侧直接复制到 AppData。EPUB / CBZ 全程不经过 WebView Blob，
    其它格式只在解析时按需读成 File。
    ========================================================================== */
 
@@ -22,6 +22,8 @@ const IMPORT_FILTER_EXTENSIONS = [
   'mobi',
   'prc',
   'azw',
+  'cbz',
+  'zip',
   'txt',
   'md',
   'jpg',
@@ -39,6 +41,8 @@ const MIME_BY_EXTENSION = {
   mobi: 'application/x-mobipocket-ebook',
   prc: 'application/x-mobipocket-ebook',
   azw: 'application/vnd.amazon.ebook',
+  cbz: 'application/vnd.comicbook+zip',
+  zip: 'application/zip',
   txt: 'text/plain',
   md: 'text/markdown',
   jpg: 'image/jpeg',

@@ -132,6 +132,8 @@ fn is_supported_import_name(name: &str) -> bool {
                 | "mobi"
                 | "prc"
                 | "azw"
+                | "cbz"
+                | "zip"
                 | "txt"
                 | "md"
                 | "jpg"
@@ -443,7 +445,7 @@ mod tests {
         fs::create_dir_all(root.join(".hidden")).unwrap();
         fs::create_dir_all(root.join("__MACOSX")).unwrap();
         fs::write(root.join("01.epub"), b"a").unwrap();
-        fs::write(root.join("02.PDF"), b"bb").unwrap();
+        fs::write(root.join("02.CBZ"), b"bb").unwrap();
         fs::write(root.join("notes.tmp"), b"tmp").unwrap();
         fs::write(root.join("nested/003.jpg"), b"jpg").unwrap();
         fs::write(root.join(".hidden/secret.epub"), b"hidden").unwrap();
@@ -460,7 +462,7 @@ mod tests {
             relative,
             vec![
                 format!("{prefix}/01.epub"),
-                format!("{prefix}/02.PDF"),
+                format!("{prefix}/02.CBZ"),
                 format!("{prefix}/nested/003.jpg"),
             ]
         );

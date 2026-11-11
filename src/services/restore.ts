@@ -16,7 +16,7 @@ import {
   removeNativeBookDir,
   removeNativeFile
 } from './nativeStorage.ts';
-import { parseEpubFileLazy, parseTxtFile, parseMobiFileLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks } from './parsers.ts';
+import { parseEpubFileLazy, parseCbzFileLazy, parseCbzNativeArchive, parseTxtFile, parseMobiFileLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks } from './parsers.ts';
 import {
   createNativeMangaManifest,
   isNativeMangaManifestValid,
@@ -59,7 +59,7 @@ export function makeFileSource(file: File & { customHandle?: FileSystemFileHandl
   return source;
 }
 
-// 原生 EPUB 在解析前先流式落到 AppData，Android 插件或桌面 Rust
+// 原生 EPUB / CBZ 在解析前先流式落到 AppData，Android 插件或桌面 Rust
 // 随后直接按路径随机读取。
 // source.preStaged 让 persistBook 复用这份已写好的文件，避免导入后再整本复制一次。
 export async function stageNativeFileSource(bookId: string, file: File & { customHandle?: FileSystemFileHandle | null }) {
@@ -159,7 +159,7 @@ async function stageBlob(path: unknown, blob: Blob) {
 }
 
 // Tauri 平台优先落原生 AppData，容量只受磁盘限制；桌面句柄仍是零拷贝引用。
-// EPUB 已在导入前预存到 AppData，上面会直接复用，不重复复制。
+// EPUB / CBZ 已在导入前预存到 AppData，上面会直接复用，不重复复制。
 async function stageSource(bookId: string, source: StoredSource) {
   // 桌面端句柄是零拷贝引用，跨重启可用；Android 的 content:// 句柄不可靠。
   if (source.preStaged && source.nativePath) {
@@ -374,7 +374,7 @@ export async function persistBooks(items: Array<{ book: BookLike; source: Stored
       failed
     };
   } catch (err) {
-    // 预存的 EPUB 目录由导入准备阶段创建，批事务失败后逐本重试还要复用。
+    // 预存的 EPUB / CBZ 目录由导入准备阶段创建，批事务失败后逐本重试还要复用。
     const cleanupEntries = entries.filter(entry => !entry.preStaged);
     await Promise.allSettled(cleanupEntries.flatMap(entry => [
       removeBookDir(entry.book.id),
@@ -444,7 +444,7 @@ function makeRestoredFile(blob: Blob, name: string, lastModified: number, type?:
 function releaseParsedCover(parsed: { cover?: string; pageItems?: Array<{ url?: string }> }) {
   const cover = parsed?.cover;
   if (!cover || !cover.startsWith('blob:')) return;
-  // 漫画 EPUB 的第一页与封面共用同一个 Blob URL，不能直接释放。
+  // 漫画 EPUB / CBZ 的第一页与封面共用同一个 Blob URL，不能直接释放。
   if ((parsed.pageItems || []).some((item) => item.url === cover)) return;
   URL.revokeObjectURL(cover);
 }
@@ -516,6 +516,7 @@ async function resolveStoredFile(source: StoredSource, displayName: string) {
 function parseStoredFile(file: File, options: Record<string, unknown> = {}) {
   if (/\.epub$/i.test(file.name)) return parseEpubFileLazy(file, options);
   if (/\.pdf$/i.test(file.name)) return parsePdfFileLazy(file);
+  if (/\.(cbz|zip)$/i.test(file.name)) return parseCbzFileLazy(file, options);
   if (/\.(mobi|prc|azw)$/i.test(file.name)) return parseMobiFileLazy(file);
   if (/\.md$/i.test(file.name)) return parseMarkdownFile(file);
   if (/\.txt$/i.test(file.name)) return parseTxtFile(file);
@@ -523,7 +524,7 @@ function parseStoredFile(file: File, options: Record<string, unknown> = {}) {
 }
 
 function isStoredFileFormatSupported(file: File) {
-  return /\.(epub|pdf|mobi|prc|azw|md|txt)$/i.test(file.name);
+  return /\.(epub|pdf|cbz|zip|mobi|prc|azw|md|txt)$/i.test(file.name);
 }
 
 async function resolveFolderFiles(source: StoredSource) {
@@ -573,12 +574,19 @@ function sourceFailureMessage(source: StoredSource, failures: Array<{ kind?: str
   return `本地存档中的原${subject}不存在，请重新导入该作品`;
 }
 
-function restoreNativeMangaManifest(book: BookLike, source: StoredSource, manifest: { items: Array<{ index: number; width?: number; height?: number }> }) {
+function restoreNativeMangaManifest(
+  book: BookLike,
+  source: StoredSource,
+  manifest: { items: Array<{ index: number; width?: number; height?: number }> },
+  mode: 'document' | 'pages' = 'document',
+  format: 'epub' | 'cbz' = 'epub'
+) {
   const nativeArchiveId = book.nativeArchiveId || book.id;
   const nativeArchivePath = source.nativePath;
   const pageItems = manifest.items.map((item) => ({
     nativeArchiveId,
     nativeArchivePath,
+    nativeArchiveMode: mode,
     nativeIndex: item.index,
     imageWidth: Math.max(0, Number(item.width) || 0),
     imageHeight: Math.max(0, Number(item.height) || 0),
@@ -587,12 +595,13 @@ function restoreNativeMangaManifest(book: BookLike, source: StoredSource, manife
   return {
     id: book.id,
     type: 'manga',
-    format: 'epub',
+    format,
     title: book.title,
     pageItems,
     pageCount: pageItems.length,
     nativeArchiveId,
-    nativeArchivePath
+    nativeArchivePath,
+    nativeArchiveMode: mode
   };
 }
 
@@ -628,7 +637,7 @@ export async function hydrateBook(book: BookLike) {
     const groups = buildImageFolderBooks(files);
     parsed = groups.length > 0 ? (groups[0].book as unknown as Book) : null;
   } else {
-    // 原生 EPUB 不需要把整个原文件读回 JS；允许恢复的失败才回退 Blob 解析。
+    // 原生 EPUB / CBZ 不需要把整个原文件读回 JS；允许恢复的失败才回退 Blob 解析。
     if (source.nativePath && canUseNativeArchive()) {
       if (/\.epub$/i.test(source.name || '')) {
         if (isNativeMangaManifestValid(source.nativePageManifest)) {
@@ -636,7 +645,8 @@ export async function hydrateBook(book: BookLike) {
             // 快路径仍要验证 ZipFile 会话；失败时按既有规则回退完整存档读取。
             await ensureNativeArchiveSession({
               nativeArchiveId: book.nativeArchiveId || book.id,
-              nativeArchivePath: source.nativePath
+              nativeArchivePath: source.nativePath,
+              nativeArchiveMode: 'document'
             });
             // 漫画页清单已包含页序与尺寸，恢复书架时不需要读正文。
             parsed = restoreNativeMangaManifest(book, source, source.nativePageManifest as { items: Array<{ index: number; width?: number; height?: number }> }) as unknown as Book;
@@ -659,6 +669,44 @@ export async function hydrateBook(book: BookLike) {
               return false;
             }
             console.warn('[HOMURA] 原生 EPUB 恢复失败，回退完整存档读取', err);
+          }
+        }
+      } else if (/\.(cbz|zip)$/i.test(source.name || '')) {
+        // 页清单已含页序与尺寸；冷启动只需重开 ZipFile，不必再扫描整本图片尺寸。
+        if (isNativeMangaManifestValid(source.nativePageManifest)) {
+          try {
+            await ensureNativeArchiveSession({
+              nativeArchiveId: book.nativeArchiveId || book.id,
+              nativeArchivePath: source.nativePath,
+              nativeArchiveMode: 'pages'
+            });
+            parsed = restoreNativeMangaManifest(
+              book,
+              source,
+              source.nativePageManifest as { items: Array<{ index: number; width?: number; height?: number }> },
+              'pages',
+              'cbz'
+            ) as unknown as Book;
+          } catch (err) {
+            if (!shouldFallbackNativeArchive(err)) {
+              console.warn('[HOMURA] CBZ 页清单对应的原生会话被安全或限额规则拒绝', err);
+              return false;
+            }
+            console.warn('[HOMURA] CBZ 页清单原生会话不可用，回退完整解析', err);
+          }
+        }
+        if (!parsed) {
+          try {
+            parsed = (await parseCbzNativeArchive(source.nativePath, {
+              id: book.id,
+              name: source.name
+            })) as unknown as Book;
+          } catch (err) {
+            if (!shouldFallbackNativeArchive(err)) {
+              console.warn('[HOMURA] 原生压缩包被安全或限额规则拒绝，不再回退', err);
+              return false;
+            }
+            console.warn('[HOMURA] 原生压缩包恢复失败，回退完整存档读取', err);
           }
         }
       }
@@ -713,6 +761,7 @@ export async function hydrateBook(book: BookLike) {
   book.nativeArchivePath = parsed.nativeArchiveId
     ? (parsed.nativeArchivePath || source.nativePath || null)
     : (null as string | null);
+  book.nativeArchiveMode = (parsed.nativeArchiveMode as string | undefined) || null;
   book.nativeEntryIndexByPath = parsed.nativeEntryIndexByPath || null;
   book.nativeArchiveStaged = false;
   // 书架元数据里保存的是小封面，重新解析出的大图不应覆盖它；

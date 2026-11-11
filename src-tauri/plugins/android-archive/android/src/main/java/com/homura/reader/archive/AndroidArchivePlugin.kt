@@ -42,6 +42,7 @@ private const val MAX_CACHE_BYTES = 192L * 1024 * 1024
 private const val MIN_PAGE_EDGE = 1280
 private const val MAX_PAGE_EDGE = 2048
 private const val PAGE_WEBP_QUALITY = 82
+private const val PREFETCH_AHEAD = 2
 // 每解出这么多页才做一次目录清理，避免每翻一页都 list + stat 整个缓存目录
 private const val TRIM_EVERY_EXTRACTS = 5
 private const val MAX_TEXT_PATHS = 5_000
@@ -105,7 +106,9 @@ private class ArchiveSession(
   val bookId: String,
   val zipFile: ZipFile,
   val entries: List<ZipEntry>,
-  val entryIndexByName: Map<String, Int>
+  val entryIndexByName: Map<String, Int>,
+  // 只有 CBZ 的图片条目顺序等于阅读顺序；EPUB 文档的条目索引和页序无关
+  val sequentialPages: Boolean
 ) {
   val lock = Any()
 }
@@ -128,13 +131,50 @@ private data class ImportUriMetadata(
 class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
   private val sessions = HashMap<String, ArchiveSession>()
   private val extractCounters = ConcurrentHashMap<String, Int>()
+  private val prefetchGenerations = ConcurrentHashMap<String, Int>()
   private val executor: ExecutorService = Executors.newFixedThreadPool(2) { runnable ->
     Thread(runnable, "homura-archive").apply { isDaemon = true }
+  }
+  private val prefetchExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+    Thread(runnable, "homura-archive-prefetch").apply { isDaemon = true }
   }
 
   init {
     // 导入进程被杀时 .part 来不及清理，下一次启动先回收残留临时文件。
     executor.execute(::cleanupImportPartFiles)
+  }
+
+  @Command
+  fun open(invoke: Invoke) {
+    val options = invoke.parseArgs(OpenOptions::class.java)
+    runAsync(invoke) {
+      val archiveFile = resolveArchiveFile(options.path)
+      val zipFile = ZipFile(archiveFile)
+      try {
+        val entries = readImageEntries(zipFile)
+        if (entries.isEmpty()) throw IllegalStateException("压缩包内未找到图片")
+
+        val dimensions = if (options.scanDimensions) {
+          readPageDimensions(zipFile, entries)
+        } else {
+          emptyList()
+        }
+        val session = createSession(options.archiveId, zipFile, entries, sequentialPages = true)
+        replaceSession(session)
+
+        JSObject().apply {
+          put("archiveId", options.archiveId)
+          put("entries", JSArray().apply {
+            entries.forEachIndexed { index, entry ->
+              put(entryJson(entry, index, dimensions.getOrNull(index)))
+            }
+          })
+        }
+      } catch (error: Throwable) {
+        zipFile.close()
+        throw error
+      }
+    }
   }
 
   @Command
@@ -153,7 +193,7 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
         } else {
           emptyList()
         }
-        val session = createSession(options.archiveId, zipFile, entries)
+        val session = createSession(options.archiveId, zipFile, entries, sequentialPages = false)
         replaceSession(session)
 
         JSObject().apply {
@@ -194,6 +234,7 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
         } else {
           extractCounters[session.bookId] = counter
         }
+        schedulePrefetch(session, options.index)
         page
       }
     }
@@ -257,6 +298,7 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
     runAsync(invoke) {
       closeBookSessions(options.bookId)
       extractCounters.remove(options.bookId)
+      prefetchGenerations.remove(options.bookId)
       cacheDirFor(options.bookId).deleteRecursively()
       null
     }
@@ -267,6 +309,7 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
     runAsync(invoke) {
       closeAllSessions()
       extractCounters.clear()
+      prefetchGenerations.clear()
       File(activity.cacheDir, CACHE_ROOT).deleteRecursively()
       null
     }
@@ -348,6 +391,7 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
   override fun onDestroy(activity: AppCompatActivity) {
     closeAllSessions()
     executor.shutdownNow()
+    prefetchExecutor.shutdownNow()
     super.onDestroy(activity)
   }
 
@@ -572,7 +616,7 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
 
   private fun isSupportedImportName(name: String): Boolean {
     return name.substringAfterLast('.', "").lowercase() in setOf(
-      "epub", "pdf", "mobi", "prc", "azw", "txt", "md",
+      "epub", "pdf", "mobi", "prc", "azw", "cbz", "zip", "txt", "md",
       "jpg", "jpeg", "png", "webp", "gif", "avif", "bmp"
     )
   }
@@ -609,12 +653,13 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
   private fun createSession(
     archiveId: String,
     zipFile: ZipFile,
-    entries: List<ZipEntry>
+    entries: List<ZipEntry>,
+    sequentialPages: Boolean
   ): ArchiveSession {
     val indexByName = entries
       .mapIndexed { index, entry -> entry.name to index }
       .toMap()
-    return ArchiveSession(archiveId, archiveId, zipFile, entries, indexByName)
+    return ArchiveSession(archiveId, archiveId, zipFile, entries, indexByName, sequentialPages)
   }
 
   private fun readAllEntries(zipFile: ZipFile): List<ZipEntry> {
@@ -631,8 +676,26 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
     return entries
   }
 
+  private fun readImageEntries(zipFile: ZipFile): List<ZipEntry> {
+    val entries = mutableListOf<ZipEntry>()
+    val enumeration = zipFile.entries()
+    while (enumeration.hasMoreElements()) {
+      val entry = enumeration.nextElement()
+      if (isImageEntry(entry)) {
+        entries.add(entry)
+        if (entries.size > MAX_ENTRIES) throw IllegalStateException("压缩包图片数量过多")
+      }
+    }
+    entries.sortWith { left, right -> naturalCompare(left.name, right.name) }
+    return entries
+  }
+
   private fun isImageEntry(entry: ZipEntry): Boolean {
-    return !entry.isDirectory && IMAGE_NAME.matches(entry.name) && !entry.name.contains("__MACOSX")
+    if (entry.isDirectory || !IMAGE_NAME.matches(entry.name)) return false
+    // macOS 打包残留不是页面：__MACOSX 目录、AppleDouble 文件与 .DS_Store 全部跳过
+    return entry.name.split('/', '\\').none { segment ->
+      segment == "__MACOSX" || segment == ".DS_Store" || segment.startsWith("._")
+    }
   }
 
   private fun entryJson(
@@ -872,6 +935,31 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
     } finally {
       if (output !== decoded) output.recycle()
       decoded.recycle()
+    }
+  }
+
+  // 当前页解完后，在独立线程提前转码后两页；翻过去时直接命中缓存
+  private fun schedulePrefetch(session: ArchiveSession, currentIndex: Int) {
+    // 文档模式的 index 是 ZIP 条目索引，不是阅读页序，预取会转码无关页并占用会话锁
+    if (!session.sequentialPages) return
+    val generation = (prefetchGenerations[session.bookId] ?: 0) + 1
+    prefetchGenerations[session.bookId] = generation
+    val archiveId = session.id
+    prefetchExecutor.execute {
+      for (offset in 1..PREFETCH_AHEAD) {
+        val index = currentIndex + offset
+        if (index >= session.entries.size) return@execute
+        if (prefetchGenerations[session.bookId] != generation) return@execute
+        if (synchronized(sessions) { sessions[archiveId] } !== session) return@execute
+        try {
+          synchronized(session.lock) {
+            if (prefetchGenerations[session.bookId] != generation) return@synchronized
+            ensurePageFile(session, index)
+          }
+        } catch (_: Throwable) {
+          // 预取失败不影响当前阅读，真正翻到该页时会再试
+        }
+      }
     }
   }
 

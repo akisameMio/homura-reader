@@ -14,10 +14,11 @@ globalThis.window = {
     core: {
       invoke: async (command, args) => {
         const name = command.split('|').pop();
-        await new Promise(resolve => setTimeout(resolve, name === 'openDocument' ? 20 : 5));
+        await new Promise(resolve => setTimeout(resolve, name === 'open' || name === 'openDocument' ? 20 : 5));
         calls.push({ name, args });
-        if (name === 'openDocument') sessionOpen = true;
+        if (name === 'open' || name === 'openDocument') sessionOpen = true;
         if (name === 'close') sessionOpen = false;
+        if (name === 'open') return { entries: [] };
         if (name === 'openDocument') return { archiveId: args.archiveId, entries: [], images: [] };
         if (name === 'readTextBatch') {
           const paths = JSON.parse(args.pathsJson);
@@ -40,6 +41,7 @@ const {
   ensureNativeArchiveSession,
   extractNativeEntry,
   isNativeArchiveSessionOpen,
+  openNativeArchive,
   openNativeDocument,
   readNativeTextBatch,
   releaseNativeArchiveSession
@@ -48,10 +50,11 @@ const {
 test('关闭阅读器后按保存的路径懒重开 ZipFile 会话', async () => {
   const book = {
     nativeArchiveId: 'book-reopen',
-    nativeArchivePath: 'homura-native-sources/book-reopen/source/book.epub'
+    nativeArchivePath: 'homura-native-sources/book-reopen/source/book.cbz',
+    nativeArchiveMode: 'pages'
   };
 
-  await openNativeDocument(book.nativeArchiveId, book.nativeArchivePath);
+  await openNativeArchive(book.nativeArchiveId, book.nativeArchivePath);
   assert.equal(isNativeArchiveSessionOpen(book.nativeArchiveId), true);
 
   await releaseNativeArchiveSession(book);
@@ -61,22 +64,22 @@ test('关闭阅读器后按保存的路径懒重开 ZipFile 会话', async () =>
   assert.equal(isNativeArchiveSessionOpen(book.nativeArchiveId), true);
   assert.deepEqual(
     calls.filter(call => call.args.archiveId === book.nativeArchiveId).map(call => call.name),
-    ['openDocument', 'close', 'openDocument']
+    ['open', 'close', 'open']
   );
   const reopenCall = calls.filter(call => (
-    call.name === 'openDocument' && call.args.archiveId === book.nativeArchiveId
+    call.name === 'open' && call.args.archiveId === book.nativeArchiveId
   )).at(-1);
-  assert.equal(reopenCall.args.scanDimensions, false);
-  assert.equal(reopenCall.args.includeEntries, false);
+  assert.equal(reopenCall.args.archiveId, book.nativeArchiveId);
 });
 
-test('快速切书时 close 与后续 openDocument 按压缩包串行执行', async () => {
+test('快速切书时 close 与后续 open 按压缩包串行执行', async () => {
   const book = {
     nativeArchiveId: 'book-race',
-    nativeArchivePath: 'homura-native-sources/book-race/source/book.epub'
+    nativeArchivePath: 'homura-native-sources/book-race/source/book.cbz',
+    nativeArchiveMode: 'pages'
   };
 
-  const initialOpen = openNativeDocument(book.nativeArchiveId, book.nativeArchivePath);
+  const initialOpen = openNativeArchive(book.nativeArchiveId, book.nativeArchivePath);
   const close = releaseNativeArchiveSession(book);
   const reopen = ensureNativeArchiveSession(book);
   await Promise.all([initialOpen, close, reopen]);
@@ -84,7 +87,7 @@ test('快速切书时 close 与后续 openDocument 按压缩包串行执行', as
   assert.equal(sessionOpen, true);
   assert.deepEqual(
     calls.filter(call => call.args.archiveId === book.nativeArchiveId).map(call => call.name),
-    ['openDocument', 'close', 'openDocument']
+    ['open', 'close', 'open']
   );
 });
 
@@ -109,4 +112,35 @@ test('原生文档会话支持批量取文本和按索引取图', async () => {
   const extracted = await extractNativeEntry(archiveId, 3);
   assert.deepEqual(extracted, { path: '/cache/page.jpg', mime: 'image/jpeg', size: 123 });
   await releaseNativeArchiveSession({ nativeArchiveId: archiveId, nativeArchivePath: path });
+});
+
+test('文档会话关闭后使用 openDocument 恢复，而不是页模式 open', async () => {
+  const book = {
+    nativeArchiveId: 'document-reopen',
+    nativeArchivePath: 'homura-native-sources/document-reopen/source/book.epub',
+    nativeArchiveMode: 'document'
+  };
+
+  await openNativeDocument(book.nativeArchiveId, book.nativeArchivePath);
+  await releaseNativeArchiveSession(book);
+  assert.equal(await ensureNativeArchiveSession(book), true);
+  assert.deepEqual(
+    calls.filter(call => call.args.archiveId === book.nativeArchiveId).map(call => call.name),
+    ['openDocument', 'close', 'openDocument']
+  );
+});
+
+test('缺少模式字段的旧存档仍按文档会话恢复', async () => {
+  const book = {
+    nativeArchiveId: 'legacy-document',
+    nativeArchivePath: 'homura-native-sources/legacy-document/source/book.epub'
+  };
+
+  await openNativeDocument(book.nativeArchiveId, book.nativeArchivePath);
+  await releaseNativeArchiveSession(book);
+  assert.equal(await ensureNativeArchiveSession(book), true);
+  assert.deepEqual(
+    calls.filter(call => call.args.archiveId === book.nativeArchiveId).map(call => call.name),
+    ['openDocument', 'close', 'openDocument']
+  );
 });

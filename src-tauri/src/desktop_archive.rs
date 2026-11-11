@@ -184,6 +184,12 @@ fn is_image(name: &str) -> bool {
     )
 }
 
+// macOS 打包残留不是页面：__MACOSX 已在读取条目时丢弃，这里补上 AppleDouble 与 .DS_Store。
+fn is_junk_entry(name: &str) -> bool {
+    name.split(['/', '\\'])
+        .any(|segment| segment == "__MACOSX" || segment == ".DS_Store" || segment.starts_with("._"))
+}
+
 fn natural_order(left: &str, right: &str) -> std::cmp::Ordering {
     use std::cmp::Ordering;
 
@@ -879,15 +885,30 @@ fn open_archive(
     state: &DesktopArchiveState,
     archive_id: &str,
     path: &str,
+    document: bool,
 ) -> Result<OpenResponse, String> {
     if archive_id.trim().is_empty() {
         return Err(invalid_data("缺少压缩包会话 ID"));
     }
     let archive_file = resolve_archive_file(app, path)?;
     let archive = read_zip_archive(&archive_file)?;
-    let entries = archive.entries;
+    let images: Vec<ZipEntry> = archive
+        .entries
+        .iter()
+        .filter(|entry| is_image(&entry.name) && !is_junk_entry(&entry.name))
+        .cloned()
+        .collect();
+    let entries = if document {
+        archive.entries
+    } else {
+        images.clone()
+    };
     if entries.is_empty() {
-        return Err(invalid_data("压缩包内没有可读取的条目"));
+        return Err(invalid_data(if document {
+            "压缩包内没有可读取的条目"
+        } else {
+            "压缩包内未找到图片"
+        }));
     }
 
     let entry_index_by_name = entries
@@ -895,14 +916,17 @@ fn open_archive(
         .enumerate()
         .map(|(index, entry)| (entry.name.clone(), index))
         .collect::<HashMap<_, _>>();
-    let images = entries
-        .iter()
-        .filter(|entry| is_image(&entry.name))
-        .map(|entry| {
-            let index = entry_index_by_name.get(&entry.name).copied().unwrap_or(0);
-            entry_info(entry, index)
-        })
-        .collect();
+    let images = if document {
+        images
+            .iter()
+            .map(|entry| {
+                let index = entry_index_by_name.get(&entry.name).copied().unwrap_or(0);
+                entry_info(entry, index)
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     let session = Arc::new(ArchiveSession {
         path: archive_file,
         entries: entries.clone(),
@@ -930,6 +954,16 @@ fn open_archive(
     })
 }
 
+#[tauri::command(async)]
+pub fn open(
+    app: AppHandle,
+    state: State<'_, DesktopArchiveState>,
+    archive_id: String,
+    path: String,
+) -> Result<OpenResponse, String> {
+    open_archive(&app, state.inner(), &archive_id, &path, false)
+}
+
 #[tauri::command(async, rename = "openDocument")]
 pub fn open_document(
     app: AppHandle,
@@ -937,7 +971,7 @@ pub fn open_document(
     archive_id: String,
     path: String,
 ) -> Result<OpenResponse, String> {
-    open_archive(&app, state.inner(), &archive_id, &path)
+    open_archive(&app, state.inner(), &archive_id, &path, true)
 }
 
 #[tauri::command(async)]
@@ -1426,6 +1460,10 @@ mod tests {
         let mut names = vec!["chapter10.jpg", "chapter2.jpg", "chapter1.jpg"];
         names.sort_by(|left, right| natural_order(left, right));
         assert_eq!(names, vec!["chapter1.jpg", "chapter2.jpg", "chapter10.jpg"]);
+        assert!(is_junk_entry("__MACOSX/chapter/1.jpg"));
+        assert!(is_junk_entry("chapter/._1.jpg"));
+        assert!(is_junk_entry("chapter/.DS_Store"));
+        assert!(!is_junk_entry("chapter/1.jpg"));
         assert_eq!(safe_extension("../../evil.JPG"), "jpg");
         assert_eq!(safe_cache_segment("../library/book"), ".._library_book");
         assert_eq!(safe_cache_segment("."), "book");

@@ -270,6 +270,7 @@ const types = [
 const formatOptions = [
   { value: 'all', label: '不限格式' },
   { value: 'epub', label: 'EPUB' },
+  { value: 'cbz', label: 'CBZ' },
   { value: 'pdf', label: 'PDF' },
   { value: 'mobi', label: 'MOBI' },
   { value: 'txt', label: 'TXT' },

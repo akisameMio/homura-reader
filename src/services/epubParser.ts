@@ -98,7 +98,7 @@ const NATIVE_MANGA_MANIFEST_VERSION = 1;
 // EPUB 漫画的页序与图片尺寸在导入时已经完整解析过，顺手存成轻量清单。
 // 首次打开只按 ZIP 条目索引取图，不再重新解析全书 XHTML、扫描图片头。
 export function createNativeMangaManifest(book: Book | null | undefined) {
-  if (book?.type !== 'manga' || book?.format !== 'epub') return null;
+  if (book?.type !== 'manga' || (book?.format !== 'epub' && book?.format !== 'cbz')) return null;
   const items: { index: number; width: number; height: number }[] = [];
   for (const item of (book.pageItems || []) as Array<{ nativeIndex?: number; imageWidth?: number; imageHeight?: number }>) {
     if (!Number.isInteger(item?.nativeIndex)) return null;
@@ -249,6 +249,7 @@ export async function createNativeEpubArchive(nativePath: string, options: EpubP
       const item: {
         nativeArchiveId: string;
         nativeArchivePath: string;
+        nativeArchiveMode: string;
         nativeIndex: number;
         url: string | null;
         imageWidth?: number;
@@ -256,6 +257,7 @@ export async function createNativeEpubArchive(nativePath: string, options: EpubP
       } = {
         nativeArchiveId: archiveId,
         nativeArchivePath: nativePath,
+        nativeArchiveMode: 'document',
         nativeIndex: index,
         url
       };
@@ -269,6 +271,7 @@ export async function createNativeEpubArchive(nativePath: string, options: EpubP
       return {
         nativeArchiveId: archiveId,
         nativeArchivePath: nativePath,
+        nativeArchiveMode: 'document',
         nativeEntryIndexByPath: entryIndexByPath
       };
     }
