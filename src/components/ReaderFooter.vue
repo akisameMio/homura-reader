@@ -66,7 +66,6 @@
         @input="onInput"
         @change="onRangeChange"
         @pointerdown="onPointerDown"
-        @pointermove="onPointerMove"
         @focus="onFocus"
         @blur="onBlur"
         @keydown="onKeydown"
@@ -121,6 +120,12 @@ let activePointerId: number | null = null;
 let pointerStartX = 0;
 let pointerStartY = 0;
 let lastHapticIndex = -1;
+let touchPointerActive = false;
+let touchHoldPending = false;
+let touchScrubActive = false;
+let touchHoldTimer: ReturnType<typeof setTimeout> | null = null;
+let revealChangeTimer: ReturnType<typeof setTimeout> | null = null;
+let ignoreRevealChange = false;
 
 const total = computed(() => reader.activePages.length);
 const maxIndex = computed(() => Math.max(0, total.value - 1));
@@ -200,6 +205,11 @@ watch(() => reader.currentBook?.id, () => {
   }
   pointerActive.value = false;
   activePointerId = null;
+  if (touchHoldTimer) clearTimeout(touchHoldTimer);
+  touchHoldTimer = null;
+  touchPointerActive = false;
+  touchHoldPending = false;
+  touchScrubActive = false;
   sliderValue.value = Math.min(reader.currentIndex, maxIndex.value);
 });
 
@@ -226,11 +236,19 @@ function clampSliderValue(value: number) {
 }
 
 function onInput(event: Event) {
-  sliderValue.value = clampSliderValue(Number((event.target as HTMLInputElement).value));
-  if (pointerActive.value && isAndroid && previewIndex.value !== lastHapticIndex) {
-    lastHapticIndex = previewIndex.value;
-    try { navigator.vibrate?.(8); } catch (err) {}
+  if (touchPointerActive) return;
+  if (ignoreRevealChange) {
+    sliderValue.value = reader.currentIndex;
+    return;
   }
+  sliderValue.value = clampSliderValue(Number((event.target as HTMLInputElement).value));
+  triggerPageHaptic();
+}
+
+function triggerPageHaptic() {
+  if (!pointerActive.value || !isAndroid || previewIndex.value === lastHapticIndex) return;
+  lastHapticIndex = previewIndex.value;
+  try { navigator.vibrate?.(8); } catch (err) {}
 }
 
 // 松手 / 键盘 change 只提交一次；重复调用时 currentIndex 已相等，直接跳过。
@@ -243,6 +261,12 @@ function commit() {
 function onPointerDown(event: PointerEvent) {
   if (event.pointerType !== 'mouse' && !trackVisible.value) {
     trackVisible.value = true;
+    ignoreRevealChange = true;
+    if (revealChangeTimer) clearTimeout(revealChangeTimer);
+    revealChangeTimer = setTimeout(() => {
+      ignoreRevealChange = false;
+      revealChangeTimer = null;
+    }, 300);
     event.preventDefault();
     return;
   }
@@ -252,6 +276,23 @@ function onPointerDown(event: PointerEvent) {
   pointerStartY = event.clientY;
   lastHapticIndex = previewIndex.value;
   pointerActive.value = true;
+  if (event.pointerType !== 'mouse') {
+    event.preventDefault();
+    touchPointerActive = true;
+    touchHoldPending = true;
+    touchScrubActive = false;
+    if (touchHoldTimer) clearTimeout(touchHoldTimer);
+    touchHoldTimer = setTimeout(() => {
+      touchHoldTimer = null;
+      if (!pointerActive.value || !touchHoldPending) return;
+      touchHoldPending = false;
+      touchScrubActive = true;
+      scrubbing.value = true;
+      ui.pinChrome();
+      setSliderFromPointer(pointerStartX);
+    }, 350);
+    return;
+  }
   scrubbing.value = true;
   dragging.value = false;
   ui.pinChrome();
@@ -274,22 +315,54 @@ function canHoverTrack() {
 }
 
 function onPointerMove(event: PointerEvent) {
+  if (touchPointerActive && event.pointerId === activePointerId) {
+    if (touchHoldPending) {
+      if (Math.hypot(event.clientX - pointerStartX, event.clientY - pointerStartY) >= 8) {
+        if (touchHoldTimer) clearTimeout(touchHoldTimer);
+        touchHoldTimer = null;
+        touchHoldPending = false;
+        pointerActive.value = false;
+        activePointerId = null;
+        touchPointerActive = false;
+      }
+      return;
+    }
+    if (touchScrubActive) {
+      dragging.value = Math.abs(event.clientX - pointerStartX) >= 3;
+      setSliderFromPointer(event.clientX);
+    }
+    return;
+  }
   if (!pointerActive.value || event.pointerId !== activePointerId || dragging.value) return;
   if (Math.hypot(event.clientX - pointerStartX, event.clientY - pointerStartY) >= 3) {
     dragging.value = true;
   }
 }
 
+function setSliderFromPointer(clientX: number) {
+  const bounds = rangeEl.value?.getBoundingClientRect();
+  if (!bounds || !bounds.width) return;
+  sliderValue.value = clampSliderValue(((clientX - bounds.left) / bounds.width) * maxIndex.value);
+  triggerPageHaptic();
+}
+
 function endPointer(commitValue: boolean) {
   if (!pointerActive.value) return;
+  const shouldCommit = commitValue && (!touchPointerActive || touchScrubActive);
+  const wasScrubbing = scrubbing.value;
+  if (touchHoldTimer) clearTimeout(touchHoldTimer);
+  touchHoldTimer = null;
   pointerActive.value = false;
   activePointerId = null;
+  touchPointerActive = false;
+  touchHoldPending = false;
+  touchScrubActive = false;
   scrubbing.value = false;
   dragging.value = false;
-  if (commitValue) commit();
+  if (shouldCommit) commit();
   else sliderValue.value = reader.currentIndex;
   rangeEl.value?.blur();
-  ui.unpinChrome();
+  if (wasScrubbing) ui.unpinChrome();
 }
 
 function onWindowPointerUp(event: PointerEvent) {
@@ -304,6 +377,14 @@ function onWindowPointerCancel(event: PointerEvent) {
 
 // 指针在滑条外松开时 window 上的 pointerup 负责收尾；个别 WebKit 版本只给 change，这里兜底一次
 function onRangeChange() {
+  if (touchPointerActive) return;
+  if (ignoreRevealChange) {
+    ignoreRevealChange = false;
+    if (revealChangeTimer) clearTimeout(revealChangeTimer);
+    revealChangeTimer = null;
+    sliderValue.value = reader.currentIndex;
+    return;
+  }
   if (pointerActive.value) {
     endPointer(true);
     return;
@@ -351,12 +432,16 @@ function abortPointer() {
 }
 onMounted(() => {
   window.addEventListener('blur', abortPointer);
+  window.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onWindowPointerUp);
   window.addEventListener('pointercancel', onWindowPointerCancel);
 });
 onBeforeUnmount(() => {
   if (pageCountTimer) clearTimeout(pageCountTimer);
+  if (touchHoldTimer) clearTimeout(touchHoldTimer);
+  if (revealChangeTimer) clearTimeout(revealChangeTimer);
   window.removeEventListener('blur', abortPointer);
+  window.removeEventListener('pointermove', onPointerMove);
   window.removeEventListener('pointerup', onWindowPointerUp);
   window.removeEventListener('pointercancel', onWindowPointerCancel);
 });
