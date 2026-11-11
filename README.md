@@ -25,12 +25,12 @@ HOMURA是一个**本地优先**的阅读器：漫画、轻小说、PDF 和图集
 | 移动平台 | Android arm64-v8a APK |
 | 核心链路 | 导入、本地存档、恢复、分页/滚动阅读、目录跳转、进度记忆、一级书库、收藏、自定义封面、导入进度与失败重试、应用内更新均可用 |
 | 尚未完成 | 标签功能尚未实现；书签功能尚未实现 |
-| 质量保障 | 有 `node:test` + jsdom 单元测试（224 条）与 `vue-tsc` 类型检查；没有 ESLint 或 E2E，关键阅读流程仍需手动回归 |
+| 质量保障 | 有 `node:test` + jsdom 单元测试（229 条）与 `vue-tsc` 类型检查；没有 ESLint 或 E2E，关键阅读流程仍需手动回归 |
 | 许可 | MIT，完整条款见 [`LICENSE`](LICENSE) |
 
 ## 功能概览
 
-- **多格式书架**：EPUB / KEPUB、PDF、MOBI、TXT、Markdown 和图片文件夹。
+- **多格式书架**：EPUB / KEPUB、CBZ / ZIP 漫画压缩包、PDF、MOBI、TXT、Markdown 和图片文件夹。
 - **一级书库与收藏**：可新建、改名、删除书库，书本可多选移入或跨库搬移；收藏页平铺展示全部收藏书。
 - **两种阅读方式**：小说使用自动分页引擎；漫画支持单页、双页、首页单排和上下条漫。
 - **本地进度记忆**：按书保存页码、阅读比例、方向、单双页、字号、字体、行距、页边距和条漫尺寸，重开自动续读。
@@ -43,6 +43,7 @@ HOMURA是一个**本地优先**的阅读器：漫画、轻小说、PDF 和图集
 | 格式 | 扩展名 | 当前能力 |
 | --- | --- | --- |
 | EPUB / KEPUB | `.epub`、`.kepub.epub` | 读取 OPF spine 与章节正文；图片占主导的 EPUB 会自动按漫画阅读 |
+| CBZ / ZIP | `.cbz`、`.zip` | 压缩包内图片按文件名自然序排列成漫画页；原生通道按需解页，其他情况回退 JSZip |
 | PDF | `.pdf` | 按页懒加载并渲染为位图，保留原始版式；不支持重排或改字号，加密 PDF 暂不支持 |
 | MOBI | `.mobi`、`.prc`、`.azw` | 解析 PalmDOC 容器，提取正文、封面与内嵌图片；不支持 DRM、AZW3 / KF8 和 Huffman 压缩 |
 | 纯文本 / Markdown | `.txt`、`.md` | TXT 兼容 UTF-8、GBK / GB18030、带 BOM 的 UTF-16 及有明显零字节特征的无 BOM UTF-16，按常见章节标题切分；Markdown 按一级/二级标题切章并渲染常见 GFM 内容 |
@@ -58,7 +59,7 @@ Markdown 输出会经过安全处理：原始 HTML 只作为文本显示，链�
 - 「新建」可建立自定义一级书库；支持拖入书本、多选移入、跨库移动与移回主页。每本书只属于一个书库，删除书库会将书本放回主页，保留原文件和阅读进度。
 - 书库始终排在单本前；文件夹外观显示库内排序的第一本封面及后面最多三本的薄叠影，不足的叠影以主题色补齐。
 - 导入包含多本作品的文件夹时，可以选择按目录分别创建书库，逐个确认名称；深层目录也会展平为独立书库，不建立嵌套书库。在书库中导入单独文件会归入当前书库。
-- 书架与收藏支持类型筛选（全部 / 漫画 / 轻小说 / 其他），PDF 及不属于漫画、小说的书归入「其他」；还支持格式筛选（EPUB / PDF / MOBI / TXT / Markdown）和三种排序（书名 / 最近添加 / 阅读进度）。默认按书名排序：数字按自然顺序排列，中文按拼音与英文字母混排。
+- 书架与收藏支持类型筛选（全部 / 漫画 / 轻小说 / 其他），PDF 及不属于漫画、小说的书归入「其他」；还支持格式筛选（EPUB / CBZ / PDF / MOBI / TXT / Markdown）和三种排序（书名 / 最近添加 / 阅读进度）。默认按书名排序：数字按自然顺序排列，中文按拼音与英文字母混排。
 - 主页在同一个网格中紧接排列「继续阅读 → 书库 → 小说 → 漫画 → 其他」，不显示分类标题、不按类别强制换行；同类书本沿用所选排序，PDF 放在「其他」。继续阅读也可直接返回书库内上次阅读的作品。
 - 阅读器顶栏「本目录」右侧的星星可收藏 / 取消收藏本书，独立书本也支持收藏。导航中的「收藏」平铺展示所有已收藏书本（包含库内书本），支持排序、搜索和格式筛选，不显示继续阅读卡或书库；导入书籍的收藏重启后保留，示例书收藏随本次示例保留。
 - 收藏页卡片的移除按钮仅取消收藏，保留原书、书库归属和阅读进度；书架中的移除按钮仍用于删除书本。继续阅读卡片会在原有左侧窄栏中裁切展示封面，并向右渐变融入背景，不改变卡片尺寸；无封面时保留文字书脊。
@@ -144,7 +145,7 @@ npm run build      # tauri build，Tauri 会先构建前端再打包安装包
 
 | 命令 | 作用 |
 | --- | --- |
-| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，224 条用例，覆盖解析、书名排序、同名识别、书库归属、目录分组和阅读手势规则 |
+| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，229 条用例，覆盖解析、书名排序、同名识别、书库归属、目录分组和阅读手势规则 |
 | `npm run typecheck` | `vue-tsc --noEmit`，类型检查（当前 0 报错） |
 | `npm run dev:vite` | 只启动 Vite 开发服务器，端口固定为 `5173`，支持 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`，是最快的构建验证 |
@@ -179,7 +180,7 @@ homura-reader/
 │   │   └── styles/             # tokens / base / library / overlays / controls /
 │   │                           # canvas / legacy / theme-picker / content 九个模块
 │   ├── stores/                 # 7 个 setup store：theme / shelf / reader / ui / settings / importProgress / updates
-│   ├── services/               # 35 个：解析、存储、平台适配、原生桥接、更新（不依赖 Vue / Pinia）
+│   ├── services/               # 39 个：解析、存储、平台适配、原生桥接、更新（不依赖 Vue / Pinia）
 │   │   ├── parsers.ts / epubParser.ts / epubType.ts   # 解析调度与漫画/小说判定
 │   │   ├── pagination.ts       # 小说智能分页、章节与图片页构建
 │   │   ├── pdf.ts / mobi.ts / markdown.ts / textEncoding.ts
@@ -210,8 +211,8 @@ services / stores / composables 三层已全部迁移为 TypeScript（`component
 - IndexedDB 数据库名为 `homura_shelf`，包含 `books`、`sources`、`progress`、`collections` 四个对象仓库，分别保存书籍元数据/封面、原始文件来源、阅读进度以及书库与书本归属；旧书架会自动升级。
 - Tauri 包会把书目、封面缩略图、书库归属与阅读进度镜像到 `$APPDATA/homura-metadata/homura.sqlite3`（WAL）。启动优先读 SQLite；首次启用或发现 `homura-native-metadata-dirty` 时，会从 IndexedDB 完整重建镜像。IndexedDB 仍是数据存在性与原始文件来源的最终兜底，SQLite 清理失败不会让已删除的书复活。
 - 书架封面优先由 Rust `image` 解码并缩到最长边 480px；AVIF 等原生不支持的格式、旧安装缺少命令或非 Tauri 环境会回退 Canvas / OffscreenCanvas。原生安全上限与像素上限不会继续交给 JS 重试。
-- Tauri 平台（含桌面）优先把原文件写入应用私有 AppData，容量只受磁盘剩余空间限制；桌面普通文件仍保留 `FileSystemFileHandle` 零拷贝引用，无句柄或原生写入失败才回退 OPFS 与 IndexedDB Blob。桌面 EPUB 会在解析前 staging 到 AppData，让 Rust 直接随机读取 ZIP 条目；原生失败时仍按 AppData、OPFS、句柄、Blob 逐层恢复或回退 JSZip。
-- 桌面原生 ZIP 通道只接受 `homura-native-sources` 下的路径，EPUB 条目按需解到 AppCache，并按最近访问时间保留 24 个文件 / 192MB；安全限制与资源超限错误不会回退到 JSZip。
+- Tauri 平台（含桌面）优先把原文件写入应用私有 AppData，容量只受磁盘剩余空间限制；桌面普通文件仍保留 `FileSystemFileHandle` 零拷贝引用，无句柄或原生写入失败才回退 OPFS 与 IndexedDB Blob。桌面 EPUB / CBZ 会在解析前 staging 到 AppData，让 Rust 直接随机读取 ZIP 条目；原生失败时仍按 AppData、OPFS、句柄、Blob 逐层恢复或回退 JSZip。
+- 桌面原生 ZIP 通道只接受 `homura-native-sources` 下的路径，EPUB / CBZ 条目按需解到 AppCache，并按最近访问时间保留 24 个文件 / 192MB；安全限制与资源超限错误不会回退到 JSZip。
 - 设置页的「存储与数据」在原生环境显示磁盘总容量、HOMURA / 其他应用 / 剩余可用三段占用，并单独列出书库原始文件与缓存、WebView 本地数据；浏览器调试环境回退到 WebView 配额估算。
 - 导入后会检查存储配额；已用空间达到 85% 或剩余不足 200 MB 时会提示。
 - 阅读进度写入做了 350 ms 防抖，并在关闭阅读器、页面卸载或切到后台时补写。
@@ -228,14 +229,14 @@ services / stores / composables 三层已全部迁移为 TypeScript（`component
 - 目录可以跳转，但目录状态不保存；书签功能尚未实现。
 - 书架搜索只匹配书名与书库名，不支持作者搜索或标签筛选。
 - macOS 安装包尚未签名/公证，首次启动需要手动放行。
-- 项目提供书名排序、同名识别、书库归属、目录分组和手势判定等单元测试（`npm test`，224 条），配合 `npm run typecheck` 做类型检查；但没有 E2E、覆盖不到完整阅读流程，也没有 ESLint，改动后仍需执行构建并手动回归关键阅读流程。
+- 项目提供书名排序、同名识别、书库归属、目录分组和手势判定等单元测试（`npm test`，229 条），配合 `npm run typecheck` 做类型检查；但没有 E2E、覆盖不到完整阅读流程，也没有 ESLint，改动后仍需执行构建并手动回归关键阅读流程。
 
 ## 开发与发布
 
 开发和代码约束以仓库根目录的 [`AGENTS.md`](AGENTS.md) 为准。提交前至少运行：
 
 ```bash
-npm test          # 单元测试（224 条）
+npm test          # 单元测试（229 条）
 npm run typecheck # vue-tsc 类型检查
 npm run build:vite
 ```

@@ -9,7 +9,7 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 
 - 当前版本 `2.2.5`
 - 技术栈：Vue 3 + Pinia + Vite 6 + Tauri 2（Rust）
-- **TypeScript**：`src/services/`（35 个）、`src/stores/`（7 个）、`src/composables/`（10 个）三层的逻辑代码已全部迁移为 `.ts`；`components/`（41 个 `.vue`）的 `<script setup>` 已全部升级为 `lang="ts"`（保留原有运行时 `defineProps({...})` / `defineEmits([...])` 写法，未改写成泛型语法）；入口 `src/main.ts` 亦已迁移。`tsconfig.json` 开 `allowJs: true` 允许 JS/TS 混存，`strict: true`，且 `noImplicitAny` / `noUnusedLocals` / `noUnusedParameters` 均已开启。`npm run typecheck`（`vue-tsc --noEmit`）已清零 0 报错，可作为门槛使用。没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
+- **TypeScript**：`src/services/`（39 个）、`src/stores/`（7 个）、`src/composables/`（10 个）三层的逻辑代码已全部迁移为 `.ts`；`components/`（41 个 `.vue`）的 `<script setup>` 已全部升级为 `lang="ts"`（保留原有运行时 `defineProps({...})` / `defineEmits([...])` 写法，未改写成泛型语法）；入口 `src/main.ts` 亦已迁移。`tsconfig.json` 开 `allowJs: true` 允许 JS/TS 混存，`strict: true`，且 `noImplicitAny` / `noUnusedLocals` / `noUnusedParameters` 均已开启。`npm run typecheck`（`vue-tsc --noEmit`）已清零 0 报错，可作为门槛使用。没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
 - 新增 / 迁移文件时，指向已迁移 `.ts` 文件（services / stores / composables）的 import 必须写 `.ts` 后缀（Node `--experimental-strip-types` 不会把 `./x.js` 解析到 `x.ts`，只有 Vite / tsc 会）
 - 数据存本机 IndexedDB（`homura_shelf`，v3，4 个 store：`books` / `sources` / `progress` / `collections`）；Tauri 环境额外把书目 / 书库 / 进度镜像到 `$APPDATA/homura-metadata/homura.sqlite3`；原文件按平台写 `$APPDATA/homura-native-sources`、OPFS（`homura-sources`）或 IndexedDB Blob；主题与设置偏好写 localStorage
 
@@ -18,19 +18,20 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 | 格式 | 扩展名 | 实现入口 |
 | --- | --- | --- |
 | EPUB / KEPUB | `.epub`、`.kepub.epub` | `src/services/epubParser.ts`（`parsers.ts` 调度） |
+| CBZ / ZIP | `.cbz`、`.zip` | `src/services/cbzParser.ts`（原生按需解页 + JSZip 回退） |
 | PDF | `.pdf` | `src/services/pdf.ts`（pdf.js，按页懒渲染） |
 | MOBI | `.mobi`、`.prc`、`.azw` | `src/services/mobi.ts`（不支持 DRM / AZW3） |
 | 纯文本 / Markdown | `.txt`、`.md` | `parsers.ts` + `markdown.ts` + `textEncoding.ts`（GB18030 兜底） |
 | 图片文件夹 | jpg/jpeg/png/webp/gif/avif/bmp | `parsers.ts` 的图片文件夹构建 + `collections.ts` 的目录建库 |
 
-**CBZ / ZIP 压缩包支持已移除**（commit `7a2d6f8`），不要再按压缩包思路改导入链路。
+CBZ / ZIP 与 EPUB 共用原生 ZIP 通道：漫画压缩包只把图片条目按自然序暴露成页，EPUB 仍按文档条目读取。
 
 ## 2. 常用命令
 
 | 命令 | 作用 |
 | --- | --- |
 | `npm install` | 安装前端依赖；Tauri 命令找不到时先跑这个 |
-| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 32 个测试文件、224 条用例全绿，约 1 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
+| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 33 个测试文件、229 条用例全绿，约 1 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
 | `npm run typecheck` | `vue-tsc --noEmit`，类型检查 |
 | `npm run dev:vite` | 只起 Vite 开发服务器，固定端口 **5173**（strictPort），带 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`（最常用的快速验证） |
@@ -72,12 +73,12 @@ src/
       theme-picker.css     主题色板
       content.css          阅读内容排版（小说正文 / 章节 / Markdown）
   stores/                  7 个 setup store：theme / shelf / reader / ui / settings / importProgress / updates
-  services/                35 个：解析、存储、平台、原生桥接、更新（不依赖 Vue / Pinia）
+  services/                39 个：解析、存储、平台、原生桥接、更新（不依赖 Vue / Pinia）
   composables/             10 个：useImporter / useViewport / useShortcuts / useSheetDrag / useShelfDialogs /
                            useScrollBounce / useDuplicateImport / useReaderBackDismiss / useAndroidBackExit /
                            useVolumeKeys
   components/              41 个 SFC（视图与交互）
-tests/                     32 个 .test.mjs（node:test + assert/strict + jsdom）
+tests/                     33 个 .test.mjs（node:test + assert/strict + jsdom）
 scripts/                   5 个：check-dark-glow / generate-icons / release-notes / sync-android-icons /
                            patch-android-manifest
 references/                4 份规范：md3-component-guide / tokens / ui-component-spec / desktop-island
@@ -94,9 +95,9 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 .github/workflows/         三平台 + Android 自动打包
 ```
 
-`src/services/` 的关键分工（35 个文件，别只看名字猜）：
+`src/services/` 的关键分工（39 个文件，别只看名字猜）：
 
-- **解析**：`parsers.ts`（总入口与调度）、`epubParser.ts`、`epubType.ts`（漫画/小说判定）、`pdf.ts`、`mobi.ts`、`markdown.ts`、`pagination.ts`（小说智能分页、章节/图片页构建）、`readerLayout.ts`（页宽 / 行高 / 页边距度量）、`textEncoding.ts`
+- **解析**：`parsers.ts`（总入口与调度）、`epubParser.ts`、`cbzParser.ts`（CBZ / ZIP 漫画）、`epubType.ts`（漫画/小说判定）、`pdf.ts`、`mobi.ts`、`markdown.ts`、`pagination.ts`（小说智能分页、章节/图片页构建）、`readerLayout.ts`（页宽 / 行高 / 页边距度量）、`textEncoding.ts`
 - **存储**：`storage.ts`（IndexedDB 完整存档 + SQLite 镜像）、`nativeMetadata.ts`、`nativeStorage.ts`、`opfs.ts`、`restore.ts`、`progress.ts`、`mutationQueue.ts`（串行写队列）
 - **原生桥**：`nativeRuntime.ts`（错误码与能力探测）、`nativeArchive.ts`（桌面 EPUB 会话）、`nativeImport.ts`、`coverThumb.ts`、`androidSystemBars.ts`、`updateDownload.ts`
 - **书库/书架**：`collections.ts`（书库归属与目录建库规划）、`collectionReading.ts`（书库内连读顺序）、`bookTitles.ts`（拼音排序）、`shelfSections.ts`（小说/漫画/其他分段）、`bookCover.ts`
@@ -205,7 +206,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 12. **Markdown 安全**：输出会进 `v-html`，原始 HTML 必须经 `sanitize.ts` 的 `ALLOWED_TAGS` 白名单校验，链接/图片只放行 `http/https/mailto/tel` 与相对路径。章节按一级/二级标题切分，并排除代码块内的标题标记。
 13. **进度与排版记忆**：翻页、滚轮、条漫滚动、拖进度条都要按书保存，包含方向 / 单双页 / 首页单排 / 字号（14–28，偶数档）/ 字体（宋 / 黑 / 楷）/ 行距 / 页边距 / 条漫尺寸。目录展开状态与书签目前**没有**持久化，书签功能尚未实现，这是已知限制，不要假装已支持。
 14. **重对象不进响应式深度代理**：见第 4 节。`PaginatedView` 的双缓冲动画对象尤其不能变成 `ref` 深层代理。
-15. **桌面原生压缩包会话**：EPUB 只从 `homura-native-sources` 读取，Rust 按 ZIP 中央目录随机读取条目到 AppCache；路径越界、条目过多、解压超限必须直接失败。JSZip 只对不可用、暂不支持或普通解析失败回退，不能吞掉 `NATIVE_SECURITY_LIMIT` / `NATIVE_LIMIT_EXCEEDED`。
+15. **桌面原生压缩包会话**：EPUB / CBZ / ZIP 只从 `homura-native-sources` 读取，Rust 按 ZIP 中央目录随机读取条目到 AppCache；CBZ 只暴露图片条目，路径越界、条目过多、解压超限必须直接失败。JSZip 只对不可用、暂不支持或普通解析失败回退，不能吞掉 `NATIVE_SECURITY_LIMIT` / `NATIVE_LIMIT_EXCEEDED`。
 16. **封面与元数据原生兜底**：封面缩略图优先走 Rust `create_cover_thumbnail` / `create_cover_thumbnail_from_archive`，格式不支持、命令不可用或没有 Tauri 时才回退 Canvas；原生像素 / 输入大小上限不得继续交给 JS 重试。SQLite 元数据失败时回退 IndexedDB，但 `dirty` 标记与删除顺序不能删，否则旧镜像可能复活已删除书本。
 17. **书库归属唯一**：每本书最多属于一个书库，`moveCollectionBooks` 负责搬移而不是复制；删除书库不能连带删书。
 18. **导入必须可取消可重试**：`useImporter` + `importProgress` store 支持取消、单本失败重试、同名确认、按批提交。并发与批量上限是实测过的（桌面 4 / Android 2，超 64MB 降到 3、超 256MB 降到 2、Android 超 32MB 降到 1），不要随手调高。
