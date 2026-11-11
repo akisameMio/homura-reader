@@ -55,7 +55,7 @@ export function restoreCollections(records: unknown[], books: Book[]) {
       assigned.add(id);
       bookIds.push(id);
     }
-    restored.push({ id: item.id, title: String(item.name || '未命名书库'), createdAt: Number(item.createdAt) || 0, bookIds });
+    restored.push({ id: item.id, title: String(item.title || item.name || '未命名书库'), createdAt: Number(item.createdAt) || 0, bookIds });
   }
   return restored;
 }

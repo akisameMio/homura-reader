@@ -18,6 +18,15 @@ test('恢复时去除失效与重复归属，保留空书库', () => {
     { id: 'c', title: '空书库', bookIds: [] }
   ], [{ id: '1' }, { id: '2' }]);
   assert.deepEqual(restored.map(item => item.bookIds), [['1'], ['2'], []]);
+  assert.deepEqual(restored.map(item => item.title), ['甲', '乙', '空书库']);
+});
+
+test('恢复时兼容旧 name 字段，缺失名称才回退为未命名书库', () => {
+  const restored = restoreCollections([
+    { id: 'a', name: '旧书库', bookIds: [] },
+    { id: 'b', bookIds: [] }
+  ], []);
+  assert.deepEqual(restored.map(item => item.title), ['旧书库', '未命名书库']);
 });
 
 test('目录逐层展平为独立书库，不合并同名子目录', () => {
