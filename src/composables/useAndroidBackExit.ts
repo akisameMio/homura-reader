@@ -1,8 +1,8 @@
 /* ============================================================================
    HOMURA · Android 主页返回退出
    ----------------------------------------------------------------------------
-   主页第一次按返回只提示，短时间内再按一次才退出；
-   阅读器打开时交给 useShortcuts 处理，避免两条返回链路重叠。
+   常驻监听系统返回，阅读器打开时交给阅读器处理；
+   主页第一次按返回只提示，短时间内再按一次才退出。
    ========================================================================== */
 
 import { onMounted, onBeforeUnmount, watch } from 'vue';
@@ -11,6 +11,14 @@ import type { useReaderStore } from '../stores/reader.ts';
 
 type ReaderStore = ReturnType<typeof useReaderStore>;
 type BackListener = (() => void) | { unregister: () => void } | null;
+let readerBackHandler: (() => void) | null = null;
+
+export function registerReaderBackHandler(handler: () => void) {
+  readerBackHandler = handler;
+  return () => {
+    if (readerBackHandler === handler) readerBackHandler = null;
+  };
+}
 
 const EXIT_CONFIRM_WINDOW = 2000;
 const EXIT_TOAST_TEXT = '再按一次退出';
@@ -52,7 +60,10 @@ export function useAndroidBackExit(reader: ReaderStore, dismissOverlay: () => bo
   }
 
   function onBackButtonPress() {
-    if (reader.currentBook) return;
+    if (reader.currentBook) {
+      readerBackHandler?.();
+      return;
+    }
     if (dismissOverlay && dismissOverlay()) {
       lastBackAt = 0;
       return;
@@ -70,7 +81,7 @@ export function useAndroidBackExit(reader: ReaderStore, dismissOverlay: () => bo
   }
 
   async function enableBackListener() {
-    if (!isAndroid || backListener || reader.currentBook) return;
+    if (!isAndroid || backListener) return;
 
     const token = ++backListenerToken;
     const app = window.__TAURI__ && window.__TAURI__.app;
@@ -78,13 +89,13 @@ export function useAndroidBackExit(reader: ReaderStore, dismissOverlay: () => bo
 
     try {
       const listener = await app.onBackButtonPress(onBackButtonPress);
-      if (token !== backListenerToken || reader.currentBook) {
+      if (token !== backListenerToken) {
         await unregisterBackListener(listener);
         return;
       }
       backListener = listener;
     } catch (err) {
-      console.warn('[HOMURA] 注册 Android 主页返回监听失败', err);
+      console.warn('[HOMURA] 注册 Android 返回监听失败', err);
     }
   }
 
@@ -96,16 +107,13 @@ export function useAndroidBackExit(reader: ReaderStore, dismissOverlay: () => bo
     const listener = backListener;
     backListener = null;
     Promise.resolve(unregisterBackListener(listener)).catch(err => {
-      console.warn('[HOMURA] 注销 Android 主页返回监听失败', err);
+      console.warn('[HOMURA] 注销 Android 返回监听失败', err);
     });
   }
 
   const stopBackWatch = watch(
     () => reader.currentBook,
-    book => {
-      if (book) disableBackListener();
-      else enableBackListener();
-    }
+    () => { lastBackAt = 0; }
   );
 
   onMounted(enableBackListener);

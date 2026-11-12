@@ -8,6 +8,7 @@
 
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { isAndroid } from '../services/platform.ts';
+import { registerReaderBackHandler } from './useAndroidBackExit.ts';
 
 const COMMIT_RATIO = 0.28;
 const FLING_VELOCITY = 0.52;
@@ -50,10 +51,6 @@ interface NativeBackEvent {
   phase?: string;
   progress?: number;
 }
-interface BackListener {
-  unregister?: () => void;
-}
-
 interface TauriChannelCtor {
   new (handler: (event: NativeBackEvent) => void): unknown;
 }
@@ -75,9 +72,6 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
   let nativeMode: string | null = null;
   let nativeChannel: unknown = null;
   let nativeEnableToken = 0;
-  let androidBackMode = 'pending';
-  let fallbackListener: BackListener | (() => void) | null = null;
-  let fallbackToken = 0;
   const nativePredictiveBackSupported = ref(false);
 
   function applyProgress(progress: number, direction = activeDirection) {
@@ -167,7 +161,6 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
       resetVisuals();
       if (commit) {
         disableNativePredictiveBack();
-        disableAndroidFallback();
         reader.closeReader();
       }
       closing = false;
@@ -186,7 +179,6 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
       if (commit) {
         // 先摘掉原生回调再关书，避免退出动画最后一帧被新的返回事件截胡
         await disableNativePredictiveBack();
-        await disableAndroidFallback();
         reader.closeReader();
         await nextTick();
       }
@@ -366,43 +358,6 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
     return window.__TAURI__ && window.__TAURI__.core;
   }
 
-  function unregisterListener(listener: BackListener | (() => void) | null | undefined) {
-    if (typeof listener === 'function') return listener();
-    if (listener && typeof listener.unregister === 'function') return listener.unregister();
-  }
-
-  async function disableAndroidFallback() {
-    fallbackToken++;
-    if (!fallbackListener) return;
-    const listener = fallbackListener;
-    fallbackListener = null;
-    await Promise.resolve(unregisterListener(listener)).catch(err => {
-      console.warn('[HOMURA] 注销 Android 阅读器返回监听失败', err);
-    });
-  }
-
-  // 预见式返回是否真的注册成功，前端拿不到可靠答案：框架在 Checker 校验不过时只打日志、静默丢弃回调，
-  // 而插件仍会 resolve。所以 native 模式下这条 button 事件监听同样保持启用——原生回调生效时它收不到事件，
-  // 一旦原生没接管上，它就是阅读器期间唯一的返回消费者，能挡住直接 finish 退到桌面。
-  async function enableAndroidFallback() {
-    if (!isAndroid || fallbackListener || !reader.currentBook) return;
-    if (androidBackMode !== 'fallback' && androidBackMode !== 'native') return;
-    const app = window.__TAURI__ && window.__TAURI__.app;
-    if (!app || typeof app.onBackButtonPress !== 'function') return;
-
-    const token = ++fallbackToken;
-    try {
-      const listener = await app.onBackButtonPress(onFallbackBack);
-      if (token !== fallbackToken || !reader.currentBook) {
-        await Promise.resolve(unregisterListener(listener)).catch(() => {});
-        return;
-      }
-      fallbackListener = listener;
-    } catch (err) {
-      console.warn('[HOMURA] 注册 Android 阅读器返回监听失败', err);
-    }
-  }
-
   async function disableNativePredictiveBack() {
     nativeEnableToken++;
     nativeMode = null;
@@ -435,41 +390,25 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
       }
     } catch (err) {
       nativeChannel = null;
-      console.warn('[HOMURA] 启用 Android 预见式返回失败，回退到按钮事件', err);
+      console.warn('[HOMURA] 启用 Android 预见式返回失败，回退到常驻返回监听', err);
       nativePredictiveBackSupported.value = false;
-      androidBackMode = 'fallback';
-      await enableAndroidFallback();
     }
   }
 
   async function initializeAndroidBack() {
-    if (!isAndroid) {
-      androidBackMode = 'none';
-      return;
-    }
+    if (!isAndroid) return;
 
     const core = getTauriCore() as TauriCoreLike | null;
-    if (!core || !core.Channel || typeof core.invoke !== 'function') {
-      androidBackMode = 'fallback';
-      await enableAndroidFallback();
-      return;
-    }
+    if (!core || !core.Channel || typeof core.invoke !== 'function') return;
 
     try {
       const result = await core.invoke('plugin:android-predictive-back|supported');
       if (result && result.supported) {
-        androidBackMode = 'native';
         nativePredictiveBackSupported.value = true;
         await enableNativePredictiveBack();
-        await enableAndroidFallback();
-      } else {
-        androidBackMode = 'fallback';
-        await enableAndroidFallback();
       }
     } catch (err) {
-      console.warn('[HOMURA] 查询 Android 预见式返回能力失败，回退到按钮事件', err);
-      androidBackMode = 'fallback';
-      await enableAndroidFallback();
+      console.warn('[HOMURA] 查询 Android 预见式返回能力失败，回退到常驻返回监听', err);
     }
   }
 
@@ -485,25 +424,22 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
 
       if (!book) {
         disableNativePredictiveBack();
-        disableAndroidFallback();
-      } else if (androidBackMode === 'native') {
+      } else if (nativePredictiveBackSupported.value) {
         enableNativePredictiveBack();
-        enableAndroidFallback();
-      } else if (androidBackMode === 'fallback') {
-        enableAndroidFallback();
       }
     }
   );
 
+  // 应用级返回监听始终存在，低版本及原生回调失效时由它转发到阅读器。
+  const unregisterReaderBackHandler = registerReaderBackHandler(onFallbackBack);
   initializeAndroidBack();
 
   onBeforeUnmount(() => {
     settleToken++;
     nativeEnableToken++;
-    fallbackToken++;
+    unregisterReaderBackHandler();
     cancelAnimationFrame(frameId);
     disableNativePredictiveBack();
-    disableAndroidFallback();
     document.documentElement.classList.remove('reader-back-settling');
     document.documentElement.classList.remove('reader-back-entering');
   });
