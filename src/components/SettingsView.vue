@@ -80,6 +80,14 @@
               />
             </div>
 
+          </section>
+
+          <section id="settings-reading" class="settings-section settings-page-panel">
+            <div class="settings-section-heading">
+              <h2>阅读默认值</h2>
+              <span>首次打开作品时采用</span>
+            </div>
+
             <div class="settings-block">
               <div class="settings-head">
                 <span class="settings-title">翻页方式</span>
@@ -92,13 +100,6 @@
                 aria-label="翻页方式"
                 @update:model-value="settings.setTransitionStyle"
               />
-            </div>
-          </section>
-
-          <section id="settings-reading" class="settings-section settings-page-panel">
-            <div class="settings-section-heading">
-              <h2>阅读默认值</h2>
-              <span>首次打开作品时采用</span>
             </div>
 
             <div v-if="readerDefaults.direction !== 'vertical'" class="settings-block">

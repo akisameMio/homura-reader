@@ -226,12 +226,6 @@
           <SurfaceModePreview surface="reader" />
 
           <div class="md-drawer-group-head mt-4">
-            <span class="md-drawer-group-label">主题色</span>
-            <b class="md-drawer-group-value">{{ themeLabel }}</b>
-          </div>
-          <ThemeSwatchGrid />
-
-          <div class="md-drawer-group-head mt-4">
             <span class="md-drawer-group-label">翻页方式</span>
             <b class="md-drawer-group-value">{{ TRANSITION_LABELS[reader.transitionStyle] }}</b>
           </div>
@@ -295,7 +289,6 @@ import { useSettingsStore } from '../stores/settings.ts';
 import { useShelfStore } from '../stores/shelf.ts';
 import {
   READER_SURFACE_MODE_OPTIONS,
-  THEME_OPTIONS,
   TRANSITION_LABELS,
   TRANSITION_OPTIONS,
   useThemeStore
@@ -308,7 +301,6 @@ import MdRange from './MdRange.vue';
 import MdSegmentedControl from './MdSegmentedControl.vue';
 import MdSwitch from './MdSwitch.vue';
 import SurfaceModePreview from './SurfaceModePreview.vue';
-import ThemeSwatchGrid from './ThemeSwatchGrid.vue';
 
 const reader = useReaderStore();
 const shelf = useShelfStore();
@@ -404,7 +396,6 @@ const webtoonFits = [
 const directionLabel = computed(() => (directions.find(d => d.value === config.direction) || directions[0]).label);
 const spreadLabel = computed(() => (isVertical.value ? '长卷' : (allowSpreadChoice.value && config.spread === 2 ? '双页' : '单页')));
 const modeLabel = computed(() => (READER_SURFACE_MODE_OPTIONS.find(option => option.value === theme.readerSurfaceMode) || READER_SURFACE_MODE_OPTIONS[2]).label);
-const themeLabel = computed(() => (THEME_OPTIONS.find(option => option.name === theme.themeColor) || THEME_OPTIONS[0]).title.replace(' (默认)', ''));
 
 // 恢复默认：全部走 store 已有的公开动作，不改动 store API
 function resetDefaults() {
