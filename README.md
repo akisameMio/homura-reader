@@ -22,7 +22,7 @@ HOMURA是一个**本地优先**的阅读器：漫画、轻小说、PDF 和图集
 | --- | --- |
 | 发布版本 | `2.2.6`，`package.json`、`Cargo.toml`、`tauri.conf.json` 三处版本一致 |
 | 桌面平台 | macOS / Windows / Linux |
-| 移动平台 | Android arm64-v8a APK |
+| 移动平台 | Android arm64-v8a / armeabi-v7a APK |
 | 核心链路 | 导入、本地存档、恢复、分页/滚动阅读、目录跳转、进度记忆、一级书库、收藏、自定义封面、导入进度与失败重试、应用内更新均可用 |
 | 尚未完成 | 标签功能尚未实现；书签功能尚未实现 |
 | 质量保障 | 有 `node:test` + jsdom 单元测试（259 条）与 `vue-tsc` 类型检查；没有 ESLint 或 E2E，关键阅读流程仍需手动回归 |
@@ -116,7 +116,7 @@ Android 端可在「设置 → 外观与阅读」里打开「音量键翻页」�
 | macOS | `.dmg`，Universal 构建，支持 Apple Silicon 与 Intel；最低系统版本 10.15 |
 | Windows | `.msi` 或 NSIS `-setup.exe` |
 | Linux | 仅 `.deb` 与 `.rpm` |
-| Android | `.apk`，arm64-v8a，release keystore 签名 |
+| Android | `.apk`，可选 arm64-v8a 或 armeabi-v7a，release keystore 签名 |
 
 > **macOS**：当前安装包没有 Apple 开发者签名与公证，首次打开可能需要右键 `HOMURA.app` →「打开」，或执行 `xattr -cr /Applications/HOMURA.app`。
 >
@@ -155,8 +155,10 @@ npm run build      # tauri build，Tauri 会先构建前端再打包安装包
 | `npm run icons:generate` | 从 `src-tauri/app-icon.png` 母版生成各平台图标，并同步网页、启动页和已初始化的 Android 工程 |
 | `npm run android:init` | 初始化 Android 工程 |
 | `npm run android:dev` | 运行 Android 开发版 |
-| `npm run android:build` | 构建 Android arm64 release APK，需要本地 release keystore |
-| `npm run android:build:debug` | 构建 Android arm64 debug APK |
+| `npm run android:build` | 同时构建 Android arm64 / arm32 release APK，需要本地 release keystore |
+| `npm run android:build:arm64` | 只构建 Android arm64 release APK |
+| `npm run android:build:arm32` | 只构建 Android arm32（armeabi-v7a）release APK |
+| `npm run android:build:debug` | 同时构建 Android arm64 / arm32 debug APK |
 | `npm run check:dark-glow` | 扫描夜间白色泛光（`build:vite` 会自动执行） |
 | `npm run tauri` | 直通 Tauri CLI |
 
@@ -254,7 +256,7 @@ CI 只在推送 `v*` 标签或手动触发 `workflow_dispatch` 时运行，不�
 - **macOS**：Universal `.dmg`
 - **Windows**：`.msi` / NSIS
 - **Linux**：仅 `.deb` 和 `.rpm`
-- **Android**：arm64-v8a release APK，使用 GitHub Secrets 中的 keystore 签名
+- **Android**：arm64-v8a 与 armeabi-v7a release APK，使用 GitHub Secrets 中的 keystore 签名
 
 推送版本标签会创建草稿 Release，并把桌面安装包与 APK 一并上传；手动触发只保留构建产物 14 天。Release 说明由 `scripts/release-notes.mjs` 按提交类别自动生成。
 

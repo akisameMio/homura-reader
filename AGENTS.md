@@ -41,8 +41,10 @@ CBZ / ZIP 与 EPUB 共用原生 ZIP 通道：漫画压缩包只把图片条目�
 | `npm run icons:generate` | 从源图生成全平台应用图标 |
 | `npm run android:init` | `tauri android init` + `android:sync-icons` |
 | `npm run android:dev` | Android 开发 |
-| `npm run android:build` | Android arm64 release APK（需本地配置 release keystore） |
-| `npm run android:build:debug` | Android arm64 debug APK |
+| `npm run android:build` | Android arm64 / arm32 release APK（需本地配置 release keystore） |
+| `npm run android:build:arm64` | 只构建 Android arm64 release APK |
+| `npm run android:build:arm32` | 只构建 Android arm32（armeabi-v7a）release APK |
+| `npm run android:build:debug` | Android arm64 / arm32 debug APK |
 | `npm run tauri` | 直通 Tauri CLI |
 
 环境要求：Node.js 22+、Rust stable ≥ **1.77.2**（`Cargo.toml` 的 `rust-version`），以及对应平台的 Tauri 依赖。
@@ -236,7 +238,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 
 - 提交信息按 **Conventional Commits**：`feat:` / `fix:` / `perf:` / `refactor:` / `docs:` / `build:` / `ci:` / `chore:`。冒号后的描述必须使用中文；Release 说明会原样复用该描述，不做自动翻译。
 - CI 只在推送 `v*` tag 或手动 `workflow_dispatch` 时运行，不响应 main 分支推送；两个 job：`build`（三平台矩阵）与 `android`（needs: build）。
-- 平台产物：macOS Universal `.dmg`、Windows `.msi` / NSIS、Linux **仅 deb + rpm**（不出 AppImage）、Android arm64 release APK（CI 使用 GitHub Secrets 中的 keystore 签名）。
+- 平台产物：macOS Universal `.dmg`、Windows `.msi` / NSIS、Linux **仅 deb + rpm**（不出 AppImage）、Android arm64 / arm32 release APK（CI 使用 GitHub Secrets 中的 keystore 签名）。
 - tag 触发时用 `scripts/release-notes.mjs` 生成说明，由 tauri-action 建**草稿** Release；手动触发只上传 artifacts，保留 14 天。
 - 发版时版本号要同步 3 处：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`。
 - 不要提交：`node_modules/`、`dist/`、`public/pdfjs/`、`src-tauri/target/`、`src-tauri/gen/`、`.trae/`、`.trae-html-share-packages/`、`.DS_Store`、`HOMURA-test.exe`、各 Android 插件的 `build/` 产物。

@@ -230,7 +230,7 @@ jobs:
           path.write_text(source)
           PY
 
-      # 只出 arm64-v8a（覆盖绝大多数设备），用正式 keystore 签名并剔除调试信息。
+      # 同时出 arm64-v8a 与 armeabi-v7a，用正式 keystore 签名并剔除调试信息。
       - name: Build signed release APK
         env:
           ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/src-tauri/gen/android/app/homura-release.jks
@@ -238,18 +238,11 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           CARGO_PROFILE_RELEASE_STRIP: debuginfo
-        run: npx tauri android build --apk --split-per-abi -t aarch64
+        run: npx tauri android build --apk --split-per-abi -t aarch64 armv7
 
       - name: Verify signed release APK
         run: |
           set -euo pipefail
-
-          APK=$(find src-tauri/gen/android/app/build/outputs/apk/arm64/release \
-            -name '*.apk' -print -quit)
-          if [ -z "$APK" ]; then
-            echo "::error::Release APK was not produced"
-            exit 1
-          fi
 
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f \
             | sort -V | tail -1)
@@ -258,29 +251,66 @@ jobs:
             exit 1
           fi
 
-          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f \
+            | sort -V | tail -1)
+          if [ ! -x "$AAPT" ]; then
+            echo "::error::aapt was not found in the Android SDK"
+            exit 1
+          fi
+
+          verify_apk() {
+            local output_dir="$1"
+            local expected_abi="$2"
+            local apk
+            apk=$(find "src-tauri/gen/android/app/build/outputs/apk/${output_dir}/release" \
+              -name '*.apk' -print -quit)
+            if [ -z "$apk" ]; then
+              echo "::error::Release APK for ${expected_abi} was not produced"
+              exit 1
+            fi
+
+            local badging
+            badging=$("$AAPT" dump badging "$apk")
+            if ! grep -Fq "native-code: '${expected_abi}'" <<< "$badging"; then
+              echo "::error::Expected ${expected_abi} in ${apk}"
+              printf '%s\n' "$badging"
+              exit 1
+            fi
+
+            "$APKSIGNER" verify --verbose --print-certs "$apk"
+          }
+
+          verify_apk arm64 arm64-v8a
+          verify_apk arm armeabi-v7a
 
       - name: Rename APK with app name and version
         run: |
           set -euo pipefail
 
-          APK=$(find src-tauri/gen/android/app/build/outputs/apk/arm64/release \
+          ARM64_APK=$(find src-tauri/gen/android/app/build/outputs/apk/arm64/release \
             -name '*.apk' -print -quit)
-          if [ -z "$APK" ]; then
-            echo "::error::Release APK was not produced"
+          ARMV7_APK=$(find src-tauri/gen/android/app/build/outputs/apk/arm/release \
+            -name '*.apk' -print -quit)
+          if [ -z "$ARM64_APK" ] || [ -z "$ARMV7_APK" ]; then
+            echo "::error::One or more release APKs were not produced"
             exit 1
           fi
 
           VERSION=$(node -p "require('./package.json').version")
-          APK_PATH="$(dirname "$APK")/HOMURA_${VERSION}_arm64.apk"
-          mv "$APK" "$APK_PATH"
-          echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
+          APK_ARM64_PATH="$(dirname "$ARM64_APK")/HOMURA_${VERSION}_arm64.apk"
+          APK_ARMV7_PATH="$(dirname "$ARMV7_APK")/HOMURA_${VERSION}_armv7.apk"
+          mv "$ARM64_APK" "$APK_ARM64_PATH"
+          mv "$ARMV7_APK" "$APK_ARMV7_PATH"
+          echo "APK_ARM64_PATH=$APK_ARM64_PATH" >> "$GITHUB_ENV"
+          echo "APK_ARMV7_PATH=$APK_ARMV7_PATH" >> "$GITHUB_ENV"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: homura-android-arm64-release
-          path: ${{ env.APK_PATH }}
+          name: homura-android-release
+          path: |
+            ${{ env.APK_ARM64_PATH }}
+            ${{ env.APK_ARMV7_PATH }}
           if-no-files-found: error
           retention-days: 14
 
@@ -296,4 +326,5 @@ jobs:
             echo "::error::draft release for ${GITHUB_REF_NAME} not found, cannot attach APK"
             exit 1
           fi
-          gh release upload "${GITHUB_REF_NAME}" "$APK_PATH" --clobber
+          gh release upload "${GITHUB_REF_NAME}" \
+            "$APK_ARM64_PATH" "$APK_ARMV7_PATH" --clobber
