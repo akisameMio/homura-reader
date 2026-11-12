@@ -21,7 +21,7 @@ import {
   stageNativeFileSource,
   stageNativePathSource
 } from '../services/restore.ts';
-import { canUseNativeArchive, releaseNativeArchiveSession } from '../services/nativeArchive.ts';
+import { canUseNativeArchive, NATIVE_ONLY_ARCHIVE_BYTES, releaseNativeArchiveSession } from '../services/nativeArchive.ts';
 import { removeNativeBookDir } from '../services/nativeStorage.ts';
 import {
   isAndroidContentUri,
@@ -492,9 +492,9 @@ export function useImporter() {
         nativePath = staged.nativePath;
         if (viaNativePath) metrics.nativeStageMs += now() - started;
       } catch (err) {
-        if (!shouldFallbackNativeImport(err)) {
+        if (file.size > NATIVE_ONLY_ARCHIVE_BYTES || !shouldFallbackNativeImport(err)) {
           console.warn('[HOMURA] 原生 EPUB 预存被拒绝', err);
-          // 安全 / 超限拒绝不会进入回退分支，已经写了一半的 AppData 目录同样要回收，
+          // 安全、超限或大型压缩包的原生失败都不会回退；已写一半的 AppData 也要回收，
           // 否则会留下没有书目指向的孤儿文件。
           await removeNativeBookDir(bookId).catch(() => {});
           markTaskFailure(task, err);
@@ -533,6 +533,7 @@ export function useImporter() {
       id: bookId,
       name: file.name,
       nativePath,
+      archiveSize: source.size,
       loadFallbackFile: nativePath
         ? () => materializeStagedNativeImportFile(file, nativePath)
         : undefined
@@ -553,7 +554,8 @@ export function useImporter() {
         const metadataCode = (metadataError as { code?: string }).code;
         const canRetryFull = metadataCode !== NativeErrorCode.SECURITY_LIMIT
           && metadataCode !== NativeErrorCode.LIMIT_EXCEEDED
-          && metadataCode !== NativeErrorCode.CANCELLED;
+          && metadataCode !== NativeErrorCode.CANCELLED
+          && (source.size || file.size) <= NATIVE_ONLY_ARCHIVE_BYTES;
         if (!canRetryFull) {
           console.warn('[HOMURA] EPUB 被安全或限额规则拒绝，不再回退', metadataError);
         } else {
@@ -613,7 +615,7 @@ export function useImporter() {
         nativePath = staged.nativePath as string;
         if (viaNativePath) metrics.nativeStageMs += now() - started;
       } catch (err) {
-        if (!shouldFallbackNativeImport(err)) {
+        if (file.size > NATIVE_ONLY_ARCHIVE_BYTES || !shouldFallbackNativeImport(err)) {
           console.warn('[HOMURA] 原生压缩包预存被拒绝', err);
           await removeNativeBookDir(bookId).catch(() => {});
           markTaskFailure(task, err);
@@ -652,6 +654,7 @@ export function useImporter() {
         id: bookId,
         name: file.name,
         nativePath,
+        archiveSize: source.size,
         staged: !!nativePath,
         loadFallbackFile: nativePath
           ? () => materializeStagedNativeImportFile(file, nativePath)

@@ -26,6 +26,7 @@ import { createCoverThumbnail } from './coverThumb.ts';
 import {
   canUseNativeArchive,
   ensureNativeArchiveSession,
+  NATIVE_ONLY_ARCHIVE_BYTES,
   shouldFallbackNativeArchive
 } from './nativeArchive.ts';
 import {
@@ -713,6 +714,11 @@ export async function hydrateBook(book: BookLike) {
     }
 
     if (!parsed) {
+      if ((source.size || 0) > NATIVE_ONLY_ARCHIVE_BYTES
+        && /\.(epub|cbz|zip)$/i.test(source.name || '')) {
+        console.warn('[HOMURA] 大型压缩包需要原生通道，跳过整包回退', book.id);
+        return false;
+      }
       const { file, failures } = await resolveStoredFile(source, source.name || 'book');
       logSourceFailures(book.id, failures);
       if (!file) {

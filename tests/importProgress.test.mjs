@@ -111,6 +111,10 @@ test('失败原因把常见压缩包错误转成中文短句', () => {
     '文件不是有效的 EPUB 压缩包'
   );
   assert.equal(importFailureReason({ code: 'NATIVE_SECURITY_LIMIT' }), '文件触发原生安全限制');
+  assert.equal(importFailureReason({
+    code: 'NATIVE_LIMIT_EXCEEDED',
+    message: 'NATIVE_LIMIT_EXCEEDED: 单个压缩包超过 16 GiB'
+  }), '单个压缩包超过 16 GiB');
 });
 
 test('dismiss 只能在完成或取消后清空状态', () => {

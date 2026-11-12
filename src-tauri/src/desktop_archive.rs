@@ -21,7 +21,7 @@ use tauri::{AppHandle, Manager, State};
 const SOURCE_ROOT: &str = "homura-native-sources";
 const CACHE_ROOT: &str = "homura-native-pages";
 const MAX_ENTRIES: usize = 20_000;
-const MAX_ARCHIVE_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+const MAX_ARCHIVE_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 const MAX_CENTRAL_DIRECTORY_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_EOCD_SEARCH_BYTES: u64 = 22 + u16::MAX as u64;
 const MAX_PAGE_BYTES: u64 = 256 * 1024 * 1024;
@@ -1453,6 +1453,39 @@ mod tests {
         );
         assert_eq!(output, data);
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn reads_sparse_zip64_larger_than_four_gib() {
+        let name = "pages/large.jpg";
+        let data = b"page beyond four gib";
+        let mut bytes = build_zip64(name, data);
+        let local_len = 30 + name.len() + data.len();
+        let central_len = 46 + name.len() + 28;
+        let central_offset = 4 * 1024 * 1024 * 1024 + 4096;
+        let zip64_offset = central_offset + central_len as u64;
+        let zip64_start = local_len + central_len;
+        bytes[zip64_start + 48..zip64_start + 56].copy_from_slice(&central_offset.to_le_bytes());
+        let locator_start = zip64_start + 56;
+        bytes[locator_start + 8..locator_start + 16].copy_from_slice(&zip64_offset.to_le_bytes());
+
+        let directory = temp_dir();
+        let path = directory.join("large.zip");
+        let mut file = File::create(&path).unwrap();
+        file.write_all(&bytes[..local_len]).unwrap();
+        file.seek(SeekFrom::Start(central_offset)).unwrap();
+        file.write_all(&bytes[local_len..]).unwrap();
+        drop(file);
+
+        let archive = read_zip_archive(&path).unwrap();
+        assert_eq!(archive.entries.len(), 1);
+        let mut output = Vec::new();
+        assert_eq!(
+            copy_entry_to(&path, &archive.entries[0], 1024, &mut output).unwrap(),
+            CopyOutcome::Copied(data.len() as u64)
+        );
+        assert_eq!(output, data);
+        let _ = fs::remove_dir_all(directory);
     }
 
     #[test]

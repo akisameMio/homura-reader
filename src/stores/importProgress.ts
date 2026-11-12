@@ -63,7 +63,10 @@ export function importFailureReason(error: unknown) {
   if (typeof error === 'string') return error;
   const err = error as { code?: string; message?: string; name?: string };
   if (err.code === 'NATIVE_SECURITY_LIMIT') return '文件触发原生安全限制';
-  if (err.code === 'NATIVE_LIMIT_EXCEEDED') return '文件超出原生解析限额';
+  if (err.code === 'NATIVE_LIMIT_EXCEEDED') {
+    const fileLimit = err.message?.match(/单个(?:压缩包|导入文件)超过 \d+ GiB/)?.[0];
+    return fileLimit || '文件超出原生解析限额';
+  }
   const message = err.message || err.name || '';
   if (/end of central directory|not a zip|invalid zip/i.test(message)) return '文件不是有效的 EPUB 压缩包';
   if (/password|encrypted|drm/i.test(message)) return '文件受密码或 DRM 保护';

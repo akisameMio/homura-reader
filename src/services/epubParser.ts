@@ -13,6 +13,7 @@ import {
   clearNativeArchiveBookCache,
   closeNativeArchive,
   openNativeDocument,
+  NATIVE_ONLY_ARCHIVE_BYTES,
   readNativePageBlob,
   readNativeTextBatch,
   shouldFallbackNativeArchive
@@ -197,6 +198,7 @@ export async function createJsZipEpubArchive(file: Blob): Promise<EpubArchive> {
 interface EpubParseOptions {
   id?: string;
   name?: string;
+  archiveSize?: number;
   fallbackTitle?: string;
   metadataOnly?: boolean;
   nativePath?: string;
@@ -711,6 +713,7 @@ export async function parseEpubNativeArchive(nativePath: string, options: EpubPa
 export async function parseEpubFile(file: Blob & { name?: string }, options: EpubParseOptions = {}) {
   const id = options.id || makeEpubId();
   const fallbackTitle = epubTitleFromFileName(options.name || file?.name);
+  const archiveSize = Math.max(file?.size || 0, options.archiveSize || 0);
 
   if (options.nativePath) {
     try {
@@ -720,9 +723,13 @@ export async function parseEpubFile(file: Blob & { name?: string }, options: Epu
         metadataOnly: options.metadataOnly
       });
     } catch (err) {
-      if (!shouldFallbackNativeArchive(err)) throw err;
+      if (archiveSize > NATIVE_ONLY_ARCHIVE_BYTES || !shouldFallbackNativeArchive(err)) throw err;
       console.warn('[HOMURA] 原生 EPUB 解析失败，回退 JSZip', err);
     }
+  }
+
+  if (archiveSize > NATIVE_ONLY_ARCHIVE_BYTES) {
+    throw new Error('超过 4 GiB 的 EPUB 需要原生读取');
   }
 
   const fallbackFile = typeof options.loadFallbackFile === 'function'

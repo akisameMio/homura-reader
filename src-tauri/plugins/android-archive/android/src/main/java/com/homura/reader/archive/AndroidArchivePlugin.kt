@@ -49,6 +49,7 @@ private const val MAX_TEXT_PATHS = 5_000
 private const val MAX_TEXT_ENTRY_BYTES = 8L * 1024 * 1024
 private const val MAX_TEXT_TOTAL_BYTES = 32L * 1024 * 1024
 private const val MAX_IMPORT_FILE_BYTES = 4L * 1024 * 1024 * 1024
+private const val MAX_IMPORT_ARCHIVE_BYTES = 16L * 1024 * 1024 * 1024
 private const val MAX_IMPORT_NAME_CHARS = 180
 private const val IMPORT_PART_PREFIX = ".homura-import-"
 
@@ -490,8 +491,13 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
     if (!isSupportedImportName(safeName)) {
       throw NativeImportException("NATIVE_INVALID_DATA", "不支持的导入文件格式")
     }
-    if (metadata.size > MAX_IMPORT_FILE_BYTES) {
-      throw NativeImportException("NATIVE_LIMIT_EXCEEDED", "单个导入文件超过 4GB")
+    val archive = safeName.endsWith(".epub", ignoreCase = true) ||
+      safeName.endsWith(".cbz", ignoreCase = true) ||
+      safeName.endsWith(".zip", ignoreCase = true)
+    val maxBytes = if (archive) MAX_IMPORT_ARCHIVE_BYTES else MAX_IMPORT_FILE_BYTES
+    val limitMessage = if (archive) "单个压缩包超过 16 GiB" else "单个导入文件超过 4 GiB"
+    if (metadata.size > maxBytes) {
+      throw NativeImportException("NATIVE_LIMIT_EXCEEDED", limitMessage)
     }
 
     val sourceRoot = File(activity.dataDir, SOURCE_ROOT)
@@ -528,8 +534,8 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
             val read = stream.read(buffer)
             if (read < 0) break
             copied += read
-            if (copied > MAX_IMPORT_FILE_BYTES) {
-              throw NativeImportException("NATIVE_LIMIT_EXCEEDED", "单个导入文件超过 4GB")
+            if (copied > maxBytes) {
+              throw NativeImportException("NATIVE_LIMIT_EXCEEDED", limitMessage)
             }
             output.write(buffer, 0, read)
           }
@@ -647,6 +653,9 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
       throw SecurityException("压缩包路径不在 HOMURA 存档目录内")
     }
     if (!file.isFile) throw IllegalArgumentException("压缩包不存在")
+    if (file.length() > MAX_IMPORT_ARCHIVE_BYTES) {
+      throw IllegalStateException("NATIVE_LIMIT_EXCEEDED: 单个压缩包超过 16 GiB")
+    }
     return file
   }
 

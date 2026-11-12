@@ -15,6 +15,7 @@ use tauri_plugin_fs::FsExt;
 
 const SOURCE_ROOT: &str = "homura-native-sources";
 const MAX_IMPORT_FILE_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+const MAX_IMPORT_ARCHIVE_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 const MAX_SCAN_ENTRIES: usize = 20_000;
 const MAX_SCAN_ROOTS: usize = 4_096;
 const MAX_SCAN_DEPTH: usize = 64;
@@ -147,6 +148,17 @@ fn is_supported_import_name(name: &str) -> bool {
     )
 }
 
+fn import_file_limit(name: &str) -> (u64, &'static str) {
+    match name
+        .rsplit_once('.')
+        .map(|(_, extension)| extension.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("epub" | "cbz" | "zip") => (MAX_IMPORT_ARCHIVE_BYTES, "单个压缩包超过 16 GiB"),
+        _ => (MAX_IMPORT_FILE_BYTES, "单个导入文件超过 4 GiB"),
+    }
+}
+
 fn is_hidden_name(name: &str) -> bool {
     name.starts_with('.') || name == "__MACOSX"
 }
@@ -181,13 +193,13 @@ fn stage_import_path_to(
     if !metadata.is_file() {
         return Err(invalid_data("导入路径不是文件"));
     }
-    if metadata.len() > MAX_IMPORT_FILE_BYTES {
-        return Err(limit_exceeded("单个导入文件超过 4GB"));
-    }
-
     let name = safe_file_name(&source.file_name().unwrap_or_default().to_string_lossy());
     if !is_supported_import_name(&name) {
         return Err(invalid_data("不支持的导入文件格式"));
+    }
+    let (max_bytes, limit_message) = import_file_limit(&name);
+    if metadata.len() > max_bytes {
+        return Err(limit_exceeded(limit_message));
     }
 
     let book_segment = safe_book_segment(book_id);
@@ -487,5 +499,16 @@ mod tests {
 
         let _ = fs::remove_dir_all(data_root);
         let _ = fs::remove_dir_all(source_root);
+    }
+
+    #[test]
+    fn raises_only_archive_import_limit() {
+        assert_eq!(import_file_limit("book.CBZ").0, MAX_IMPORT_ARCHIVE_BYTES);
+        assert_eq!(
+            import_file_limit("book.kepub.epub").0,
+            MAX_IMPORT_ARCHIVE_BYTES
+        );
+        assert_eq!(import_file_limit("book.zip").0, MAX_IMPORT_ARCHIVE_BYTES);
+        assert_eq!(import_file_limit("book.pdf").0, MAX_IMPORT_FILE_BYTES);
     }
 }

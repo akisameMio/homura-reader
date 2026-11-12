@@ -23,6 +23,21 @@ globalThis.NodeFilter = dom.window.NodeFilter;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+test('超过 4 GiB 的 EPUB 不回退到 JSZip 整包读取', async () => {
+  let fallbackCalled = false;
+  await assert.rejects(
+    parseEpubFile({ name: '大画集.epub', size: 0 }, {
+      archiveSize: 4 * 1024 ** 3 + 1,
+      loadFallbackFile: () => {
+        fallbackCalled = true;
+        return null;
+      }
+    }),
+    /需要原生读取/
+  );
+  assert.equal(fallbackCalled, false);
+});
+
 test('漫画 EPUB 页清单只保存原生条目索引与尺寸', () => {
   const manifest = createNativeMangaManifest({
     type: 'manga',

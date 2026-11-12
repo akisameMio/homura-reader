@@ -25,7 +25,7 @@ HOMURA是一个**本地优先**的阅读器：漫画、轻小说、PDF 和图集
 | 移动平台 | Android arm64-v8a APK |
 | 核心链路 | 导入、本地存档、恢复、分页/滚动阅读、目录跳转、进度记忆、一级书库、收藏、自定义封面、导入进度与失败重试、应用内更新均可用 |
 | 尚未完成 | 标签功能尚未实现；书签功能尚未实现 |
-| 质量保障 | 有 `node:test` + jsdom 单元测试（230 条）与 `vue-tsc` 类型检查；没有 ESLint 或 E2E，关键阅读流程仍需手动回归 |
+| 质量保障 | 有 `node:test` + jsdom 单元测试（232 条）与 `vue-tsc` 类型检查；没有 ESLint 或 E2E，关键阅读流程仍需手动回归 |
 | 许可 | MIT，完整条款见 [`LICENSE`](LICENSE) |
 
 ## 功能概览
@@ -145,7 +145,7 @@ npm run build      # tauri build，Tauri 会先构建前端再打包安装包
 
 | 命令 | 作用 |
 | --- | --- |
-| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，230 条用例，覆盖解析、书名排序、同名识别、书库归属、目录分组和阅读手势规则 |
+| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，232 条用例，覆盖解析、书名排序、同名识别、书库归属、目录分组和阅读手势规则 |
 | `npm run typecheck` | `vue-tsc --noEmit`，类型检查（当前 0 报错） |
 | `npm run dev:vite` | 只启动 Vite 开发服务器，端口固定为 `5173`，支持 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`，是最快的构建验证 |
@@ -214,6 +214,7 @@ services / stores / composables 三层已全部迁移为 TypeScript（`component
 - Tauri 平台（含桌面）优先把原文件写入应用私有 AppData，容量只受磁盘剩余空间限制；桌面普通文件仍保留 `FileSystemFileHandle` 零拷贝引用，无句柄或原生写入失败才回退 OPFS 与 IndexedDB Blob。桌面 EPUB / CBZ 会在解析前 staging 到 AppData，让 Rust 直接随机读取 ZIP 条目；原生失败时仍按 AppData、OPFS、句柄、Blob 逐层恢复或回退 JSZip。
 - 桌面原生 ZIP 通道只接受 `homura-native-sources` 下的路径，EPUB / CBZ 条目按需解到 AppCache，并按最近访问时间保留 24 个文件 / 192MB；安全限制与资源超限错误不会回退到 JSZip。
 - 设置页的「存储与数据」在原生环境显示磁盘总容量、HOMURA / 其他应用 / 剩余可用三段占用，并单独列出书库原始文件与缓存、WebView 本地数据；浏览器调试环境回退到 WebView 配额估算。
+- 原生导入 EPUB / CBZ / ZIP 的单文件上限为 16 GiB，其他格式为 4 GiB。超过 4 GiB 的压缩包仅使用原生通道，失败后不会整包加载到 WebView；浏览器环境不支持这类大文件。
 - 导入后会检查存储配额；已用空间达到 85% 或剩余不足 200 MB 时会提示。
 - 阅读进度写入做了 350 ms 防抖，并在关闭阅读器、页面卸载或切到后台时补写。
 - 应用内更新会从 GitHub Releases 读取最新版本，下载安装包后交给系统安装；下载只校验字节数是否完整，没有签名/哈希校验，请以官方仓库发布为准。
@@ -229,14 +230,14 @@ services / stores / composables 三层已全部迁移为 TypeScript（`component
 - 目录可以跳转，但目录状态不保存；书签功能尚未实现。
 - 书架搜索只匹配书名与书库名，不支持作者搜索或标签筛选。
 - macOS 安装包尚未签名/公证，首次启动需要手动放行。
-- 项目提供书名排序、同名识别、书库归属、目录分组和手势判定等单元测试（`npm test`，230 条），配合 `npm run typecheck` 做类型检查；但没有 E2E、覆盖不到完整阅读流程，也没有 ESLint，改动后仍需执行构建并手动回归关键阅读流程。
+- 项目提供书名排序、同名识别、书库归属、目录分组和手势判定等单元测试（`npm test`，232 条），配合 `npm run typecheck` 做类型检查；但没有 E2E、覆盖不到完整阅读流程，也没有 ESLint，改动后仍需执行构建并手动回归关键阅读流程。
 
 ## 开发与发布
 
 开发和代码约束以仓库根目录的 [`AGENTS.md`](AGENTS.md) 为准。提交前至少运行：
 
 ```bash
-npm test          # 单元测试（230 条）
+npm test          # 单元测试（232 条）
 npm run typecheck # vue-tsc 类型检查
 npm run build:vite
 ```

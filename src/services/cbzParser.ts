@@ -12,6 +12,7 @@ import {
   clearNativeArchiveBookCache,
   closeNativeArchive,
   openNativeArchive,
+  NATIVE_ONLY_ARCHIVE_BYTES,
   readNativePageBlob,
   shouldFallbackNativeArchive
 } from './nativeArchive.ts';
@@ -29,6 +30,7 @@ interface CbzOptions {
   id?: string;
   name?: string;
   nativePath?: string;
+  archiveSize?: number;
   staged?: boolean;
   loadFallbackFile?: () => Promise<Blob | null>;
   [key: string]: unknown;
@@ -98,6 +100,7 @@ export async function parseCbzNativeArchive(nativePath: string, options: CbzOpti
 export async function parseCbzFileLazy(file: File | null | undefined, options: CbzOptions = {}) {
   const id = options.id || makeCbzId();
   const name = options.name || file?.name || 'book.cbz';
+  const archiveSize = Math.max(file?.size || 0, options.archiveSize || 0);
 
   if (options.nativePath && canUseNativeArchive()) {
     try {
@@ -107,9 +110,12 @@ export async function parseCbzFileLazy(file: File | null | undefined, options: C
         name
       });
     } catch (err) {
-      if (!shouldFallbackNativeArchive(err)) throw err;
+      if (archiveSize > NATIVE_ONLY_ARCHIVE_BYTES || !shouldFallbackNativeArchive(err)) throw err;
       console.warn('[HOMURA] 原生压缩包解析失败，回退 JSZip', err);
     }
+  }
+  if (archiveSize > NATIVE_ONLY_ARCHIVE_BYTES) {
+    throw new Error('超过 4 GiB 的压缩包需要原生读取');
   }
   const fallbackFile = typeof options.loadFallbackFile === 'function'
     ? await options.loadFallbackFile()

@@ -15,6 +15,9 @@ import {
   normalizeNativeError
 } from './nativeRuntime.ts';
 
+// 大于 4 GiB 的 ZIP 不能交给 JSZip 整包载入 WebView 内存。
+export const NATIVE_ONLY_ARCHIVE_BYTES = 4 * 1024 * 1024 * 1024;
+
 const openArchives = new Set<string>();
 const lifecycleQueues = new Map<string, Promise<unknown>>();
 const ensureTasks = new Map<string, Promise<boolean>>();

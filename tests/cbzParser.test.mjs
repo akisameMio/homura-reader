@@ -4,6 +4,20 @@ import JSZip from 'jszip';
 
 const { parseCbzFileLazy } = await import('../src/services/cbzParser.ts');
 
+test('超过 4 GiB 的压缩包不回退到 JSZip 整包读取', async () => {
+  let fallbackCalled = false;
+  await assert.rejects(
+    parseCbzFileLazy({ name: '大合集.cbz', size: 4 * 1024 ** 3 + 1 }, {
+      loadFallbackFile: () => {
+        fallbackCalled = true;
+        return null;
+      }
+    }),
+    /需要原生读取/
+  );
+  assert.equal(fallbackCalled, false);
+});
+
 async function makeCbz(entries) {
   const zip = new JSZip();
   for (const [name, content] of Object.entries(entries)) {
