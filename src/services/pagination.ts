@@ -371,7 +371,7 @@ function splitPlainTextParagraph(text: string, measurer: HTMLElement, maxHeight:
   if (!paragraph) return null;
 
   paragraph.textContent = text;
-  const fullHeight = measureBlockHeight(measurer);
+  const fullHeight = measureBlockExtent(measurer);
   if (fullHeight <= maxHeight) return [`<p>${escapeHtml(text)}</p>`];
 
   const lineHeight = parseFloat(getComputedStyle(paragraph).lineHeight);
@@ -387,7 +387,7 @@ function splitPlainTextParagraph(text: string, measurer: HTMLElement, maxHeight:
     // 按行数做少量比例校正，通常 1-2 次即可贴满一页；每次都以真实布局为准。
     for (let round = 0; round < 4; round++) {
       paragraph.textContent = text.slice(start, start + guess);
-      measured = measureBlockHeight(measurer);
+      measured = measureBlockExtent(measurer);
       if (measured <= maxHeight) {
         const spareLines = Math.floor((maxHeight - measured) / lineHeight);
         if (spareLines < 1) break;
@@ -404,7 +404,7 @@ function splitPlainTextParagraph(text: string, measurer: HTMLElement, maxHeight:
     }
 
     paragraph.textContent = text.slice(start, start + guess);
-    measured = measureBlockHeight(measurer);
+    measured = measureBlockExtent(measurer);
     if (measured > maxHeight) {
       let low = 1;
       let high = guess - 1;
@@ -412,7 +412,7 @@ function splitPlainTextParagraph(text: string, measurer: HTMLElement, maxHeight:
       while (low <= high) {
         const middle = Math.floor((low + high) / 2);
         paragraph.textContent = text.slice(start, start + middle);
-        if (measureBlockHeight(measurer) <= maxHeight) {
+        if (measureBlockExtent(measurer) <= maxHeight) {
           fit = middle;
           low = middle + 1;
         } else {
@@ -422,6 +422,11 @@ function splitPlainTextParagraph(text: string, measurer: HTMLElement, maxHeight:
       guess = fit;
     }
 
+    // 比例估算按 UTF-16 下标取值，页边界不能落在 emoji 等字符的代理对中间。
+    const end = start + guess;
+    if (end < text.length && /[\uD800-\uDBFF]/.test(text[end - 1]) && /[\uDC00-\uDFFF]/.test(text[end])) {
+      guess += guess === 1 ? 1 : -1;
+    }
     parts.push(`<p>${escapeHtml(text.slice(start, start + guess))}</p>`);
     start += guess;
   }
@@ -515,7 +520,7 @@ export function splitLongParagraph(html: string, measurer: HTMLElement, maxHeigh
     while (low <= high) {
       const middle = Math.floor((low + high) / 2);
       measurer.innerHTML = fragment(offsets[start], offsets[middle]);
-      if (measureBlockHeight(measurer) <= maxHeight) { fit = middle; low = middle + 1; }
+      if (measureBlockExtent(measurer) <= maxHeight) { fit = middle; low = middle + 1; }
       else high = middle - 1;
     }
     parts.push(fragment(offsets[start], offsets[fit]));
@@ -546,17 +551,20 @@ function isIllustrationChapter(blocks: Array<{ type: string; html: string; text?
   return !blocks.some(block => PROSE_BLOCK_TAGS.has(block.type) && (block.text || '').trim());
 }
 
-// 分页只关心“这一页最后一行的底部”，不应把最后一段的 margin-bottom
-// 也算成溢出。否则 1px 的下边距就会把整段拆到下一页，页数翻倍且大幅变慢。
-function measureBlockHeight(measurer: HTMLElement) {
+// 横排量末行底部，竖排量最左列边界；两者都排除最后一段的块末间距。
+function measureBlockExtent(measurer: HTMLElement) {
+  const vertical = measurer.style.writingMode === 'vertical-rl';
   const last = measurer.lastElementChild;
   if (last && typeof last.getBoundingClientRect === 'function') {
     const rect = last.getBoundingClientRect();
-    if (rect.height > 0) {
+    if (vertical && rect.width > 0) {
+      return measurer.getBoundingClientRect().right - rect.left;
+    }
+    if (!vertical && rect.height > 0) {
       return rect.bottom - measurer.getBoundingClientRect().top;
     }
   }
-  return measurer.scrollHeight;
+  return vertical ? measurer.scrollWidth : measurer.scrollHeight;
 }
 
 // EPUB 常把整章包在 section/div 里；结构容器必须拆开分页，否则含图的整章会被裁成一页。
@@ -608,6 +616,7 @@ function computeNovelMetrics(layoutConfig: ReaderLayoutConfig) {
   });
   const contentWidth = metrics.textWidth;
   const availableTextHeight = metrics.textHeight;
+  const verticalText = layoutConfig.verticalText === true && layoutConfig.direction !== 'vertical';
   const cacheKey = [
     contentWidth,
     availableTextHeight,
@@ -615,9 +624,10 @@ function computeNovelMetrics(layoutConfig: ReaderLayoutConfig) {
     layoutConfig.spread,
     layoutConfig.fontFamily || 'song',
     layoutConfig.lineHeight || 'normal',
-    layoutConfig.pageMargin || 'normal'
+    layoutConfig.pageMargin || 'normal',
+    verticalText ? 'vertical-rl' : 'horizontal-tb'
   ].join('|');
-  return { contentWidth, availableTextHeight, cacheKey, metrics };
+  return { contentWidth, availableTextHeight, availableBlockExtent: verticalText ? contentWidth : availableTextHeight, verticalText, cacheKey, metrics };
 }
 
 // 章首页：一块整体参与测量，保证标题不会单独溢出到上一页。
@@ -710,7 +720,7 @@ function paginateNovelChapter(chap: ChapterItem, chapterIndex: number, measurer:
     const previousChildCount = measurer.childNodes.length;
     measurer.insertAdjacentHTML('beforeend', blk.html);
 
-    if (measureBlockHeight(measurer) <= availableTextHeight) {
+    if (measureBlockExtent(measurer) <= availableTextHeight) {
       currentPageParts.push(blk.html);
     } else {
       // 只移除刚测高的块，避免每加一段都重新解析整页 HTML。
@@ -719,7 +729,7 @@ function paginateNovelChapter(chap: ChapterItem, chapterIndex: number, measurer:
       }
       if (currentPageParts.length) flushCurrentPage();
       measurer.innerHTML = blk.html;
-      const parts = measureBlockHeight(measurer) > availableTextHeight ? splitLongParagraph(blk.html, measurer, availableTextHeight) : [blk.html];
+      const parts = measureBlockExtent(measurer) > availableTextHeight ? splitLongParagraph(blk.html, measurer, availableTextHeight) : [blk.html];
       for (let index = 0; index < parts.length; index++) {
         const part = parts[index];
         measurer.innerHTML = part;
@@ -731,7 +741,7 @@ function paginateNovelChapter(chap: ChapterItem, chapterIndex: number, measurer:
           });
         } else {
           currentPageParts = [part];
-          if (measureBlockHeight(measurer) > availableTextHeight) flushCurrentPage();
+          if (measureBlockExtent(measurer) > availableTextHeight) flushCurrentPage();
         }
       }
     }
@@ -764,6 +774,9 @@ export function createNovelPaginator(book: Book, layoutConfig: ReaderLayoutConfi
   const proseStyle = resolveProseStyle(layoutConfig as unknown as Parameters<typeof resolveProseStyle>[0], metrics.metrics);
   measurer.style.fontFamily = proseStyle['--reader-font-family'];
   measurer.style.lineHeight = proseStyle['--reader-line-height'];
+  measurer.style.writingMode = proseStyle['--reader-writing-mode'];
+  measurer.style.textOrientation = 'mixed';
+  measurer.style.setProperty('--reader-writing-mode', proseStyle['--reader-writing-mode']);
   measurer.style.letterSpacing = '0.01em';
   measurer.style.setProperty('--reader-para-gap', proseStyle['--reader-para-gap']);
   // 与纸页正文流同高，保证插图、百分比高度在测量与渲染两侧解析到同一尺寸。
@@ -776,7 +789,7 @@ export function createNovelPaginator(book: Book, layoutConfig: ReaderLayoutConfi
 
   function paginateChapter(chapterIndex: number) {
     if (chapterPages[chapterIndex]) return chapterPages[chapterIndex];
-    const pages = paginateNovelChapter(chapters[chapterIndex] || {}, chapterIndex, measurer, metrics.availableTextHeight);
+    const pages = paginateNovelChapter(chapters[chapterIndex] || {}, chapterIndex, measurer, metrics.availableBlockExtent);
     chapterPages[chapterIndex] = pages;
     completedChapters++;
     return pages;

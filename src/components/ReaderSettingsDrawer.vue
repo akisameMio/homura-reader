@@ -128,7 +128,7 @@
         </section>
 
         <!-- 阅读方向 -->
-        <section class="md-drawer-section">
+        <section v-if="!isVertical" class="md-drawer-section">
           <div class="md-drawer-group-head">
             <span class="md-drawer-group-label">阅读方向</span>
             <b class="md-drawer-group-value">{{ directionLabel }}</b>
@@ -155,11 +155,11 @@
         <!-- 翻页布局 -->
         <section v-if="!isVertical || isManga" class="md-drawer-section">
           <div class="md-drawer-group-head">
-            <span class="md-drawer-group-label">{{ isVertical ? '条漫尺寸' : '翻页布局' }}</span>
+            <span class="md-drawer-group-label">{{ isVertical ? '滚动尺寸' : '翻页布局' }}</span>
             <b class="md-drawer-group-value">{{ spreadLabel }}</b>
           </div>
           <MdSegmentedControl
-            v-if="!isVertical && !isPhone"
+            v-if="!isVertical && allowSpreadChoice"
             class="w-full"
             :model-value="config.spread"
             :options="spreadOptions"
@@ -167,12 +167,22 @@
             @update:model-value="value => reader.setSpreadCount(Number(value))"
           />
 
-          <p v-if="!isVertical && isPhone" class="mt-3 text-[13px] leading-relaxed text-[var(--md-on-surface-variant)]">
+          <p v-if="!isVertical && !allowSpreadChoice" class="mt-3 text-[13px] leading-relaxed text-[var(--md-on-surface-variant)]">
             当前屏幕按单页显示，窗口变宽后可选择双页。
           </p>
 
           <MdSwitch
-            v-if="!isVertical && !isPhone && config.spread === 2"
+            v-if="!isManga && !isVertical"
+            class="mt-3.5"
+            :model-value="config.verticalText"
+            title="文字从上往下，各列从右往左排列"
+            @update:model-value="reader.setVerticalText"
+          >
+            <span class="text-[13px] font-medium">竖排文字</span>
+          </MdSwitch>
+
+          <MdSwitch
+            v-if="!isVertical && allowSpreadChoice && config.spread === 2"
             class="mt-3.5"
             :model-value="config.coverOffset"
             title="双页模式下首页单独显示，确保后续跨页大图对齐"
@@ -186,7 +196,7 @@
             class="w-full mt-3.5"
             :model-value="config.webtoonFit"
             :options="webtoonFits"
-            aria-label="条漫尺寸"
+            aria-label="滚动尺寸"
             @update:model-value="reader.setWebtoonFit"
           />
         </section>
@@ -222,15 +232,15 @@
           <ThemeSwatchGrid />
 
           <div class="md-drawer-group-head mt-4">
-            <span class="md-drawer-group-label">翻页过渡</span>
-            <b class="md-drawer-group-value">{{ TRANSITION_LABELS[theme.transitionStyle] }}</b>
+            <span class="md-drawer-group-label">翻页方式</span>
+            <b class="md-drawer-group-value">{{ TRANSITION_LABELS[reader.transitionStyle] }}</b>
           </div>
           <MdSegmentedControl
             class="w-full"
-            :model-value="theme.transitionStyle"
+            :model-value="reader.transitionStyle"
             :options="transitionOptions"
-            aria-label="翻页过渡"
-            @update:model-value="theme.setTransitionStyle"
+            aria-label="翻页方式"
+            @update:model-value="reader.setTransitionStyle"
           />
         </section>
         <section class="md-drawer-section">
@@ -371,11 +381,11 @@ const {
 
 const isVertical = computed(() => config.direction === 'vertical');
 const isManga = computed(() => reader.currentBook && reader.currentBook.type === 'manga');
+const allowSpreadChoice = computed(() => isManga.value ? !isPhone.value : !isCompact.value);
 
 const directions = [
   { value: 'ltr', label: '从左到右', title: '普通排版' },
-  { value: 'rtl', label: '从右到左', title: '日漫' },
-  { value: 'vertical', label: '条漫模式', title: '条漫长卷' }
+  { value: 'rtl', label: '从右到左', title: '日漫' }
 ];
 
 const transitionOptions = TRANSITION_OPTIONS;
@@ -392,13 +402,14 @@ const webtoonFits = [
 ];
 
 const directionLabel = computed(() => (directions.find(d => d.value === config.direction) || directions[0]).label);
-const spreadLabel = computed(() => (isVertical.value ? '长卷' : (!isPhone.value && config.spread === 2 ? '双页' : '单页')));
+const spreadLabel = computed(() => (isVertical.value ? '长卷' : (allowSpreadChoice.value && config.spread === 2 ? '双页' : '单页')));
 const modeLabel = computed(() => (READER_SURFACE_MODE_OPTIONS.find(option => option.value === theme.readerSurfaceMode) || READER_SURFACE_MODE_OPTIONS[2]).label);
 const themeLabel = computed(() => (THEME_OPTIONS.find(option => option.name === theme.themeColor) || THEME_OPTIONS[0]).title.replace(' (默认)', ''));
 
 // 恢复默认：全部走 store 已有的公开动作，不改动 store API
 function resetDefaults() {
   reader.setDirection('ltr');
+  reader.setVerticalText(false);
   if (reader.layoutConfig.spread !== 2) reader.setSpreadCount(2);
   if (!reader.layoutConfig.coverOffset) reader.toggleCoverOffset();
   reader.setWebtoonFit('screen');

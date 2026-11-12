@@ -15,6 +15,8 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 /** 进度记录追加的排版字段（webtoonFit 不在基础 ReadingProgress 里）。 */
 interface ProgressLayout {
   direction?: string;
+  pagedDirection?: string;
+  verticalText?: boolean;
   spread?: number;
   coverOffset?: boolean;
   fontSize?: number;
@@ -71,6 +73,8 @@ function makeRecord(reader: ReaderLike) {
     // 每本书自己的排版：方向 / 单双页 / 首页单排 / 字号 / 条漫尺寸
     layout: {
       direction: reader.layoutConfig.direction,
+      pagedDirection: reader.layoutConfig.pagedDirection,
+      verticalText: reader.layoutConfig.verticalText,
       spread: reader.layoutConfig.spread,
       coverOffset: reader.layoutConfig.coverOffset,
       fontSize: reader.layoutConfig.fontSize,

@@ -118,6 +118,8 @@ export interface Collection {
 /** 阅读排版配置 */
 export interface ReaderLayoutConfig {
   direction?: 'horizontal' | 'vertical' | string;
+  pagedDirection?: string;
+  verticalText?: boolean;
   spread?: number | string;
   fontSize?: number | string;
   fontFamily?: string;

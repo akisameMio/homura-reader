@@ -251,7 +251,69 @@ test('排版变更会改变分页缓存键', () => {
   assert.notEqual(key({ ...base, fontFamily: 'kai' }), key(base));
   assert.notEqual(key({ ...base, pageMargin: 'wide' }), key(base));
   assert.notEqual(key({ ...base, fontSize: 20 }), key(base));
+  assert.notEqual(key({ ...base, verticalText: true }), key(base));
   assert.equal(key({ ...base }), key({ ...base }));
+});
+
+test('竖排按纸面宽度切列，增量与同步分页一致且正文顺序不变', () => {
+  const originalWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+  const originalHeight = Object.getOwnPropertyDescriptor(document.documentElement, 'clientHeight');
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+  Object.defineProperty(document.documentElement, 'clientHeight', { configurable: true, value: 710 });
+  const measurer = document.createElement('div');
+  Object.defineProperties(measurer, {
+    scrollWidth: { get() { return this.childNodes.length * 160; } },
+    scrollHeight: { get() { return 1; } }
+  });
+  const book = { type: 'novel', chapters: [{ title: '第一章', htmlContent: '<p>甲</p><p>乙</p><p>丙</p><p>丁</p><p>戊</p>' }] };
+  const layout = { direction: 'ltr', spread: 1, verticalText: true, fontSize: 18 };
+  try {
+    const paginator = createNovelPaginator(book, layout, measurer);
+    assert.equal(measurer.style.writingMode, 'vertical-rl');
+    assert.equal(measurer.style.height, '510px');
+    assert.equal(measurer.style.width, '346px');
+    paginator.paginateChapter(0);
+    const pages = paginator.commitCache();
+    const texts = pages.map(page => {
+      const node = document.createElement('div');node.innerHTML = page.html;
+      node.querySelector('.reader-chapter')?.remove();
+      return node.textContent;
+    });
+    assert.deepEqual(texts, ['甲', '乙丙', '丁戊']);
+    assert.deepEqual(buildActivePages(book, layout, measurer).map(page => page.html), pages.map(page => page.html));
+    assert.deepEqual(pages.map(page => page.pageNumber), [1, 2, 3]);
+  } finally {
+    if (originalWidth) Object.defineProperty(window, 'innerWidth', originalWidth);
+    if (originalHeight) Object.defineProperty(document.documentElement, 'clientHeight', originalHeight);
+  }
+});
+
+test('竖排长段落可跨页保留富文本和 emoji，纯文本快路径不切断代理对', () => {
+  const originalGetStyle = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = () => ({ lineHeight: '18px' });
+  const text = '甲🙂乙丙丁。'.repeat(30);
+  try {
+    for (const html of [`<p>${text}</p>`, `<p><strong>${text}</strong><br><em>结尾。</em></p>`]) {
+      const measurer = document.createElement('div');
+      measurer.style.writingMode = 'vertical-rl';
+      Object.defineProperties(measurer, {
+        scrollWidth: { get() { return this.textContent.length * 18 + this.querySelectorAll('br').length * 18; } },
+        scrollHeight: { value: 99999 }
+      });
+      const parts = splitLongParagraph(html, measurer, 150);
+      assert.ok(parts.length > 1);
+      const content = parts.map(part => {
+        const node = document.createElement('div');node.innerHTML = part;
+        assert.equal(node.textContent.isWellFormed(), true);
+        return node.textContent;
+      }).join('');
+      assert.equal(content, text + (html.includes('<em>') ? '结尾。' : ''));
+      if (html.includes('<strong>')) assert.ok(parts.some(part => part.includes('<strong>')));
+    }
+  } finally {
+    if (originalGetStyle === undefined) delete globalThis.getComputedStyle;
+    else globalThis.getComputedStyle = originalGetStyle;
+  }
 });
 
 test('增量测量分页保持段落顺序且不丢正文', () => {

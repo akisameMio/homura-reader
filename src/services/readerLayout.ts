@@ -6,6 +6,29 @@
    内容盒，视图只负责把它摆到画布上。
    ========================================================================== */
 
+import type { ReaderPage } from '../types.ts';
+
+export interface ReaderFolio {
+  pageNumber: number;
+  position: 'left' | 'right' | 'center';
+}
+
+/** 页码跟实际纸页对齐；RTL 对调左右，单排页也跟随各自的起读栏。 */
+export function resolveReaderFolios(pages: ReaderPage[], options: { rtl: boolean; singleOnRight: boolean; startIndex: number; }): ReaderFolio[] {
+  const folios = pages.map((page, index): ReaderFolio => {
+    const explicit = Number(page.pageNumber);
+    return {
+      pageNumber: Number.isFinite(explicit) && explicit > 0 ? explicit : options.startIndex + index + 1,
+      position: pages.length > 1 ? (index === 0 ? 'left' : 'right') : options.singleOnRight ? (options.rtl ? 'left' : 'right') : 'center'
+    };
+  });
+  if (folios.length > 1 && options.rtl) {
+    folios.reverse();
+    folios.forEach((folio, index) => { folio.position = index === 0 ? 'left' : 'right'; });
+  }
+  return folios;
+}
+
 /** 正文字体：只暴露有稳定 CJK 覆盖的系统字体栈，不引入网络字体。 */
 export const READER_FONT_OPTIONS = [
   {
@@ -95,6 +118,7 @@ interface ReaderLayoutPrefs {
   fontSize?: number | string;
   fontFamily?: string | unknown;
   lineHeight?: unknown;
+  verticalText?: boolean;
   [key: string]: unknown;
 }
 
@@ -144,6 +168,7 @@ export function resolveProseStyle(layout: ReaderLayoutPrefs = {}, _metrics: Reco
     '--reader-font-family': resolveFontStack(layout.fontFamily),
     '--reader-font-size': `${fontSize}px`,
     '--reader-line-height': String(resolveLineHeight(layout.lineHeight)),
-    '--reader-para-gap': `${(fontSize * 0.42).toFixed(1)}px`
+    '--reader-para-gap': `${(fontSize * 0.42).toFixed(1)}px`,
+    '--reader-writing-mode': layout.verticalText && layout.direction !== 'vertical' ? 'vertical-rl' : 'horizontal-tb'
   };
 }

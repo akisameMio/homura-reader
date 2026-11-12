@@ -24,21 +24,29 @@
         </button>
       </div>
 
-      <div class="md-reader-footer-pages">
-        <Transition
-          mode="out-in"
-          enter-active-class="md-fade-enter-active"
-          enter-from-class="opacity-0"
-          enter-to-class="opacity-100"
-          leave-active-class="md-fade-leave-active"
-          leave-from-class="opacity-100"
-          leave-to-class="opacity-0"
+      <div class="md-reader-footer-pages" :data-page-count-visible="pageCountVisible">
+        <div
+          v-for="folio in visibleFolios"
+          :key="folio.position"
+          class="md-reader-footer-folio"
+          :class="`is-${folio.position}`"
+          :data-reader-folio="folio.position"
         >
-          <span
-            :key="`${pageCountVisible ? 'total' : 'current'}-${currentPageNumber}`"
-            class="md-reader-footer-page-label"
-          >{{ pageCountVisible ? `${currentPageNumber}/${total}页` : `${currentPageNumber}页` }}</span>
-        </Transition>
+          <Transition
+            mode="out-in"
+            enter-active-class="md-fade-enter-active"
+            enter-from-class="opacity-0"
+            enter-to-class="opacity-100"
+            leave-active-class="md-fade-leave-active"
+            leave-from-class="opacity-100"
+            leave-to-class="opacity-0"
+          >
+            <span
+              :key="`${pageCountVisible ? 'total' : 'current'}-${folio.pageNumber}`"
+              class="md-reader-footer-page-label"
+            >{{ pageCountVisible ? `${folio.pageNumber}/${total}页` : `${folio.pageNumber}页` }}</span>
+          </Transition>
+        </div>
       </div>
 
       <div class="md-reader-footer-side is-end">
@@ -95,7 +103,7 @@
 /* ============================================================================
    HOMURA · 阅读器底栏
    ----------------------------------------------------------------------------
-   常驻在翻页舞台内部的纸书页脚：左侧回跳历史、中央当前页 / 双页页码、右侧本章剩余；
+   常驻在翻页舞台内部的纸书页脚：左侧回跳历史、按纸页对齐的页码、右侧本章剩余；
    底部一条通栏滑条，拖动时只更新气泡预览，松手才交给 store 翻页，
    避免一路 pointermove 都触发图片解码和双缓冲重渲染。
    ========================================================================== */
@@ -104,6 +112,7 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vu
 import { useReaderStore } from '../stores/reader.ts';
 import { useUiStore } from '../stores/ui.ts';
 import { isAndroid } from '../services/platform.ts';
+import { resolveReaderFolios } from '../services/readerLayout.ts';
 import MdIcon from './MdIcon.vue';
 import type { ReaderPage } from '../types.ts';
 
@@ -132,7 +141,6 @@ const maxIndex = computed(() => Math.max(0, total.value - 1));
 // 原生 range 走连续值，手柄跟手移动；页码预览和真正落点再取最近页。
 const sliderValue = ref(reader.currentIndex);
 const previewIndex = computed(() => Math.max(0, Math.min(maxIndex.value, Math.round(sliderValue.value))));
-const currentPageNumber = computed(() => pageNumberFor(reader.activePages[reader.currentIndex], reader.currentIndex));
 let pageCountTimer: ReturnType<typeof setTimeout> | null = null;
 
 // 当前实际可见的页：双页取整屏，条漫只取滚动到的那一页。
@@ -145,6 +153,12 @@ const visiblePages = computed<ReaderPage[]>(() => {
   }
   return reader.getSpreadPair(reader.currentIndex);
 });
+
+const visibleFolios = computed(() => resolveReaderFolios(visiblePages.value, {
+  rtl: reader.layoutConfig.direction === 'rtl',
+  singleOnRight: reader.layoutConfig.direction !== 'vertical' && reader.effectiveDouble && reader.currentBook?.type !== 'manga',
+  startIndex: Math.max(0, reader.activePages.indexOf(visiblePages.value[0]!))
+}));
 
 const chapterRemaining = computed(() => {
   const pages = reader.activePages;

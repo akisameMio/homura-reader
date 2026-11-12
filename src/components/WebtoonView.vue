@@ -37,15 +37,15 @@
       class="no-scrollbar w-full h-full overflow-y-auto overscroll-contain touch-pan-y py-4 px-3 sm:px-2"
       style="scroll-padding-top: calc(3.5rem + env(safe-area-inset-top)); scroll-padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));"
     >
-      <div ref="novelContent" :style="novelProseStyle" class="max-w-[660px] mx-auto bg-[var(--md-surface-low)] border-[0.5px] border-[var(--md-outline-variant)] rounded-[16px] p-5 sm:p-12 space-y-8">
+      <div ref="novelContent" :style="novelProseStyle" class="max-w-[660px] mx-auto bg-[var(--md-reader-paper)] border-[0.5px] border-[var(--md-reader-rule)] rounded-[16px] p-5 sm:p-12 space-y-8">
         <section
           v-for="p in reader.activePages"
           :key="p.pageNumber"
           :id="'webtoon-page-' + ((p.pageNumber ?? 0) - 1)"
           data-novel-section
-          class="webtoon-chapter border-b-[0.5px] border-[var(--border-line)] pb-6 last:border-none"
+          class="webtoon-chapter border-b-[0.5px] border-[var(--md-reader-rule)] pb-6 last:border-none"
         >
-          <div class="text-xs font-bold text-[var(--brand-primary)] mb-4 flex items-center gap-2">
+          <div class="text-xs font-bold text-[var(--md-reader-ink-soft)] mb-4 flex items-center gap-2">
             <span class="truncate">{{ p.title }}</span>
             <i class="block w-[0.5px] h-3 shrink-0 bg-current opacity-30"></i>
             <span class="shrink-0">第 {{ p.pageNumber }} 章</span>

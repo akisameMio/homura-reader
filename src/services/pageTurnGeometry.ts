@@ -60,6 +60,22 @@ export function curlPoint(point: TurnPoint, geometry: CurlGeometry) {
   };
 }
 
+/** 128×1 渐变纹理沿卷轴缩放，避免每张纸面副本再生成一张整屏阴影纹理。 */
+export function curlLighting(geometry: CurlGeometry, extent: number) {
+  const { normal: n, axis, radius, length } = geometry;
+  const strip = (start: number, width: number): TurnMatrix => [
+    n.x * width / 128, n.y * width / 128, -n.y * extent * 2, n.x * extent * 2,
+    axis.x + n.x * start + n.y * extent,
+    axis.y + n.y * start - n.x * extent
+  ];
+  return {
+    cast: strip(0, radius * 4),
+    contact: strip(-radius * 2.4, radius * 2.4),
+    surface: strip(0, Math.PI * radius),
+    opacity: Math.min(1, length / (radius * 6))
+  };
+}
+
 /** 裁剪源纸面到卷曲轴上的一段；裁剪发生在变形前，不会把正文重新排版。 */
 export function curlPolygon(width: number, height: number, geometry: CurlGeometry, min: number, max: number): TurnPoint[] {
   const { normal: n, axis } = geometry;
@@ -99,6 +115,30 @@ export function curlMatrix(geometry: CurlGeometry, distance: number): { matrix: 
     back: angle > Math.PI / 2,
     shade: Math.sin(angle) * 0.22
   };
+}
+
+/** 固定大小的矩形裁剪窗：外层沿卷轴变形，内层逆变换，合成后仍是原纸面矩阵。 */
+export function curlStripTransforms(geometry: CurlGeometry, polygon: TurnPoint[], distance: number, extent: number) {
+  const { normal: n, axis } = geometry;
+  const distances = polygon.map(p => (p.x - axis.x) * n.x + (p.y - axis.y) * n.y);
+  const min = Math.min(...distances);
+  const span = Math.max(0.0001, Math.max(...distances) - min);
+  const scale = span / extent;
+  const x = axis.x + n.x * min + n.y * extent;
+  const y = axis.y + n.y * min - n.x * extent;
+  const frame = curlMatrix(geometry, distance);
+  const [a, b, c, d, e, f] = frame.matrix;
+  const clip: TurnMatrix = [
+    (a * n.x + c * n.y) * scale, (b * n.x + d * n.y) * scale,
+    -a * n.y + c * n.x, -b * n.y + d * n.x,
+    a * x + c * y + e, b * x + d * y + f
+  ];
+  const content: TurnMatrix = [
+    n.x / scale, -n.y, n.y / scale, n.x,
+    -(n.x * axis.x + n.y * axis.y + min) / scale,
+    n.y * axis.x - n.x * axis.y + extent
+  ];
+  return { ...frame, clip, content };
 }
 
 export function pageTurnTarget(index: number, count: number, step: number, forward: boolean) {

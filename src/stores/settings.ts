@@ -9,6 +9,7 @@ import { defineStore } from 'pinia';
 import { computed, reactive, ref } from 'vue';
 import { isWindows } from '../services/platform.ts';
 import { resolveFontValue } from '../services/readerLayout.ts';
+import { TRANSITION_OPTIONS, useThemeStore } from './theme.ts';
 
 const READER_DEFAULTS_KEY = 'homura_reader_defaults';
 const DEBUG_FORCE_FULLSCREEN_KEY = 'homura_debug_force_fullscreen';
@@ -22,6 +23,8 @@ const PAGE_MARGINS = ['narrow', 'normal', 'wide'];
 
 export const DEFAULT_READER_SETTINGS = Object.freeze({
   direction: 'ltr',
+  pagedDirection: 'ltr',
+  verticalText: false,
   spread: 2,
   coverOffset: true,
   fontSize: 18,
@@ -42,6 +45,10 @@ function normalizeReaderDefaults(value: unknown) {
     direction: DIRECTIONS.includes(source.direction as string)
       ? (source.direction as string)
       : DEFAULT_READER_SETTINGS.direction,
+    pagedDirection: source.direction === 'ltr' || source.direction === 'rtl'
+      ? source.direction
+      : source.pagedDirection === 'rtl' ? 'rtl' : 'ltr',
+    verticalText: source.verticalText === true,
     spread: source.spread === 1 ? 1 : 2,
     coverOffset: typeof source.coverOffset === 'boolean'
       ? source.coverOffset
@@ -110,7 +117,9 @@ function readVolumeKeysTurnPage() {
 }
 
 export const useSettingsStore = defineStore('settings', () => {
+  const theme = useThemeStore();
   const readerDefaults = reactive(readReaderDefaults());
+  const transitionStyle = computed(() => readerDefaults.direction === 'vertical' ? 'scroll' : theme.transitionStyle);
   const debugForceFullscreen = ref(readDebugForceFullscreen());
   const debugAutoUpdateCheck = ref(readDebugAutoUpdateCheck());
   const importCollectionPrompt = ref(readImportCollectionPrompt());
@@ -131,6 +140,16 @@ export const useSettingsStore = defineStore('settings', () => {
   function resetReaderDefaults() {
     Object.assign(readerDefaults, DEFAULT_READER_SETTINGS);
     persistReaderDefaults();
+  }
+
+  function setTransitionStyle(style: string) {
+    if (!TRANSITION_OPTIONS.some(option => option.value === style)) return;
+    if (style === 'scroll') {
+      setReaderDefault('direction', 'vertical');
+    } else {
+      theme.setTransitionStyle(style);
+      if (readerDefaults.direction === 'vertical') setReaderDefault('direction', readerDefaults.pagedDirection);
+    }
   }
 
   function setDebugForceFullscreen(value: unknown) {
@@ -175,12 +194,14 @@ export const useSettingsStore = defineStore('settings', () => {
 
   return {
     readerDefaults,
+    transitionStyle,
     debugForceFullscreen,
     debugAutoUpdateCheck,
     importCollectionPrompt,
     volumeKeysTurnPage,
     showFullscreenButton,
     setReaderDefault,
+    setTransitionStyle,
     resetReaderDefaults,
     setDebugForceFullscreen,
     setDebugAutoUpdateCheck,

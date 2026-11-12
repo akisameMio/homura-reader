@@ -13,13 +13,15 @@ import { defineStore } from 'pinia';
 import { ref, shallowRef, reactive, computed, nextTick } from 'vue';
 import { useShelfStore } from './shelf.ts';
 import { useSettingsStore } from './settings.ts';
+import { TRANSITION_OPTIONS, useThemeStore } from './theme.ts';
 import { hydrateBook } from '../services/restore.ts';
 import { buildActivePages, createNovelPaginator, getNovelPaginationKey, ensureBookImagesResolved, releaseBookPageUrls } from '../services/pagination.ts';
 import {
   READER_FONT_OPTIONS,
   READER_LINE_HEIGHT_OPTIONS,
   READER_MARGIN_OPTIONS,
-  resolveFontValue
+  resolveFontValue,
+  resolveReaderMetrics
 } from '../services/readerLayout.ts';
 import { applyRestoredProgress, scheduleProgressSave, flushProgress } from '../services/progress.ts';
 import { collectionReadingOrder, adjacentCollectionBook, spreadBounds } from '../services/collectionReading.ts';
@@ -40,6 +42,8 @@ interface NovelPaginationJob {
 /** 排版配置（local，比 ReaderLayoutConfig 更贴合运行时的字符串档位） */
 interface ReaderLayout {
   direction: string;
+  pagedDirection: string;
+  verticalText: boolean;
   spread: number;
   coverOffset: boolean;
   fontSize: number;
@@ -71,6 +75,7 @@ const NOVEL_PAGINATION_SLICE_MS = 6;
 
 export const useReaderStore = defineStore('reader', () => {
   const settings = useSettingsStore();
+  const theme = useThemeStore();
   const currentBook = shallowRef<Book | null>(null);
   const shelf = useShelfStore();
   const openingBook = ref(false);
@@ -121,6 +126,7 @@ export const useReaderStore = defineStore('reader', () => {
     ...settings.readerDefaults,
     rtlInvertButtons: true     // 日漫右→左模式下默认「左边是下一页」
   });
+  const transitionStyle = computed(() => layoutConfig.direction === 'vertical' ? 'scroll' : theme.transitionStyle);
 
   const currentCollection = computed(() => currentBook.value ? shelf.collections.find(item => item.bookIds.includes(currentBook.value?.id ?? '')) || null : null);
   const collectionBooks = computed(() => {
@@ -153,7 +159,16 @@ export const useReaderStore = defineStore('reader', () => {
   // ---- 纯派生逻辑（原 reader.js 的查询函数） ----
 
   function canUseDoubleSpread() {
-    return layoutConfig.spread === 2 && (typeof window === 'undefined' || window.innerWidth >= DOUBLE_SPREAD_MIN_WIDTH);
+    if (layoutConfig.spread !== 2) return false;
+    if (typeof window === 'undefined') return true;
+    if (currentBook.value?.type === 'manga') return window.innerWidth >= DOUBLE_SPREAD_MIN_WIDTH;
+    const stage = document.querySelector<HTMLElement>('[data-reader-stage]');
+    return resolveReaderMetrics({
+      width: stage?.clientWidth || window.innerWidth,
+      height: stage?.clientHeight || window.innerHeight,
+      layout: layoutConfig,
+      compact: window.innerWidth < 900
+    }).isDouble;
   }
 
   // 同步「当前实际是否双页」，供顶栏状态与窗口尺寸变化判断复用
@@ -221,10 +236,12 @@ export const useReaderStore = defineStore('reader', () => {
       if (book.type === 'manga' && book.readingDirection === 'rtl' && next.direction === 'ltr') {
         next.direction = 'rtl';
       }
+      if (next.direction !== 'vertical') next.pagedDirection = next.direction;
       return next;
     }
 
     if (LAYOUT_DIRECTIONS.includes(saved.direction)) next.direction = saved.direction;
+    if (typeof saved.verticalText === 'boolean') next.verticalText = saved.verticalText;
     if (saved.spread === 1 || saved.spread === 2) next.spread = saved.spread;
     if (typeof saved.coverOffset === 'boolean') next.coverOffset = saved.coverOffset;
     if (Number.isFinite(saved.fontSize)) next.fontSize = clampNovelFontSize(saved.fontSize);
@@ -236,6 +253,8 @@ export const useReaderStore = defineStore('reader', () => {
     if (book.type === 'manga' && book.readingDirection === 'rtl' && next.direction === 'ltr' && rec.type !== 'manga') {
       next.direction = 'rtl';
     }
+    next.pagedDirection = next.direction !== 'vertical' ? next.direction
+      : saved.pagedDirection === 'ltr' || saved.pagedDirection === 'rtl' ? saved.pagedDirection : next.pagedDirection;
     return next;
   }
 
@@ -614,7 +633,10 @@ export const useReaderStore = defineStore('reader', () => {
   }
 
   function setDirection(dir: string) {
+    if (!LAYOUT_DIRECTIONS.includes(dir)) return;
     const prevDir = layoutConfig.direction;
+    if (dir !== 'vertical') layoutConfig.pagedDirection = dir;
+    else if (prevDir !== 'vertical') layoutConfig.pagedDirection = prevDir;
     layoutConfig.direction = dir;
     if (dir === 'rtl') {
       layoutConfig.rtlInvertButtons = true;
@@ -624,12 +646,23 @@ export const useReaderStore = defineStore('reader', () => {
     } else {
       requestRender('fade');
     }
+    touchProgress();
+  }
+
+  function setTransitionStyle(style: string) {
+    if (!TRANSITION_OPTIONS.some(option => option.value === style)) return;
+    if (style === 'scroll') {
+      if (layoutConfig.direction !== 'vertical') setDirection('vertical');
+    } else {
+      theme.setTransitionStyle(style);
+      if (layoutConfig.direction === 'vertical') setDirection(layoutConfig.pagedDirection);
+    }
   }
 
   function setSpreadCount(count: number) {
     layoutConfig.spread = count;
     if (layoutConfig.direction === 'vertical') {
-      layoutConfig.direction = 'ltr';
+      layoutConfig.direction = layoutConfig.pagedDirection;
     }
     if (currentBook.value && currentBook.value.type !== 'manga') {
       recalculateNovelPaginationAndRender();
@@ -705,6 +738,12 @@ export const useReaderStore = defineStore('reader', () => {
   function setPageMargin(value: string) {
     if (!PAGE_MARGINS.includes(value)) return;
     updateNovelTypography({ pageMargin: value });
+  }
+
+  function setVerticalText(value: boolean) {
+    if (!currentBook.value || currentBook.value.type === 'manga' || layoutConfig.direction === 'vertical') return;
+    updateNovelTypography({ verticalText: !!value });
+    touchProgress();
   }
 
   async function setCustomCover(file: File | null) {
@@ -867,6 +906,7 @@ export const useReaderStore = defineStore('reader', () => {
     pageIndicator,
     sliderValue,
     layoutConfig,
+    transitionStyle,
     effectiveDouble,
     getSpreadPair,
     getStepSizeForNext,
@@ -880,6 +920,7 @@ export const useReaderStore = defineStore('reader', () => {
     handleViewportChange,
     applyReaderDefaults,
     setDirection,
+    setTransitionStyle,
     setSpreadCount,
     toggleCoverOffset,
     setWebtoonFit,
@@ -888,6 +929,7 @@ export const useReaderStore = defineStore('reader', () => {
     setFontFamily,
     setLineHeight,
     setPageMargin,
+    setVerticalText,
     setCustomCover,
     goNextPage,
     goPrevPage,

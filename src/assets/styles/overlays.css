@@ -259,6 +259,7 @@
 
     /* 阅读器底栏：页脚直接浮在纸面上，不铺底、不描边，避免和正文分成两块 */
     .md-reader-footer {
+      --reader-footer-inline-pad: 24px;
       position: absolute;
       z-index: 35;
       right: 0;
@@ -271,6 +272,7 @@
       user-select: none;
     }
     .md-reader-footer-row {
+      position: relative;
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
       align-items: center;
@@ -283,6 +285,7 @@
       align-items: center;
     }
     .md-reader-footer-side.is-end {
+      grid-column: 3;
       justify-content: flex-end;
     }
     .md-reader-footer-history {
@@ -327,12 +330,26 @@
       outline-offset: 2px;
     }
     .md-reader-footer-pages {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: clamp(64px, 24vw, 360px);
+      position: absolute;
+      inset: 0 calc(-1 * var(--reader-footer-inline-pad));
       white-space: nowrap;
       transform: translateY(-4px);
+      pointer-events: none;
+    }
+    .md-reader-footer-folio {
+      position: absolute;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .md-reader-footer-folio.is-left {
+      left: calc(var(--reader-pad-x, 0px) + var(--reader-page-width, 50%) / 2);
+    }
+    .md-reader-footer-folio.is-right {
+      left: calc(100% - var(--reader-pad-x, 0px) - var(--reader-page-width, 50%) / 2);
     }
     .md-reader-footer-page-label,
     .md-reader-footer-remaining {
@@ -495,15 +512,13 @@
     }
     @media (max-width: 899px) {
       .md-reader-footer {
+        --reader-footer-inline-pad: 16px;
         bottom: 10px;
         padding: 5px 16px calc(7px + env(safe-area-inset-bottom, 0px));
       }
       .md-reader-footer-row {
         gap: 10px;
         min-height: 28px;
-      }
-      .md-reader-footer-pages {
-        gap: clamp(28px, 13vw, 150px);
       }
       .md-reader-footer-page-label,
       .md-reader-footer-remaining {
@@ -525,9 +540,6 @@
     @media (max-width: 560px) {
       .md-reader-footer-remaining {
         display: none;
-      }
-      .md-reader-footer-pages {
-        gap: 22px;
       }
     }
     @media (prefers-reduced-motion: reduce) {

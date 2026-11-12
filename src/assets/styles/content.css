@@ -189,6 +189,8 @@
        由舞台下发的 CSS 变量决定，测量与渲染必须逐字一致，否则末行会被裁掉。
        ========================================================================== */
     .md-reader-prose {
+      writing-mode: var(--reader-writing-mode, horizontal-tb);
+      text-orientation: mixed;
       font-family: var(--reader-font-family, serif);
       font-size: var(--reader-font-size, 18px);
       line-height: var(--reader-line-height, 1.9);
@@ -200,15 +202,28 @@
     }
     /* 覆盖 .epub-content p 的 1.75 行高与 0.75em 段距，保证与测量器同源 */
     .md-reader-prose p {
-      margin: 0 0 var(--reader-para-gap, 7px);
+      margin: 0;
+      margin-block-end: var(--reader-para-gap, 7px);
       text-indent: 2em;
       line-height: inherit;
     }
     .md-reader-prose p:last-child {
-      margin-bottom: 0;
+      margin-block-end: 0;
     }
     .md-reader-prose > :first-child {
-      margin-top: 0;
+      margin-block-start: 0;
+    }
+    .md-reader-prose :is(h1, h2, h3, h4, h5, h6) {
+      margin: 0;
+      margin-block: 1.2em 0.6em;
+      color: var(--md-reader-ink, var(--md-on-surface));
+    }
+    .md-reader-prose blockquote {
+      color: var(--md-reader-ink-soft, var(--md-on-surface-variant));
+      background: color-mix(in oklab, var(--md-reader-rule, var(--md-outline-variant)) 20%, var(--md-reader-paper, var(--md-surface)));
+    }
+    .md-reader-prose th {
+      background: color-mix(in oklab, var(--md-reader-rule, var(--md-outline-variant)) 20%, var(--md-reader-paper, var(--md-surface)));
     }
     /* 插图按纸页正文流高度收缩。--reader-flow-height 由舞台与测量器同时下发，
        避免 SVG 的百分比高度在两侧解析成不同尺寸，把整页插图撑出纸面。 */
@@ -236,7 +251,8 @@
 
     /* 章首页：标题、发丝线、章序号作为一整块参与分页测量 */
     .md-reader-prose .reader-chapter {
-      margin: 0 0 calc(var(--reader-para-gap, 7px) * 4);
+      margin: 0;
+      margin-block-end: calc(var(--reader-para-gap, 7px) * 4);
       text-align: center;
       text-indent: 0;
     }
@@ -254,8 +270,9 @@
       text-wrap: balance;
     }
     .md-reader-prose .reader-chapter-rule {
-      height: 0.5px;
-      margin: 20px 0 14px;
+      block-size: 0.5px;
+      margin-block: 20px 14px;
+      margin-inline: 0;
       background: var(--md-reader-rule, var(--md-outline-variant));
     }
     .md-reader-prose .reader-chapter-num {
@@ -264,5 +281,6 @@
       font-size: 11px;
       letter-spacing: 0.3em;
       text-indent: 0.3em;
+      text-combine-upright: all;
       color: var(--md-reader-ink-faint, var(--md-on-surface-variant));
     }

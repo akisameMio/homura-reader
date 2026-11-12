@@ -78,7 +78,7 @@ import { useUiStore } from '../stores/ui.ts';
 import { useViewport } from '../composables/useViewport.ts';
 import { isAndroid } from '../services/platform.ts';
 import { ensurePageUrlLoaded, decodePageImage, releaseDistantPageUrls, type MangaPageItem } from '../services/pagination.ts';
-import { resolveProseStyle, resolveReaderMetrics } from '../services/readerLayout.ts';
+import { resolveProseStyle, resolveReaderMetrics, resolveReaderFolios, type ReaderFolio } from '../services/readerLayout.ts';
 import { classifyReaderGesture } from '../services/readerGestures.ts';
 import { createPageTurn, type PageTurnController, type PaperTurnStyle } from '../services/pageTurn.ts';
 import { pageTurnTarget, type TurnSide } from '../services/pageTurnGeometry.ts';
@@ -89,6 +89,7 @@ import type { ReaderPage } from '../types.ts';
 
 interface SlotVM {
   mode: 'single' | 'double';
+  folios: ReaderFolio[];
   single?: ReaderPage;
   left?: ReaderPage;
   right?: ReaderPage;
@@ -174,9 +175,15 @@ function clearSlotImages(slotIndex: number, keepKeys: string[]) {
 
 function buildSlotVM(pair: ReaderPage[], total: number): SlotVM {
   const rtl = reader.layoutConfig.direction === 'rtl';
+  const folios = resolveReaderFolios(pair, {
+    rtl,
+    singleOnRight: reader.effectiveDouble && !isManga.value,
+    startIndex: Math.max(0, reader.activePages.indexOf(pair[0]!))
+  });
   if (pair.length === 1) {
     return {
       mode: 'single',
+      folios,
       single: pair[0],
       singleLabel: rtl ? '[右→左]' : '[左→右]',
       total
@@ -186,6 +193,7 @@ function buildSlotVM(pair: ReaderPage[], total: number): SlotVM {
   const right = rtl ? pair[0] : pair[1];
   return {
     mode: 'double',
+    folios,
     left,
     right,
     leftLabel: rtl ? '左页(后读)' : '左页(先读)',
@@ -262,6 +270,14 @@ function finishPaperTurn(controller: PageTurnController, slot: number) {
   showSlot(slot);
 }
 
+function paperTurnPageNumbers(outgoingSlot: number, incomingSlot: number) {
+  const label = pageStage.value?.querySelector<HTMLElement>('.md-reader-footer-pages');
+  const outgoing = slotVMs.value[outgoingSlot]?.folios;
+  const incoming = slotVMs.value[incomingSlot]?.folios;
+  if (!label || !outgoing?.length || !incoming?.length) return undefined;
+  return { label, outgoing, incoming, total: reader.activePages.length, showTotal: label.dataset.pageCountVisible === 'true' };
+}
+
 async function renderReaderViewport(transitionDir = 'fade') {
   if (!reader.currentBook) return;
   const myToken = ++reader.renderToken;
@@ -312,7 +328,7 @@ async function renderReaderViewport(transitionDir = 'fade') {
     const style = theme.transitionStyle;
     const directional = transitionDir === 'enter-from-right' || transitionDir === 'enter-from-left';
     if (!controller && directional && (style === 'slide' || style === 'curl') && !prefersReducedMotion()) {
-      controller = createPageTurn({ stage: pageStage.value!, outgoing: outEl, incoming: inEl, style, forward, side: reader.layoutConfig.direction === 'rtl' ? -1 : 1, originY, compact: isCompact.value });
+      controller = createPageTurn({ stage: pageStage.value!, outgoing: outEl, incoming: inEl, style, forward, side: reader.layoutConfig.direction === 'rtl' ? -1 : 1, originY, compact: isCompact.value, lowPower: isAndroid, pageNumbers: paperTurnPageNumbers(prevSlot, nextSlot) });
       activePaperTurn = controller;
     }
     if (controller) {
@@ -367,7 +383,7 @@ function prepareGestureTurn() {
   preview.ready = prepareSlot(nextSlot, reader.getSpreadPair(targetIndex), reader.activePages.length, valid).then(ready => {
     if (!ready) return false;
     resetStageTransform();
-    const controller = createPageTurn({ stage: pageStage.value!, outgoing: activeStageEl()!, incoming: stageEls[nextSlot]!, style: style as PaperTurnStyle, forward, side, originY, compact: isCompact.value });
+    const controller = createPageTurn({ stage: pageStage.value!, outgoing: activeStageEl()!, incoming: stageEls[nextSlot]!, style: style as PaperTurnStyle, forward, side, originY, compact: isCompact.value, lowPower: isAndroid, pageNumbers: paperTurnPageNumbers(reader.activeBufferSlot, nextSlot) });
     activePaperTurn = controller;
     preview.controller = controller;
     controller.move(preview.dx, preview.dy);
@@ -635,7 +651,9 @@ onMounted(() => {
       reader.layoutConfig.pageMargin,
       reader.layoutConfig.fontSize,
       reader.layoutConfig.fontFamily,
-      reader.layoutConfig.lineHeight
+      reader.layoutConfig.lineHeight,
+      reader.layoutConfig.verticalText,
+      isCompact.value
     ],
     applyReaderGeometry
   );

@@ -40,12 +40,13 @@ export const READER_SURFACE_MODE_OPTIONS = Object.freeze([
   { value: 'settings', label: '跟随设置外观', note: '沿用全局表面', title: '跟随设置外观', icon: 'update' }
 ]);
 const SURFACE_REVEAL_DURATION = 720;
-const TRANSITION_ORDER = ['slide', 'curl', 'fade', 'none'];
+// 滚动由每本书的排版方向持有；这里保留上一次分页效果，切回时继续使用。
+const TRANSITION_ORDER = ['slide', 'curl', 'fade'];
 export const TRANSITION_OPTIONS = Object.freeze([
   { value: 'slide', label: '滑动' },
   { value: 'curl', label: '卷页' },
   { value: 'fade', label: '柔和淡入' },
-  { value: 'none', label: '无动画' }
+  { value: 'scroll', label: '滚动' }
 ]);
 export const TRANSITION_LABELS = Object.fromEntries(
   TRANSITION_OPTIONS.map(option => [option.value, option.label])

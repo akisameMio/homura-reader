@@ -114,7 +114,32 @@
     .reader-turn-copy {
       pointer-events: none;
       user-select: none;
+      backface-visibility: visible;
     }
+    /* 副本已由外层分片合成；图片不再各自提升为整屏 GPU 图层。 */
+    .reader-turn-copy .manga-page-img {
+      transform: none;
+      backface-visibility: visible;
+    }
+    /* Android 的裁剪窗与纸面尺寸固定，逐帧只更新两层 transform。
+       背景留在纸面层，不能填满裁剪窗，否则会盖住卷页外的底页。 */
+    .reader-paper-turn-stable .reader-turn-piece {
+      width: var(--turn-clip-extent);
+      height: calc(var(--turn-clip-extent) * 2);
+      background: transparent;
+    }
+    .reader-turn-surface {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: var(--turn-width);
+      height: var(--turn-height);
+      overflow: hidden;
+      background: var(--md-reader-paper, var(--md-surface));
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+    .reader-turn-back,
     .reader-turn-shade,
     .reader-turn-dimmer,
     .reader-turn-shadow {
@@ -123,12 +148,51 @@
       background: var(--md-shadow-color);
       pointer-events: none;
     }
+    .reader-turn-back {
+      display: none;
+      background: color-mix(in oklab, var(--md-reader-paper, var(--md-surface)) 81%, transparent);
+    }
     .reader-turn-shade {
       opacity: 0;
     }
+    /* 三层光照共用卷轴：底页柔投影、未卷纸面接触阴影、曲面连续明暗。
+       固定渐变只变形，不使用 blur，Android 也能保留纸张离地的厚度。 */
+    .reader-turn-shadow,
+    .reader-turn-contact,
+    .reader-turn-shade {
+      position: absolute;
+      inset: auto;
+      left: 0;
+      top: 0;
+      width: 128px;
+      height: 1px;
+      transform-origin: 0 0;
+      pointer-events: none;
+      will-change: transform;
+    }
     .reader-turn-shadow {
-      background: var(--md-shadow-color-soft);
-      filter: blur(12px);
+      background: linear-gradient(to right,
+        transparent,
+        var(--md-shadow-color-soft) 23%,
+        color-mix(in oklab, var(--md-shadow-color-soft) 72%, transparent) 38%,
+        color-mix(in oklab, var(--md-shadow-color-soft) 24%, transparent) 65%,
+        transparent);
+    }
+    .reader-turn-contact {
+      z-index: 2;
+      background: linear-gradient(to right,
+        transparent,
+        color-mix(in oklab, var(--md-shadow-color-soft) 12%, transparent) 32%,
+        color-mix(in oklab, var(--md-shadow-color-soft) 48%, transparent) 68%,
+        var(--md-shadow-color-soft));
+    }
+    .reader-turn-shade {
+      background: linear-gradient(to right,
+        transparent,
+        color-mix(in oklab, var(--md-shadow-color) 8%, transparent) 18%,
+        color-mix(in oklab, var(--md-shadow-color) 30%, transparent) 50%,
+        color-mix(in oklab, var(--md-shadow-color) 12%, transparent) 78%,
+        transparent);
     }
 
     /* 安卓 WebView 对超长小说章节跳过屏外排版，减少滚动时的样式与绘制开销。
@@ -200,6 +264,8 @@
     }
     .reader-page-flow {
       flex: 1 1 auto;
+      width: 100%;
+      min-width: 0;
       min-height: 0;
       overflow: hidden;
     }

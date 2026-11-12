@@ -82,15 +82,15 @@
 
             <div class="settings-block">
               <div class="settings-head">
-                <span class="settings-title">翻页过渡</span>
+                <span class="settings-title">翻页方式</span>
                 <span class="settings-value">{{ transitionLabel }}</span>
               </div>
               <MdSegmentedControl
                 class="w-full"
-                :model-value="theme.transitionStyle"
+                :model-value="settings.transitionStyle"
                 :options="transitionOptions"
-                aria-label="翻页过渡"
-                @update:model-value="theme.setTransitionStyle"
+                aria-label="翻页方式"
+                @update:model-value="settings.setTransitionStyle"
               />
             </div>
           </section>
@@ -101,7 +101,7 @@
               <span>首次打开作品时采用</span>
             </div>
 
-            <div class="settings-block">
+            <div v-if="readerDefaults.direction !== 'vertical'" class="settings-block">
               <div class="settings-head">
                 <span class="settings-title">阅读方向</span>
                 <span class="settings-value">{{ directionLabel }}</span>
@@ -115,7 +115,7 @@
               />
             </div>
 
-            <div class="settings-block">
+            <div v-if="readerDefaults.direction !== 'vertical'" class="settings-block">
               <div class="settings-head">
                 <span class="settings-title">跨页布局</span>
                 <span class="settings-value">{{ spreadLabel }}</span>
@@ -127,6 +127,17 @@
                 aria-label="跨页布局"
                 @update:model-value="setSpread"
               />
+              <MdSwitch
+                class="settings-value-row"
+                :model-value="readerDefaults.verticalText"
+                title="文字从上往下，各列从右往左排列，仅作用于小说分页阅读"
+                @update:model-value="value => settings.setReaderDefault('verticalText', value)"
+              >
+                <span class="settings-value-copy">
+                  <b>竖排文字</b>
+                  <span>文字从上往下，各列从右往左</span>
+                </span>
+              </MdSwitch>
               <MdSwitch
                 v-if="readerDefaults.spread === 2"
                 class="settings-value-row"
@@ -181,14 +192,14 @@
 
             <div class="settings-block">
               <div class="settings-head">
-                <span class="settings-title">条漫宽度</span>
+                <span class="settings-title">滚动宽度</span>
                 <span class="settings-value">{{ webtoonFitLabel }}</span>
               </div>
               <MdSegmentedControl
                 class="w-full"
                 :model-value="readerDefaults.webtoonFit"
                 :options="webtoonOptions"
-                aria-label="条漫宽度"
+                aria-label="滚动宽度"
                 @update:model-value="value => settings.setReaderDefault('webtoonFit', value)"
               />
             </div>
@@ -395,7 +406,7 @@
               <div class="settings-data-row">
                 <span class="settings-data-copy">
                   <b>示例漫画</b>
-                  <span>6 页分镜样张，用于检查单双页、日漫方向与条漫模式。</span>
+                  <span>6 页分镜样张，用于检查单双页、日漫方向与滚动阅读。</span>
                 </span>
                 <button type="button" class="settings-text-button" @click="addDemoManga">添加</button>
               </div>
@@ -602,8 +613,7 @@ const debugNote = ref('');
 const transitionOptions = TRANSITION_OPTIONS;
 const directionOptions = [
   { value: 'ltr', label: '从左到右', title: '普通排版' },
-  { value: 'rtl', label: '从右到左', title: '日漫' },
-  { value: 'vertical', label: '条漫模式', title: '条漫长卷' }
+  { value: 'rtl', label: '从右到左', title: '日漫' }
 ];
 const spreadOptions = [
   { value: 1, label: '单页' },
@@ -666,7 +676,7 @@ const surfaceLabel = computed(() => {
   const option = SURFACE_MODE_OPTIONS.find(item => item.value === theme.surfaceMode);
   return option ? option.label : theme.surfaceMode;
 });
-const transitionLabel = computed(() => TRANSITION_LABELS[theme.transitionStyle] || '');
+const transitionLabel = computed(() => TRANSITION_LABELS[settings.transitionStyle] || '');
 const directionLabel = computed(() => {
   const option = directionOptions.find(item => item.value === readerDefaults.direction);
   return option ? option.label : '';
