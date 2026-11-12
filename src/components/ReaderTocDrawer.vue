@@ -39,7 +39,7 @@
         @drag-cancel="onSheetDragCancel"
       />
 
-      <div class="md-drawer-body px-3 pb-4">
+      <div ref="tocBodyRef" class="md-drawer-body px-3 pb-4">
         <!-- 漫画：页码网格 -->
         <nav v-if="isManga" class="md-toc-grid" aria-label="漫画页码">
           <button
@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useReaderStore } from '../stores/reader.ts';
 import { useUiStore } from '../stores/ui.ts';
 import { useViewport } from '../composables/useViewport.ts';
@@ -92,6 +92,7 @@ const reader = useReaderStore();
 const ui = useUiStore();
 const { isCompact } = useViewport();
 const tocOpen = computed(() => ui.tocOpen);
+const tocBodyRef = ref<HTMLElement | null>(null);
 const {
   onDragStart: onSheetDragStart,
   onDragMove: onSheetDragMove,
@@ -133,6 +134,23 @@ const tocSubtitle = computed(() => {
 function isCurrentChapter(group: { index: number; end: number }) {
   return reader.currentIndex >= group.index && reader.currentIndex <= group.end;
 }
+
+// 打开目录时把当前章 / 当前页滚到可视区中间，省去手动翻找
+function scrollCurrentIntoView() {
+  const body = tocBodyRef.value;
+  const active = body?.querySelector<HTMLElement>('.md-toc-page.is-active, .md-drawer-list-item.is-active');
+  if (!body || !active) return;
+  const bodyRect = body.getBoundingClientRect();
+  const activeRect = active.getBoundingClientRect();
+  const offset = body.scrollTop + activeRect.top - bodyRect.top - (bodyRect.height - activeRect.height) / 2;
+  body.scrollTop = Math.max(0, offset);
+}
+
+watch(tocOpen, async (open) => {
+  if (!open) return;
+  await nextTick();
+  scrollCurrentIntoView();
+});
 
 function jumpTo(index: number) {
   reader.jumpToPage(index);
