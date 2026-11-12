@@ -87,6 +87,48 @@
       backface-visibility: hidden;
       transform: translate3d(0, 0, 0);
       overflow: hidden;
+      background: var(--md-reader-paper, var(--md-surface));
+    }
+
+    /* 翻页副本只变形已排好的纸面，不进入 Vue 的高频响应式更新。 */
+    .reader-paper-turn {
+      position: absolute;
+      inset: 0;
+      z-index: 25;
+      overflow: hidden;
+      pointer-events: none;
+      contain: layout style paint;
+    }
+    .reader-turn-piece {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: var(--turn-width);
+      height: var(--turn-height);
+      overflow: hidden;
+      background: var(--md-reader-paper, var(--md-surface));
+      transform-origin: 0 0;
+      will-change: transform;
+      contain: layout style paint;
+    }
+    .reader-turn-copy {
+      pointer-events: none;
+      user-select: none;
+    }
+    .reader-turn-shade,
+    .reader-turn-dimmer,
+    .reader-turn-shadow {
+      position: absolute;
+      inset: 0;
+      background: var(--md-shadow-color);
+      pointer-events: none;
+    }
+    .reader-turn-shade {
+      opacity: 0;
+    }
+    .reader-turn-shadow {
+      background: var(--md-shadow-color-soft);
+      filter: blur(12px);
     }
 
     /* 安卓 WebView 对超长小说章节跳过屏外排版，减少滚动时的样式与绘制开销。

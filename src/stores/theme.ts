@@ -40,9 +40,10 @@ export const READER_SURFACE_MODE_OPTIONS = Object.freeze([
   { value: 'settings', label: '跟随设置外观', note: '沿用全局表面', title: '跟随设置外观', icon: 'update' }
 ]);
 const SURFACE_REVEAL_DURATION = 720;
-const TRANSITION_ORDER = ['slide', 'fade', 'none'];
+const TRANSITION_ORDER = ['slide', 'curl', 'fade', 'none'];
 export const TRANSITION_OPTIONS = Object.freeze([
-  { value: 'slide', label: '丝滑平移' },
+  { value: 'slide', label: '滑动' },
+  { value: 'curl', label: '卷页' },
   { value: 'fade', label: '柔和淡入' },
   { value: 'none', label: '无动画' }
 ]);

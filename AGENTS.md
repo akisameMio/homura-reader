@@ -31,7 +31,7 @@ CBZ / ZIP 与 EPUB 共用原生 ZIP 通道：漫画压缩包只把图片条目�
 | 命令 | 作用 |
 | --- | --- |
 | `npm install` | 安装前端依赖；Tauri 命令找不到时先跑这个 |
-| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 34 个测试文件、232 条用例全绿，约 4 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
+| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 35 个测试文件、238 条用例全绿，约 4 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
 | `npm run typecheck` | `vue-tsc --noEmit`，类型检查 |
 | `npm run dev:vite` | 只起 Vite 开发服务器，固定端口 **5173**（strictPort），带 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`（最常用的快速验证） |
@@ -78,7 +78,7 @@ src/
                            useScrollBounce / useDuplicateImport / useReaderBackDismiss / useAndroidBackExit /
                            useVolumeKeys
   components/              41 个 SFC（视图与交互）
-tests/                     34 个 .test.mjs（node:test + assert/strict + jsdom）
+tests/                     35 个 .test.mjs（node:test + assert/strict + jsdom）
 scripts/                   5 个：check-dark-glow / generate-icons / release-notes / sync-android-icons /
                            patch-android-manifest
 references/                4 份规范：md3-component-guide / tokens / ui-component-spec / desktop-island
