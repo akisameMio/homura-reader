@@ -212,7 +212,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 16. **封面与元数据原生兜底**：封面缩略图优先走 Rust `create_cover_thumbnail` / `create_cover_thumbnail_from_archive`，格式不支持、命令不可用或没有 Tauri 时才回退 Canvas；原生像素 / 输入大小上限不得继续交给 JS 重试。SQLite 元数据失败时回退 IndexedDB，但 `dirty` 标记与删除顺序不能删，否则旧镜像可能复活已删除书本。
 17. **书库归属唯一**：每本书最多属于一个书库，`moveCollectionBooks` 负责搬移而不是复制；删除书库不能连带删书。
 18. **导入必须可取消可重试**：`useImporter` + `importProgress` store 支持取消、单本失败重试、同名确认、按批提交。并发与批量上限是实测过的（桌面 4 / Android 2，超 64MB 降到 3、超 256MB 降到 2、Android 超 32MB 降到 1），不要随手调高。
-19. **应用内更新只认官方仓库**：`updates.ts` 的 `REPOSITORY_URL` 与 `external.ts` 的白名单都锁死 `github.com/Leon-Ning-san/HOMURA-reader`；下载只校验字节数与 `expected_size` 一致，没有签名/哈希校验，不要对外宣称更强保证。
+19. **应用内更新只认官方仓库**：`updates.ts` 的 `REPOSITORY_URL` 与 `external.ts` 的白名单都锁死 `github.com/Leon-Ning-san/HomuraReader`；下载只校验字节数与 `expected_size` 一致，没有签名/哈希校验，不要对外宣称更强保证。
 20. **Android 预见式返回**：`useReaderBackDismiss` 直接写 `--homura-back-*` CSS 变量驱动动画，**不能**改成响应式状态，否则返回手势会掉帧。native 模式（API 34+）必须同时保留 `app.onBackButtonPress` 的 JS 兜底监听：框架在 `Checker` 校验不过时只打日志、静默丢弃原生回调，插件却照样 resolve，一旦撤掉 JS 监听，阅读器期间就没有任何返回消费者，返回会落到 Tauri `AppPlugin` 的 `activity.onBackPressed()` 直接 finish 并退回桌面。原生回调是 top 时 JS 收不到事件，两条通道不会重复触发，不要「优化」成单通道。
 21. **CSP 严格白名单**：`tauri.conf.json` 的 `app.security.csp` 已启用，`script-src` 不含 `'unsafe-inline'`，注入的 `<script>` 与 `on*` 事件处理器会被浏览器直接拦掉；`'unsafe-eval'` 是 vendor Tailwind 运行时与 pdf.js wasm 必需的，别删。漫画页走 asset 协议，`img-src` / `media-src` 必须保留 `asset:` 与 `http://asset.localhost`（Windows / Android 用 `http://asset.localhost`，macOS / Linux / iOS 用 `asset://localhost`），删掉会整本漫画白屏。新增站外请求域名要同步登记进 `connect-src`；启动引导只能放 `public/homura-boot.js`。
 

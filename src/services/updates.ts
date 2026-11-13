@@ -9,10 +9,10 @@
 import { isAndroid } from './platform.ts';
 import type { Release } from '../types.ts';
 
-export const REPOSITORY_URL = 'https://github.com/Leon-Ning-san/HOMURA-reader';
+export const REPOSITORY_URL = 'https://github.com/Leon-Ning-san/HomuraReader';
 export const RELEASES_PAGE_URL = `${REPOSITORY_URL}/releases`;
 
-const RELEASES_API_URL = 'https://api.github.com/repos/Leon-Ning-san/HOMURA-reader/releases?per_page=10';
+const RELEASES_API_URL = 'https://api.github.com/repos/Leon-Ning-san/HomuraReader/releases?per_page=10';
 const REQUEST_TIMEOUT = 12000;
 const CACHE_TTL = 5 * 60 * 1000;
 
@@ -219,7 +219,7 @@ export function formatReleaseDate(value: unknown) {
 function isAllowedReleaseUrl(value: unknown) {
   try {
     const url = new URL(String(value));
-    const repositoryPath = '/Leon-Ning-san/HOMURA-reader';
+    const repositoryPath = '/Leon-Ning-san/HomuraReader';
     return url.protocol === 'https:'
       && url.hostname === 'github.com'
       && (url.pathname === repositoryPath || url.pathname.startsWith(`${repositoryPath}/`));

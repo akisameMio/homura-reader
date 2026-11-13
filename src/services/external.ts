@@ -10,7 +10,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 function isAllowedGithubUrl(value: string) {
   try {
     const url = new URL(value);
-    const repositoryPath = '/Leon-Ning-san/HOMURA-reader';
+    const repositoryPath = '/Leon-Ning-san/HomuraReader';
     return url.protocol === 'https:'
       && url.hostname === 'github.com'
       && (url.pathname === repositoryPath || url.pathname.startsWith(`${repositoryPath}/`));
