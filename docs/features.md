@@ -13,7 +13,7 @@
 | 移动平台 | Android arm64-v8a / armeabi-v7a APK |
 | 核心链路 | 导入、本地存档、恢复、分页/滚动阅读、目录跳转、进度记忆、一级书库、收藏、自定义封面、导入进度与失败重试、应用内更新均可用 |
 | 尚未完成 | 标签功能尚未实现；书签功能尚未实现 |
-| 质量保障 | 有 `node:test` + jsdom 单元测试（259 条）与 `vue-tsc` 类型检查；没有 ESLint 或 E2E，关键阅读流程仍需手动回归 |
+| 质量保障 | 有 `node:test` + jsdom 单元测试（264 条）与 `vue-tsc` 类型检查；没有 ESLint 或 E2E，关键阅读流程仍需手动回归 |
 | 许可 | MIT，完整条款见 [`LICENSE`](../LICENSE) |
 
 ## 功能概览
@@ -67,6 +67,8 @@
 10 套主题色：森系绿、薄荷青、海盐青、深海蓝、鸢尾紫、兰花紫（默认）、樱雾粉、落日赤陶、琥珀金、橄榄青。
 
 三种阅读表面：白昼、护眼、夜间。护眼模式会给漫画图片叠加柔和暖色滤镜；切换背景时会同步更新原生窗口标题栏和窗口底色。
+
+设置首页按卡片展示偏好，二级页提供完整选项。外观页可独立开启纯黑偏好，仅在夜间生效；跟随系统时自动应用，启动与原生窗口底色同步恢复。
 
 ### 快捷键
 
@@ -129,7 +131,7 @@ homura-reader/
 │   │                           # useReaderBackDismiss / useAndroidBackExit / useVolumeKeys
 │   └── components/             # 41 个 SFC：SideNav、LibraryHeader、BookShelf、BookCard、
 │                               # ReaderModal、PaginatedView、WebtoonView、DesktopIsland、SettingsView 等
-├── tests/                      # 36 个 .test.mjs（node:test + jsdom）
+├── tests/                      # 37 个 .test.mjs（node:test + jsdom）
 ├── scripts/                    # check-dark-glow / generate-icons / release-notes / sync-android-icons /
 │                               # patch-android-manifest
 ├── references/                 # MD3 组件写法、token、系统布局、桌面灵动胶囊状态机
@@ -152,7 +154,7 @@ npm run build      # tauri build，Tauri 会先构建前端再打包安装包
 
 | 命令 | 作用 |
 | --- | --- |
-| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，259 条用例，覆盖解析、书名排序、同名识别、书库归属、目录分组、阅读手势、翻页几何与阅读模式恢复 |
+| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，264 条用例，覆盖解析、书名排序、同名识别、书库归属、目录分组、阅读手势、翻页几何与阅读模式恢复 |
 | `npm run typecheck` | `vue-tsc --noEmit`，类型检查（当前 0 报错） |
 | `npm run dev:vite` | 只启动 Vite 开发服务器，端口固定为 `5173`，支持 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`，是最快的构建验证 |
@@ -189,7 +191,7 @@ sudo apt-get install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev pat
 开发和代码约束以仓库根目录的 [`AGENTS.md`](../AGENTS.md) 为准。提交前至少运行：
 
 ```bash
-npm test          # 单元测试（259 条）
+npm test          # 单元测试（264 条）
 npm run typecheck # vue-tsc 类型检查
 npm run build:vite
 ```
@@ -216,4 +218,4 @@ CI 只在推送 `v*` 标签或手动触发 `workflow_dispatch` 时运行，不�
 - 目录可以跳转，但目录状态不保存；书签功能尚未实现。
 - 书架搜索只匹配书名与书库名，不支持作者搜索或标签筛选。
 - macOS 安装包尚未签名/公证，首次启动需要手动放行。
-- 项目提供书名排序、同名识别、书库归属、目录分组、手势判定、翻页几何和阅读模式恢复等单元测试（`npm test`，259 条），配合 `npm run typecheck` 做类型检查；但没有 E2E、覆盖不到完整阅读流程，也没有 ESLint，改动后仍需执行构建并手动回归关键阅读流程。
+- 项目提供书名排序、同名识别、书库归属、目录分组、手势判定、翻页几何和阅读模式恢复等单元测试（`npm test`，264 条），配合 `npm run typecheck` 做类型检查；但没有 E2E、覆盖不到完整阅读流程，也没有 ESLint，改动后仍需执行构建并手动回归关键阅读流程。

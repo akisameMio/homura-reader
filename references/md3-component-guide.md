@@ -303,15 +303,18 @@
 - 触屏上的移除、多选等操作必须常显；hover 只服务鼠标设备。
 - 卡片本身只能有一个主点击目标；不要在整卡按钮内部再嵌按钮。
 
-### 3.9 品牌 Hero / 封面容器
+### 3.9 设置卡片与阅读示意
 
-关于页的 `.about-hero` 是内容型品牌容器的基准：左侧封面区、右侧信息区，窄屏上下堆叠。
+设置页使用 `.settings-card` 组合大小卡片；外观卡展示表面切换和书页示意，关于卡集中展示版本、更新与开源入口。
 
-- 背景用 `primary-container` 向 `tertiary-container` 混色，文字用 `on-primary-container`。
-- 版本徽章用 `surface-container` / `on-surface`，形成局部对比，不把白底黑字写死。
-- 装饰线、色环只用 `on-primary-container` 或 `secondary-container` 的低透明度 `color-mix`。
-- 宽屏 `>=1200px` 双栏；中窄屏堆叠。这个断点只服务该内容容器，不替代全局 900px 主断点。
-- 信息区优先使用「标语 → 隐私说明 → 一个主行动 → 元信息」；不要退回营销海报式大字水印。
+- 页面使用 `surface-low`，卡片使用 `surface` / `on-surface`，书页示意衬底使用 `primary-container`。
+- 卡片圆角 34px，窄屏 28px；投影使用 `--md-shadow-color-soft`，不抬升卡片。
+- 外观二级页复用 `ThemeSwatchGrid strip`：实心圆点、选中圆环与勾选；色板可用宽度达到 640px 时十列一行，不足时五列两行，不使用横向滚动。承载容器声明 `container: theme-palette / inline-size`。共享色板默认仍为五列两行，保持其他外观面板尺寸。
+- 1040px / 600px 容器断点只用于设置卡片排版，不替代全局 900px 主导航断点。
+- 书页示意仅作装饰，标记 `aria-hidden`；阅读默认值使用实际控件呈现，不将示意当作排版验证。
+- 二级页使用 `.settings-detail-hero` 与 `.settings-list`，复用 `SettingsInterfacePreview` 绘制随主题变化的缩略图；模式缩略图同时带对应 `data-theme` / `data-mode`，不改全局根节点。
+- 「标准 / 纯黑」沿用分组列表。只通过 `theme.setPureBlackMode()` 修改偏好，组件不自行覆盖根节点或写黑色背景；缩略图可用 `black` 属性独立展示两种夜间表面。
+- 列表选择项复用 `SettingsSelectRow`，由原生 select 处理键盘与平台选择菜单，并保留单双页值的数字类型。
 
 ## 4. 响应式与布局
 
@@ -433,7 +436,7 @@
 | 开关 | `src/components/MdSwitch.vue` |
 | 进度 / 字号滑条 | `src/components/MdRange.vue` |
 | 设置分组与响应式布局 | `src/components/SettingsView.vue` |
-| 品牌 Hero / 封面容器 | `SettingsView.vue` 的 `.about-hero`、`.about-cover` |
+| 设置卡片 / 阅读示意 | `SettingsView.vue` 的 `.settings-card`、`.settings-book-stage` |
 | 共享组件类与 token | `src/assets/homura.css` |
 
 一句话原则：**新组件应该像这套界面里本来就长出来的一样；如果它需要一套新颜色、一套新圆角和一套新层级，先回到现有 MD3 组件里找答案。**

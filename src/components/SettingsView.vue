@@ -1,147 +1,476 @@
 <template>
-  <!-- 一级设置页：外观与阅读、存储、关于各自独立成页 -->
-  <div class="settings-page">
-    <header
-      class="settings-topbar z-20 bg-[var(--md-surface)]"
-      :style="isCompact ? { paddingTop: 'env(safe-area-inset-top)' } : null"
-    >
+  <div class="settings-page" :class="{ 'has-detail': activeSection }">
+    <header class="settings-topbar" :style="isCompact ? { paddingTop: 'env(safe-area-inset-top)' } : null">
       <div class="settings-topbar-inner">
-        <Transition name="settings-title" appear>
-          <h1>设置</h1>
-        </Transition>
-        <span class="settings-save-state">
-          <i aria-hidden="true"></i>
-          <span class="save-state-long">更改会自动保存</span>
-          <span class="save-state-short">已自动保存</span>
+        <button
+          v-if="activeSection"
+          ref="backButtonRef"
+          type="button"
+          class="settings-back-button"
+          aria-label="返回设置"
+          @click="showPreviousSection"
+        >
+          <MdIcon name="chevron_left" />
+        </button>
+        <div>
+          <h1>{{ activeSection ? sectionTitles[activeSection] : '设置' }}</h1>
+          <p v-if="!activeSection">让阅读，更合你的习惯。</p>
+        </div>
+        <span v-if="activeSection !== 'about'" class="settings-save-state">
+          <MdIcon name="check" />
+          <span>{{ activeSection ? '自动保存' : '更改会自动保存' }}</span>
         </span>
       </div>
     </header>
-
     <div v-if="isCompact && $slots.status" class="settings-import-status">
       <slot name="status"></slot>
     </div>
-
-    <div
-      class="settings-layout"
-      :class="{ 'has-preview': activeSection === 'appearance' }"
-    >
-      <nav ref="sectionNavRef" class="settings-section-nav" aria-label="设置分区">
-        <span
-          class="settings-section-indicator"
-          :class="{ 'is-ready': sectionIndicatorReady }"
-          :style="sectionIndicatorStyle"
-          aria-hidden="true"
-        ></span>
-        <p class="settings-section-label">偏好</p>
+    <div v-if="!activeSection" class="settings-grid">
+      <section class="settings-card settings-appearance" aria-labelledby="settings-appearance-title">
         <button
-          v-for="section in sections"
-          :key="section.key"
           type="button"
-          class="settings-section-link"
-          :class="{ 'is-active': activeSection === section.key }"
-          :aria-current="activeSection === section.key ? 'page' : undefined"
-          @click="selectSection(section.key)"
+          class="settings-card-open"
+          aria-label="打开外观设置"
+          @click="openSection('appearance', $event)"
         >
-          <MdIcon :name="section.icon" />
-          <span class="section-link-desktop">{{ section.label }}</span>
-          <span class="section-link-mobile">{{ section.shortLabel }}</span>
+          <span class="settings-card-open-icon">
+            <MdIcon name="chevron_right" />
+          </span>
         </button>
-
-        <div class="settings-section-foot">
-          <b>本地优先</b>
-          阅读记录与作品只保存在此设备。
+        <div class="appearance-content">
+          <div class="settings-card-head">
+            <h2 id="settings-appearance-title">
+              <MdIcon name="palette" />
+              外观
+            </h2>
+          </div>
+          <h3>给阅读换个心情</h3>
+          <p>从明亮白昼，到安静的夜间。</p>
+          <MdSegmentedControl
+            :model-value="theme.surfaceMode"
+            :options="surfaceOptions"
+            aria-label="表面模式"
+            @update:model-value="setSurfaceMode"
+          />
         </div>
-      </nav>
-
-      <main class="settings-main">
-        <template v-if="activeSection === 'appearance'">
-          <section id="settings-appearance" class="settings-section settings-page-panel">
-            <div class="settings-section-heading">
-              <h2>外观</h2>
-              <span>即时应用到整个应用</span>
+        <div class="settings-book-stage" aria-hidden="true">
+          <div class="settings-open-book">
+            <div class="settings-book-page">
+              <b>夏日的序章</b>
+              <p>
+                风穿过敞开的窗，
+                <br />
+                书页轻轻翻动。
+              </p>
+              <i v-for="line in 5" :key="line"></i>
+              <span>12</span>
             </div>
-
+            <div class="settings-book-page">
+              <i v-for="line in 9" :key="line"></i>
+              <span>13</span>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="settings-card settings-reading" aria-labelledby="settings-reading-title">
+        <button
+          type="button"
+          class="settings-card-open"
+          aria-label="打开阅读默认值"
+          @click="openSection('reading', $event)"
+        >
+          <span class="settings-card-open-icon">
+            <MdIcon name="chevron_right" />
+          </span>
+        </button>
+        <div class="settings-card-head">
+          <h2 id="settings-reading-title">
+            <MdIcon name="auto_stories" />
+            阅读默认值
+          </h2>
+          <span>首次打开作品时采用</span>
+        </div>
+        <div
+          class="settings-reading-controls"
+          :class="{ 'is-scrolling': readerDefaults.direction === 'vertical' }"
+        >
+          <div class="settings-block">
+            <div class="settings-head">
+              <span>翻页方式</span>
+              <b>{{ transitionLabel }}</b>
+            </div>
+            <MdSegmentedControl
+              :model-value="settings.transitionStyle"
+              :options="transitionOptions"
+              aria-label="翻页方式"
+              @update:model-value="settings.setTransitionStyle"
+            />
+          </div>
+          <template v-if="readerDefaults.direction !== 'vertical'">
             <div class="settings-block">
               <div class="settings-head">
-                <span class="settings-title">表面</span>
-                <span class="settings-value">{{ surfaceLabel }}</span>
-              </div>
-              <SurfaceModePreview />
-            </div>
-
-            <div class="settings-block">
-              <div class="settings-head">
-                <span class="settings-title">主题色</span>
-                <span class="settings-value">{{ themeLabel }}</span>
-              </div>
-              <ThemeSwatchGrid
-                wide
-                :columns="isCompact ? 5 : 10"
-              />
-            </div>
-
-          </section>
-
-          <section id="settings-reading" class="settings-section settings-page-panel">
-            <div class="settings-section-heading">
-              <h2>阅读默认值</h2>
-              <span>首次打开作品时采用</span>
-            </div>
-
-            <div class="settings-block">
-              <div class="settings-head">
-                <span class="settings-title">翻页方式</span>
-                <span class="settings-value">{{ transitionLabel }}</span>
+                <span>阅读方向</span>
+                <b>{{ directionLabel }}</b>
               </div>
               <MdSegmentedControl
-                class="w-full"
-                :model-value="settings.transitionStyle"
-                :options="transitionOptions"
-                aria-label="翻页方式"
-                @update:model-value="settings.setTransitionStyle"
-              />
-            </div>
-
-            <div v-if="readerDefaults.direction !== 'vertical'" class="settings-block">
-              <div class="settings-head">
-                <span class="settings-title">阅读方向</span>
-                <span class="settings-value">{{ directionLabel }}</span>
-              </div>
-              <MdSegmentedControl
-                class="w-full"
                 :model-value="readerDefaults.direction"
                 :options="directionOptions"
                 aria-label="阅读方向"
                 @update:model-value="setDirection"
               />
             </div>
-
-            <div v-if="readerDefaults.direction !== 'vertical'" class="settings-block">
+            <div class="settings-block">
               <div class="settings-head">
-                <span class="settings-title">跨页布局</span>
-                <span class="settings-value">{{ spreadLabel }}</span>
+                <span>跨页布局</span>
+                <b>{{ spreadLabel }}</b>
               </div>
               <MdSegmentedControl
-                class="w-full"
                 :model-value="readerDefaults.spread"
                 :options="spreadOptions"
                 aria-label="跨页布局"
                 @update:model-value="setSpread"
               />
-              <MdSwitch
-                class="settings-value-row"
-                :model-value="readerDefaults.verticalText"
-                title="文字从上往下，各列从右往左排列，仅作用于小说分页阅读"
-                @update:model-value="value => settings.setReaderDefault('verticalText', value)"
+            </div>
+          </template>
+        </div>
+        <div class="settings-reading-bottom">
+          <div class="settings-block">
+            <div class="settings-head">
+              <span>默认字号</span>
+              <b>{{ readerDefaults.fontSize }} px</b>
+            </div>
+            <div class="font-size-control">
+              <button
+                type="button"
+                class="settings-icon-button"
+                title="减小字号"
+                aria-label="减小字号"
+                :disabled="readerDefaults.fontSize <= 14"
+                @click="changeDefaultFont(-2)"
               >
-                <span class="settings-value-copy">
-                  <b>竖排文字</b>
-                  <span>文字从上往下，各列从右往左</span>
-                </span>
-              </MdSwitch>
+                <MdIcon name="remove" />
+              </button>
+              <MdRange
+                class="settings-range"
+                :model-value="readerDefaults.fontSize"
+                :min="14"
+                :max="28"
+                :step="2"
+                aria-label="默认字号"
+                @update:model-value="setFontSize"
+              />
+              <button
+                type="button"
+                class="settings-icon-button"
+                title="增大字号"
+                aria-label="增大字号"
+                :disabled="readerDefaults.fontSize >= 28"
+                @click="changeDefaultFont(2)"
+              >
+                <MdIcon name="add" />
+              </button>
+            </div>
+          </div>
+          <MdSwitch
+            v-if="readerDefaults.direction !== 'vertical'"
+            :model-value="readerDefaults.verticalText"
+            title="文字从上往下，各列从右往左排列，仅作用于小说分页阅读"
+            @update:model-value="value => settings.setReaderDefault('verticalText', value)"
+          >
+            <span class="settings-value-copy">
+              <b>竖排文字</b>
+              <span>文字从上往下，各列从右往左</span>
+            </span>
+          </MdSwitch>
+        </div>
+        <p class="settings-detail-hint">更多阅读设置</p>
+      </section>
+      <section class="settings-card settings-storage" aria-labelledby="settings-storage-title">
+        <button
+          type="button"
+          class="settings-card-open"
+          aria-label="打开存储与数据"
+          @click="openSection('storage', $event)"
+        >
+          <span class="settings-card-open-icon">
+            <MdIcon name="chevron_right" />
+          </span>
+        </button>
+        <div class="settings-card-head">
+          <h2 id="settings-storage-title">
+            <MdIcon name="database" />
+            存储与数据
+          </h2>
+          <button
+            type="button"
+            class="settings-icon-button"
+            title="刷新存储用量"
+            aria-label="刷新存储用量"
+            :disabled="storageLoading"
+            @click="refreshStorage"
+          >
+            <MdIcon name="update" />
+          </button>
+        </div>
+        <template v-if="diskSegments">
+          <strong class="storage-number">{{ formatBytes(diskSegments.appBytes) }}</strong>
+          <p class="settings-note">HOMURA 占用 · 共 {{ storageTotalText }}</p>
+          <div
+            class="storage-stack"
+            :class="{ 'is-revealing': storageRevealing }"
+            role="img"
+            :aria-label="storageAriaLabel"
+          >
+            <i class="storage-seg storage-seg-app" :style="{ width: segmentWidth(diskSegments.appRatio) }"></i>
+            <i
+              class="storage-seg storage-seg-other"
+              :style="{ width: segmentWidth(diskSegments.otherRatio) }"
+            ></i>
+            <i class="storage-seg storage-seg-free" :style="{ width: segmentWidth(diskSegments.freeRatio) }"></i>
+          </div>
+          <div class="storage-legend">
+            <div>
+              <i class="storage-dot storage-seg-app"></i>
+              <span>HOMURA</span>
+              <b>{{ formatBytes(diskSegments.appBytes) }}</b>
+            </div>
+            <div>
+              <i class="storage-dot storage-seg-other"></i>
+              <span>其他应用</span>
+              <b>{{ formatBytes(diskSegments.otherBytes) }}</b>
+            </div>
+            <div>
+              <i class="storage-dot storage-seg-free"></i>
+              <span>可用空间</span>
+              <b>{{ formatBytes(diskSegments.freeBytes) }}</b>
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <strong class="storage-number">{{ storageUsageText }}</strong>
+          <p class="settings-note">{{ nativeStorageEnabled ? 'WebView 本地数据' : '浏览器本地数据' }}</p>
+          <div
+            class="storage-bar"
+            :class="{ 'is-revealing': storageRevealing }"
+            role="progressbar"
+            aria-label="本地存储用量"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            :aria-valuenow="storagePercent"
+          >
+            <i :style="{ width: storageBarWidth }"></i>
+          </div>
+          <p class="settings-note">{{ storageQuotaText }}</p>
+          <p v-if="nativeStorageEnabled" class="settings-note">原始文件存入本机，容量受磁盘剩余空间限制。</p>
+        </template>
+        <p class="settings-detail-hint">管理本机数据</p>
+      </section>
+      <section class="settings-card settings-about" aria-labelledby="settings-about-title">
+        <button
+          type="button"
+          class="settings-card-open"
+          aria-label="打开关于 HOMURA"
+          @click="openSection('about', $event)"
+        >
+          <span class="settings-card-open-icon">
+            <MdIcon name="chevron_right" />
+          </span>
+        </button>
+        <div class="settings-card-head">
+          <h2 id="settings-about-title">
+            <MdIcon name="info" />
+            关于 HOMURA
+          </h2>
+          <span class="settings-badge">MIT 开源</span>
+        </div>
+        <div class="about-version">
+          <img :src="logoUrl" alt="HOMURA 应用图标" />
+          <div>
+            <h3>
+              HOMURA
+              <span>{{ appVersion }}</span>
+            </h3>
+            <p class="settings-note">本地优先的 ACGN 阅读器</p>
+          </div>
+        </div>
+        <div class="settings-card-actions">
+          <button type="button" class="settings-tonal-button" @click="updates.handlePrimaryUpdateAction">{{ hasPendingInstall ? '继续安装' : '检查更新' }}</button>
+          <button type="button" class="settings-text-button" @click="updates.openChangelog">
+            更新日志
+            <i v-if="hasNewRelease" class="about-log-new" aria-label="有新版本"></i>
+          </button>
+        </div>
+        <button type="button" class="settings-text-button about-repository" @click="openRepository">
+          开源仓库
+          <MdIcon name="open_in_new" />
+        </button>
+        <p v-if="aboutLinkError" class="settings-note" role="alert">{{ aboutLinkError }}</p>
+      </section>
+      <section class="settings-card settings-import" aria-labelledby="settings-import-title">
+        <button
+          type="button"
+          class="settings-card-open"
+          aria-label="打开导入偏好"
+          @click="openSection('import', $event)"
+        >
+          <span class="settings-card-open-icon">
+            <MdIcon name="chevron_right" />
+          </span>
+        </button>
+        <div class="settings-card-head">
+          <h2 id="settings-import-title">
+            <MdIcon name="upload_file" />
+            导入偏好
+          </h2>
+        </div>
+        <MdSwitch
+          :model-value="settings.importCollectionPrompt"
+          title="导入多本作品时询问是否创建书库"
+          @update:model-value="settings.setImportCollectionPrompt"
+        >
+          <span class="settings-value-copy">
+            <b>导入时询问创建书库</b>
+            <span>按目录整理，一次归好类。</span>
+          </span>
+        </MdSwitch>
+        <p class="settings-note">{{ settings.importCollectionPrompt ? '导入多本作品时，按目录询问' : '默认直接导入' }}</p>
+      </section>
+      <section class="settings-card settings-debug" aria-labelledby="settings-debug-title">
+        <button
+          type="button"
+          class="settings-card-open"
+          aria-label="打开调试设置"
+          @click="openSection('debug', $event)"
+        >
+          <span class="settings-card-open-icon">
+            <MdIcon name="chevron_right" />
+          </span>
+        </button>
+        <div class="settings-card-head">
+          <h2 id="settings-debug-title">
+            <MdIcon name="science" />
+            调试
+          </h2>
+        </div>
+        <p class="settings-debug-copy">调试与实验功能</p>
+        <p class="settings-note">自动检查更新、全屏入口与示例内容。</p>
+        <p class="settings-detail-hint">打开调试设置</p>
+      </section>
+    </div>
+    <div v-else class="settings-detail">
+      <template v-if="activeSection === 'appearance'">
+        <div class="settings-detail-hero settings-surface-hero">
+          <SettingsInterfacePreview />
+        </div>
+        <section class="settings-detail-group" aria-labelledby="settings-surface-heading">
+          <h2 id="settings-surface-heading">
+            <MdIcon name="light_mode" />
+            表面模式
+          </h2>
+          <div class="settings-list" role="group" aria-label="表面模式">
+            <button
+              v-for="option in detailSurfaceOptions"
+              :key="option.value"
+              type="button"
+              class="settings-list-row settings-surface-row"
+              :aria-pressed="theme.surfaceMode === option.value"
+              @click="selectSurfaceMode(option.value, $event)"
+            >
+              <SettingsInterfacePreview :mode="option.value" thumbnail />
+              <span class="settings-value-copy">
+                <b>{{ option.label }}</b>
+                <span>{{ option.description }}</span>
+              </span>
+              <MdIcon v-if="theme.surfaceMode === option.value" name="check" class="settings-row-check" />
+            </button>
+          </div>
+          <p class="settings-detail-note">更改即时应用到整个应用，也会自动保存。</p>
+        </section>
+        <section class="settings-detail-group" aria-labelledby="settings-black-heading">
+          <h2 id="settings-black-heading">
+            <MdIcon name="contrast" />
+            纯黑模式
+          </h2>
+          <div class="settings-list" role="group" aria-label="纯黑模式">
+            <button
+              v-for="option in pureBlackOptions"
+              :key="option.black"
+              type="button"
+              class="settings-list-row settings-surface-row"
+              :aria-pressed="theme.pureBlackMode === option.value"
+              @click="selectPureBlackMode(option.value, $event)"
+            >
+              <SettingsInterfacePreview mode="dark" :black="option.black" thumbnail />
+              <span class="settings-value-copy">
+                <b>{{ option.label }}</b>
+              </span>
+              <MdIcon v-if="theme.pureBlackMode === option.value" name="check" class="settings-row-check" />
+            </button>
+          </div>
+          <p class="settings-detail-note">仅在夜间模式下生效，跟随系统时也会自动应用。</p>
+        </section>
+        <section class="settings-detail-group" aria-labelledby="settings-colors-heading">
+          <h2 id="settings-colors-heading">
+            <MdIcon name="palette" />
+            主题色彩
+            <span class="settings-color-name">{{ themeLabel }}</span>
+          </h2>
+          <div class="settings-list settings-color-strip">
+            <ThemeSwatchGrid strip />
+          </div>
+        </section>
+      </template>
+      <template v-else-if="activeSection === 'reading'">
+        <div class="settings-detail-hero settings-reading-hero">
+          <div class="settings-book-stage" aria-hidden="true">
+            <div class="settings-open-book">
+              <div class="settings-book-page">
+                <b>夏日的序章</b>
+                <p>
+                  风穿过敞开的窗，
+                  <br />
+                  书页轻轻翻动。
+                </p>
+                <i v-for="line in 5" :key="line"></i>
+                <span>12</span>
+              </div>
+              <div class="settings-book-page">
+                <i v-for="line in 9" :key="line"></i>
+                <span>13</span>
+              </div>
+            </div>
+          </div>
+          <div class="settings-hero-copy">
+            <span class="settings-badge">阅读示意</span>
+            <h2>找到舒服的阅读节奏</h2>
+            <p>首次打开作品时，从这里开始。</p>
+          </div>
+        </div>
+        <section class="settings-detail-group" aria-labelledby="settings-layout-heading">
+          <h2 id="settings-layout-heading">翻页与布局</h2>
+          <div class="settings-list">
+            <SettingsSelectRow
+              label="翻页方式"
+              :model-value="settings.transitionStyle"
+              :options="transitionOptions"
+              @update:model-value="settings.setTransitionStyle"
+            />
+            <template v-if="readerDefaults.direction !== 'vertical'">
+              <SettingsSelectRow
+                label="阅读方向"
+                :model-value="readerDefaults.direction"
+                :options="directionOptions"
+                @update:model-value="setDirection"
+              />
+              <SettingsSelectRow
+                label="跨页布局"
+                :model-value="readerDefaults.spread"
+                :options="spreadOptions"
+                @update:model-value="setSpread"
+              />
               <MdSwitch
                 v-if="readerDefaults.spread === 2"
-                class="settings-value-row"
+                class="settings-list-row"
                 :model-value="readerDefaults.coverOffset"
                 title="让后续跨页大图保持对齐"
                 @update:model-value="value => settings.setReaderDefault('coverOffset', value)"
@@ -151,12 +480,27 @@
                   <span>让后续跨页大图保持对齐</span>
                 </span>
               </MdSwitch>
-            </div>
-
-            <div class="settings-block">
+              <MdSwitch
+                class="settings-list-row"
+                :model-value="readerDefaults.verticalText"
+                title="文字从上往下，各列从右往左排列，仅作用于小说分页阅读"
+                @update:model-value="value => settings.setReaderDefault('verticalText', value)"
+              >
+                <span class="settings-value-copy">
+                  <b>竖排文字</b>
+                  <span>文字从上往下，各列从右往左</span>
+                </span>
+              </MdSwitch>
+            </template>
+          </div>
+        </section>
+        <section class="settings-detail-group" aria-labelledby="settings-text-heading">
+          <h2 id="settings-text-heading">文字与滚动</h2>
+          <div class="settings-list">
+            <div class="settings-detail-font">
               <div class="settings-head">
-                <span class="settings-title">默认字号</span>
-                <span class="settings-value">{{ readerDefaults.fontSize }} px</span>
+                <span>默认字号</span>
+                <b>{{ readerDefaults.fontSize }} px</b>
               </div>
               <div class="font-size-control">
                 <button
@@ -190,142 +534,127 @@
                 </button>
               </div>
             </div>
-
-            <div class="settings-block">
-              <div class="settings-head">
-                <span class="settings-title">滚动宽度</span>
-                <span class="settings-value">{{ webtoonFitLabel }}</span>
-              </div>
-              <MdSegmentedControl
-                class="w-full"
-                :model-value="readerDefaults.webtoonFit"
-                :options="webtoonOptions"
-                aria-label="滚动宽度"
-                @update:model-value="value => settings.setReaderDefault('webtoonFit', value)"
-              />
-            </div>
-
-            <div v-if="isAndroid" class="settings-block">
-              <div class="settings-head">
-                <span class="settings-title">音量键翻页</span>
-                <span class="settings-value">{{ settings.volumeKeysTurnPage ? '已开启' : '已关闭' }}</span>
-              </div>
-              <MdSwitch
-                :model-value="settings.volumeKeysTurnPage"
-                title="音量加键上一页、音量减键下一页"
-                @update:model-value="settings.setVolumeKeysTurnPage"
-              >
-                <span class="settings-value-copy">
-                  <b>用音量键翻页</b>
-                  <span>全局生效；音量加键上一页、音量减键下一页，关闭后音量键照常调节系统音量。</span>
-                </span>
-              </MdSwitch>
-            </div>
-
-            <button type="button" class="settings-reset-button" @click="settings.resetReaderDefaults">
-              恢复阅读默认值
-            </button>
-          </section>
-        </template>
-
-        <section
-          v-else-if="activeSection === 'storage'"
-          id="settings-storage"
-          class="settings-section settings-page-panel"
-        >
-          <div class="settings-section-heading">
-            <h2>存储与数据</h2>
-            <span>{{ diskSegments ? '磁盘空间' : 'WebView 本地数据' }}</span>
-          </div>
-
-          <div class="settings-block">
-            <template v-if="diskSegments">
-              <div class="storage-disk-head">
-                <div class="storage-disk-total">
-                  <strong>{{ storageTotalText }}</strong>
-                  <span>磁盘总容量</span>
-                </div>
-                <div class="storage-disk-meta">
-                  已用 {{ storageUsedText }}<template v-if="storageUsedPercentText"> · {{ storageUsedPercentText }}</template>
-                </div>
-              </div>
-              <div
-                class="storage-stack"
-                :class="{ 'is-revealing': storageRevealing }"
-                role="img"
-                :aria-label="storageAriaLabel"
-              >
-                <i class="storage-seg storage-seg-app" :style="{ width: segmentWidth(diskSegments.appRatio) }"></i>
-                <i class="storage-seg storage-seg-other" :style="{ width: segmentWidth(diskSegments.otherRatio) }"></i>
-                <i class="storage-seg storage-seg-free" :style="{ width: segmentWidth(diskSegments.freeRatio) }"></i>
-              </div>
-              <div class="storage-legend">
-                <div class="storage-legend-item">
-                  <span class="storage-dot storage-seg-app"></span>
-                  <b>HOMURA</b>
-                  <em>{{ formatBytes(diskSegments.appBytes) }}</em>
-                </div>
-                <div class="storage-legend-item">
-                  <span class="storage-dot storage-seg-other"></span>
-                  <b>其他应用</b>
-                  <em>{{ formatBytes(diskSegments.otherBytes) }}</em>
-                </div>
-                <div class="storage-legend-item">
-                  <span class="storage-dot storage-seg-free"></span>
-                  <b>剩余可用</b>
-                  <em>{{ formatBytes(diskSegments.freeBytes) }}</em>
-                </div>
-              </div>
-              <div class="storage-detail-row">
-                <span>书库原始文件与缓存</span>
-                <b>{{ storageNativeText }}</b>
-              </div>
-              <div class="storage-detail-row">
-                <span>WebView 本地数据</span>
-                <b>{{ storageWebviewText }}</b>
-              </div>
-              <p class="storage-hint">原始文件存入本地 AppData，容量只受磁盘剩余空间限制。</p>
-            </template>
-            <div v-else class="storage-overview">
-              <strong>{{ storageUsageText }}</strong>
-              <span>{{ storageQuotaText }}</span>
-              <div
-                class="storage-bar"
-                :class="{ 'is-revealing': storageRevealing }"
-                role="progressbar"
-                aria-label="本地存储用量"
-                aria-valuemin="0"
-                aria-valuemax="100"
-                :aria-valuenow="storagePercent"
-              >
-                <i :style="{ width: storageBarWidth }"></i>
-              </div>
-              <p v-if="nativeStorageEnabled" class="storage-hint">
-                原始文件存入本地 AppData，导入容量受磁盘剩余空间限制。
-              </p>
-            </div>
-          </div>
-
-          <div class="settings-block">
-            <div class="settings-head">
-              <span class="settings-title">导入书库</span>
-              <span class="settings-value">{{ settings.importCollectionPrompt ? '按目录询问' : '已关闭' }}</span>
-            </div>
+            <SettingsSelectRow
+              label="滚动宽度"
+              :model-value="readerDefaults.webtoonFit"
+              :options="webtoonOptions"
+              @update:model-value="value => settings.setReaderDefault('webtoonFit', value)"
+            />
             <MdSwitch
-              :model-value="settings.importCollectionPrompt"
-              title="导入多本作品时询问是否创建书库"
-              @update:model-value="settings.setImportCollectionPrompt"
+              v-if="isAndroid"
+              class="settings-list-row"
+              :model-value="settings.volumeKeysTurnPage"
+              title="音量加键上一页、音量减键下一页"
+              @update:model-value="settings.setVolumeKeysTurnPage"
             >
               <span class="settings-value-copy">
-                <b>导入时询问创建书库</b>
-                <span>默认直接导入；开启后，目录导入会先询问是否按目录创建一级书库。</span>
+                <b>用音量键翻页</b>
+                <span>音量加键上一页、音量减键下一页</span>
               </span>
             </MdSwitch>
           </div>
-
-          <div class="settings-block settings-data-list">
-            <div class="settings-data-row">
-              <span class="settings-data-copy">
+          <p class="settings-detail-note">每本书已有的阅读位置与排版记忆会继续保留。</p>
+        </section>
+        <button type="button" class="settings-text-button" @click="settings.resetReaderDefaults">恢复阅读默认值</button>
+      </template>
+      <template v-else-if="activeSection === 'storage'">
+        <div class="settings-detail-hero settings-storage-hero">
+          <div class="settings-storage-hero-head">
+            <span>本机存储用量</span>
+            <button
+              type="button"
+              class="settings-icon-button"
+              title="刷新存储用量"
+              aria-label="刷新存储用量"
+              :disabled="storageLoading"
+              @click="refreshStorage"
+            >
+              <MdIcon name="update" />
+            </button>
+          </div>
+          <template v-if="diskSegments">
+            <strong class="storage-number">{{ formatBytes(diskSegments.appBytes) }}</strong>
+            <p class="settings-note">HOMURA 占用 · 共 {{ storageTotalText }}</p>
+            <div
+              class="storage-stack"
+              :class="{ 'is-revealing': storageRevealing }"
+              role="img"
+              :aria-label="storageAriaLabel"
+            >
+              <i class="storage-seg storage-seg-app" :style="{ width: segmentWidth(diskSegments.appRatio) }"></i>
+              <i
+                class="storage-seg storage-seg-other"
+                :style="{ width: segmentWidth(diskSegments.otherRatio) }"
+              ></i>
+              <i
+                class="storage-seg storage-seg-free"
+                :style="{ width: segmentWidth(diskSegments.freeRatio) }"
+              ></i>
+            </div>
+            <div class="storage-legend">
+              <div>
+                <i class="storage-dot storage-seg-app"></i>
+                <span>HOMURA</span>
+                <b>{{ formatBytes(diskSegments.appBytes) }}</b>
+              </div>
+              <div>
+                <i class="storage-dot storage-seg-other"></i>
+                <span>其他应用</span>
+                <b>{{ formatBytes(diskSegments.otherBytes) }}</b>
+              </div>
+              <div>
+                <i class="storage-dot storage-seg-free"></i>
+                <span>可用空间</span>
+                <b>{{ formatBytes(diskSegments.freeBytes) }}</b>
+              </div>
+            </div>
+          </template>
+          <template v-else>
+            <strong class="storage-number">{{ storageUsageText }}</strong>
+            <p class="settings-note">{{ nativeStorageEnabled ? 'WebView 本地数据' : '浏览器本地数据' }}</p>
+            <div
+              class="storage-bar"
+              :class="{ 'is-revealing': storageRevealing }"
+              role="progressbar"
+              aria-label="本地存储用量"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              :aria-valuenow="storagePercent"
+            >
+              <i :style="{ width: storageBarWidth }"></i>
+            </div>
+            <p class="settings-note">{{ storageQuotaText }}</p>
+            <p v-if="nativeStorageEnabled" class="settings-note">原始文件存入本机，容量受磁盘剩余空间限制。</p>
+          </template>
+        </div>
+        <section v-if="diskSegments" class="settings-detail-group" aria-labelledby="settings-usage-heading">
+          <h2 id="settings-usage-heading">本机用量</h2>
+          <div class="settings-list">
+            <div class="settings-list-row">
+              <span class="settings-row-icon">
+                <MdIcon name="folder_open" />
+              </span>
+              <span class="settings-value-copy">
+                <b>原始文件与缓存</b>
+              </span>
+              <b class="settings-row-value">{{ storageNativeText }}</b>
+            </div>
+            <div class="settings-list-row">
+              <span class="settings-row-icon">
+                <MdIcon name="database" />
+              </span>
+              <span class="settings-value-copy">
+                <b>WebView 本地数据</b>
+              </span>
+              <b class="settings-row-value">{{ storageWebviewText }}</b>
+            </div>
+          </div>
+        </section>
+        <section class="settings-detail-group" aria-labelledby="settings-data-heading">
+          <h2 id="settings-data-heading">数据管理</h2>
+          <div class="settings-list">
+            <div class="settings-list-row">
+              <span class="settings-value-copy">
                 <b>阅读进度</b>
                 <span>{{ progressCount }} 本作品保留阅读位置与排版</span>
               </span>
@@ -334,188 +663,190 @@
                 class="settings-text-button"
                 :disabled="progressCount === 0 || actionBusy"
                 @click="requestDataAction('progress')"
-              >清空进度</button>
+              >
+                清空进度
+              </button>
             </div>
-            <div class="settings-data-row">
-              <span class="settings-data-copy">
+            <div class="settings-list-row">
+              <span class="settings-value-copy">
                 <b>书架与原始文件</b>
-                <span>{{ shelf.library.length }} 部作品，删除后无法从 HOMURA 恢复</span>
+                <span>{{ shelf.library.length }} 部作品，删除后无法恢复</span>
               </span>
               <button
                 type="button"
                 class="settings-text-button"
                 :disabled="shelf.library.length === 0 || actionBusy"
                 @click="requestDataAction('shelf')"
-              >清空书架</button>
+              >
+                清空书架
+              </button>
             </div>
           </div>
-          <p v-if="actionNote" class="settings-action-note" role="status">{{ actionNote }}</p>
+          <p class="settings-detail-note">清空前会再次确认。删除书架会同时删除原始文件与阅读记录。</p>
+          <p v-if="actionNote" class="settings-detail-note" role="status">{{ actionNote }}</p>
         </section>
-
-        <section
-          v-else-if="activeSection === 'debug'"
-          id="settings-debug"
-          class="settings-section settings-page-panel"
-        >
-          <div class="settings-section-heading">
-            <h2>调试</h2>
-            <span>仅保存在本机</span>
+      </template>
+      <template v-else-if="activeSection === 'about'">
+        <div class="settings-detail-hero settings-about-hero">
+          <img :src="logoUrl" alt="HOMURA 应用图标" />
+          <h2>HOMURA</h2>
+          <span class="settings-badge">{{ appVersion }}</span>
+          <p>把故事留在本机，把阅读留给自己。</p>
+          <p class="settings-note">
+            漫画、轻小说与图集都在设备内解析。
+            <br />
+            作品与阅读记录不上传服务器。
+          </p>
+        </div>
+        <section class="settings-detail-group" aria-labelledby="settings-update-heading">
+          <h2 id="settings-update-heading">版本与更新</h2>
+          <div class="settings-list">
+            <button type="button" class="settings-list-row" @click="updates.handlePrimaryUpdateAction">
+              <span class="settings-row-icon">
+                <MdIcon name="update" />
+              </span>
+              <span class="settings-value-copy">
+                <b>{{ hasPendingInstall ? '继续安装' : '检查更新' }}</b>
+              </span>
+              <span class="settings-row-value">{{ hasPendingInstall ? '安装包已就绪' : '手动检查' }}</span>
+              <MdIcon name="chevron_right" />
+            </button>
+            <button type="button" class="settings-list-row" @click="updates.openChangelog">
+              <span class="settings-row-icon">
+                <MdIcon name="article" />
+              </span>
+              <span class="settings-value-copy">
+                <b>更新日志</b>
+              </span>
+              <i v-if="hasNewRelease" class="about-log-new" aria-label="有新版本"></i>
+              <MdIcon name="chevron_right" />
+            </button>
           </div>
-
-          <div class="settings-block">
-            <div class="settings-head">
-              <span class="settings-title">自动检测更新</span>
-              <span class="settings-value">{{ settings.debugAutoUpdateCheck ? '启动时检查' : '已关闭' }}</span>
+        </section>
+        <section class="settings-detail-group" aria-labelledby="settings-open-source-heading">
+          <h2 id="settings-open-source-heading">开源信息</h2>
+          <div class="settings-list">
+            <button type="button" class="settings-list-row" @click="openRepository">
+              <span class="settings-row-icon">
+                <MdIcon name="open_in_new" />
+              </span>
+              <span class="settings-value-copy">
+                <b>开源仓库</b>
+              </span>
+              <span class="settings-row-value">GitHub</span>
+              <MdIcon name="chevron_right" />
+            </button>
+            <div class="settings-list-row">
+              <span class="settings-row-icon">
+                <MdIcon name="info" />
+              </span>
+              <span class="settings-value-copy">
+                <b>开源许可</b>
+              </span>
+              <span class="settings-row-value">MIT License</span>
             </div>
+          </div>
+          <p class="settings-detail-note">© Leo NING · AkisameRin</p>
+          <p v-if="aboutLinkError" class="settings-detail-note" role="alert">{{ aboutLinkError }}</p>
+        </section>
+      </template>
+      <template v-else-if="activeSection === 'import'">
+        <div class="settings-detail-hero settings-import-hero">
+          <div class="settings-import-diagram" aria-hidden="true">
+            <span class="settings-import-folder">
+              <MdIcon name="folder_open" />
+            </span>
+            <MdIcon name="chevron_right" />
+            <span class="settings-import-books">
+              <i></i>
+              <i></i>
+              <i></i>
+            </span>
+          </div>
+          <h2>让作品，井井有条</h2>
+          <p>从文件夹到书库，保留你熟悉的整理方式。</p>
+        </div>
+        <section class="settings-detail-group" aria-labelledby="settings-import-behavior-heading">
+          <h2 id="settings-import-behavior-heading">导入行为</h2>
+          <div class="settings-list">
             <MdSwitch
+              class="settings-list-row"
+              :model-value="settings.importCollectionPrompt"
+              title="导入多本作品时询问是否创建书库"
+              @update:model-value="settings.setImportCollectionPrompt"
+            >
+              <span class="settings-value-copy">
+                <b>导入时询问创建书库</b>
+                <span>导入多本作品时，按目录询问</span>
+              </span>
+            </MdSwitch>
+          </div>
+          <p class="settings-detail-note">关闭后直接导入作品；开启后，目录导入会先询问是否按目录创建一级书库。</p>
+        </section>
+        <p class="settings-quiet-note">偏好会自动保存，仅影响之后的导入。</p>
+      </template>
+      <template v-else-if="activeSection === 'debug'">
+        <section class="settings-detail-group" aria-labelledby="settings-debug-general-heading">
+          <h2 id="settings-debug-general-heading">更新与界面</h2>
+          <div class="settings-list">
+            <MdSwitch
+              class="settings-list-row"
               :model-value="settings.debugAutoUpdateCheck"
               title="启动时自动检查 GitHub 稳定版更新"
               @update:model-value="settings.setDebugAutoUpdateCheck"
             >
               <span class="settings-value-copy">
-                <b>启动时静默检查</b>
-                <span>默认关闭；开启后启动时静默请求更新信息，「关于」页始终可手动检查。</span>
+                <b>启动时静默检查更新</b>
+                <span>启动时请求官方稳定版更新信息</span>
               </span>
             </MdSwitch>
-          </div>
-
-          <div class="settings-block">
-            <div class="settings-head">
-              <span class="settings-title">全屏入口</span>
-              <span class="settings-value">{{ isWindows ? 'Windows · 默认显示' : '非 Windows · 默认隐藏' }}</span>
-            </div>
             <MdSwitch
+              class="settings-list-row"
               :model-value="settings.debugForceFullscreen"
               title="在非 Windows 系统也显示全屏入口"
               @update:model-value="settings.setDebugForceFullscreen"
             >
               <span class="settings-value-copy">
                 <b>强制显示全屏组件</b>
-                <span>在阅读器与主页顶栏显示全屏按钮，不受系统限制。</span>
+                <span>{{ isWindows ? 'Windows 默认显示' : '在非 Windows 系统也显示全屏入口' }}</span>
               </span>
             </MdSwitch>
           </div>
-
-          <p class="settings-action-note">关闭后恢复系统默认策略：仅 Windows 显示全屏组件。</p>
-
-          <div class="settings-block">
-            <div class="settings-head">
-              <span class="settings-title">示例内容</span>
-              <span class="settings-value">仅加入本机书架</span>
-            </div>
-            <div class="settings-data-list">
-              <div class="settings-data-row">
-                <span class="settings-data-copy">
-                  <b>示例漫画</b>
-                  <span>6 页分镜样张，用于检查单双页、日漫方向与滚动阅读。</span>
-                </span>
-                <button type="button" class="settings-text-button" @click="addDemoManga">添加</button>
-              </div>
-              <div class="settings-data-row">
-                <span class="settings-data-copy">
-                  <b>示例小说</b>
-                  <span>2 章 EPUB 样张，用于检查字号、分页与进度恢复。</span>
-                </span>
-                <button type="button" class="settings-text-button" @click="addDemoNovel">添加</button>
-              </div>
-            </div>
-          </div>
-
-          <p v-if="debugNote" class="settings-action-note" role="status">{{ debugNote }}</p>
+          <p class="settings-detail-note">这些调试偏好只保存在此设备。</p>
         </section>
-
-        <section
-          v-else
-          id="settings-about"
-          class="settings-section settings-page-panel"
-        >
-          <div class="settings-section-heading">
-            <h2>关于</h2>
-            <span>版本、更新与开源信息</span>
-          </div>
-          <div class="about-hero">
-            <div class="about-cover">
-              <div class="about-cover-top">
-                <img class="about-logo" :src="logoUrl" alt="HOMURA 应用图标" />
-                <div class="about-brand-copy">
-                  <div class="about-eyebrow">LOCAL-FIRST ACGN READER</div>
-                  <h3 class="about-wordmark">HOMURA</h3>
-                </div>
-              </div>
-              <div class="about-cover-meta">
-                <span class="about-version-badge">v{{ appVersion }}</span>
-                <span>稳定版</span>
-                <span class="about-local-label"><i aria-hidden="true"></i>本机数据</span>
-              </div>
-              <p class="about-cover-note">PRIVATE LIBRARY<br />NO CLOUD REQUIRED</p>
+        <section class="settings-detail-group" aria-labelledby="settings-demo-heading">
+          <h2 id="settings-demo-heading">示例内容</h2>
+          <div class="settings-list">
+            <div class="settings-list-row">
+              <span class="settings-row-icon">
+                <MdIcon name="auto_stories" />
+              </span>
+              <span class="settings-value-copy">
+                <b>示例漫画</b>
+                <span>6 页分镜样张，检查单双页、日漫方向与滚动阅读。</span>
+              </span>
+              <button type="button" class="settings-text-button" @click="addDemoManga">添加漫画</button>
             </div>
-
-            <div class="about-story">
-              <p class="about-tagline">把故事留在本机，<br /><em>把阅读留给自己。</em></p>
-              <p class="about-description">漫画、轻小说与图集的解析、分页和阅读记录都在设备内完成，不上传任何服务器。</p>
-
-              <div class="about-actions">
-                <button type="button" class="about-update-button" @click="updates.handlePrimaryUpdateAction">
-                  <MdIcon name="update" />
-                  {{ hasPendingInstall ? '继续安装' : '检查更新' }}
-                </button>
-                <button type="button" class="about-log-button" @click="updates.openChangelog">
-                  <MdIcon name="article" />
-                  更新日志
-                  <span v-if="hasNewRelease" class="about-log-new" aria-label="有新版本"></span>
-                </button>
-              </div>
-
-              <div class="about-foot">
-                <span>本地优先</span><i></i>
-                <span>无云端依赖</span><i></i>
-                <span>Tauri 2 + Vue 3</span>
-                <button type="button" @click="openRepository">开源仓库 ↗</button>
-              </div>
-              <p v-if="aboutLinkError" class="about-link-error" role="alert">{{ aboutLinkError }}</p>
+            <div class="settings-list-row">
+              <span class="settings-row-icon">
+                <MdIcon name="article" />
+              </span>
+              <span class="settings-value-copy">
+                <b>示例小说</b>
+                <span>2 章 EPUB 样张，检查字号、分页与进度恢复。</span>
+              </span>
+              <button type="button" class="settings-text-button" @click="addDemoNovel">添加小说</button>
             </div>
           </div>
+          <p class="settings-detail-note">示例只会加入本机书架，不会替换已有作品。</p>
+          <p v-if="debugNote" class="settings-detail-note" role="status">{{ debugNote }}</p>
         </section>
-      </main>
-
-      <aside v-if="activeSection === 'appearance'" class="settings-preview" aria-label="阅读预览">
-        <div class="settings-preview-head">
-          <h3>阅读预览</h3>
-          <span>{{ spreadLabel }} · {{ readerDefaults.fontSize }}px</span>
-        </div>
-        <div class="settings-book-stage">
-          <div
-            class="settings-open-book"
-            :class="{
-              'is-single': previewSinglePage,
-              'is-rtl': readerDefaults.direction === 'rtl',
-              'is-vertical': readerDefaults.direction === 'vertical'
-            }"
-          >
-            <div class="settings-book-page is-left">
-              <div class="settings-book-kicker">CHAPTER 03</div>
-              <div class="settings-book-art" aria-hidden="true"></div>
-              <h3 class="settings-book-title">星降之夜的<br />观测者</h3>
-              <p class="settings-book-subtitle">风穿过书架，也穿过没有睡意的夜晚。</p>
-              <span class="settings-book-page-no">036</span>
-            </div>
-            <div class="settings-book-page is-right">
-              <p class="settings-book-copy" :style="previewCopyStyle">她把最后一册放回木架，窗外的城市已经沉进深蓝色的雾里。</p>
-              <p class="settings-book-copy" :style="previewCopyStyle">远处有一座亮着灯的塔。每当纸页翻动，那束光就轻轻晃一下，像在回答一段只有书才听得见的暗号。</p>
-              <p class="settings-book-copy" :style="previewCopyStyle">于是她关掉台灯，任月光落在未完的那一页上。</p>
-              <span class="settings-book-page-no">037</span>
-            </div>
-          </div>
-        </div>
-        <div class="settings-preview-meta">
-          <span>{{ themeLabel }}</span><i></i>
-          <span>{{ surfaceLabel }}</span><i></i>
-          <span>{{ layoutPreviewLabel }}</span>
-        </div>
-        <p class="settings-preview-note">设置会被记住。每本书首次打开时，从这里开始。</p>
-      </aside>
+      </template>
     </div>
-
+    <footer class="settings-footer">
+      <span>阅读记录与作品，只保存在此设备。</span>
+      <span>HOMURA · ACGN GO</span>
+    </footer>
     <Teleport to="body">
       <Transition
         enter-active-class="settings-dialog-enter-active"
@@ -525,11 +856,7 @@
         leave-from-class="settings-dialog-leave-from"
         leave-to-class="settings-dialog-leave-to"
       >
-        <div
-          v-if="pendingAction"
-          class="settings-dialog-layer"
-          @mousedown.self="closeDataDialog"
-        >
+        <div v-if="pendingAction" class="settings-dialog-layer" @mousedown.self="closeDataDialog">
           <section
             class="settings-dialog"
             role="alertdialog"
@@ -550,25 +877,28 @@
                 class="settings-dialog-button is-secondary"
                 :disabled="actionBusy"
                 @click="closeDataDialog"
-              >取消</button>
+              >
+                取消
+              </button>
               <button
                 ref="confirmButtonRef"
                 type="button"
                 class="settings-dialog-button is-primary"
                 :disabled="actionBusy"
                 @click="confirmDataAction"
-              >{{ actionBusy ? '正在清空' : '确认清空' }}</button>
+              >
+                {{ actionBusy ? '正在清空' : '确认清空' }}
+              </button>
             </div>
           </section>
         </div>
       </Transition>
     </Teleport>
-
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import packageInfo from '../../package.json';
 import { createDemoManga, createDemoNovel } from '../services/demo.ts';
@@ -579,7 +909,6 @@ import type { DiskStorageStats } from '../services/storageStats.ts';
 import { formatBytes, isAndroid, isWindows } from '../services/platform.ts';
 import { openGitHubUrl } from '../services/external.ts';
 import { REPOSITORY_URL } from '../services/updates.ts';
-import { scrollAppToTop } from '../services/utils.ts';
 import { useShelfStore } from '../stores/shelf.ts';
 import { useSettingsStore } from '../stores/settings.ts';
 import {
@@ -596,8 +925,10 @@ import MdIcon from './MdIcon.vue';
 import MdRange from './MdRange.vue';
 import MdSegmentedControl from './MdSegmentedControl.vue';
 import MdSwitch from './MdSwitch.vue';
-import SurfaceModePreview from './SurfaceModePreview.vue';
 import ThemeSwatchGrid from './ThemeSwatchGrid.vue';
+import SettingsInterfacePreview from './SettingsInterfacePreview.vue';
+import SettingsSelectRow from './SettingsSelectRow.vue';
+import { scrollAppToTop } from '../services/utils.ts';
 
 const logoUrl = import.meta.env.BASE_URL + 'favicon.png';
 const shelf = useShelfStore();
@@ -626,56 +957,40 @@ const webtoonOptions = [
   { value: 'wide', label: WEBTOON_FIT_LABELS.wide }
 ];
 
-const sections = [
-  { key: 'appearance', label: '外观与阅读', shortLabel: '外观', icon: 'palette' },
-  { key: 'storage', label: '存储与数据', shortLabel: '存储', icon: 'database' },
-  { key: 'debug', label: '调试', shortLabel: '调试', icon: 'science' },
-  { key: 'about', label: '关于 HOMURA', shortLabel: '关于', icon: 'info' }
-];
-const activeSection = ref('appearance');
-
-const sectionNavRef = ref<HTMLElement | null>(null);
-const sectionIndicatorReady = ref(false);
-const sectionIndicator = ref({ x: 0, y: 0, width: 0, height: 0 });
-const sectionIndicatorStyle = computed(() => ({
-  transform: `translate3d(${sectionIndicator.value.x}px, ${sectionIndicator.value.y}px, 0)`,
-  width: `${sectionIndicator.value.width}px`,
-  height: `${sectionIndicator.value.height}px`
-}));
-
-let sectionMeasureFrame = 0;
-
-function measureSectionIndicator() {
-  const nav = sectionNavRef.value!;
-  const active = nav?.querySelector('.settings-section-link.is-active');
-  if (!active) return;
-  const navRect = nav.getBoundingClientRect();
-  const activeRect = active.getBoundingClientRect();
-  sectionIndicator.value = {
-    x: activeRect.left - navRect.left + nav.scrollLeft,
-    y: activeRect.top - navRect.top + nav.scrollTop,
-    width: activeRect.width,
-    height: activeRect.height
+const emit = defineEmits(['detail-change']);
+const sectionTitles = {
+  appearance: '外观', reading: '阅读默认值', storage: '存储与数据',
+  about: '关于 HOMURA', import: '导入偏好', debug: '调试'
+};
+type SettingsSection = keyof typeof sectionTitles;
+const activeSection = ref<SettingsSection | null>(null);
+const backButtonRef = shallowRef<HTMLButtonElement | null>(null);
+const sectionHistory: {
+  section: SettingsSection | null;
+  scrollTop: number;
+  trigger: HTMLElement;
+  selector: string;
+}[] = [];
+const detailSurfaceOptions = ['auto', 'light', 'dark'].map(value => {
+  const option = SURFACE_MODE_OPTIONS.find(item => item.value === value)!;
+  return {
+    ...option,
+    label: value === 'auto' ? '跟随系统' : option.label,
+    description: value === 'auto' ? '自动适应系统的深浅色' : value === 'light' ? '明亮、清爽的阅读界面' : '柔和低光，留给安静的夜晚'
   };
-  if (!sectionIndicatorReady.value) {
-    requestAnimationFrame(() => {
-      sectionIndicatorReady.value = true;
-    });
-  }
-}
-
-function scheduleSectionMeasure() {
-  cancelAnimationFrame(sectionMeasureFrame);
-  sectionMeasureFrame = requestAnimationFrame(measureSectionIndicator);
-}
+});
+const pureBlackOptions = [
+  { value: false, label: '标准', black: 'standard' },
+  { value: true, label: '纯黑', black: 'pure' }
+];
+const surfaceOptions = SURFACE_MODE_OPTIONS.map(option => ({
+  ...option,
+  label: option.value === 'auto' ? '跟随系统' : option.label
+}));
 
 const themeLabel = computed(() => {
   const option = THEME_OPTIONS.find(item => item.name === theme.themeColor);
   return option ? option.title.replace(' (默认)', '') : theme.themeColor;
-});
-const surfaceLabel = computed(() => {
-  const option = SURFACE_MODE_OPTIONS.find(item => item.value === theme.surfaceMode);
-  return option ? option.label : theme.surfaceMode;
 });
 const transitionLabel = computed(() => TRANSITION_LABELS[settings.transitionStyle] || '');
 const directionLabel = computed(() => {
@@ -683,18 +998,6 @@ const directionLabel = computed(() => {
   return option ? option.label : '';
 });
 const spreadLabel = computed(() => readerDefaults.spread === 2 ? '双页' : '单页');
-const webtoonFitLabel = computed(() => (WEBTOON_FIT_LABELS as Record<string, string>)[readerDefaults.webtoonFit as string] || '');
-const previewSinglePage = computed(() =>
-  readerDefaults.spread === 1 || readerDefaults.direction === 'vertical'
-);
-const layoutPreviewLabel = computed(() =>
-  readerDefaults.direction === 'vertical' ? '长卷' : spreadLabel.value
-);
-const previewCopyStyle = computed(() => ({
-  fontSize: `${Math.min(10.5, Math.max(7.8, readerDefaults.fontSize * 0.46))}px`,
-  lineHeight: readerDefaults.direction === 'vertical' ? 1.9 : 2.12
-}));
-
 const storageInfo = ref<{ usage: number; quota: number; ratio: number } | null>(null);
 const diskStats = ref<DiskStorageStats | null>(null);
 const storageRevealing = ref(false);
@@ -741,15 +1044,6 @@ const diskSegments = computed(() => {
 const storageTotalText = computed(() =>
   diskSegments.value ? formatBytes(diskSegments.value.totalBytes) : ''
 );
-const storageUsedText = computed(() => {
-  const segments = diskSegments.value;
-  return segments ? formatBytes(segments.totalBytes - segments.freeBytes) : '';
-});
-const storageUsedPercentText = computed(() => {
-  const segments = diskSegments.value;
-  if (!segments || !segments.totalBytes) return '';
-  return formatPercent((segments.totalBytes - segments.freeBytes) / segments.totalBytes);
-});
 const storageNativeText = computed(() =>
   diskStats.value ? formatBytes(diskStats.value.appBytes) : '0 B'
 );
@@ -772,12 +1066,6 @@ const dataDialogDescription = computed(() => {
 
 function setDirection(value: string) {
   settings.setReaderDefault('direction', value);
-}
-
-function formatPercent(ratio: number) {
-  if (!Number.isFinite(ratio)) return '0%';
-  const pct = Math.round(Math.max(0, Math.min(1, ratio)) * 1000) / 10;
-  return `${pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1)}%`;
 }
 
 // 占比极小时仍保留 3px，避免本应用的使用量在进度条上完全消失。
@@ -822,13 +1110,68 @@ async function openRepository() {
   }
 }
 
-async function selectSection(key: string) {
-  if (activeSection.value === key) return;
-  activeSection.value = key;
-  debugNote.value = '';
-  if (key === 'storage') refreshStorage();
+
+function settingsScroller() {
+  const node = document.querySelector<HTMLElement>('[data-app-scroll]');
+  return node && /auto|scroll/.test(getComputedStyle(node).overflowY) ? node : null;
+}
+
+async function openSection(section: SettingsSection, event: MouseEvent) {
+  sectionHistory.push({
+    section: activeSection.value,
+    scrollTop: settingsScroller()?.scrollTop ?? window.scrollY,
+    trigger: event.currentTarget as HTMLElement,
+    selector: `.settings-${section} > .settings-card-open`
+  });
+  activeSection.value = section;
+  emit('detail-change', true);
   await nextTick();
-  scrollAppToTop('auto');
+  scrollAppToTop();
+  backButtonRef.value?.focus({ preventScroll: true });
+  if (section === 'storage' && !storageLoading.value) refreshStorage();
+}
+
+async function showPreviousSection() {
+  if (actionBusy.value) return;
+  const previous = sectionHistory.pop();
+  activeSection.value = previous?.section ?? null;
+  emit('detail-change', !!activeSection.value);
+  await nextTick();
+  const scroller = settingsScroller();
+  const scrollTop = previous?.scrollTop ?? 0;
+  if (scroller) scroller.scrollTo({ top: scrollTop, behavior: 'instant' });
+  else window.scrollTo({ top: scrollTop, behavior: 'instant' });
+  // 上一页由 v-if 重建时，重新定位入口，恢复焦点与原滚动位置。
+  const trigger = previous?.trigger.isConnected
+    ? previous.trigger
+    : previous ? document.querySelector<HTMLElement>(previous.selector) : null;
+  trigger?.focus({ preventScroll: true });
+}
+
+function dismissBack() {
+  if (pendingAction.value) {
+    closeDataDialog();
+    return true;
+  }
+  if (!activeSection.value) return false;
+  showPreviousSection();
+  return true;
+}
+
+defineExpose({ dismissBack });
+
+function selectSurfaceMode(value: string, event: MouseEvent) {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  setSurfaceMode(value, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+}
+
+function selectPureBlackMode(value: boolean, event: MouseEvent) {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  theme.setPureBlackMode(value, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+}
+
+function setSurfaceMode(value: string, origin: { x: number; y: number } | null) {
+  theme.setSurfaceMode(value, false, origin);
 }
 
 function addDemoManga() {
@@ -845,7 +1188,7 @@ function addDemoNovel() {
 
 function requestDataAction(action: string) {
   if (actionBusy.value) return;
-      dialogTrigger = document.activeElement as HTMLElement | null;
+  dialogTrigger = document.activeElement as HTMLElement | null;
   pendingAction.value = action;
 }
 
@@ -877,7 +1220,13 @@ async function confirmDataAction() {
 }
 
 function onDialogKeydown(event: KeyboardEvent) {
-  if (!pendingAction.value) return;
+  if (!pendingAction.value) {
+    if (event.key === 'Escape' && activeSection.value && !updates.changelogOpen && !updates.updateDialogOpen) {
+      event.preventDefault();
+      showPreviousSection();
+    }
+    return;
+  }
   if (event.key === 'Escape') {
     event.preventDefault();
     closeDataDialog();
@@ -923,20 +1272,13 @@ watch(modalLayerOpen, open => {
   }
 });
 
-watch(activeSection, () => nextTick(measureSectionIndicator));
-watch(isCompact, () => nextTick(scheduleSectionMeasure));
-
 onMounted(() => {
-  if (activeSection.value === 'storage') refreshStorage();
-  measureSectionIndicator();
-  document.fonts?.ready.then(measureSectionIndicator);
-  window.addEventListener('resize', scheduleSectionMeasure);
+  refreshStorage();
   window.addEventListener('keydown', onDialogKeydown);
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', scheduleSectionMeasure);
-  cancelAnimationFrame(sectionMeasureFrame);
+  emit('detail-change', false);
   window.removeEventListener('keydown', onDialogKeydown);
   if (modalLayerLocked) document.body.style.overflow = previousModalBodyOverflow;
 });
@@ -944,329 +1286,311 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .settings-page {
+  container: settings / inline-size;
   width: 100%;
   min-width: 0;
   flex: 1;
-  display: flex;
-  flex-direction: column;
+  color: var(--md-on-surface);
+  background: var(--md-surface-low);
 }
 
 .settings-topbar {
   position: sticky;
   top: 0;
-}
-
-.settings-import-status {
-  position: sticky;
-  top: calc(64px + env(safe-area-inset-top));
-  z-index: 19;
-  flex: none;
+  z-index: 20;
+  background: var(--md-surface-low);
 }
 
 .settings-topbar-inner {
-  padding: 0 16px;
-  height: 64px;
+  width: 100%;
+  max-width: 1480px;
+  min-height: 104px;
+  margin: auto;
+  padding: 24px 28px;
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: 16px;
 }
 
 .settings-topbar h1 {
   margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  font-size: 21px;
-  font-weight: 500;
+  font-size: 26px;
+  font-weight: 650;
   letter-spacing: -0.025em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.settings-title-enter-active {
-  transition:
-    opacity 180ms var(--md-ease-emphasized),
-    transform 180ms var(--md-ease-emphasized);
-}
-
-.settings-title-enter-from {
-  opacity: 0;
-  transform: translate3d(-12px, 0, 0);
+.settings-topbar p {
+  margin: 6px 0 0;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
 }
 
 .settings-save-state {
-  flex-shrink: 0;
-  display: inline-flex;
+  display: flex;
+  flex: none;
+  gap: 8px;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 9999px;
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.settings-save-state i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--md-primary);
-}
-
-.save-state-short {
-  display: none;
-}
-
-.settings-layout {
-  width: 100%;
-  max-width: 1220px;
-  margin: 0 auto;
-  padding: 18px 38px 72px;
-  display: grid;
-  grid-template-columns: 160px minmax(440px, 1fr) 332px;
-  gap: 34px;
-  align-items: start;
-}
-
-.settings-layout:not(.has-preview) {
-  grid-template-columns: 160px minmax(0, 1fr);
-}
-
-.settings-section-nav {
-  position: sticky;
-  top: 84px;
-  padding-top: 4px;
-}
-
-.settings-section-indicator {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 0;
-  border-radius: 12px;
-  background: var(--md-secondary-container);
-  opacity: 0;
-  pointer-events: none;
-}
-
-.settings-section-indicator.is-ready {
-  opacity: 1;
-  transition:
-    transform 300ms var(--md-ease-emphasized),
-    width 300ms var(--md-ease-emphasized),
-    height 300ms var(--md-ease-emphasized),
-    opacity 120ms var(--md-ease-emphasized);
-}
-
-.settings-section-label {
-  margin: 0 0 12px 12px;
+  padding: 12px 16px;
+  border-radius: 24px;
+  background: var(--md-surface);
   color: var(--md-on-surface-variant);
   font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
 }
 
-.settings-section-link {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  min-height: 42px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 12px;
-  background: transparent;
-  color: var(--md-on-surface-variant);
+.settings-save-state svg {
+  width: 18px;
+  height: 18px;
+  color: var(--md-primary);
+}
+
+.settings-import-status {
+  position: sticky;
+  top: calc(88px + env(safe-area-inset-top));
+  z-index: 19;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-flow: row dense;
+  align-items: stretch;
+  gap: 22px;
+  max-width: 1480px;
+  margin: auto;
+  padding: 12px 28px 0;
+}
+
+.settings-card {
+  min-width: 0;
+  padding: 26px;
+  border-radius: 34px;
+  background: var(--md-surface);
+  box-shadow: 0 6px 10px -8px color-mix(in oklab, var(--md-shadow-color-soft) 18%, transparent), 0 14px 30px -16px color-mix(in oklab, var(--md-shadow-color-soft) 24%, transparent);
+}
+
+.settings-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+  margin-bottom: 24px;
+}
+
+.settings-card-head h2 {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
-  text-align: left;
-  font-size: 13px;
-  font-weight: 570;
-  cursor: pointer;
-  transition:
-    background-color var(--md-duration-short) var(--md-ease-emphasized),
-    color var(--md-duration-short) var(--md-ease-emphasized);
-}
-
-.settings-section-link + .settings-section-link {
-  margin-top: 2px;
-}
-
-.settings-section-link svg {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
-  opacity: 0.72;
-}
-
-.settings-section-link:hover {
-  background: var(--md-surface-container);
-}
-
-.settings-section-link.is-active {
-  background: transparent;
-  color: var(--md-on-secondary-container);
-}
-
-.settings-section-link.is-active svg {
-  opacity: 1;
-}
-
-.section-link-mobile {
-  display: none;
-}
-
-.settings-section-foot {
-  margin: 28px 12px 0;
-  padding-top: 15px;
-  border-top: 0.5px solid var(--md-outline-variant);
-  color: var(--md-on-surface-variant);
-  font-size: 11px;
-  line-height: 1.7;
-}
-
-.settings-section-foot b {
-  display: block;
-  color: var(--md-on-surface);
-  font-weight: 620;
-}
-
-.settings-main {
-  min-width: 0;
-}
-
-.settings-page-panel {
-  animation: settings-page-enter 200ms var(--md-ease-emphasized);
-}
-
-@keyframes settings-page-enter {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.settings-section {
-  padding-bottom: 34px;
-  scroll-margin-top: 84px;
-}
-
-.settings-section + .settings-section {
-  padding-top: 30px;
-  border-top: 0.5px solid var(--md-outline-variant);
-}
-
-.settings-section-heading {
-  margin: 0 0 22px;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.settings-section-heading h2 {
   margin: 0;
   font-size: 17px;
   font-weight: 650;
-  letter-spacing: -0.01em;
 }
 
-.settings-section-heading span {
+.settings-card-head h2 svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
   color: var(--md-on-surface-variant);
+}
+
+.settings-card-head > span {
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+}
+
+.settings-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--md-on-surface-variant);
+}
+
+.settings-appearance {
+  grid-column: span 2;
+  min-height: 294px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+}
+
+.appearance-content {
+  position: relative;
+  z-index: 1;
+  width: 57%;
+}
+
+.appearance-content h3 {
+  font-size: 24px;
+  line-height: 1.4;
+  letter-spacing: -0.025em;
+  margin: 27px 0 8px;
+  font-weight: 650;
+}
+
+.appearance-content > p {
+  margin: 0 0 28px;
   font-size: 12px;
-  white-space: nowrap;
+  color: var(--md-on-surface-variant);
 }
 
-.settings-block + .settings-block {
-  margin-top: 25px;
+.appearance-content :deep(.md-segmented) {
+  max-width: 340px;
 }
 
-.settings-action-note + .settings-block {
-  margin-top: 25px;
+.appearance-content :deep(.md-segmented-option) {
+  min-height: 44px;
+}
+
+.settings-book-stage {
+  position: absolute;
+  inset: 0 0 0 63%;
+  display: grid;
+  place-items: center;
+  border-radius: 80px 0 0 100px;
+  background: var(--md-primary-container);
+}
+
+.settings-open-book {
+  display: flex;
+  width: 174px;
+  height: 214px;
+  transform: rotate(9deg);
+  border: 5px solid color-mix(in oklab, var(--md-surface) 85%, var(--md-primary));
+  border-radius: 8px 13px 13px 8px;
+  background: var(--md-surface);
+  box-shadow: 0 16px 24px -10px color-mix(in oklab, var(--md-shadow-color-soft) 40%, transparent);
+}
+
+.settings-book-page {
+  position: relative;
+  width: 50%;
+  min-width: 0;
+  padding: 21px 9px;
+  font-family: 'Songti SC', 'STSong', serif;
+}
+
+.settings-book-page:first-child {
+  border-right: 1px solid var(--md-outline-variant);
+}
+
+.settings-book-page b {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 10px;
+  text-align: center;
+}
+
+.settings-book-page p {
+  margin: 0 0 12px;
+  font-size: 8px;
+  line-height: 1.9;
+}
+
+.settings-book-page i {
+  display: block;
+  height: 3px;
+  margin: 8px 0;
+  border-radius: 2px;
+  background: var(--md-outline-variant);
+}
+
+.settings-book-page i:nth-of-type(3n) {
+  width: 78%;
+}
+
+.settings-book-page > span {
+  position: absolute;
+  bottom: 16px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 8px;
+  color: var(--md-on-surface-variant);
+}
+
+.settings-reading {
+  grid-column: span 2;
+  container: reading / inline-size;
+}
+
+.settings-reading-controls {
+  display: grid;
+  grid-template-columns: 1.4fr 1.1fr 0.8fr;
+  gap: 20px;
+}
+
+.settings-reading-controls.is-scrolling {
+  grid-template-columns: 1fr;
 }
 
 .settings-head {
-  min-height: 24px;
-  margin-bottom: 11px;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 18px;
-}
-
-.settings-title {
-  font-size: 13px;
-  font-weight: 620;
-}
-
-.settings-value {
-  color: var(--md-on-surface-variant);
-  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
+  gap: 10px;
+  min-height: 20px;
+  margin-bottom: 12px;
   font-size: 12px;
+}
+
+.settings-head b {
+  color: var(--md-on-surface-variant);
+  font-size: 10.5px;
   font-weight: 500;
 }
 
-.settings-value-row {
-  margin-top: 12px;
-  border-top: 0.5px solid var(--md-outline-variant);
-}
-
-.settings-value-copy {
+.settings-block {
   min-width: 0;
 }
 
-.settings-value-copy b {
-  display: block;
-  font-size: 13px;
-  font-weight: 580;
+.settings-reading :deep(.md-segmented-option) {
+  min-height: 44px;
+  padding-inline: 6px;
+  font-size: 11px;
 }
 
-.settings-value-copy span {
-  display: block;
-  margin-top: 3px;
-  color: var(--md-on-surface-variant);
-  font-size: 11px;
+.settings-reading-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 32px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid color-mix(in oklab, var(--md-outline-variant) 65%, transparent);
+}
+
+.settings-reading-bottom .settings-head b {
+  color: var(--md-primary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .font-size-control {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .settings-icon-button {
+  display: grid;
+  place-items: center;
+  flex: none;
   width: 44px;
   height: 44px;
-  flex: 0 0 44px;
   padding: 0;
   border: 0;
   border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--md-surface-high);
-  color: var(--md-on-surface);
+  color: var(--md-on-surface-variant);
+  background: transparent;
   cursor: pointer;
-  transition: background-color var(--md-duration-short) var(--md-ease-emphasized);
-}
-
-.settings-icon-button:hover:not(:disabled) {
-  background: var(--md-surface-highest);
-}
-
-.settings-icon-button:disabled {
-  opacity: 0.42;
-  cursor: default;
 }
 
 .settings-icon-button svg {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
 
 .settings-range {
@@ -1275,45 +1599,97 @@ onBeforeUnmount(() => {
   flex: 1;
 }
 
-.settings-reset-button {
+.settings-value-copy {
+  display: block;
+  min-width: 0;
+}
+
+.settings-value-copy b {
+  display: block;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.settings-value-copy span {
+  display: block;
+  margin-top: 6px;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.settings-text-button, .settings-tonal-button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
   min-height: 44px;
-  margin-top: 16px;
-  padding: 0 14px;
+  padding: 8px 12px;
   border: 0;
-  border-radius: 20px;
+  border-radius: 22px;
   background: transparent;
   color: var(--md-primary);
   font-size: 12px;
-  font-weight: 620;
+  font-weight: 550;
   cursor: pointer;
 }
 
-.settings-reset-button:hover {
-  background: var(--md-surface-container);
+.settings-text-button svg {
+  width: 17px;
+  height: 17px;
 }
 
-.storage-overview {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px 18px;
-  align-items: baseline;
+.settings-tonal-button {
+  padding-inline: 18px;
+  color: var(--md-on-secondary-container);
+  background: var(--md-secondary-container);
 }
 
-.storage-overview strong {
-  font-size: 17px;
-  font-weight: 640;
+.settings-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 16px;
 }
 
-.storage-overview span {
-  color: var(--md-on-surface-variant);
-  font-size: 12px;
+.settings-storage .settings-card-head {
+  margin-bottom: 12px;
 }
 
-.storage-bar {
-  grid-column: 1 / -1;
-  height: 6px;
+.storage-number {
+  display: block;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.storage-stack, .storage-bar {
+  display: flex;
+  gap: 3px;
+  height: 11px;
+  margin: 22px 0 18px;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: 12px;
+  background: var(--md-surface-high);
+}
+
+.storage-seg {
+  height: 100%;
+  flex-shrink: 1;
+}
+
+.storage-seg-app, .storage-bar i {
+  background: var(--md-primary);
+}
+
+.storage-seg-other {
+  background: color-mix(in oklab, var(--md-primary) 35%, var(--md-surface));
+}
+
+.storage-seg-free {
   background: var(--md-surface-high);
 }
 
@@ -1321,87 +1697,130 @@ onBeforeUnmount(() => {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--md-primary);
-  transition: width var(--md-duration-medium) var(--md-ease-emphasized);
 }
 
-.storage-hint {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--md-on-surface-variant);
-  font-size: 11px;
-  line-height: 1.6;
+.storage-legend {
+  display: grid;
+  gap: 12px;
 }
 
-.storage-disk-head {
+.storage-legend > div {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.storage-disk-total {
-  display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   min-width: 0;
-}
-
-.storage-disk-total strong {
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-}
-
-.storage-disk-total span,
-.storage-disk-meta {
+  font-size: 11px;
   color: var(--md-on-surface-variant);
-  font-size: 12px;
 }
 
-.storage-disk-meta {
+.storage-legend b {
+  margin-left: auto;
+  color: var(--md-on-surface);
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+
+.storage-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.settings-about, .settings-import, .settings-debug {
+  min-height: 240px;
+}
+
+.settings-card-head > .settings-badge {
+  flex: none;
+  border-radius: 16px;
+  padding: 6px 9px;
+  font-size: 10px;
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+
+.about-version {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.about-version > img {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 13px;
+}
+
+.about-version h3 {
+  margin: 0;
+  font-size: 19px;
+  letter-spacing: -0.025em;
+  font-weight: 650;
+}
+
+.about-version h3 span {
+  font-size: 12px;
+  font-weight: 500;
   white-space: nowrap;
 }
 
-.storage-stack {
-  display: flex;
-  gap: 3px;
-  height: 12px;
-  margin-top: 14px;
-  padding: 2px;
-  box-sizing: border-box;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--md-surface-container);
-  box-shadow: inset 0 0 0 1px var(--md-outline-variant);
+.about-version .settings-note {
+  margin-top: 5px;
 }
 
-.storage-seg {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
+.about-repository {
+  margin-top: 4px;
 }
 
-.storage-seg-app {
+.about-log-new {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
   background: var(--md-primary);
 }
 
-.storage-seg-other {
-  background: color-mix(in oklab, var(--md-on-surface-variant) 58%, var(--md-surface-container));
+.settings-debug-copy {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 550;
 }
 
-.storage-seg-free {
-  background: color-mix(in oklab, var(--md-outline-variant) 78%, var(--md-surface-container));
+.settings-debug > .settings-text-button {
+  margin-top: 14px;
+  padding-left: 0;
 }
 
-.storage-bar.is-revealing {
-  animation: storage-reveal var(--md-duration-medium) var(--md-ease-emphasized) both;
+.settings-import > .settings-note {
+  margin-top: 18px;
+}
+
+.settings-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  max-width: 1480px;
+  margin: auto;
+  padding: 24px 32px 36px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--md-on-surface-variant);
+}
+
+.settings-page button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.settings-page button:focus-visible, .settings-page summary:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 3px;
 }
 
 .storage-stack.is-revealing .storage-seg {
-  transform-origin: left center;
-  animation: storage-seg-grow var(--md-duration-medium) var(--md-ease-emphasized) both;
+  transform-origin: left;
+  animation: settings-storage-grow 280ms var(--md-ease-emphasized) both;
 }
 
 .storage-stack.is-revealing .storage-seg-other {
@@ -1412,17 +1831,12 @@ onBeforeUnmount(() => {
   animation-delay: 180ms;
 }
 
-@keyframes storage-reveal {
-  from {
-    clip-path: inset(0 100% 0 0);
-  }
-
-  to {
-    clip-path: inset(0 0 0 0);
-  }
+.storage-bar.is-revealing i {
+  transform-origin: left;
+  animation: settings-storage-grow 280ms var(--md-ease-emphasized) both;
 }
 
-@keyframes storage-seg-grow {
+@keyframes settings-storage-grow {
   from {
     transform: scaleX(0);
   }
@@ -1432,663 +1846,166 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .storage-bar.is-revealing {
-    animation: none;
+@container reading (max-width: 680px) {
+  .settings-reading-controls {
+    grid-template-columns: 1fr 1fr;
   }
 
-  .storage-stack.is-revealing .storage-seg {
-    animation: none;
-  }
-}
-
-.storage-legend {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px 18px;
-  margin-top: 14px;
-}
-
-.storage-legend-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  font-size: 12px;
-}
-
-.storage-dot {
-  width: 9px;
-  height: 9px;
-  flex: none;
-  border-radius: 999px;
-}
-
-.storage-dot.storage-seg-free {
-  box-shadow: inset 0 0 0 1px var(--md-outline-variant);
-}
-
-.storage-legend-item b {
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.storage-legend-item em {
-  margin-left: auto;
-  color: var(--md-on-surface-variant);
-  font-style: normal;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.storage-detail-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--md-outline-variant);
-  color: var(--md-on-surface-variant);
-  font-size: 11px;
-}
-
-.storage-detail-row b {
-  color: var(--md-on-surface);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-@media (max-width: 560px) {
-  .storage-disk-head {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
+  .settings-reading-controls > .settings-block:first-child {
+    grid-column: 1 / -1;
   }
 
-  .storage-legend {
-    grid-template-columns: 1fr;
+  .settings-reading-bottom {
+    gap: 20px;
   }
 }
 
-.settings-data-list {
-  margin-top: 14px;
-}
-
-.settings-data-row {
-  min-height: 58px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  border-top: 0.5px solid var(--md-outline-variant);
-}
-
-.settings-data-copy {
-  min-width: 0;
-}
-
-.settings-data-copy b {
-  display: block;
-  font-size: 13px;
-  font-weight: 590;
-}
-
-.settings-data-copy span {
-  display: block;
-  margin-top: 4px;
-  color: var(--md-on-surface-variant);
-  font-size: 11px;
-}
-
-.settings-text-button {
-  min-height: 36px;
-  flex: 0 0 auto;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 18px;
-  background: transparent;
-  color: var(--md-primary);
-  font-size: 12px;
-  font-weight: 620;
-  cursor: pointer;
-}
-
-.settings-text-button:hover:not(:disabled) {
-  background: var(--md-surface-container);
-}
-
-.settings-text-button:disabled {
-  opacity: 0.42;
-  cursor: default;
-}
-
-.settings-action-note {
-  margin: 11px 0 0;
-  color: var(--md-on-surface-variant);
-  font-size: 12px;
-}
-
-.about-hero {
-  position: relative;
-  isolation: isolate;
-  padding: 14px;
-  overflow: hidden;
-  border-radius: 28px;
-  background: var(--md-surface-container);
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--md-outline-variant) 72%, transparent);
-}
-
-.about-cover {
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  min-height: 260px;
-  flex-direction: column;
-  padding: 24px 24px 22px 28px;
-  overflow: hidden;
-  border-radius: 22px;
-  background:
-    radial-gradient(
-      120% 110% at 100% 0%,
-      color-mix(in oklab, var(--md-secondary-container) 82%, transparent),
-      transparent 61%
-    ),
-    linear-gradient(
-      150deg,
-      var(--md-primary-container),
-      color-mix(in oklab, var(--md-primary-container) 86%, var(--md-tertiary-container))
-    );
-  color: var(--md-on-primary-container);
-}
-
-.about-cover::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  width: 230px;
-  height: 230px;
-  right: -116px;
-  bottom: -124px;
-  border: 1px solid color-mix(in oklab, var(--md-on-primary-container) 18%, transparent);
-  border-radius: 50%;
-  box-shadow:
-    0 0 0 24px color-mix(in oklab, var(--md-secondary-container) 26%, transparent),
-    0 0 0 58px color-mix(in oklab, var(--md-secondary-container) 14%, transparent);
-}
-
-.about-cover::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  top: 22px;
-  bottom: 22px;
-  left: 11px;
-  width: 3px;
-  border-radius: 999px;
-  background: linear-gradient(
-    180deg,
-    var(--md-primary),
-    color-mix(in oklab, var(--md-tertiary) 62%, var(--md-primary))
-  );
-  opacity: 0.74;
-}
-
-.about-cover-top {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-}
-
-.about-logo {
-  width: 56px;
-  height: 56px;
-  flex: 0 0 56px;
-  border-radius: 16px;
-  object-fit: cover;
-  box-shadow:
-    0 1px 2px color-mix(in oklab, var(--md-shadow-color-soft) 18%, transparent),
-    0 10px 24px -14px color-mix(in oklab, var(--md-shadow-color-soft) 55%, transparent);
-}
-
-.about-brand-copy {
-  min-width: 0;
-  flex: 1;
-}
-
-.about-eyebrow {
-  color: inherit;
-  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10.5px;
-  font-weight: 650;
-  letter-spacing: 0.12em;
-  opacity: 0.72;
-}
-
-.about-wordmark {
-  margin: 5px 0 0;
-  font-size: 40px;
-  font-weight: 700;
-  line-height: 0.98;
-  letter-spacing: -0.065em;
-}
-
-.about-cover-meta {
-  margin-top: auto;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-}
-
-.about-version-badge {
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: var(--md-surface-container);
-  color: var(--md-on-surface);
-  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10.5px;
-  font-weight: 650;
-}
-
-.about-local-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.about-local-label i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.6;
-}
-
-.about-cover-note {
-  margin: 15px 0 0;
-  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10.5px;
-  font-weight: 500;
-  line-height: 1.65;
-  letter-spacing: 0.12em;
-  opacity: 0.56;
-}
-
-.about-story {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  justify-content: center;
-  padding: 24px 20px 10px;
-}
-
-.about-tagline {
-  max-width: 22ch;
-  margin: 0;
-  font-size: 22px;
-  font-weight: 650;
-  line-height: 1.42;
-  letter-spacing: -0.025em;
-}
-
-.about-tagline em {
-  color: var(--md-primary);
-  font-style: normal;
-}
-
-.about-description {
-  max-width: 50ch;
-  margin: 12px 0 0;
-  color: var(--md-on-surface-variant);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.about-actions {
-  margin-top: 26px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 9px;
-}
-
-.about-update-button,
-.about-log-button {
-  min-height: 48px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  border-radius: 24px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background-color var(--md-duration-short) var(--md-ease-emphasized),
-    color var(--md-duration-short) var(--md-ease-emphasized);
-}
-
-.about-update-button {
-  padding: 0 22px;
-  border: 0;
-  background: var(--md-primary);
-  color: var(--md-on-primary);
-}
-
-.about-update-button:hover {
-  background: color-mix(in oklab, var(--md-primary) 92%, var(--md-on-primary));
-}
-
-.about-update-button svg,
-.about-log-button svg {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
-}
-
-.about-log-button {
-  padding: 0 14px;
-  border: 0;
-  background: transparent;
-  color: var(--md-primary);
-}
-
-.about-log-button:hover {
-  background: color-mix(in oklab, var(--md-primary) 8%, transparent);
-}
-
-.about-log-new {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--md-primary);
-  box-shadow: 0 0 0 4px color-mix(in oklab, var(--md-primary) 12%, transparent);
-}
-
-.about-foot {
-  margin-top: 22px;
-  padding-top: 14px;
-  border-top: 1px solid color-mix(in oklab, var(--md-outline-variant) 72%, transparent);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 7px 10px;
-  color: var(--md-on-surface-variant);
-  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10.5px;
-}
-
-.about-foot i {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.42;
-}
-
-.about-foot button {
-  min-height: 44px;
-  margin-left: auto;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 22px;
-  background: transparent;
-  color: var(--md-primary);
-  font-family: var(--font-sans, system-ui), -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.about-foot button:hover {
-  background: color-mix(in oklab, var(--md-primary) 8%, transparent);
-}
-
-.about-link-error {
-  margin: 9px 0 0;
-  color: var(--md-primary);
-  font-size: 10.5px;
-}
-
-.settings-preview {
-  position: sticky;
-  top: 84px;
-  padding: 18px;
-  border-radius: 24px;
-  background:
-    radial-gradient(120% 88% at 88% 0%, color-mix(in oklab, var(--md-primary) 14%, transparent), transparent 58%),
-    var(--md-surface-low);
-  box-shadow:
-    inset 0 0 0 0.5px color-mix(in oklab, var(--md-outline-variant) 68%, transparent),
-    0 18px 50px -34px color-mix(in oklab, var(--md-shadow-color-soft) 44%, transparent);
-}
-
-.settings-preview-head {
-  padding: 1px 2px 14px;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.settings-preview-head h3 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.settings-preview-head span {
-  color: var(--md-on-surface-variant);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11px;
-}
-
-.settings-book-stage {
-  position: relative;
-  min-height: 382px;
-  padding: 30px 20px 36px;
-  overflow: hidden;
-  border-radius: 16px;
-  background: linear-gradient(160deg, color-mix(in oklab, var(--md-primary) 10%, var(--md-surface-container)), var(--md-surface-container));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.settings-book-stage::before {
-  content: "";
-  position: absolute;
-  width: 210px;
-  height: 210px;
-  right: -92px;
-  top: -92px;
-  border: 0.5px solid color-mix(in oklab, var(--md-primary) 18%, transparent);
-  border-radius: 50%;
-  box-shadow:
-    0 0 0 22px color-mix(in oklab, var(--md-primary) 4%, transparent),
-    0 0 0 50px color-mix(in oklab, var(--md-primary) 3%, transparent);
-}
-
-.settings-open-book {
-  position: relative;
-  width: 252px;
-  height: 316px;
-  border-radius: 7px 10px 10px 7px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  overflow: hidden;
-  color: var(--md-on-surface);
-  background: color-mix(in oklab, var(--md-surface) 88%, var(--md-primary-container));
-  box-shadow:
-    0 2px 3px color-mix(in oklab, var(--md-shadow-color-soft) 14%, transparent),
-    0 20px 34px -18px color-mix(in oklab, var(--md-shadow-color-soft) 42%, transparent);
-  transform: rotate(-1.2deg);
-  transition: width var(--md-duration-medium) var(--md-ease-emphasized);
-}
-
-.settings-open-book::before {
-  content: "";
-  position: absolute;
-  z-index: 4;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: 16px;
-  transform: translateX(-50%);
-  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--md-on-surface) 11%, transparent), transparent);
-  pointer-events: none;
-}
-
-.settings-open-book.is-single {
-  width: 210px;
-  grid-template-columns: 1fr;
-}
-
-.settings-open-book.is-single::before,
-.settings-open-book.is-single .is-right {
-  display: none;
-}
-
-.settings-open-book.is-rtl .settings-book-copy {
-  text-align: right;
-}
-
-.settings-book-page {
-  position: relative;
-  min-width: 0;
-  padding: 21px 16px 18px;
-  overflow: hidden;
-}
-
-.settings-book-page.is-left {
-  padding-right: 12px;
-}
-
-.settings-book-page.is-right {
-  padding-left: 12px;
-}
-
-.settings-book-page.is-left::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent 72%, color-mix(in oklab, var(--md-on-surface) 5%, transparent));
-  pointer-events: none;
-}
-
-.settings-book-page.is-right::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, color-mix(in oklab, var(--md-on-surface) 5%, transparent), transparent 28%);
-  pointer-events: none;
-}
-
-.settings-book-kicker {
-  color: color-mix(in oklab, var(--md-on-surface) 56%, transparent);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 7px;
-  letter-spacing: 0.08em;
-}
-
-.settings-book-art {
-  position: relative;
-  height: 116px;
-  margin: 12px 0 19px;
-  overflow: hidden;
-  border-radius: 3px;
-  background: linear-gradient(to top, color-mix(in oklab, var(--md-primary) 33%, var(--md-primary-container)), color-mix(in oklab, var(--md-primary-container) 68%, var(--md-surface)));
-}
-
-.settings-book-art::before {
-  content: "";
-  position: absolute;
-  width: 55px;
-  height: 55px;
-  top: 18px;
-  right: 15px;
-  border-radius: 50%;
-  background: color-mix(in oklab, var(--md-surface) 84%, var(--md-primary-container));
-  box-shadow: 0 0 0 9px color-mix(in oklab, var(--md-surface) 12%, transparent);
-}
-
-.settings-book-art::after {
-  content: "";
-  position: absolute;
-  left: -9px;
-  right: -9px;
-  bottom: 17px;
-  height: 42px;
-  border-radius: 50% 50% 0 0;
-  background: color-mix(in oklab, var(--md-primary) 52%, var(--md-on-primary-container));
-  transform: rotate(-4deg);
-}
-
-.settings-book-title {
-  margin: 0;
-  font-family: "Songti SC", "STSong", "Noto Serif SC", serif;
-  font-size: 16px;
-  font-weight: 650;
-  line-height: 1.42;
-  letter-spacing: 0.04em;
-}
-
-.settings-book-subtitle {
-  margin: 7px 0 0;
-  color: color-mix(in oklab, var(--md-on-surface) 62%, transparent);
-  font-size: 8px;
-  line-height: 1.6;
-}
-
-.settings-book-copy {
-  margin: 0;
-  color: color-mix(in oklab, var(--md-on-surface) 82%, transparent);
-  font-family: "Songti SC", "STSong", "Noto Serif SC", serif;
-  text-align: justify;
-}
-
-.settings-book-copy + .settings-book-copy {
-  margin-top: 2px;
-  text-indent: 2em;
-}
-
-.settings-book-page-no {
-  position: absolute;
-  right: 16px;
-  bottom: 10px;
-  color: color-mix(in oklab, var(--md-on-surface) 44%, transparent);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 6.5px;
-}
-
-.settings-preview-meta {
-  padding: 14px 4px 1px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--md-on-surface-variant);
-  font-size: 11px;
-}
-
-.settings-preview-meta i {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.48;
-}
-
-.settings-preview-note {
-  margin: 0 4px;
-  padding-top: 12px;
-  color: var(--md-on-surface-variant);
-  font-size: 11px;
-  line-height: 1.7;
+@container settings (max-width: 1039px) {
+  .settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .settings-card {
+    padding: 24px;
+  }
+
+  .settings-about {
+    min-height: 0;
+  }
+}
+
+@container settings (max-width: 599px) {
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    padding: 8px 16px 0;
+  }
+
+  .settings-card {
+    padding: 22px;
+    border-radius: 28px;
+  }
+
+  .settings-appearance, .settings-reading, .settings-storage, .settings-about {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .settings-topbar-inner {
+    min-height: 88px;
+    padding: 18px 16px;
+  }
+
+  .settings-topbar h1 {
+    font-size: 22px;
+  }
+
+  .settings-topbar p {
+    font-size: 11px;
+  }
+
+  .settings-save-state {
+    padding: 10px;
+  }
+
+  .settings-save-state span {
+    display: none;
+  }
+
+  .settings-card-head {
+    margin-bottom: 22px;
+  }
+
+  .settings-card-head h2 {
+    font-size: 17px;
+  }
+
+  .settings-card-head > span {
+    font-size: 10px;
+  }
+
+  .settings-appearance {
+    min-height: 266px;
+  }
+
+  .appearance-content {
+    width: 66%;
+  }
+
+  .appearance-content h3 {
+    margin-top: 25px;
+    font-size: 21px;
+  }
+
+  .appearance-content > p {
+    font-size: 10px;
+    margin-bottom: 24px;
+  }
+
+  .appearance-content :deep(.md-segmented-option) {
+    padding-inline: 4px;
+    font-size: 11px;
+  }
+
+  .settings-book-stage {
+    left: 71%;
+    border-radius: 65px 0 0 80px;
+  }
+
+  .settings-open-book {
+    width: 88px;
+    height: 158px;
+    transform: rotate(9deg);
+  }
+
+  .settings-book-page {
+    padding: 18px 5px;
+  }
+
+  .settings-book-page b {
+    font-size: 7px;
+  }
+
+  .settings-book-page p {
+    font-size: 6px;
+  }
+
+  .settings-book-page i {
+    height: 2px;
+    margin-block: 7px;
+  }
+
+  .settings-reading-controls, .settings-reading-bottom {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-reading-controls > .settings-block:first-child {
+    grid-column: auto;
+  }
+
+  .settings-reading-bottom {
+    gap: 20px;
+  }
+
+  .settings-about, .settings-import, .settings-debug {
+    min-height: 0;
+  }
+
+  .settings-footer {
+    padding: 24px 20px 32px;
+    font-size: 10px;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .settings-icon-button:not(:disabled):hover, .settings-text-button:not(:disabled):hover {
+    background: var(--md-surface-container);
+  }
+
+  .settings-tonal-button:hover {
+    background: color-mix(in oklab, var(--md-secondary-container) 85%, var(--md-primary));
+  }
 }
 
 .settings-dialog-layer {
@@ -2181,8 +2098,7 @@ onBeforeUnmount(() => {
 
 .settings-dialog-enter-active .settings-dialog,
 .settings-dialog-leave-active .settings-dialog {
-  transition:
-    transform var(--md-duration-short) var(--md-ease-emphasized),
+  transition: transform var(--md-duration-short) var(--md-ease-emphasized),
     opacity var(--md-duration-short) var(--md-ease-emphasized);
 }
 
@@ -2202,259 +2118,612 @@ onBeforeUnmount(() => {
   opacity: 1;
 }
 
-@media (min-width: 900px) and (max-width: 1199px) {
-  .settings-layout,
-  .settings-layout:not(.has-preview) {
-    grid-template-columns: 148px minmax(0, 1fr);
-    gap: 28px;
-  }
-
-  .settings-preview {
-    display: none;
-  }
-}
-
-@media (min-width: 900px) {
-  .settings-topbar-inner {
-    padding: 0 28px;
-    gap: 12px;
-  }
-
-  .settings-topbar h1 {
-    font-size: 22px;
-  }
-
-  .settings-save-state {
-    font-size: 12px;
-  }
-
-  .settings-layout:not(.has-preview) .settings-main {
-    max-width: 760px;
-  }
-}
-
-@media (min-width: 1200px) {
-  .about-hero {
-    display: grid;
-    grid-template-columns: minmax(218px, 0.82fr) minmax(0, 1.18fr);
-  }
-
-  .about-cover {
-    min-height: 332px;
-  }
-
-  .about-story {
-    padding: 22px 22px 12px 26px;
-  }
-}
-
 @media (max-width: 899px) {
-  .settings-topbar-inner {
-    height: 56px;
-  }
-
-  .save-state-long {
-    display: none;
-  }
-
-  .save-state-short {
-    display: inline;
-  }
-
-  .settings-layout {
-    display: block;
-    padding: 8px 16px 28px;
-  }
-
-  .settings-section-nav {
-    position: relative;
-    top: auto;
-    padding: 3px 0 14px;
-    display: flex;
-    gap: 7px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .settings-section-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .settings-section-label,
-  .settings-section-foot {
-    display: none;
-  }
-
-  .settings-section-link {
-    width: auto;
-    min-height: 44px;
-    padding: 0 13px;
-    flex: none;
-    border: 0.5px solid var(--md-outline-variant);
-  }
-
-  .settings-section-link + .settings-section-link {
-    margin-top: 0;
-  }
-
-  .settings-section-link.is-active {
-    border-color: transparent;
-  }
-
-  .section-link-desktop {
-    display: none;
-  }
-
-  .section-link-mobile {
-    display: inline;
-  }
-
-  .settings-section {
-    padding-bottom: 28px;
-    scroll-margin-top: 74px;
-  }
-
-  .settings-section + .settings-section {
-    padding-top: 24px;
-  }
-
-  .settings-section-heading {
-    margin-bottom: 18px;
-  }
-
-  .settings-preview {
-    display: none;
-  }
-
-  .settings-data-row {
-    min-height: 64px;
-  }
-
-  .settings-text-button {
-    min-height: 44px;
-  }
-
-  .about-hero {
-    display: block;
-    padding: 10px;
-    border-radius: 24px;
-  }
-
-  .about-cover {
-    min-height: 196px;
-    padding: 18px 18px 16px 22px;
-    border-radius: 18px;
-  }
-
-  .about-cover::before {
-    width: 184px;
-    height: 184px;
-    right: -82px;
-    bottom: -104px;
-  }
-
-  .about-cover::after {
-    top: 16px;
-    bottom: 16px;
-    left: 9px;
-  }
-
-  .about-cover-top {
-    gap: 12px;
-  }
-
-  .about-logo {
-    width: 48px;
-    height: 48px;
-    flex-basis: 48px;
-    border-radius: 14px;
-  }
-
-  .about-wordmark {
-    margin-top: 4px;
-    font-size: 34px;
-  }
-
-  .about-cover-note {
-    margin-top: 12px;
-  }
-
-  .about-story {
-    padding: 20px 10px 8px;
-  }
-
-  .about-tagline {
-    font-size: 21px;
-  }
-
-  .about-actions {
-    margin-top: 22px;
-    gap: 7px;
-  }
-
-  .about-update-button {
-    flex: 1;
-    min-width: 162px;
-    padding: 0 17px;
-  }
-
-  .about-log-button {
-    padding: 0 12px;
-  }
-
-  .about-foot {
-    margin-top: 20px;
-    padding-top: 12px;
-    gap: 7px 9px;
-  }
-
-  .about-foot button {
-    width: auto;
-    min-height: 44px;
-    margin: 2px 0 0 -10px;
-  }
-
   .settings-dialog-layer {
     padding: 16px;
     align-items: end;
   }
 
   .settings-dialog {
-    padding: 22px;
     border-radius: 28px 28px 20px 20px;
   }
 }
 
-@media (min-width: 600px) and (max-width: 899px) {
-  .about-update-button {
-    flex: none;
+@media (prefers-reduced-motion: reduce) {
+  .storage-stack.is-revealing .storage-seg, .storage-bar.is-revealing i {
+    animation: none;
   }
 
-  .about-foot button {
-    margin-left: auto;
+  .settings-dialog-enter-active, .settings-dialog-leave-active, .settings-dialog-enter-active .settings-dialog, .settings-dialog-leave-active .settings-dialog {
+    transition: none;
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .settings-section-link,
-  .settings-section-indicator.is-ready,
-  .settings-page-panel,
-  .settings-icon-button,
-  .storage-bar i,
-  .settings-open-book,
-  .about-update-button,
-  .about-log-button,
-  .settings-title-enter-active,
-  .settings-dialog-enter-active,
-  .settings-dialog-leave-active,
-  .settings-dialog-enter-active .settings-dialog,
-  .settings-dialog-leave-active .settings-dialog {
-    transition: none !important;
-    animation: none !important;
+/* 二级设置使用整页分组列表，首页卡片保留快捷控件。 */
+
+.settings-card {
+  position: relative;
+  isolation: isolate;
+}
+
+.settings-card > .settings-card-open {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.settings-card-open-icon {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  display: grid;
+  place-items: center;
+  color: var(--md-on-surface-variant);
+}
+
+.settings-card > :not(.settings-card-open) {
+  pointer-events: none;
+}
+
+.settings-card :deep(.md-segmented), .settings-card :deep(.md-range), .settings-card :deep(.theme-swatch-grid), .settings-card button:not(.settings-card-open) {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.settings-card :deep(button), .settings-card :deep(input) {
+  pointer-events: auto;
+}
+
+.settings-page .settings-card-open:focus-visible {
+  outline-offset: -4px;
+}
+
+.settings-detail-hint {
+  margin: 20px 30px 0 0;
+  min-height: 24px;
+  color: var(--md-primary);
+  font-size: 12px;
+}
+
+.settings-back-button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  cursor: pointer;
+}
+
+.settings-back-button svg {
+  width: 29px;
+  height: 29px;
+}
+
+.has-detail .settings-topbar-inner {
+  justify-content: flex-start;
+  max-width: 1036px;
+  gap: 20px;
+}
+
+.has-detail .settings-save-state {
+  margin-left: auto;
+  background: transparent;
+}
+
+.settings-detail {
+  max-width: 1036px;
+  margin: auto;
+  padding: 8px 28px 16px;
+}
+
+.has-detail .settings-footer {
+  max-width: 1036px;
+}
+
+.settings-detail-hero {
+  min-width: 0;
+  padding: 30px;
+  margin-bottom: 30px;
+  overflow: hidden;
+  border-radius: 34px;
+  background: var(--md-surface);
+}
+
+.settings-surface-hero {
+  display: grid;
+  place-items: center;
+  min-height: 324px;
+}
+
+.settings-detail-group {
+  margin-bottom: 28px;
+}
+
+.settings-detail-group > h2 {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 0 18px 14px;
+  color: var(--md-on-surface-variant);
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.settings-detail-group > h2 svg {
+  width: 21px;
+  height: 21px;
+}
+
+.settings-list {
+  min-width: 0;
+  border-radius: 28px;
+  overflow: hidden;
+  background: var(--md-surface);
+}
+
+.settings-list > :not(:first-child) {
+  border-top: 1px solid color-mix(in oklab, var(--md-outline-variant) 65%, transparent);
+}
+
+.settings-list-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 17px;
+  width: 100%;
+  min-height: 74px;
+  padding: 18px 24px;
+  border: 0;
+  background: transparent;
+  color: var(--md-on-surface);
+  text-align: left;
+}
+
+button.settings-list-row {
+  cursor: pointer;
+}
+
+.settings-list-row .settings-value-copy {
+  flex: 1;
+}
+
+.settings-list-row .settings-value-copy b {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.settings-list-row .settings-value-copy span {
+  font-size: 12px;
+}
+
+.settings-list-row > svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  color: var(--md-on-surface-variant);
+}
+
+.settings-list-row > .settings-row-check {
+  width: 27px;
+  height: 27px;
+  color: var(--md-primary);
+}
+
+.settings-row-value {
+  flex: none;
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--md-on-surface-variant);
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-row-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  background: var(--md-surface-container);
+  color: var(--md-on-surface-variant);
+}
+
+.settings-row-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.settings-detail-note {
+  margin: 12px 20px 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--md-on-surface-variant);
+}
+
+.settings-quiet-note {
+  margin: 28px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+
+.settings-surface-row {
+  min-height: 102px;
+}
+
+.settings-hero-copy {
+  min-width: 0;
+  max-width: 350px;
+}
+
+.settings-hero-copy h2 {
+  margin: 21px 0 10px;
+  font-size: 25px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.settings-hero-copy p {
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.settings-badge {
+  display: inline-block;
+  padding: 7px 12px;
+  border-radius: 15px;
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  font-size: 11px;
+}
+
+.settings-reading-hero {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 55px;
+  min-height: 216px;
+}
+
+.settings-reading-hero .settings-book-stage {
+  position: static;
+  display: block;
+  flex: none;
+  background: transparent;
+  border-radius: 0;
+}
+
+.settings-reading-hero .settings-open-book {
+  width: 145px;
+  height: 164px;
+  border-width: 4px;
+  transform: rotate(7deg);
+}
+
+.settings-reading-hero .settings-book-page {
+  padding: 16px 7px;
+}
+
+.settings-reading-hero .settings-book-page b {
+  font-size: 8px;
+}
+
+.settings-reading-hero .settings-book-page p {
+  font-size: 6px;
+  margin-block: 8px;
+}
+
+.settings-reading-hero .settings-book-page i {
+  height: 2px;
+  margin-block: 6px;
+}
+
+.settings-reading-hero .settings-book-page > span {
+  bottom: 9px;
+  font-size: 6px;
+}
+
+.settings-reading-hero .settings-hero-copy h2 {
+  font-size: 22px;
+}
+
+.settings-detail-font {
+  padding: 18px 24px;
+}
+
+.settings-detail-font .settings-head {
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 16px;
+}
+
+.settings-detail-font .settings-head b {
+  font-size: 14px;
+  color: var(--md-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-detail .settings-list-row > .settings-text-button {
+  flex: none;
+}
+
+.settings-storage-hero {
+  padding: 28px 36px;
+}
+
+.settings-storage-hero-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--md-on-surface-variant);
+  font-size: 13px;
+}
+
+.settings-storage-hero .storage-number {
+  font-size: 42px;
+}
+
+.settings-storage-hero .storage-legend {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.settings-about-hero {
+  padding: 32px;
+  text-align: center;
+}
+
+.settings-about-hero > img {
+  display: block;
+  width: 70px;
+  height: 70px;
+  margin: auto;
+  border-radius: 21px;
+}
+
+.settings-about-hero > h2 {
+  margin: 16px 0 10px;
+  font-size: 28px;
+  letter-spacing: 0.025em;
+}
+
+.settings-about-hero > p:not(.settings-note) {
+  margin: 22px 0 10px;
+  font-size: 17px;
+}
+
+.settings-about-hero .settings-note {
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.settings-import-hero {
+  min-height: 334px;
+  text-align: center;
+}
+
+.settings-import-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  margin-top: 10px;
+}
+
+.settings-import-diagram > svg {
+  color: var(--md-outline);
+}
+
+.settings-import-folder {
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  border-radius: 30px;
+  background: var(--md-primary-container);
+  color: var(--md-primary);
+}
+
+.settings-import-folder svg {
+  width: 65px;
+  height: 65px;
+}
+
+.settings-import-books {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 104px;
+}
+
+.settings-import-books i {
+  position: relative;
+  width: 47px;
+  height: 80px;
+  border-radius: 7px;
+  border-left: 5px solid var(--md-primary);
+  background: var(--md-secondary-container);
+}
+
+.settings-import-books i:nth-child(2) {
+  height: 102px;
+  background: var(--md-primary-container);
+}
+
+.settings-import-books i:nth-child(3) {
+  height: 91px;
+  background: var(--md-tertiary-container);
+}
+
+.settings-import-books i::before {
+  content: '';
+  position: absolute;
+  top: 15px;
+  left: 7px;
+  right: 7px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--md-surface);
+}
+
+.settings-import-hero > h2 {
+  margin: 29px 0 10px;
+  font-size: 24px;
+  font-weight: 650;
+}
+
+.settings-import-hero > p {
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button.settings-list-row:hover {
+    background: color-mix(in oklab, var(--md-primary) 4%, transparent);
   }
 
-  .settings-title-enter-from {
-    transform: none;
+  .settings-back-button:hover {
+    background: var(--md-surface-high);
+  }
+}
+
+@container settings (max-width: 699px) {
+  .has-detail .settings-topbar-inner {
+    min-height: 92px;
+    padding: 18px 16px;
+    gap: 15px;
+  }
+
+  .settings-back-button {
+    width: 46px;
+    height: 46px;
+  }
+
+  .settings-back-button svg {
+    width: 25px;
+    height: 25px;
+  }
+
+  .settings-detail {
+    padding: 8px 16px calc(24px + env(safe-area-inset-bottom));
+  }
+
+  .settings-detail-hero {
+    padding: 26px 20px;
+    border-radius: 28px;
+  }
+
+  .settings-hero-copy h2 {
+    font-size: 20px;
+  }
+
+  .settings-reading-hero {
+    gap: 22px;
+  }
+
+  .settings-reading-hero .settings-open-book {
+    width: 105px;
+    height: 150px;
+  }
+
+  .settings-reading-hero .settings-hero-copy {
+    max-width: 170px;
+  }
+
+  .settings-reading-hero .settings-hero-copy h2 {
+    font-size: 19px;
+  }
+
+  .settings-detail-group > h2 {
+    font-size: 15px;
+  }
+
+  .settings-list-row {
+    gap: 12px;
+    padding: 18px 20px;
+  }
+
+  .settings-list-row .settings-value-copy b {
+    font-size: 15px;
+  }
+
+  .settings-list-row .settings-value-copy span {
+    font-size: 11px;
+  }
+
+  .settings-row-value {
+    font-size: 12px;
+  }
+
+  .settings-storage-hero .storage-legend {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .settings-detail-font {
+    padding: 18px 20px;
+  }
+
+  .settings-import-diagram {
+    gap: 20px;
+  }
+
+  .settings-import-folder {
+    width: 80px;
+    height: 80px;
+    border-radius: 24px;
+  }
+
+  .settings-import-folder svg {
+    width: 50px;
+    height: 50px;
+  }
+
+  .settings-import-books {
+    height: 90px;
+    gap: 6px;
+  }
+
+  .settings-import-books i {
+    width: 35px;
+  }
+
+  .settings-import-books i:nth-child(2) {
+    height: 90px;
+  }
+
+  .settings-import-hero > h2 {
+    font-size: 22px;
+  }
+}
+
+.settings-color-name {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.settings-color-strip {
+  container: theme-palette / inline-size;
+  padding: 12px 20px;
+}
+
+@container settings (max-width: 599px) {
+  .settings-color-strip {
+    padding-inline: 12px;
   }
 }
 </style>

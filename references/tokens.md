@@ -53,6 +53,12 @@
 | shadow-color-soft | shadow-color 52% + surface | shadow-color 52% + surface | 同 shadow-color（夜间不再变亮） |
 | manga-filter | none | sepia(.18) brightness(.97) contrast(.98) | brightness(.92) |
 
+### 夜间纯黑覆盖
+
+`--md-canvas-black: #000000` 是纯黑模式专用画布 token。`data-mode="dark"` 与 `data-black="pure"` 同时存在时，`surface` / `surface-low` 使用该 token，较高表面阶由它与 `on-surface` 混色。主题强调色和白昼表面不变；组件仍不得自行硬编码黑色。
+
+偏好保存在 `homura_pure_black`。`public/homura-boot.js` 首帧恢复该属性与 theme-color；`theme.ts` 同步原生窗口底色与后续模式切换。
+
 ## 3.1 Elevation（`:root`）
 
 | token | 值 | 用途 |

@@ -1,7 +1,7 @@
 <template>
   <div
     class="theme-swatch-grid"
-    :class="{ 'is-wide': wide }"
+    :class="{ 'is-wide': wide, 'has-labels': labels && !strip, 'is-strip': strip }"
     :style="{ '--swatch-columns': columns }"
     role="group"
     aria-label="主题色"
@@ -21,6 +21,7 @@
       <span v-if="theme.themeColor === option.name" class="theme-swatch-check" aria-hidden="true">
         <MdIcon name="check" />
       </span>
+      <span v-if="labels && !strip" class="theme-swatch-label">{{ option.title.replace(' (默认)', '') }}</span>
     </button>
   </div>
 </template>
@@ -31,7 +32,9 @@ import MdIcon from './MdIcon.vue';
 
 defineProps({
   columns: { type: Number, default: 5 },
-  wide: { type: Boolean, default: false }
+  wide: { type: Boolean, default: false },
+  labels: { type: Boolean, default: false },
+  strip: { type: Boolean, default: false }
 });
 
 const theme = useThemeStore();
@@ -49,6 +52,70 @@ function swatchStyle(option: ThemeOption) {
 </script>
 
 <style scoped>
+.theme-swatch-grid.is-strip {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 8px;
+  max-width: none;
+  padding: 8px 4px;
+}
+
+.is-strip .theme-swatch-tile {
+  width: min(100%, 56px);
+  height: 56px;
+  justify-self: center;
+  aspect-ratio: auto;
+  border-radius: 50%;
+}
+
+.is-strip .theme-swatch-disc {
+  width: 40px;
+  background: var(--swatch-deep);
+  box-shadow: none;
+}
+
+.is-strip .is-selected .theme-swatch-disc {
+  background: var(--md-primary);
+  outline: 2px solid var(--md-primary);
+  outline-offset: 4px;
+}
+
+.is-strip .theme-swatch-check {
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  color: var(--md-on-primary);
+  box-shadow: none;
+}
+
+.is-strip .theme-swatch-check svg {
+  width: 24px;
+  height: 24px;
+}
+
+@container theme-palette (max-width: 639px) {
+  .theme-swatch-grid.is-strip {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.theme-swatch-grid.has-labels .theme-swatch-tile {
+  aspect-ratio: auto;
+  min-height: 66px;
+  grid-template-rows: 44px auto;
+  gap: 6px;
+}
+
+.has-labels .theme-swatch-check {
+  top: 14px;
+}
+
+.theme-swatch-label {
+  color: var(--md-on-surface-variant);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
 .theme-swatch-grid.is-wide {
   grid-template-columns: repeat(var(--swatch-columns, 10), minmax(0, 1fr));
   gap: 8px;

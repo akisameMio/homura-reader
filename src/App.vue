@@ -6,17 +6,17 @@
     class="library-back-layer flex flex-1 min-h-0"
     :class="{ 'is-under-reader': !!reader.currentBook }"
   >
-    <SideNav :active="activeNav" @nav="onRailNav" />
+    <SideNav v-if="!isCompact || !settingsDetailOpen" :active="activeNav" @nav="onRailNav" />
 
     <div
       class="library-main-column flex-1 min-w-0 flex flex-col"
       :class="[
-        isCompact && activeNav === 'settings' ? 'is-settings md-bottom-nav-space' : ''
+        isCompact && activeNav === 'settings' ? ['is-settings', !settingsDetailOpen ? 'md-bottom-nav-space' : ''] : ''
       ]"
       data-app-scroll
     >
       <template v-if="activeNav === 'settings'">
-        <SettingsView>
+        <SettingsView ref="settingsViewRef" @detail-change="settingsDetailOpen = $event">
           <template #status>
             <ImportStatusBar v-if="isCompact" @retry="retryFailedImport" />
           </template>
@@ -190,6 +190,8 @@ const folderInput = ref(null);
 const importMenuOpen = ref(false);
 const appearanceOpen = ref(false);
 const activeNav = ref('shelf');
+const settingsViewRef = shallowRef(null);
+const settingsDetailOpen = ref(false);
 
 useScrollBounce(libraryScrollRef);
 
@@ -364,7 +366,13 @@ useAndroidBackExit(reader, () => {
     resolveImport();
     return true;
   }
+  if (updates.changelogOpen) { updates.closeChangelog(); return true; }
+  if (isCompact.value && updates.updateDialogOpen) {
+    updates.closeUpdateDialog();
+    return true;
+  }
   if (activeNav.value === 'settings') {
+    if (settingsViewRef.value?.dismissBack()) return true;
     activeNav.value = 'shelf';
     scrollAppToTop('smooth');
     return true;
@@ -375,10 +383,6 @@ useAndroidBackExit(reader, () => {
   }
   if (isCompact.value && importProgress.status !== 'idle' && importProgress.expanded) {
     importProgress.toggleExpanded(false);
-    return true;
-  }
-  if (isCompact.value && updates.updateDialogOpen) {
-    updates.closeUpdateDialog();
     return true;
   }
   if (appearanceOpen.value) {

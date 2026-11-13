@@ -23,10 +23,12 @@ document.documentElement.classList.add('homura-splashing');
         : 'light';
     }
     document.documentElement.setAttribute('data-mode', mode);
+    var pureBlack = localStorage.getItem('homura_pure_black') === 'true';
+    document.documentElement.setAttribute('data-black', pureBlack ? 'pure' : 'standard');
     document.documentElement.classList.toggle('dark', mode === 'dark');
     // 移动端浏览器地址栏跟随阅读表面底色，避免启动瞬间白条
     var canvases = { light: '#F8FAFC', dark: '#0F1115' };
     var meta = document.getElementById('homuraThemeColor');
-    if (meta) meta.setAttribute('content', canvases[mode]);
+    if (meta) meta.setAttribute('content', mode === 'dark' && pureBlack ? '#000000' : canvases[mode]);
   } catch (e) {}
 })();

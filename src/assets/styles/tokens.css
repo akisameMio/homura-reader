@@ -253,6 +253,7 @@
     :root {
       --md-canvas-light: #F8FAFC;
       --md-canvas-dark: #0F1115;
+      --md-canvas-black: #000000;
       --md-parchment-paper: #F4E8D3;
       --md-parchment-ink: #2E2418;
       --md-parchment-ink-soft: #695946;
@@ -300,6 +301,15 @@
       --md-outline-variant: #3A424C;
       --md-shadow-color: var(--md-surface);
       --manga-filter: brightness(0.92);
+    }
+
+    /* 纯黑偏好只覆盖夜间表面，主题强调色与白昼模式保持独立。 */
+    [data-mode="dark"][data-black="pure"] {
+      --md-surface: var(--md-canvas-black);
+      --md-surface-low: var(--md-canvas-black);
+      --md-surface-container: color-mix(in oklab, var(--md-canvas-black) 94%, var(--md-on-surface));
+      --md-surface-high: color-mix(in oklab, var(--md-canvas-black) 90%, var(--md-on-surface));
+      --md-surface-highest: color-mix(in oklab, var(--md-canvas-black) 86%, var(--md-on-surface));
     }
 
     /* ==========================================================================
