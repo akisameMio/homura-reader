@@ -140,16 +140,6 @@
             aria-label="阅读方向"
             @update:model-value="reader.setDirection"
           />
-
-          <MdSwitch
-            v-if="config.direction === 'rtl'"
-            class="mt-3.5"
-            :model-value="config.rtlInvertButtons"
-            title="反转 RTL 模式下左右翻页按钮的方向"
-            @update:model-value="reader.toggleRtlTapInvert()"
-          >
-            <span class="text-[13px] font-medium">左右翻页按钮反转</span>
-          </MdSwitch>
         </section>
 
         <!-- 翻页布局 -->

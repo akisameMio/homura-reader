@@ -795,11 +795,6 @@ export const useReaderStore = defineStore('reader', () => {
     }
   }
 
-  function toggleRtlTapInvert() {
-    if (layoutConfig.direction !== 'rtl') return;
-    layoutConfig.rtlInvertButtons = !layoutConfig.rtlInvertButtons;
-  }
-
   function onLeftButtonClick() {
     if (isNavigationInverted()) goNextPage();
     else goPrevPage();
@@ -933,7 +928,6 @@ export const useReaderStore = defineStore('reader', () => {
     setCustomCover,
     goNextPage,
     goPrevPage,
-    toggleRtlTapInvert,
     onLeftButtonClick,
     onRightButtonClick,
     onSliderInput,
