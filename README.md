@@ -2,7 +2,7 @@
   <img src="https://github.com/user-attachments/assets/818e7aba-f12a-49e1-8640-8852cb852b8b" width="180" alt="HOMURA" />
   <h1>HOMURA</h1>
   <p><b>本地漫画与轻小说阅读器</b></p>
-  <p><i>Stories are found things, like fossils in the ground.</i></p>
+  <p><i>**Stories are found things, like fossils in the ground. — Stephen Hawking**</i></p>
   <img src="https://github.com/user-attachments/assets/049e7a11-e0af-4a94-a77e-8f8c72cb50e7" width="160" alt="HOMURA 动图" />
 </div>
 
