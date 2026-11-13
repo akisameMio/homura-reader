@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
 
 // 生成 Release 说明：静态安装信息 + 基于 Conventional Commits 的自动更新日志
-const repo = process.env.GITHUB_REPOSITORY || 'Leon-Ning-san/HOMURA-reader';
+const repo = process.env.GITHUB_REPOSITORY || 'Leon-Ning-san/HomuraReader';
 const server = process.env.GITHUB_SERVER_URL || 'https://github.com';
 const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 const tag = process.env.GITHUB_REF_NAME || `v${version}`;
@@ -74,8 +74,8 @@ if (previousTag) {
 
 const body = `# HOMURA ${tag}
 
-本地优先的 ACGN 漫画与轻小说阅读器，现已支持 macOS、Windows 与 Linux。
-解析与渲染全部在本地完成，不上传任何文件。
+本地优先的 ACGN 漫画、轻小说与图集阅读器，支持 macOS、Windows、Linux 和 Android。
+书籍解析、分页与渲染全部在本机完成，不上传书籍内容。
 
 ## 🔄 更新日志
 
@@ -83,13 +83,13 @@ ${changelog}
 
 ## ✨ 功能亮点
 
-- **格式通吃**：EPUB / KEPUB / CBZ / ZIP / PDF / MOBI / TXT / Markdown，以及整文件夹漫画导入
-- **四种阅读姿势**：单页、双页、日漫右→左、上下条漫
-- **护眼三件套**：白昼 / 暖色护眼 / 夜间模式，搭配蓝、红、绿、紫四色主题
-- **翻页手感**：丝滑平移、柔和淡入、极速无动画，可自由切换
-- **顺手操作**：滚轮翻页、键盘快捷键
-- **书架持久化**：导入的作品、封面与源文件存入本地 IndexedDB，重启后自动恢复
-- **离线可用**：Tailwind 与 JSZip 已内置于应用，断网也能正常阅读
+- **格式齐全**：EPUB / KEPUB、CBZ / ZIP、PDF、MOBI、TXT、Markdown 与图片文件夹；桌面端支持目录导入
+- **小说阅读**：自动分页、竖排文字，按书记忆字号、字体、行距和页边距
+- **漫画阅读**：单页、双页、首页单排、日漫右→左与上下条漫滚动
+- **翻页手感**：圆角覆盖滑动、跟手卷页、柔和淡入与滚动模式可自由切换
+- **10 套主题 × 3 种表面**：白昼 / 暖色护眼 / 夜间，适配桌面与手机界面
+- **本地书架**：书库、收藏、自定义封面、阅读进度与排版记忆全部保存在本机
+- **顺手操作**：滚轮与键盘翻页，Android 支持音量键翻页；大文件导入可取消并重试
 
 ## 📦 下载安装
 
@@ -98,6 +98,9 @@ ${changelog}
 | macOS | \`.dmg\`（Universal，Apple Silicon + Intel） |
 | Windows | \`.msi\` 或 NSIS \`-setup.exe\` |
 | Linux | \`.deb\` / \`.rpm\` |
+| Android | \`.apk\`（arm64-v8a / armeabi-v7a） |
+
+> **Android**：新设备优先选择 arm64-v8a；仅支持 32 位的旧设备请选择 armeabi-v7a。
 
 ## 🍎 macOS 首次打开
 
@@ -110,15 +113,17 @@ ${changelog}
 
 \`\`\`bash
 npm install
-npm run build
+npm run build       # 桌面安装包
 \`\`\`
 
-构建产物位于 \`src-tauri/target/release/bundle/\`。
+Android 构建命令与 keystore 配置见 README 与 \`docs/features.md\`。桌面构建产物位于
+\`src-tauri/target/release/bundle/\`。
 
 ## 📌 说明
 
-- 书架数据保存在本机 IndexedDB 中，卸载应用或清理站点数据会一并清除。
-- 欢迎反馈问题与建议。
+- 书籍元数据、原始文件与阅读进度保存在本机；Tauri 版还会把元数据镜像到本地 SQLite。
+- 卸载应用或清理应用数据会同时清除本地书架，请自行保留原始书籍与重要数据。
+- 欢迎通过 [Issues](${server}/${repo}/issues) 反馈问题与建议。
 `;
 
 if (process.env.GITHUB_OUTPUT) {
