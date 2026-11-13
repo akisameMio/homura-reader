@@ -79,6 +79,7 @@
 
       <ReaderTocDrawer />
       <ReaderSettingsDrawer />
+      <ReaderFontDrawer />
       <ReaderCollectionDrawer />
       <Transition
         enter-active-class="md-fade-enter-active"
@@ -126,6 +127,7 @@ import MdIcon from './MdIcon.vue';
 import ReaderTopBar from './ReaderTopBar.vue';
 import ReaderTocDrawer from './ReaderTocDrawer.vue';
 import ReaderSettingsDrawer from './ReaderSettingsDrawer.vue';
+import ReaderFontDrawer from './ReaderFontDrawer.vue';
 import ReaderCollectionDrawer from './ReaderCollectionDrawer.vue';
 import PaginatedView from './PaginatedView.vue';
 import WebtoonView from './WebtoonView.vue';

@@ -46,13 +46,12 @@
       <!-- 可重排的正文用 Aa 开字体浮层；漫画 / PDF 没有字体可换，用齿轮开显示设置 -->
       <button
         v-if="isReflowable"
-        ref="typeButton"
         type="button"
         class="md-reader-type-button md-icon-button"
         :class="{ 'is-active': ui.fontMenuOpen }"
         title="字体"
         aria-label="字体"
-        aria-haspopup="menu"
+        aria-haspopup="dialog"
         aria-controls="reader-font-menu"
         :aria-expanded="ui.fontMenuOpen"
         @click="ui.toggleFontMenu()"
@@ -72,38 +71,6 @@
         <MdIcon name="settings" />
       </button>
 
-      <Transition
-        enter-active-class="md-fade-enter-active"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
-        leave-active-class="md-fade-leave-active"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="isReflowable && ui.fontMenuOpen"
-          id="reader-font-menu"
-          ref="fontMenu"
-          class="md-menu md-reader-font-menu"
-          role="menu"
-          aria-label="正文字体"
-        >
-          <p class="md-menu-label">字体</p>
-          <button
-            v-for="option in fontOptions"
-            :key="option.value"
-            type="button"
-            role="menuitemradio"
-            :aria-checked="reader.layoutConfig.fontFamily === option.value"
-            class="md-menu-item md-reader-font-item"
-            @click="pickFont(option.value)"
-          >
-            <span class="md-reader-font-sample" :style="{ fontFamily: option.stack }" aria-hidden="true">永</span>
-            <span class="md-reader-font-name">{{ option.label }}</span>
-            <MdIcon v-if="reader.layoutConfig.fontFamily === option.value" name="check" class="md-menu-check" />
-          </button>
-        </div>
-      </Transition>
 
       <button
         type="button"
@@ -145,12 +112,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useReaderStore } from '../stores/reader.ts';
 import { useShelfStore } from '../stores/shelf.ts';
 import { useSettingsStore } from '../stores/settings.ts';
 import { useUiStore } from '../stores/ui.ts';
-import { READER_FONT_OPTIONS } from '../services/readerLayout.ts';
 import MdIcon from './MdIcon.vue';
 
 const reader = useReaderStore();
@@ -165,43 +131,10 @@ const isFavorite = computed(() => !!((shelf.library).find(book => book.id === re
 // 漫画与 PDF 的页面是位图，没有字体 / 行距可调
 const isReflowable = computed(() => reader.currentBook?.type !== 'manga');
 const bookTitle = computed(() => reader.currentBook?.title || '');
-const fontOptions = READER_FONT_OPTIONS;
-const typeButton = ref<HTMLElement | null>(null);
-const fontMenu = ref<HTMLElement | null>(null);
-
 watch(() => reader.currentBook?.id, () => {
   favoriteError.value = '';
   ui.closeFontMenu();
 });
-
-function onDocumentPointerDown(event: PointerEvent) {
-  if (!ui.fontMenuOpen) return;
-  const target = event.target as Node | null;
-  if (fontMenu.value?.contains(target) || typeButton.value?.contains(target)) return;
-  ui.closeFontMenu();
-}
-
-function onDocumentKeydown(event: KeyboardEvent) {
-  if (!ui.fontMenuOpen || event.key !== 'Escape') return;
-  // 浮层优先吃掉 Esc，别让全局快捷键顺手关掉阅读器
-  event.preventDefault();
-  event.stopPropagation();
-  ui.closeFontMenu();
-  typeButton.value?.focus();
-}
-
-document.addEventListener('pointerdown', onDocumentPointerDown, true);
-document.addEventListener('keydown', onDocumentKeydown, true);
-onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', onDocumentPointerDown, true);
-  document.removeEventListener('keydown', onDocumentKeydown, true);
-});
-
-function pickFont(value: string) {
-  reader.setFontFamily(value);
-  ui.closeFontMenu();
-  nextTick(() => typeButton.value?.focus());
-}
 
 async function toggleFavorite() {
   const id = reader.currentBook?.id;

@@ -269,6 +269,9 @@
 - 桌面 `>=900px`：宽 372px，最大 92%，贴右侧，左侧 28px 圆角。
 - 手机 `<900px`：底部 sheet，最大 `78dvh`，顶部 28px 圆角，保留安全区。
 - 头部固定；`.md-drawer-body` 独立滚动并设置 `overscroll-behavior: contain`；底部操作区固定。
+- 阅读设置使用「排版 / 外观 / 封面」三个页签，大圆角分组卡片；字号预览放在排版滚动区内。`ReaderDrawerHeader prominent` 提供左侧圆形关闭按钮与 `status` 插槽，其他抽屉沿用默认头部。
+- 顶栏字体入口打开 `ReaderFontDrawer`：桌面使用 372px side sheet，手机使用 78dvh bottom sheet，复用遮罩、拖拽关闭与固定搜索区；默认字体独立一组，可用字体按自身字体展示并支持搜索；字体来源为 `READER_FONT_OPTIONS`，选中后关闭卡片并恢复触发按钮焦点。
+- 阅读纸面用 `SurfaceModePreview surface="reader" cards`：羊皮纸与护眼绿双列，跟随设置外观占满一行；默认缩略图布局不变。字体、行距和页边距复用 `SettingsSelectRow`，选择项保留原始值类型。
 - 手机拖拽条由 `ReaderDrawerHeader` 渲染，手势逻辑统一走 `useSheetDrag()`。
 - 遮罩 z-40，sheet z-50；不要新增 `z-[999]`。
 - 抽屉打开时禁止背景滚动并停止工具栏自动隐藏；关闭后恢复焦点与滚动位置。

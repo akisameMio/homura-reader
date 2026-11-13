@@ -33,9 +33,11 @@ interface UiLike {
   settingsOpen: boolean;
   tocOpen: boolean;
   collectionTocOpen: boolean;
+  fontMenuOpen?: boolean;
   closeSettings: () => void;
   closeToc: () => void;
   closeCollectionToc: () => void;
+  closeFontMenu?: () => void;
 }
 interface BackGesture {
   pointerId: number;
@@ -280,7 +282,8 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
   }
 
   function closeOpenDrawer() {
-    if (ui.settingsOpen) ui.closeSettings();
+    if (ui.fontMenuOpen) ui.closeFontMenu?.();
+    else if (ui.settingsOpen) ui.closeSettings();
     else if (ui.tocOpen) ui.closeToc();
     else if (ui.collectionTocOpen) ui.closeCollectionToc();
   }

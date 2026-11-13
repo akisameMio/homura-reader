@@ -497,7 +497,7 @@ Hover 规则：
 - 活动轨道宽度由组件按 `min/max` 自动计算，不要在调用处手写渐变或进度宽度。
 - RTL 翻页传入 `:rtl="inverted"`，活动轨道会从右往左填充，不要反转整个底栏。
 - 拖动时持续更新视觉进度，持久化仍由现有节流机制负责。
-- 阅读设置里的字号滑条使用 `variant="bubble"`：28px 轨道、40px 数值圆钮、每个可选档位一个 4px 点阵，活动段使用 `primary` 与 `on-primary` 点阵；两端 `A−` / `A+` 为 44px 按钮。字号只提供 14–28px 偶数档。
+- 阅读设置里的字号滑条使用 `variant="bubble"`：28px 轨道、40px 数值圆钮、每个可选档位一个 4px 点阵，活动段使用 `primary` 与 `on-primary` 点阵；两端 `A−` / `A+` 为 48px 按钮。字号只提供 14–28px 偶数档。
 
 ## 7. 卡片与内容展示
 
@@ -758,22 +758,20 @@ Hover 规则：
 
 ### 11.4 阅读设置
 
-组件：`ReaderSettingsDrawer.vue`
+组件：`ReaderSettingsDrawer.vue`；顶栏字体入口使用 `ReaderFontDrawer.vue`。
 
-分组顺序固定为：
+页签顺序固定为「排版 / 外观 / 封面」，底部固定「恢复默认 / 完成」：
 
-1. 阅读方向
-2. 翻页布局
-3. 排版（非漫画）
-4. 外观
-5. 底部「恢复默认 / 完成」
+1. 排版：字号预览、字号滑条、字体 / 行距 / 页边距，阅读方向与翻页布局
+2. 外观：阅读纸面卡片、翻页方式
+3. 封面：自定义封面与恢复原封面
 
 要求：
 
 - 分段控件和开关复用 `MdSegmentedControl.vue`、`MdSwitch.vue`。
 - 双页在窄屏强制单页时，必须给出解释文案，不能静默忽略用户设置。
-- 字号调整使用 44px 圆形按钮，桌面与触屏一致。
-- 外观分组复用 `SurfaceModePreview.vue` 与 `ThemeSwatchGrid.vue`。
+- 字号调整使用 48px 圆形按钮，桌面与触屏一致。
+- 阅读纸面复用 `SurfaceModePreview.vue` 的 `cards` 模式；字体抽屉复用 `ReaderDrawerHeader prominent`、遮罩与 `useSheetDrag()`，打开时与其他阅读抽屉互斥。
 - 设置变化应立即预览并沿用现有进度/排版持久化逻辑。
 
 ### 11.5 阅读画布与手势

@@ -1,11 +1,11 @@
 <template>
-  <div class="surface-mode-preview" role="group" :aria-label="isReader ? '阅读模式' : '表面'">
+  <div class="surface-mode-preview" :class="{ 'is-cards': cards && isReader }" role="group" :aria-label="isReader ? '阅读模式' : '表面'">
     <button
       v-for="option in options"
       :key="option.value"
       type="button"
       class="surface-mode-option"
-      :class="{ 'is-selected': selectedValue === option.value }"
+      :class="{ 'is-selected': selectedValue === option.value, 'is-follow': option.value === 'settings' }"
       :title="option.title"
       :aria-label="`${option.label}：${option.note}`"
       :aria-pressed="selectedValue === option.value"
@@ -18,21 +18,30 @@
         :data-mode="previewMode(option)"
       >
         <span class="surface-mode-sheet" :class="sheetClass(option)" aria-hidden="true">
-          <span class="surface-mode-palette"><i></i><i></i><i></i></span>
-          <span class="surface-mode-copy-block"><i></i><i></i><i></i></span>
-          <span class="surface-mode-footer"><i></i><i></i></span>
-          <span v-if="isReader && option.value === 'settings'" class="surface-mode-badge">跟随</span>
+          <template v-if="cards && isReader">
+            <b class="surface-mode-sample-title">阅读时光</b>
+            <span class="surface-mode-sample-lines"><i></i><i></i></span>
+          </template>
+          <template v-else>
+            <span class="surface-mode-palette"><i></i><i></i><i></i></span>
+            <span class="surface-mode-copy-block"><i></i><i></i><i></i></span>
+            <span class="surface-mode-footer"><i></i><i></i></span>
+            <span v-if="isReader && option.value === 'settings'" class="surface-mode-badge">跟随</span>
+          </template>
         </span>
-        <span v-if="selectedValue === option.value" class="surface-mode-check" aria-hidden="true">
+        <span v-if="selectedValue === option.value && !(cards && isReader)" class="surface-mode-check" aria-hidden="true">
           <MdIcon name="check" />
         </span>
       </span>
+
+      <span v-if="cards && isReader && selectedValue === option.value" class="surface-mode-check" aria-hidden="true"><MdIcon name="check" /></span>
 
       <span class="surface-mode-meta">
         <span class="surface-mode-icon" aria-hidden="true">
           <MdIcon :name="option.icon" />
         </span>
         <span class="surface-mode-note">{{ option.label }}</span>
+        <span v-if="cards && isReader" class="surface-mode-description">{{ option.value === 'settings' ? '沿用应用的外观与主题设置' : option.note }}</span>
       </span>
     </button>
   </div>
@@ -57,7 +66,8 @@ type PreviewOption = {
 };
 
 const props = defineProps({
-  surface: { type: String, default: 'appearance' }
+  surface: { type: String, default: 'appearance' },
+  cards: { type: Boolean, default: false }
 });
 
 const theme = useThemeStore();
@@ -342,4 +352,82 @@ function selectMode(mode: string, event: MouseEvent) {
     transform: none;
   }
 }
+
+.surface-mode-preview.is-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: none;
+}
+.is-cards .surface-mode-option {
+  position: relative;
+  padding: 12px;
+  border: 2px solid transparent;
+  border-radius: 26px;
+  background: var(--md-surface);
+}
+.is-cards .surface-mode-option.is-selected { border-color: var(--md-primary); }
+.is-cards .surface-mode-card {
+  height: 92px;
+  aspect-ratio: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  box-shadow: none;
+  background: var(--md-surface-low);
+  transform: none;
+}
+.is-cards .surface-mode-option:hover .surface-mode-card { transform: none; box-shadow: none; }
+.is-cards .surface-mode-sheet {
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  border-radius: inherit;
+  box-shadow: none;
+  color: var(--md-on-surface-variant);
+}
+.is-cards .is-preview-parchment { color: var(--md-parchment-ink-soft); }
+.is-cards .is-preview-green { color: var(--md-reader-green-ink-soft); }
+.surface-mode-sample-title { font-family: 'Songti SC', serif; font-size: 17px; font-weight: 500; }
+.surface-mode-sample-lines { display: grid; gap: 6px; }
+.surface-mode-sample-lines i {
+  display: block;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.3;
+}
+.surface-mode-sample-lines i:last-child { width: 65%; }
+.is-cards .surface-mode-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 12px;
+}
+.is-cards .surface-mode-icon { display: none; }
+.is-cards .surface-mode-note { font-size: 13px; font-weight: 600; color: var(--md-on-surface); }
+.surface-mode-description { font-size: 10px; line-height: 1.6; color: var(--md-on-surface-variant); }
+.is-cards .surface-mode-check {
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  box-shadow: none;
+}
+.is-cards .surface-mode-option.is-follow {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 92px;
+  padding: 12px 16px;
+}
+.is-cards .is-follow .surface-mode-card { width: 76px; height: 66px; flex: none; }
+.is-cards .is-follow .surface-mode-sheet { padding: 10px; gap: 7px; }
+.is-cards .is-follow .surface-mode-sample-title { font-size: 12px; }
+.is-cards .is-follow .surface-mode-meta { min-width: 0; margin-top: 0; padding-right: 10px; }
+.is-cards .is-follow .surface-mode-note { white-space: normal; }
+.is-cards .surface-mode-option:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+.is-cards .surface-mode-option:focus-visible .surface-mode-card { outline: none; }
 </style>

@@ -34,7 +34,9 @@ export function useShortcuts(reader: ReaderStore, viewportRef: Ref<HTMLElement |
       reader.goPrevPage();
     } else if (e.key === 'Escape') {
       // 逐层退出：先关抽屉，再唤出工具栏，最后关闭阅读器
-      if (ui.settingsOpen) {
+      if (ui.fontMenuOpen) {
+        ui.closeFontMenu();
+      } else if (ui.settingsOpen) {
         ui.closeSettings();
       } else if (ui.tocOpen) {
         ui.closeToc();

@@ -53,6 +53,7 @@
             @update:model-value="setSurfaceMode"
           />
         </div>
+        <p class="settings-detail-hint">更多外观设置</p>
         <div class="settings-book-stage" aria-hidden="true">
           <div class="settings-open-book">
             <div class="settings-book-page">
@@ -1413,7 +1414,23 @@ onBeforeUnmount(() => {
   position: relative;
   overflow: hidden;
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
+  gap: 20px;
+}
+
+.settings-appearance > .settings-detail-hint {
+  align-self: stretch;
+  z-index: 1;
+  margin: auto 30px 0 0;
+}
+
+.settings-appearance .settings-book-stage {
+  bottom: 64px;
+}
+
+.settings-appearance .settings-open-book {
+  max-height: calc(100% - 40px);
 }
 
 .appearance-content {

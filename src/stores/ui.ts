@@ -106,8 +106,11 @@ export const useUiStore = defineStore('ui', () => {
     showChrome();
   }
 
-  // 字体浮层：打开时钉住工具栏，关闭时重新计时
+  // 字体抽屉与其他阅读抽屉互斥，打开时钉住工具栏。
   function openFontMenu() {
+    settingsOpen.value = false;
+    tocOpen.value = false;
+    collectionTocOpen.value = false;
     fontMenuOpen.value = true;
     clearHideTimer();
     readerChromeVisible.value = true;

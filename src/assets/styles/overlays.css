@@ -164,31 +164,6 @@
       grid-column: 3;
       justify-content: flex-end;
     }
-    /* 字体浮层：贴 Aa 下方，走通用 .md-menu（8px 圆角 + elevation-2） */
-    .md-reader-font-menu {
-      position: absolute;
-      z-index: 40;
-      top: calc(100% + 8px);
-      right: 0;
-      max-height: min(60vh, 420px);
-      width: 208px;
-    }
-    .md-reader-font-item {
-      gap: 10px;
-    }
-    .md-reader-font-sample {
-      flex: none;
-      width: 28px;
-      font-size: 20px;
-      line-height: 1;
-      text-align: center;
-      color: var(--md-on-surface);
-    }
-    .md-reader-font-name {
-      flex: 1 1 auto;
-      min-width: 0;
-      text-align: left;
-    }
     .md-reader-topbar-group {
       display: flex;
       align-items: center;
@@ -754,86 +729,6 @@
       .md-drawer-header {
         min-height: 72px;
         padding: 16px 16px 12px 24px;
-      }
-    }
-
-    /* 阅读设置顶部预览：贴边通栏的一页纸，字号 / 字体 / 行距 / 页边距即时反馈 */
-    .reader-type-preview-wrap {
-      flex: none;
-      padding: 0;
-    }
-    .reader-type-preview {
-      position: relative;
-      height: 208px;
-      overflow: hidden;
-      padding-top: 18px;
-      border-bottom: 1px solid color-mix(in oklab, var(--md-outline-variant) 70%, transparent);
-      background: var(--md-reader-paper, var(--md-surface));
-    }
-    /* 底部渐隐，字号再大也不会把文字硬切一刀 */
-    .reader-type-preview::after {
-      content: '';
-      position: absolute;
-      right: 0;
-      bottom: 0;
-      left: 0;
-      height: 42px;
-      background: linear-gradient(to bottom, transparent, var(--md-reader-paper, var(--md-surface)));
-      pointer-events: none;
-    }
-    .reader-type-preview-head {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 0 var(--reader-preview-pad, 20px);
-    }
-    .reader-type-preview-glyph {
-      display: flex;
-      align-items: baseline;
-      gap: 2px;
-      color: var(--md-reader-ink);
-    }
-    .reader-type-preview-glyph b {
-      font-family: var(--font-sans, system-ui, sans-serif);
-      font-size: 30px;
-      font-weight: 600;
-      line-height: 1;
-    }
-    .reader-type-preview-glyph span {
-      font-family: var(--font-sans, system-ui, sans-serif);
-      font-size: 14px;
-      font-weight: 600;
-      line-height: 1;
-    }
-    .reader-type-preview-meta {
-      flex: none;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 10.5px;
-      letter-spacing: 0.02em;
-      color: var(--md-reader-ink-faint);
-    }
-    .reader-type-preview-text {
-      margin: 10px 0 0;
-      padding: 0 var(--reader-preview-pad, 20px);
-      color: var(--md-reader-ink);
-      letter-spacing: 0.01em;
-      text-align: justify;
-      text-justify: inter-ideograph;
-    }
-    @media (max-width: 899px) {
-      .reader-type-preview {
-        height: 168px;
-        padding-top: 14px;
-      }
-      .reader-type-preview-glyph b {
-        font-size: 24px;
-      }
-      .reader-type-preview-glyph span {
-        font-size: 12px;
-      }
-      .reader-type-preview-text {
-        margin-top: 6px;
       }
     }
 

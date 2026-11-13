@@ -50,9 +50,9 @@
 
 - 分页阅读支持左到右、右到左（日漫）；选择「滚动」可切换为纵向长卷。
 - 漫画支持单页 / 双页与「首页单排」；窗口宽度小于 `768px` 时强制按单页显示。
-- 小说正文可选宋体 / 黑体 / 楷体，行距与页边距各有三档；字号可在 `14–28px` 之间拖动滑块或逐级调整，只提供偶数档。每页行数随字体、字号、行距、页边距和窗口自动重新计算，长段落也会继续分页，按书保留排版与阅读进度。
-- 阅读设置最下方可选择本地图片作为自定义封面，支持恢复原封面；书架、继续阅读与书库封面同步更新，导入书籍的封面重启后保留，不修改原书文件。示例书封面仅在本次打开期间保留。
-- 阅读设置面板仅在内容超出可用高度时显示滚动条。
+- 小说正文可选原始 / 方体 / 宋体 / 楷体 / 圆体，行距与页边距各有三档；字号可在 `14–28px` 之间拖动滑块或逐级调整，只提供偶数档。每页行数随字体、字号、行距、页边距和窗口自动重新计算，长段落也会继续分页，按书保留排版与阅读进度。
+- 阅读设置的「封面」页签可选择本地图片作为自定义封面，支持恢复原封面；书架、继续阅读与书库封面同步更新，导入书籍的封面重启后保留，不修改原书文件。示例书封面仅在本次打开期间保留。
+- 阅读设置分「排版 / 外观 / 封面」三个页签，滚动区固定使用细滚动条。
 - 漫画滚动阅读提供完整单张、适中宽幅、超宽满屏三档尺寸。
 - 小说分页阅读支持竖排文字：在「翻页布局」下开启后，文字从上往下、各列从右往左排列；单双页、字号和行距仍可调整，横竖排切换与重开按书恢复。
 - 翻页方式可选圆角覆盖式滑动、跟手卷页、柔和淡入和滚动；上一页沿同一纸面轨迹逆向还原。滚动沿用长卷阅读，切回分页时恢复之前的左右方向。
@@ -129,7 +129,7 @@ homura-reader/
 │   ├── composables/            # 10 个：useImporter / useViewport / useShortcuts / useSheetDrag /
 │   │                           # useShelfDialogs / useScrollBounce / useDuplicateImport /
 │   │                           # useReaderBackDismiss / useAndroidBackExit / useVolumeKeys
-│   └── components/             # 41 个 SFC：SideNav、LibraryHeader、BookShelf、BookCard、
+│   └── components/             # 45 个 SFC：SideNav、LibraryHeader、BookShelf、BookCard、
 │                               # ReaderModal、PaginatedView、WebtoonView、DesktopIsland、SettingsView 等
 ├── tests/                      # 37 个 .test.mjs（node:test + jsdom）
 ├── scripts/                    # check-dark-glow / generate-icons / release-notes / sync-android-icons /
