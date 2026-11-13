@@ -1,5 +1,5 @@
 <template>
-  <div class="settings-page" :class="{ 'has-detail': activeSection }">
+  <div ref="pageRef" class="settings-page" :class="{ 'has-detail': activeSection }">
     <header class="settings-topbar" :style="isCompact ? { paddingTop: 'env(safe-area-inset-top)' } : null">
       <div class="settings-topbar-inner">
         <button
@@ -91,10 +91,7 @@
           </h2>
           <span>首次打开作品时采用</span>
         </div>
-        <div
-          class="settings-reading-controls"
-          :class="{ 'is-scrolling': readerDefaults.direction === 'vertical' }"
-        >
+        <div class="settings-reading-controls">
           <div class="settings-block">
             <div class="settings-head">
               <span>翻页方式</span>
@@ -107,82 +104,33 @@
               @update:model-value="settings.setTransitionStyle"
             />
           </div>
-          <template v-if="readerDefaults.direction !== 'vertical'">
-            <div class="settings-block">
-              <div class="settings-head">
-                <span>阅读方向</span>
-                <b>{{ directionLabel }}</b>
-              </div>
-              <MdSegmentedControl
-                :model-value="readerDefaults.direction"
-                :options="directionOptions"
-                aria-label="阅读方向"
-                @update:model-value="setDirection"
-              />
-            </div>
-            <div class="settings-block">
-              <div class="settings-head">
-                <span>跨页布局</span>
-                <b>{{ spreadLabel }}</b>
-              </div>
-              <MdSegmentedControl
-                :model-value="readerDefaults.spread"
-                :options="spreadOptions"
-                aria-label="跨页布局"
-                @update:model-value="setSpread"
-              />
-            </div>
-          </template>
-        </div>
-        <div class="settings-reading-bottom">
           <div class="settings-block">
             <div class="settings-head">
-              <span>默认字号</span>
-              <b>{{ readerDefaults.fontSize }} px</b>
+              <span>阅读方向</span>
+              <b>{{ directionLabel }}</b>
             </div>
-            <div class="font-size-control">
-              <button
-                type="button"
-                class="settings-icon-button"
-                title="减小字号"
-                aria-label="减小字号"
-                :disabled="readerDefaults.fontSize <= 14"
-                @click="changeDefaultFont(-2)"
-              >
-                <MdIcon name="remove" />
-              </button>
-              <MdRange
-                class="settings-range"
-                :model-value="readerDefaults.fontSize"
-                :min="14"
-                :max="28"
-                :step="2"
-                aria-label="默认字号"
-                @update:model-value="setFontSize"
-              />
-              <button
-                type="button"
-                class="settings-icon-button"
-                title="增大字号"
-                aria-label="增大字号"
-                :disabled="readerDefaults.fontSize >= 28"
-                @click="changeDefaultFont(2)"
-              >
-                <MdIcon name="add" />
-              </button>
-            </div>
+            <MdSegmentedControl
+              :model-value="readerDefaults.pagedDirection"
+              :options="directionOptions"
+              :disabled="isScrollDefault"
+              aria-label="阅读方向"
+              @update:model-value="setDirection"
+            />
           </div>
-          <MdSwitch
-            v-if="readerDefaults.direction !== 'vertical'"
-            :model-value="readerDefaults.verticalText"
-            title="文字从上往下，各列从右往左排列，仅作用于小说分页阅读"
-            @update:model-value="value => settings.setReaderDefault('verticalText', value)"
-          >
-            <span class="settings-value-copy">
-              <b>竖排文字</b>
-              <span>文字从上往下，各列从右往左</span>
-            </span>
-          </MdSwitch>
+          <div class="settings-block">
+            <div class="settings-head">
+              <span>跨页布局</span>
+              <b>{{ spreadLabel }}</b>
+            </div>
+            <MdSegmentedControl
+              :model-value="readerDefaults.spread"
+              :options="spreadOptions"
+              :disabled="isScrollDefault"
+              aria-label="跨页布局"
+              @update:model-value="setSpread"
+            />
+          </div>
+          <p v-if="isScrollDefault" class="settings-scroll-note">滚动模式沿用上次的分页方向与跨页布局，切回分页后生效。</p>
         </div>
         <p class="settings-detail-hint">更多阅读设置</p>
       </section>
@@ -456,44 +404,45 @@
               :options="transitionOptions"
               @update:model-value="settings.setTransitionStyle"
             />
-            <template v-if="readerDefaults.direction !== 'vertical'">
-              <SettingsSelectRow
-                label="阅读方向"
-                :model-value="readerDefaults.direction"
-                :options="directionOptions"
-                @update:model-value="setDirection"
-              />
-              <SettingsSelectRow
-                label="跨页布局"
-                :model-value="readerDefaults.spread"
-                :options="spreadOptions"
-                @update:model-value="setSpread"
-              />
-              <MdSwitch
-                v-if="readerDefaults.spread === 2"
-                class="settings-list-row"
-                :model-value="readerDefaults.coverOffset"
-                title="让后续跨页大图保持对齐"
-                @update:model-value="value => settings.setReaderDefault('coverOffset', value)"
-              >
-                <span class="settings-value-copy">
-                  <b>首页单排</b>
-                  <span>让后续跨页大图保持对齐</span>
-                </span>
-              </MdSwitch>
-              <MdSwitch
-                class="settings-list-row"
-                :model-value="readerDefaults.verticalText"
-                title="文字从上往下，各列从右往左排列，仅作用于小说分页阅读"
-                @update:model-value="value => settings.setReaderDefault('verticalText', value)"
-              >
-                <span class="settings-value-copy">
-                  <b>竖排文字</b>
-                  <span>文字从上往下，各列从右往左</span>
-                </span>
-              </MdSwitch>
-            </template>
+            <SettingsSelectRow
+              label="阅读方向"
+              :model-value="readerDefaults.pagedDirection"
+              :options="directionOptions"
+              :disabled="isScrollDefault"
+              @update:model-value="setDirection"
+            />
+            <SettingsSelectRow
+              label="跨页布局"
+              :model-value="readerDefaults.spread"
+              :options="spreadOptions"
+              :disabled="isScrollDefault"
+              @update:model-value="setSpread"
+            />
+            <MdSwitch
+              v-if="readerDefaults.spread === 2 && !isScrollDefault"
+              class="settings-list-row"
+              :model-value="readerDefaults.coverOffset"
+              title="让后续跨页大图保持对齐"
+              @update:model-value="value => settings.setReaderDefault('coverOffset', value)"
+            >
+              <span class="settings-value-copy">
+                <b>首页单排</b>
+                <span>让后续跨页大图保持对齐</span>
+              </span>
+            </MdSwitch>
+            <MdSwitch
+              class="settings-list-row"
+              :model-value="readerDefaults.verticalText"
+              title="文字从上往下，各列从右往左排列，仅作用于小说分页阅读"
+              @update:model-value="value => settings.setReaderDefault('verticalText', value)"
+            >
+              <span class="settings-value-copy">
+                <b>竖排文字</b>
+                <span>文字从上往下，各列从右往左</span>
+              </span>
+            </MdSwitch>
           </div>
+          <p v-if="isScrollDefault" class="settings-detail-note">滚动模式沿用上次的分页方向与跨页布局，切回分页后生效。</p>
         </section>
         <section class="settings-detail-group" aria-labelledby="settings-text-heading">
           <h2 id="settings-text-heading">文字与滚动</h2>
@@ -922,6 +871,7 @@ import {
 import { WEBTOON_FIT_LABELS } from '../stores/reader.ts';
 import { useUpdateStore } from '../stores/updates.ts';
 import { useViewport } from '../composables/useViewport.ts';
+import { useSettingsTransition } from '../composables/useSettingsTransition.ts';
 import MdIcon from './MdIcon.vue';
 import MdRange from './MdRange.vue';
 import MdSegmentedControl from './MdSegmentedControl.vue';
@@ -945,12 +895,12 @@ const debugNote = ref('');
 
 const transitionOptions = TRANSITION_OPTIONS;
 const directionOptions = [
-  { value: 'ltr', label: '从左到右', title: '普通排版' },
-  { value: 'rtl', label: '从右到左', title: '日漫' }
+  { value: 'ltr', label: '从左到右', title: '普通排版', icon: 'chevron_right' },
+  { value: 'rtl', label: '从右到左', title: '日漫', icon: 'chevron_left' }
 ];
 const spreadOptions = [
-  { value: 1, label: '单页' },
-  { value: 2, label: '双页' }
+  { value: 1, label: '单页', icon: 'article' },
+  { value: 2, label: '双页', icon: 'auto_stories' }
 ];
 const webtoonOptions = [
   { value: 'screen', label: WEBTOON_FIT_LABELS.screen },
@@ -965,7 +915,9 @@ const sectionTitles = {
 };
 type SettingsSection = keyof typeof sectionTitles;
 const activeSection = ref<SettingsSection | null>(null);
+const pageRef = shallowRef<HTMLElement | null>(null);
 const backButtonRef = shallowRef<HTMLButtonElement | null>(null);
+const sectionTransition = useSettingsTransition();
 const sectionHistory: {
   section: SettingsSection | null;
   scrollTop: number;
@@ -994,8 +946,9 @@ const themeLabel = computed(() => {
   return option ? option.title.replace(' (默认)', '') : theme.themeColor;
 });
 const transitionLabel = computed(() => TRANSITION_LABELS[settings.transitionStyle] || '');
+const isScrollDefault = computed(() => readerDefaults.direction === 'vertical');
 const directionLabel = computed(() => {
-  const option = directionOptions.find(item => item.value === readerDefaults.direction);
+  const option = directionOptions.find(item => item.value === readerDefaults.pagedDirection);
   return option ? option.label : '';
 });
 const spreadLabel = computed(() => readerDefaults.spread === 2 ? '双页' : '单页');
@@ -1118,10 +1071,14 @@ function settingsScroller() {
 }
 
 async function openSection(section: SettingsSection, event: MouseEvent) {
+  const trigger = event.currentTarget as HTMLElement;
+  const card = trigger.closest<HTMLElement>('.settings-card');
+  if (!await sectionTransition.bounce(card)) return;
+  const transition = sectionTransition.capture(pageRef.value, card);
   sectionHistory.push({
     section: activeSection.value,
     scrollTop: settingsScroller()?.scrollTop ?? window.scrollY,
-    trigger: event.currentTarget as HTMLElement,
+    trigger,
     selector: `.settings-${section} > .settings-card-open`
   });
   activeSection.value = section;
@@ -1129,11 +1086,13 @@ async function openSection(section: SettingsSection, event: MouseEvent) {
   await nextTick();
   scrollAppToTop();
   backButtonRef.value?.focus({ preventScroll: true });
+  transition?.play();
   if (section === 'storage' && !storageLoading.value) refreshStorage();
 }
 
 async function showPreviousSection() {
   if (actionBusy.value) return;
+  const transition = sectionTransition.capture(pageRef.value);
   const previous = sectionHistory.pop();
   activeSection.value = previous?.section ?? null;
   emit('detail-change', !!activeSection.value);
@@ -1147,6 +1106,7 @@ async function showPreviousSection() {
     ? previous.trigger
     : previous ? document.querySelector<HTMLElement>(previous.selector) : null;
   trigger?.focus({ preventScroll: true });
+  transition?.play(trigger?.closest<HTMLElement>('.settings-card'));
 }
 
 function dismissBack() {
@@ -1154,6 +1114,7 @@ function dismissBack() {
     closeDataDialog();
     return true;
   }
+  if (sectionTransition.dismissBounce()) return true;
   if (!activeSection.value) return false;
   showPreviousSection();
   return true;
@@ -1222,6 +1183,10 @@ async function confirmDataAction() {
 
 function onDialogKeydown(event: KeyboardEvent) {
   if (!pendingAction.value) {
+    if (event.key === 'Escape' && sectionTransition.dismissBounce()) {
+      event.preventDefault();
+      return;
+    }
     if (event.key === 'Escape' && activeSection.value && !updates.changelogOpen && !updates.updateDialogOpen) {
       event.preventDefault();
       showPreviousSection();
@@ -1539,10 +1504,6 @@ onBeforeUnmount(() => {
   gap: 20px;
 }
 
-.settings-reading-controls.is-scrolling {
-  grid-template-columns: 1fr;
-}
-
 .settings-head {
   display: flex;
   align-items: baseline;
@@ -1569,20 +1530,12 @@ onBeforeUnmount(() => {
   font-size: 11px;
 }
 
-.settings-reading-bottom {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  align-items: center;
-  gap: 32px;
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid color-mix(in oklab, var(--md-outline-variant) 65%, transparent);
-}
-
-.settings-reading-bottom .settings-head b {
-  color: var(--md-primary);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
+.settings-scroll-note {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+  line-height: 1.7;
 }
 
 .font-size-control {
@@ -1872,9 +1825,10 @@ onBeforeUnmount(() => {
     grid-column: 1 / -1;
   }
 
-  .settings-reading-bottom {
-    gap: 20px;
+  .settings-scroll-note {
+    grid-column: 1 / -1;
   }
+
 }
 
 @container settings (max-width: 1039px) {
@@ -1993,7 +1947,7 @@ onBeforeUnmount(() => {
     margin-block: 7px;
   }
 
-  .settings-reading-controls, .settings-reading-bottom {
+  .settings-reading-controls {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -2001,8 +1955,8 @@ onBeforeUnmount(() => {
     grid-column: auto;
   }
 
-  .settings-reading-bottom {
-    gap: 20px;
+  .settings-scroll-note {
+    grid-column: 1 / -1;
   }
 
   .settings-about, .settings-import, .settings-debug {

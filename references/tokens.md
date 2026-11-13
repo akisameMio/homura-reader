@@ -53,6 +53,10 @@
 | shadow-color-soft | shadow-color 52% + surface | shadow-color 52% + surface | 同 shadow-color（夜间不再变亮） |
 | manga-filter | none | sepia(.18) brightness(.97) contrast(.98) | brightness(.92) |
 
+### 选择菜单
+
+选择菜单使用 `--md-select-menu-surface` / `--md-select-menu-selected` / `--md-select-menu-hover`。白昼按界面参考图分别为 `#FCF8FA` / `transparent` / `#F2EEEF`：选中项由勾选标识，悬浮项显示浅暖灰底。夜间沿用 `surface-high` / `surface-highest` 与原有状态混色。
+
 ### 夜间纯黑覆盖
 
 `--md-canvas-black: #000000` 是纯黑模式专用画布 token。`data-mode="dark"` 与 `data-black="pure"` 同时存在时，`surface` / `surface-low` 使用该 token，较高表面阶由它与 `on-surface` 混色。主题强调色和白昼表面不变；组件仍不得自行硬编码黑色。

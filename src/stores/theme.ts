@@ -44,10 +44,10 @@ const SURFACE_REVEAL_DURATION = 720;
 // 滚动由每本书的排版方向持有；这里保留上一次分页效果，切回时继续使用。
 const TRANSITION_ORDER = ['slide', 'curl', 'fade'];
 export const TRANSITION_OPTIONS = Object.freeze([
-  { value: 'slide', label: '滑动' },
-  { value: 'curl', label: '卷页' },
-  { value: 'fade', label: '柔和淡入' },
-  { value: 'scroll', label: '滚动' }
+  { value: 'slide', label: '滑动', icon: 'chevron_right' },
+  { value: 'curl', label: '卷页', icon: 'auto_stories' },
+  { value: 'scroll', label: '滚动', icon: 'expand_more' },
+  { value: 'fade', label: '柔和淡入', icon: 'radio_button_unchecked' }
 ]);
 export const TRANSITION_LABELS = Object.fromEntries(
   TRANSITION_OPTIONS.map(option => [option.value, option.label])

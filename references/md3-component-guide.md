@@ -163,6 +163,7 @@
 
 - 2–4 个互斥选项使用此组件；更多选项改用菜单或列表。
 - 必须传 `aria-label`，选项字面量保持短而平行。
+- 选项可带 `icon`；图标点击动画只做辅助反馈，`prefers-reduced-motion` 下关闭。手机 `≤480px` 且选项达到 3 个时自动隐藏图标，优先保证标签完整。
 - 当前实现通过 `update:modelValue` 的第二个参数附带点击坐标，供表面切换 reveal 使用；不要丢掉第二个参数。
 - 选中态由 `primary` 滑块 + `on-primary` 文字承担，不要给每个选项各上一种颜色。
 
@@ -317,7 +318,7 @@
 - 书页示意仅作装饰，标记 `aria-hidden`；阅读默认值使用实际控件呈现，不将示意当作排版验证。
 - 二级页使用 `.settings-detail-hero` 与 `.settings-list`，复用 `SettingsInterfacePreview` 绘制随主题变化的缩略图；模式缩略图同时带对应 `data-theme` / `data-mode`，不改全局根节点。
 - 「标准 / 纯黑」沿用分组列表。只通过 `theme.setPureBlackMode()` 修改偏好，组件不自行覆盖根节点或写黑色背景；缩略图可用 `black` 属性独立展示两种夜间表面。
-- 列表选择项复用 `SettingsSelectRow`，由原生 select 处理键盘与平台选择菜单，并保留单双页值的数字类型。
+- 列表选择项复用 `SettingsSelectRow`：右侧上下箭头，展开为 28px 圆角浮动列表，选中项使用中性表面底与勾选。菜单传送到根节点以避免滚动容器裁切，并按视口避让；支持方向键、Home / End、Escape、Tab 与点击外部关闭，选择后恢复焦点，保留单双页值的数字类型。
 
 ## 4. 响应式与布局
 

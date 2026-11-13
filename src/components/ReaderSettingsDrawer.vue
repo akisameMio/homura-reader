@@ -281,15 +281,15 @@ const isManga = computed(() => reader.currentBook?.type === 'manga' || reader.cu
 const allowSpreadChoice = computed(() => isManga.value ? !isPhone.value : !isCompact.value);
 
 const directions = [
-  { value: 'ltr', label: '从左到右', title: '普通排版' },
-  { value: 'rtl', label: '从右到左', title: '日漫' }
+  { value: 'ltr', label: '从左到右', title: '普通排版', icon: 'chevron_right' },
+  { value: 'rtl', label: '从右到左', title: '日漫', icon: 'chevron_left' }
 ];
 
 const transitionOptions = TRANSITION_OPTIONS;
 
 const spreadOptions = [
-  { value: 1, label: '单页' },
-  { value: 2, label: '双页' }
+  { value: 1, label: '单页', icon: 'article' },
+  { value: 2, label: '双页', icon: 'auto_stories' }
 ];
 
 const webtoonFits = [

@@ -262,6 +262,9 @@
       --md-reader-green-ink: #1E2A18;
       --md-reader-green-ink-soft: #56664B;
       --md-reader-green-rule: #C4D4B7;
+      --md-select-menu-surface: var(--md-surface-high);
+      --md-select-menu-selected: var(--md-surface-highest);
+      --md-select-menu-hover: color-mix(in oklab, var(--md-surface-highest) 80%, var(--md-on-surface) 8%);
     }
 
     [data-mode="light"] {
@@ -271,6 +274,10 @@
       --md-surface-container: #EBEFF4;
       --md-surface-high: #E4E9EF;
       --md-surface-highest: #DDE3EA;
+      /* 白昼选择菜单按参考图使用近白底与浅暖灰状态层。 */
+      --md-select-menu-surface: #FCF8FA;
+      --md-select-menu-selected: transparent;
+      --md-select-menu-hover: #F2EEEF;
       --md-on-surface: #111827;
       --md-on-surface-variant: #475569;
       --md-error: #B3261E;

@@ -58,7 +58,7 @@ function manga(id = 'manga') {
 
 test('翻页方式替换无动画为滚动，旧无动画偏好回退分页滑动', () => fixture(({ theme }) => {
   assert.deepEqual(TRANSITION_OPTIONS.map(option => [option.value, option.label]), [
-    ['slide', '滑动'], ['curl', '卷页'], ['fade', '柔和淡入'], ['scroll', '滚动']
+    ['slide', '滑动'], ['curl', '卷页'], ['scroll', '滚动'], ['fade', '柔和淡入']
   ]);
   assert.equal(theme.transitionStyle, 'slide');
 }, { homura_transition_style: 'none' }));
