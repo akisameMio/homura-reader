@@ -1,5 +1,5 @@
 <template>
-  <!-- 目录抽屉：M3 side sheet / bottom sheet，与设置和本目录共用外壳 -->
+  <!-- 章节 / 页码与书库顺序共用一个抽屉，切换分类不重新播放抽屉动画。 -->
   <Transition
     enter-active-class="md-fade-enter-active"
     enter-from-class="opacity-0"
@@ -12,24 +12,30 @@
   </Transition>
 
   <Transition
-    enter-active-class="md-sheet-enter-active"
-    :enter-from-class="isCompact ? 'translate-y-full' : 'translate-x-full'"
-    :enter-to-class="isCompact ? 'translate-y-0' : 'translate-x-0'"
-    leave-active-class="md-sheet-leave-active"
-    :leave-from-class="isCompact ? 'translate-y-0' : 'translate-x-0'"
-    :leave-to-class="isCompact ? 'translate-y-full' : 'translate-x-full'"
+    :css="false"
+    @before-enter="onSheetBeforeEnter"
+    @enter="onSheetEnter"
+    @before-leave="onSheetBeforeLeave"
+    @leave="onSheetLeave"
+    @after-enter="scrollCurrentIntoView"
+    @after-leave="onSheetAfterLeave"
+    @leave-cancelled="onSheetLeaveCancelled"
   >
     <aside
       v-if="ui.tocOpen"
       ref="tocSheetRef"
       id="reader-toc-drawer"
-      class="md-drawer"
+      class="md-drawer reader-toc-drawer"
+      role="dialog"
+      aria-modal="true"
       aria-labelledby="reader-toc-title"
+      @keydown="onSheetKeydown"
     >
       <ReaderDrawerHeader
         :is-compact="isCompact"
+        prominent
+        inline-tabs
         title="目录"
-        :subtitle="tocSubtitle"
         title-id="reader-toc-title"
         close-label="关闭目录"
         @close="ui.closeToc()"
@@ -37,63 +43,125 @@
         @drag-move="onSheetDragMove"
         @drag-end="onSheetDragEnd"
         @drag-cancel="onSheetDragCancel"
-      />
+      >
+        <template v-if="reader.currentCollection" #status>
+          <ReaderDrawerTabs v-model="activeTab" :options="tabs" id-prefix="reader-toc" label="目录分类" />
+        </template>
+      </ReaderDrawerHeader>
 
-      <div ref="tocBodyRef" class="md-drawer-body px-3 pb-4">
-        <!-- 漫画：页码网格 -->
-        <nav v-if="isManga" class="md-toc-grid" aria-label="漫画页码">
-          <button
-            v-for="(_page, idx) in reader.activePages"
-            :key="idx"
-            type="button"
-            @click="jumpTo(idx)"
-            class="md-toc-page"
-            :class="{ 'is-active': idx === reader.currentIndex }"
-            :aria-label="`跳转到第 ${idx + 1} 页`"
-            :aria-current="idx === reader.currentIndex ? 'page' : undefined"
-          >
-            {{ idx + 1 }}
-          </button>
-        </nav>
+      <div ref="tocBodyRef" class="md-drawer-body reader-toc-scroll">
+        <section
+          v-show="activeTab === 'book'"
+          id="reader-toc-panel-book"
+          :role="reader.currentCollection ? 'tabpanel' : undefined"
+          :aria-labelledby="reader.currentCollection ? 'reader-toc-tab-book' : 'reader-toc-title'"
+        >
+          <div class="reader-toc-summary">
+            <MdIcon :name="isManga ? 'auto_stories' : 'toc'" :size="18" />
+            <div><h3 :title="reader.currentBook?.title">{{ reader.currentBook?.title }}</h3><p>{{ tocSubtitle }}</p></div>
+          </div>
+          <nav v-if="isManga" class="reader-toc-card reader-toc-pages md-toc-grid" aria-label="漫画页码">
+            <button
+              v-for="(_page, idx) in reader.activePages"
+              :key="idx"
+              type="button"
+              @click="jumpTo(idx)"
+              class="md-toc-page"
+              :class="{ 'is-active': idx === reader.currentIndex }"
+              :aria-label="`跳转到第 ${idx + 1} 页`"
+              :aria-current="idx === reader.currentIndex ? 'page' : undefined"
+            >{{ idx + 1 }}</button>
+          </nav>
 
-        <!-- 小说 / EPUB：章节列表 -->
-        <nav v-else class="flex flex-col gap-1 pb-3" aria-label="章节目录">
-          <button
-            v-for="(group, index) in groups"
-            :key="group.key"
-            type="button"
-            @click="jumpTo(group.index)"
-            class="md-drawer-list-item"
-            :class="{ 'is-active': isCurrentChapter(group) }"
-            :title="group.title"
-            :aria-current="isCurrentChapter(group) ? 'true' : undefined"
-          >
-            <span class="md-drawer-item-index" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span>
-            <span class="md-drawer-item-label line-clamp-2">{{ group.title }}</span>
-            <span v-if="isCurrentChapter(group)" class="md-drawer-item-meta">正在阅读</span>
-          </button>
-          <p v-if="groups.length === 0" class="py-10 text-center text-[13px] text-[var(--md-on-surface-variant)]">暂无章节信息</p>
-        </nav>
+          <nav v-else class="reader-toc-card reader-toc-list" aria-label="章节目录">
+            <button
+              v-for="(group, index) in groups"
+              :key="group.key"
+              type="button"
+              @click="jumpTo(group.index)"
+              class="md-drawer-list-item"
+              :class="{ 'is-active': isCurrentChapter(group) }"
+              :title="group.title"
+              :aria-current="isCurrentChapter(group) ? 'true' : undefined"
+            >
+              <span class="md-drawer-item-index" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span>
+              <span class="md-drawer-item-label">{{ group.title }}</span>
+              <MdIcon v-if="isCurrentChapter(group)" class="reader-toc-current" name="auto_stories" :size="18" />
+            </button>
+            <p v-if="groups.length === 0" class="reader-toc-empty">暂无章节信息</p>
+          </nav>
+        </section>
+
+        <section
+          v-if="reader.currentCollection"
+          v-show="activeTab === 'collection'"
+          id="reader-toc-panel-collection"
+          role="tabpanel"
+          aria-labelledby="reader-toc-tab-collection"
+        >
+          <div class="reader-toc-summary">
+            <MdIcon name="collections_bookmark" :size="18" />
+            <div><h3 :title="reader.currentCollection.title">{{ reader.currentCollection.title }}</h3><p>{{ reader.collectionBooks.length }} 本 · 按书库顺序阅读</p></div>
+          </div>
+          <nav class="reader-toc-card reader-toc-list" aria-label="本书库书本顺序">
+            <ol>
+              <li v-for="(book, index) in reader.collectionBooks" :key="book.id">
+                <button
+                  type="button"
+                  class="md-drawer-list-item"
+                  :class="{ 'is-active': book.id === reader.currentBook?.id }"
+                  :aria-current="book.id === reader.currentBook?.id ? 'true' : undefined"
+                  :aria-label="`打开书库书本：${book.title}${book.id === reader.currentBook?.id ? '，正在阅读' : ''}`"
+                  :disabled="reader.openingBook"
+                  :title="book.title"
+                  @click="openBook(book.id)"
+                >
+                  <span class="md-drawer-item-index" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span>
+                  <span class="md-drawer-item-label">{{ book.title }}</span>
+                  <MdIcon v-if="book.id === reader.currentBook?.id" class="reader-toc-current" name="auto_stories" :size="18" />
+                </button>
+              </li>
+            </ol>
+          </nav>
+        </section>
       </div>
     </aside>
   </Transition>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, shallowRef, watch } from 'vue';
 import { useReaderStore } from '../stores/reader.ts';
 import { useUiStore } from '../stores/ui.ts';
 import { useViewport } from '../composables/useViewport.ts';
 import { useSheetDrag } from '../composables/useSheetDrag.ts';
+import { useSheetSpring } from '../composables/useSheetSpring.ts';
 import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
+import ReaderDrawerTabs from './ReaderDrawerTabs.vue';
+import MdIcon from './MdIcon.vue';
 import type { ReaderPage } from '../types.ts';
 
 const reader = useReaderStore();
 const ui = useUiStore();
 const { isCompact } = useViewport();
 const tocOpen = computed(() => ui.tocOpen);
-const tocBodyRef = ref<HTMLElement | null>(null);
+const tocBodyRef = shallowRef<HTMLElement | null>(null);
+const activeTab = ref('book');
+const tabs = [
+  { value: 'book', label: '目录' },
+  { value: 'collection', label: '本目录' }
+];
+const sheetSpring = useSheetSpring({ isCompact });
 const {
+  onBeforeEnter: onSheetBeforeEnter,
+  onEnter: onSheetEnter,
+  onBeforeLeave: onSheetBeforeLeave,
+  onLeave: onSheetLeave,
+  onAfterLeave: onSheetAfterLeave,
+  onLeaveCancelled: onSheetLeaveCancelled
+} = sheetSpring;
+const {
+  sheetRef: tocSheetRef,
   onDragStart: onSheetDragStart,
   onDragMove: onSheetDragMove,
   onDragEnd: onSheetDragEnd,
@@ -101,10 +169,11 @@ const {
 } = useSheetDrag({
   isCompact,
   isOpen: tocOpen,
-  onClose: () => ui.closeToc()
+  onClose: () => ui.closeToc(),
+  onDragBegin: sheetSpring.cancel
 });
 
-const isManga = computed(() => reader.currentBook && reader.currentBook.type === 'manga');
+const isManga = computed(() => reader.currentBook?.type === 'manga' || reader.currentBook?.format === 'pdf');
 
 // 小说分页后同一章节可能跨多页，这里按 chapterIndex 聚合成目录条目
 const groups = computed(() => {
@@ -138,7 +207,7 @@ function isCurrentChapter(group: { index: number; end: number }) {
 // 打开目录时把当前章 / 当前页滚到可视区中间，省去手动翻找
 function scrollCurrentIntoView() {
   const body = tocBodyRef.value;
-  const active = body?.querySelector<HTMLElement>('.md-toc-page.is-active, .md-drawer-list-item.is-active');
+  const active = body?.querySelector<HTMLElement>(`#reader-toc-panel-${activeTab.value} [aria-current]`);
   if (!body || !active) return;
   const bodyRect = body.getBoundingClientRect();
   const activeRect = active.getBoundingClientRect();
@@ -146,14 +215,101 @@ function scrollCurrentIntoView() {
   body.scrollTop = Math.max(0, offset);
 }
 
-watch(tocOpen, async (open) => {
-  if (!open) return;
+let tocTrigger: HTMLElement | null = null;
+watch(tocOpen, async open => {
+  if (!open) {
+    await nextTick();
+    if (tocTrigger?.isConnected && reader.currentBook && !ui.readerDrawerOpen) tocTrigger.focus({ preventScroll: true });
+    tocTrigger = null;
+    return;
+  }
+  tocTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  activeTab.value = 'book';
   await nextTick();
+  tocSheetRef.value?.querySelector<HTMLButtonElement>('[aria-label="关闭目录"]')?.focus({ preventScroll: true });
   scrollCurrentIntoView();
+});
+
+watch(activeTab, async () => {
+  if (!ui.tocOpen) return;
+  await nextTick();
+  if (tocBodyRef.value) tocBodyRef.value.scrollTop = 0;
+  scrollCurrentIntoView();
+});
+
+watch(() => reader.currentCollection?.id, id => {
+  if (!id) activeTab.value = 'book';
 });
 
 function jumpTo(index: number) {
   reader.jumpToPage(index);
   ui.closeToc();
 }
+
+async function openBook(id: string) {
+  if (id === reader.currentBook?.id || await reader.openCollectionBook(id)) ui.closeToc();
+}
+
+function onSheetKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    ui.closeToc();
+    return;
+  }
+  if (event.key !== 'Tab') return;
+  const controls = [...(tocSheetRef.value?.querySelectorAll<HTMLElement>('button:not(:disabled)') || [])]
+    .filter(element => element.tabIndex >= 0 && element.getClientRects().length > 0);
+  const first = controls[0];
+  const last = controls[controls.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last?.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first?.focus();
+  }
+}
 </script>
+
+<style scoped>
+.reader-toc-drawer {
+  padding-bottom: 0;
+  background: color-mix(in oklab, var(--md-surface-container) 65%, var(--md-surface-low));
+}
+.reader-toc-scroll {
+  padding: 0 18px max(20px, env(safe-area-inset-bottom));
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-outline-variant) transparent;
+}
+.reader-toc-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 2px 12px 18px;
+  color: var(--md-on-surface-variant);
+}
+.reader-toc-summary > svg { flex: none; margin-top: 2px; }
+.reader-toc-summary > div { min-width: 0; }
+.reader-toc-summary h3 { color: var(--md-on-surface); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.reader-toc-summary p { margin-top: 5px; font-size: 11px; line-height: 1.6; }
+.reader-toc-card { border-radius: 26px; background: var(--md-surface); color: var(--md-on-surface); }
+.reader-toc-list { padding: 8px; }
+.reader-toc-list .md-drawer-list-item { min-height: 60px; gap: 10px; border-radius: 20px; padding: 14px 12px; }
+.reader-toc-list .md-drawer-item-label { font-weight: 500; line-height: 1.65; overflow-wrap: anywhere; }
+.reader-toc-list .md-drawer-item-index { min-width: 20px; text-align: left; }
+.reader-toc-list .is-active .md-drawer-item-label { font-weight: 600; }
+.reader-toc-current { flex: none; }
+.reader-toc-list button:disabled { opacity: 0.5; cursor: default; }
+.reader-toc-list button:focus-visible,
+.reader-toc-pages button:focus-visible { outline: 2px solid var(--md-primary); outline-offset: -2px; }
+.reader-toc-pages { padding: 14px; }
+.reader-toc-pages .md-toc-page { min-width: 0; }
+.reader-toc-empty { padding: 32px 16px; color: var(--md-on-surface-variant); font-size: 13px; text-align: center; }
+@media (max-width: 899px) {
+  .reader-toc-drawer { height: 78dvh; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reader-toc-list button, .reader-toc-pages button { transition: none; }
+}
+</style>

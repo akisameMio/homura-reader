@@ -206,22 +206,16 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    /* 字号入口：用文字胶囊代替 Aa 字形，和左侧工具组保持同一套圆角 */
+    /* 字号入口：Aa 字形直接作为图标，不铺胶囊底色 */
     .md-reader-topbar .md-reader-type-button {
-      width: auto;
-      padding: 0 16px;
+      width: 40px;
+      padding: 0;
       border-radius: 999px;
-      font-family: var(--font-sans, system-ui, sans-serif);
-      font-size: 13px;
-      font-weight: 500;
-      letter-spacing: 0.04em;
-      line-height: 1;
-      white-space: nowrap;
-      background: color-mix(in oklab, var(--md-reader-ink) 6%, transparent);
+      background: transparent;
     }
     .md-reader-topbar .md-reader-type-button.is-active {
-      color: var(--md-reader-ink);
-      background: color-mix(in oklab, var(--md-reader-ink) 10%, transparent);
+      color: var(--md-primary);
+      background: transparent;
     }
     @media (hover: hover) and (pointer: fine) {
       .md-reader-topbar .md-icon-button:hover:not(:disabled):not(.is-filled) {
@@ -626,12 +620,6 @@
         width: 19px;
         height: 19px;
       }
-      .md-reader-topbar .md-reader-type-button {
-        width: auto;
-        min-width: 56px;
-        padding: 0 12px;
-        font-size: 13px;
-      }
       /* 手机侧栏位已经被 Aa / 设置 / 收藏占满，书眉再挤只会被按钮压住 */
       @media (max-width: 479px) {
         .md-reader-topbar-title {
@@ -681,7 +669,7 @@
       .md-drawer {
         inset: auto 0 0;
         width: 100%;
-        max-height: 78dvh;
+        max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 8px);
         padding-bottom: env(safe-area-inset-bottom);
         border-radius: 28px 28px 0 0;
       }

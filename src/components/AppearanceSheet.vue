@@ -35,6 +35,7 @@
     >
       <div
         v-if="isCompact"
+        data-sheet-drag-handle
         class="mobile-sheet-drag-zone -mx-5 -mt-2.5 h-9 flex items-center justify-center touch-none select-none cursor-grab active:cursor-grabbing"
         @pointerdown="onSheetDragStart"
         @pointermove="onSheetDragMove"

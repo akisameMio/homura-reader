@@ -149,6 +149,10 @@ let previewGeneration = 0;
 let activePaperTurn: PageTurnController | null = null;
 let bufferQueue: Promise<unknown> = Promise.resolve();
 let turnOriginY: number | null = null;
+// 翻页动画期间合并后续请求：只保留最后一次目标页，动画结束后补渲染
+let renderRunId = 0;
+let renderBusy = false;
+let queuedTurnDir: string | null = null;
 interface GesturePreview {
   targetIndex: number;
   nextSlot: number;
@@ -353,6 +357,47 @@ async function renderReaderViewport(transitionDir = 'fade') {
   } finally {
     if (pendingRender === myToken) pendingRender = 0;
   }
+}
+
+function isDirectionalTurn(transitionDir: string) {
+  return transitionDir === 'enter-from-right' || transitionDir === 'enter-from-left';
+}
+
+function clearQueuedTurn() {
+  queuedTurnDir = null;
+}
+
+async function runReaderRender(transitionDir: string) {
+  const runId = ++renderRunId;
+  renderBusy = true;
+  try {
+    await renderReaderViewport(transitionDir);
+  } finally {
+    if (runId !== renderRunId) return;
+    renderBusy = false;
+    if (queuedTurnDir) flushQueuedTurn();
+  }
+}
+
+function flushQueuedTurn() {
+  const transitionDir = queuedTurnDir;
+  queuedTurnDir = null;
+  if (!transitionDir || renderBusy || !reader.currentBook) return;
+  void runReaderRender(transitionDir);
+}
+
+function requestReaderRender(transitionDir: string) {
+  if (!reader.currentBook) return;
+  // 滑条、重排等非翻页请求立即生效，并取消尚未执行的翻页补渲染
+  if (!isDirectionalTurn(transitionDir)) {
+    clearQueuedTurn();
+    void runReaderRender(transitionDir);
+    return;
+  }
+  queuedTurnDir = transitionDir;
+  if (renderBusy) return;
+  queuedTurnDir = null;
+  void runReaderRender(transitionDir);
 }
 
 function prepareGestureTurn() {
@@ -644,7 +689,7 @@ onMounted(() => {
   });
   if (pageStage.value) stageResizeObserver!.observe(pageStage.value);
   window.addEventListener('blur', onPointerCancel as EventListener);
-  reader.renderFn = renderReaderViewport;
+  reader.renderFn = requestReaderRender;
   watch(
     () => [
       reader.layoutConfig.spread,
@@ -664,12 +709,15 @@ onMounted(() => {
   applyReaderGeometry();
   // store 动作可能在组件挂载前就已完成分页，这里自检后直接首渲染
   if (reader.activePages.length > 0) {
-    renderReaderViewport('none');
+    void runReaderRender('none');
   }
 });
 
 onBeforeUnmount(() => {
   reader.renderToken++;
+  renderRunId++;
+  renderBusy = false;
+  clearQueuedTurn();
   pendingRender = 0;
   stopPaperTurn();
   cancelIdlePreload();

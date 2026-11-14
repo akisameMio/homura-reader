@@ -98,6 +98,12 @@ let lastMangaDirection = 1;
 let lastScrollTop = 0;
 let lastScrollAt = 0;
 let mangaScrollVelocity = 0;
+let webtoonScrollTimer = 0;
+let webtoonScrollSettleTimer = 0;
+let webtoonScrollTarget: number | null = null;
+let webtoonScrollLastAt = 0;
+const WEBTOON_SCROLL_INTERVAL = 90;
+const WEBTOON_SCROLL_SETTLE = 400;
 const mountedBookId = reader.currentBook?.id;
 const mountedBook = reader.currentBook;
 const initialMangaIndex = reader.currentBook?.type === 'manga' ? reader.currentIndex : 0;
@@ -514,6 +520,7 @@ function onContentLoad() {
 function scrollToSection(index: number, behavior: ScrollBehavior = 'auto') {
   const root = scrollRoot.value;
   if (!root) return;
+  cancelQueuedWebtoonScroll();
   if (isManga.value) {
     const target = root.querySelector('#webtoon-page-' + index);
     if (target) target.scrollIntoView({ behavior, block: 'start' });
@@ -524,6 +531,51 @@ function scrollToSection(index: number, behavior: ScrollBehavior = 'auto') {
     // scrollTo 不走 scroll-padding，手动减去顶部工具栏预留高度。
     const paddingTop = parseFloat(getComputedStyle(root).scrollPaddingTop) || 0;
     root.scrollTo({ top: Math.max(0, novelOffsets[index] - paddingTop), behavior });
+  }
+}
+
+function cancelQueuedWebtoonScroll() {
+  if (webtoonScrollTimer) window.clearTimeout(webtoonScrollTimer);
+  if (webtoonScrollSettleTimer) window.clearTimeout(webtoonScrollSettleTimer);
+  webtoonScrollTimer = 0;
+  webtoonScrollSettleTimer = 0;
+  webtoonScrollTarget = null;
+  webtoonScrollLastAt = 0;
+}
+
+// 连续按键 / 滚轮翻页时只累加目标位置，合并成一次平滑滚动，避免动画排队互相打断
+function flushWebtoonScroll() {
+  const root = scrollRoot.value;
+  const target = webtoonScrollTarget;
+  if (!root || target === null || disposed) return;
+  webtoonScrollLastAt = performance.now();
+  const limit = Math.max(0, root.scrollHeight - root.clientHeight);
+  root.scrollTo({ top: Math.min(limit, target), behavior: 'smooth' });
+  if (webtoonScrollSettleTimer) window.clearTimeout(webtoonScrollSettleTimer);
+  webtoonScrollSettleTimer = window.setTimeout(() => {
+    webtoonScrollSettleTimer = 0;
+    webtoonScrollTarget = null;
+  }, WEBTOON_SCROLL_SETTLE);
+}
+
+function queueWebtoonScroll(direction: number) {
+  const root = scrollRoot.value;
+  if (!root || disposed) return;
+  if (webtoonScrollSettleTimer) window.clearTimeout(webtoonScrollSettleTimer);
+  webtoonScrollSettleTimer = 0;
+  const maxTop = Math.max(0, root.scrollHeight - root.clientHeight);
+  const base = webtoonScrollTarget ?? root.scrollTop;
+  webtoonScrollTarget = Math.min(maxTop, Math.max(0, base + direction * root.clientHeight * 0.88));
+  const elapsed = performance.now() - webtoonScrollLastAt;
+  if (elapsed >= WEBTOON_SCROLL_INTERVAL) {
+    flushWebtoonScroll();
+    return;
+  }
+  if (!webtoonScrollTimer) {
+    webtoonScrollTimer = window.setTimeout(() => {
+      webtoonScrollTimer = 0;
+      flushWebtoonScroll();
+    }, WEBTOON_SCROLL_INTERVAL - elapsed);
   }
 }
 
@@ -545,10 +597,7 @@ onMounted(() => {
   }
 
   // 注册滚动入口：store 的翻页 / 滑条动作在条漫模式下转成滚动
-  reader.webtoonScrollBy = (dir: number) => {
-    const el = scrollRoot.value;
-    if (el) el.scrollBy({ top: dir * el.clientHeight * 0.88, behavior: 'smooth' });
-  };
+  reader.webtoonScrollBy = queueWebtoonScroll;
   reader.webtoonScrollTo = (idx: number) => scrollToSection(idx, 'smooth');
 
   if (isManga.value) {
@@ -613,6 +662,7 @@ onBeforeUnmount(() => {
   }
   if (scrollFrame) cancelAnimationFrame(scrollFrame);
   scrollFrame = 0;
+  cancelQueuedWebtoonScroll();
   if (novelOffsetFrame) cancelAnimationFrame(novelOffsetFrame);
   novelOffsetFrame = 0;
   if (mangaOffsetFrame) cancelAnimationFrame(mangaOffsetFrame);

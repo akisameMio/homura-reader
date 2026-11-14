@@ -80,7 +80,6 @@
       <ReaderTocDrawer />
       <ReaderSettingsDrawer />
       <ReaderFontDrawer />
-      <ReaderCollectionDrawer />
       <Transition
         enter-active-class="md-fade-enter-active"
         enter-from-class="opacity-0"
@@ -128,7 +127,6 @@ import ReaderTopBar from './ReaderTopBar.vue';
 import ReaderTocDrawer from './ReaderTocDrawer.vue';
 import ReaderSettingsDrawer from './ReaderSettingsDrawer.vue';
 import ReaderFontDrawer from './ReaderFontDrawer.vue';
-import ReaderCollectionDrawer from './ReaderCollectionDrawer.vue';
 import PaginatedView from './PaginatedView.vue';
 import WebtoonView from './WebtoonView.vue';
 
@@ -198,8 +196,6 @@ function onTouchEnd(e: PointerEvent) {
 }
 
 function cancelVerticalGesture() { tapInfo.active = false; }
-
-watch(() => reader.currentCollection?.id, id => { if (!id && ui.collectionTocOpen) ui.closeCollectionToc(); });
 
 // 阅读器隐藏 body 滚动前，记录页面滚动条宽度。部分 WebView 不支持
 // scrollbar-gutter，若只隐藏滚动条，返回结束时书架会被突然挤窄。

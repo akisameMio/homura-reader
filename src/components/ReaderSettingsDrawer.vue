@@ -11,12 +11,13 @@
   </Transition>
 
   <Transition
-    enter-active-class="md-sheet-enter-active"
-    :enter-from-class="isCompact ? 'translate-y-full' : 'translate-x-full'"
-    :enter-to-class="isCompact ? 'translate-y-0' : 'translate-x-0'"
-    leave-active-class="md-sheet-leave-active"
-    :leave-from-class="isCompact ? 'translate-y-0' : 'translate-x-0'"
-    :leave-to-class="isCompact ? 'translate-y-full' : 'translate-x-full'"
+    :css="false"
+    @before-enter="onSheetBeforeEnter"
+    @enter="onSheetEnter"
+    @before-leave="onSheetBeforeLeave"
+    @leave="onSheetLeave"
+    @after-leave="onSheetAfterLeave"
+    @leave-cancelled="onSheetLeaveCancelled"
   >
     <aside
       v-if="ui.settingsOpen"
@@ -31,6 +32,7 @@
       <ReaderDrawerHeader
         :is-compact="isCompact"
         prominent
+        inline-tabs
         title="阅读设置"
         title-id="reader-settings-title"
         close-label="关闭阅读设置"
@@ -41,24 +43,9 @@
         @drag-cancel="onSheetDragCancel"
       >
         <template #status>
-          <span class="reader-settings-saved"><MdIcon name="check" :size="14" />自动保存</span>
+          <ReaderDrawerTabs :model-value="activeTab" :options="tabs" id-prefix="reader-settings" label="阅读设置分类" @update:model-value="selectTab" />
         </template>
       </ReaderDrawerHeader>
-
-      <div class="reader-settings-tabs" role="tablist" aria-label="阅读设置分类">
-        <button
-          v-for="(tab, index) in tabs"
-          :id="`reader-settings-tab-${tab.value}`"
-          :key="tab.value"
-          type="button"
-          role="tab"
-          :aria-selected="activeTab === tab.value"
-          :aria-controls="`reader-settings-panel-${tab.value}`"
-          :tabindex="activeTab === tab.value ? 0 : -1"
-          @click="selectTab(tab.value)"
-          @keydown="onTabKeydown($event, index)"
-        >{{ tab.label }}</button>
-      </div>
 
       <div ref="scrollRef" class="md-drawer-body reader-settings-scroll">
         <div
@@ -138,6 +125,10 @@
               <p class="reader-settings-hint">音量加键上一页、音量减键下一页；该设置全局生效。</p>
             </section>
           </template>
+
+          <section class="reader-settings-card reader-settings-reset-card">
+            <button type="button" class="md-text-button reader-settings-reset" @click="resetDefaults">恢复默认</button>
+          </section>
         </div>
 
         <div
@@ -188,10 +179,6 @@
         </div>
       </div>
 
-      <div class="md-drawer-actions reader-settings-actions">
-        <button type="button" class="md-text-button reader-settings-reset" @click="resetDefaults">恢复默认</button>
-        <button type="button" class="md-filled-button" @click="ui.closeSettings()">完成</button>
-      </div>
     </aside>
   </Transition>
 </template>
@@ -213,7 +200,9 @@ import { TRANSITION_OPTIONS } from '../stores/theme.ts';
 import { useUiStore } from '../stores/ui.ts';
 import { useViewport } from '../composables/useViewport.ts';
 import { useSheetDrag } from '../composables/useSheetDrag.ts';
+import { useSheetSpring } from '../composables/useSheetSpring.ts';
 import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
+import ReaderDrawerTabs from './ReaderDrawerTabs.vue';
 import MdRange from './MdRange.vue';
 import MdSegmentedControl from './MdSegmentedControl.vue';
 import MdSwitch from './MdSwitch.vue';
@@ -264,6 +253,15 @@ const previewTextStyle = computed(() => ({
   lineHeight: String(resolveLineHeight(config.lineHeight))
 }));
 const settingsOpen = computed(() => ui.settingsOpen);
+const sheetSpring = useSheetSpring({ isCompact });
+const {
+  onBeforeEnter: onSheetBeforeEnter,
+  onEnter: onSheetEnter,
+  onBeforeLeave: onSheetBeforeLeave,
+  onLeave: onSheetLeave,
+  onAfterLeave: onSheetAfterLeave,
+  onLeaveCancelled: onSheetLeaveCancelled
+} = sheetSpring;
 const {
   sheetRef: settingsSheetRef,
   onDragStart: onSheetDragStart,
@@ -273,7 +271,8 @@ const {
 } = useSheetDrag({
   isCompact,
   isOpen: settingsOpen,
-  onClose: () => ui.closeSettings()
+  onClose: () => ui.closeSettings(),
+  onDragBegin: sheetSpring.cancel
 });
 
 const isVertical = computed(() => config.direction === 'vertical');
@@ -342,18 +341,6 @@ function selectTab(tab: SettingsTab) {
   if (scrollRef.value) scrollRef.value.scrollTop = 0;
 }
 
-function onTabKeydown(event: KeyboardEvent, index: number) {
-  let next = index;
-  if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
-  else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
-  else if (event.key === 'Home') next = 0;
-  else if (event.key === 'End') next = tabs.length - 1;
-  else return;
-  event.preventDefault();
-  selectTab(tabs[next].value);
-  settingsSheetRef.value?.querySelector<HTMLButtonElement>(`#reader-settings-tab-${tabs[next].value}`)?.focus();
-}
-
 function onSheetKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') {
     event.preventDefault();
@@ -381,37 +368,9 @@ function onSheetKeydown(event: KeyboardEvent) {
   padding-bottom: 0;
   background: color-mix(in oklab, var(--md-surface-container) 65%, var(--md-surface-low));
 }
-.reader-settings-saved {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 4px;
-  color: var(--md-on-surface-variant);
-  font-size: 10px;
-  white-space: nowrap;
-}
-.reader-settings-tabs {
-  display: flex;
-  flex: none;
-  gap: 8px;
-  padding: 0 20px 20px;
-}
-.reader-settings-tabs button {
-  min-width: 0;
-  min-height: 48px;
-  flex: 1;
-  border-radius: 26px;
-  background: var(--md-surface);
-  color: var(--md-on-surface-variant);
-  font-size: 13px;
-  font-weight: 600;
-  transition: background-color 200ms var(--md-ease-emphasized), color 200ms var(--md-ease-emphasized);
-}
-.reader-settings-tabs button[aria-selected='true'] { background: var(--md-primary); color: var(--md-on-primary); }
-.reader-settings-tabs button:focus-visible,
 .reader-font-step:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 3px; }
 .reader-settings-scroll {
-  padding: 0 18px 20px;
+  padding: 0 18px max(20px, env(safe-area-inset-bottom));
   scrollbar-width: thin;
   scrollbar-color: var(--md-outline-variant) transparent;
 }
@@ -509,17 +468,12 @@ function onSheetKeydown(event: KeyboardEvent) {
 .reader-settings-cover-note > svg { flex: none; margin-top: 1px; color: var(--md-on-surface-variant); }
 .reader-settings-cover-note .reader-settings-hint { margin-top: 3px; }
 .reader-settings-cover-error { margin-top: 12px; color: var(--md-error); font-size: 12px; line-height: 1.7; }
-.reader-settings-actions { justify-content: space-between; gap: 16px; padding: 16px 20px max(20px, env(safe-area-inset-bottom)); border-top: 0; }
-.reader-settings-reset { background: var(--md-surface); color: var(--md-on-surface-variant); }
-.reader-settings-actions .md-filled-button { min-width: 106px; }
+.reader-settings-reset-card { padding: 8px; }
+.reader-settings-reset { width: 100%; color: var(--md-on-surface-variant); }
 @media (max-width: 899px) {
   .reader-settings-drawer { height: 78dvh; }
 }
 @media (hover: hover) and (pointer: fine) {
   .reader-font-step:hover:not(:disabled) { background: var(--md-surface-high); }
-  .reader-settings-tabs button:not([aria-selected='true']):hover { background: var(--md-surface-high); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .reader-settings-tabs button { transition: none; }
 }
 </style>

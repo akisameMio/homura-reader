@@ -34,21 +34,23 @@
         :style="menuStyle"
         @keydown="onMenuKeydown"
       >
-        <button
-          v-for="(option, index) in options"
-          :key="option.value"
-          type="button"
-          class="settings-select-option"
-          :class="{ 'is-selected': option.value === modelValue }"
-          role="option"
-          :aria-selected="option.value === modelValue"
-          :tabindex="index === activeIndex ? 0 : -1"
-          @focus="activeIndex = index"
-          @click="select(option.value)"
-        >
-          <span>{{ option.label }}</span>
-          <MdIcon v-if="option.value === modelValue" name="check" :size="21" />
-        </button>
+        <div ref="menuContentRef" class="settings-select-menu-content">
+          <button
+            v-for="(option, index) in options"
+            :key="option.value"
+            type="button"
+            class="settings-select-option"
+            :class="{ 'is-selected': option.value === modelValue }"
+            role="option"
+            :aria-selected="option.value === modelValue"
+            :tabindex="index === activeIndex ? 0 : -1"
+            @focus="activeIndex = index"
+            @click="select(option.value)"
+          >
+            <span>{{ option.label }}</span>
+            <MdIcon v-if="option.value === modelValue" name="check" :size="21" />
+          </button>
+        </div>
       </div>
     </Teleport>
   </button>
@@ -58,6 +60,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, useId, watch, type PropType } from 'vue';
 import MdIcon from './MdIcon.vue';
 import { createSettingsSelectMotion } from '../services/settingsSelectMotion.ts';
+import { lockSettingsSelectScroll } from '../services/settingsSelectScrollLock.ts';
 
 const props = defineProps({
   label: { type: String, required: true },
@@ -70,21 +73,31 @@ const menuId = `settings-select-${useId()}`;
 const triggerRef = shallowRef<HTMLButtonElement | null>(null);
 const controlRef = shallowRef<HTMLSpanElement | null>(null);
 const menuRef = shallowRef<HTMLDivElement | null>(null);
+const menuContentRef = shallowRef<HTMLDivElement | null>(null);
 const open = ref(false);
 const menuVisible = ref(false);
 const activeIndex = ref(0);
 const menuStyle = ref({ left: '0px', top: '0px', width: '224px', maxHeight: '320px' });
 const selectedLabel = computed(() => props.options.find(option => option.value === props.modelValue)?.label || '');
+let releaseScrollLock: (() => void) | null = null;
+let menuViewport = '';
 const motion = createSettingsSelectMotion({
   control: () => controlRef.value,
   menu: () => menuRef.value,
+  content: () => menuContentRef.value,
   onClosed: () => {
     if (!open.value) {
       menuVisible.value = false;
       removeViewportListeners();
+      unlockScroll();
     }
   }
 });
+
+function unlockScroll() {
+  releaseScrollLock?.();
+  releaseScrollLock = null;
+}
 
 function focusOption(index: number) {
   activeIndex.value = index;
@@ -93,14 +106,22 @@ function focusOption(index: number) {
   if (!menu || !option) return;
   option.focus({ preventScroll: true });
   // 只滚动菜单自身，scrollIntoView 会连带移动背景并误触发关闭。
-  if (option.offsetTop < menu.scrollTop) menu.scrollTop = option.offsetTop;
-  else if (option.offsetTop + option.offsetHeight > menu.scrollTop + menu.clientHeight) {
-    menu.scrollTop = option.offsetTop + option.offsetHeight - menu.clientHeight;
+  let top = option.offsetTop;
+  let parent = option.offsetParent;
+  while (parent instanceof HTMLElement && parent !== menu) {
+    top += parent.offsetTop;
+    parent = parent.offsetParent;
+  }
+  if (top < menu.scrollTop) menu.scrollTop = top;
+  else if (top + option.offsetHeight > menu.scrollTop + menu.clientHeight) {
+    menu.scrollTop = top + option.offsetHeight - menu.clientHeight;
   }
 }
 
 async function showMenu() {
   if (props.disabled || !props.options.length || !triggerRef.value) return;
+  // 收缩途中重开沿用同一把锁，直到卡片完全归位才释放。
+  releaseScrollLock ??= lockSettingsSelectScroll(triggerRef.value, () => open.value ? menuRef.value : null);
   // 菜单传送到根节点，避免设置卡片与抽屉的滚动容器裁切。
   const rect = (controlRef.value || triggerRef.value).getBoundingClientRect();
   const viewport = window.visualViewport;
@@ -110,28 +131,29 @@ async function showMenu() {
   const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
   const index = Math.max(0, props.options.findIndex(option => option.value === props.modelValue));
   const desiredHeight = Math.min(320, props.options.length * 56 + 16);
-  const availableHeight = viewportBottom - 12 - rect.top;
-  const maxHeight = Math.min(desiredHeight, Math.max(72, availableHeight), viewportBottom - viewportTop - 24);
+  const maxHeight = Math.min(desiredHeight, viewportBottom - viewportTop - 24);
+  // 停驻时让选中项与胶囊对齐；下探由物理轨迹承担，不占用最终布局。
+  const selectedTop = rect.top + (rect.height - 56) / 2 - 8 - index * 56;
   const left = Math.max(viewportLeft + 12, Math.min(rect.right - width, viewportLeft + (viewport?.width ?? window.innerWidth) - width - 12));
-  const top = Math.max(viewportTop + 12, Math.min(rect.top, viewportBottom - maxHeight - 12));
+  const top = Math.max(viewportTop + 12, Math.min(selectedTop, viewportBottom - maxHeight - 12));
   // 反向重开时沿用原锚点，不能用新的布局位置覆盖正在运动的姿态。
   if (!menuVisible.value) {
     menuStyle.value = { left: `${left}px`, top: `${top}px`, width: `${width}px`, maxHeight: `${maxHeight}px` };
   }
+  menuViewport = viewportGeometry();
   activeIndex.value = index;
   open.value = true;
   menuVisible.value = true;
   document.addEventListener('pointerdown', onOutsidePointer, true);
   document.addEventListener('focusin', onFocusIn);
   document.addEventListener('keydown', onDocumentKeydown, true);
-  document.addEventListener('scroll', onScroll, true);
   window.addEventListener('resize', onViewportChange);
   viewport?.addEventListener('resize', onViewportChange);
   viewport?.addEventListener('scroll', onViewportChange);
   await nextTick();
   if (open.value) {
-    motion.setOpen(true);
     focusOption(index);
+    motion.setOpen(true);
   }
 }
 
@@ -142,7 +164,6 @@ function removeListeners() {
 }
 
 function removeViewportListeners() {
-  document.removeEventListener('scroll', onScroll, true);
   window.removeEventListener('resize', onViewportChange);
   window.visualViewport?.removeEventListener('resize', onViewportChange);
   window.visualViewport?.removeEventListener('scroll', onViewportChange);
@@ -177,13 +198,14 @@ function onFocusIn(event: FocusEvent) {
   if (!isInside(event.target)) close();
 }
 
-function onScroll(event: Event) {
-  if (event.target instanceof Node && menuRef.value?.contains(event.target)) return;
-  close(false, true);
+function viewportGeometry() {
+  const viewport = window.visualViewport;
+  return [window.innerWidth, window.innerHeight, viewport?.width, viewport?.height, viewport?.offsetLeft, viewport?.offsetTop, viewport?.scale].join(':');
 }
 
 function onViewportChange() {
-  close(false, true);
+  // 锁滚动条产生的 resize 会异步送达；几何未变化时不能误关刚展开的菜单。
+  if (viewportGeometry() !== menuViewport) close(false, true);
 }
 
 function onDocumentKeydown(event: KeyboardEvent) {
@@ -225,6 +247,7 @@ onBeforeUnmount(() => {
   removeListeners();
   removeViewportListeners();
   motion.dispose();
+  unlockScroll();
 });
 </script>
 
@@ -301,6 +324,7 @@ onBeforeUnmount(() => {
   position: fixed;
   z-index: 50;
   box-sizing: border-box;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 8px;
@@ -311,6 +335,10 @@ onBeforeUnmount(() => {
   transform-origin: right top;
   opacity: 0;
   scrollbar-width: thin;
+}
+
+.settings-select-menu-content {
+  transform-origin: right top;
 }
 
 .settings-select-option {

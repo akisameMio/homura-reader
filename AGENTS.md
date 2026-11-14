@@ -9,7 +9,7 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 
 - 当前版本 `2.2.7`
 - 技术栈：Vue 3 + Pinia + Vite 6 + Tauri 2（Rust）
-- **TypeScript**：`src/services/`（42 个）、`src/stores/`（7 个）、`src/composables/`（11 个）三层的逻辑代码已全部迁移为 `.ts`；`components/`（45 个 `.vue`）的 `<script setup>` 已全部升级为 `lang="ts"`（保留原有运行时 `defineProps({...})` / `defineEmits([...])` 写法，未改写成泛型语法）；入口 `src/main.ts` 亦已迁移。`tsconfig.json` 开 `allowJs: true` 允许 JS/TS 混存，`strict: true`，且 `noImplicitAny` / `noUnusedLocals` / `noUnusedParameters` 均已开启。`npm run typecheck`（`vue-tsc --noEmit`）已清零 0 报错，可作为门槛使用。没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
+- **TypeScript**：`src/services/`（43 个）、`src/stores/`（7 个）、`src/composables/`（12 个）三层的逻辑代码已全部迁移为 `.ts`；`components/`（45 个 `.vue`）的 `<script setup>` 已全部升级为 `lang="ts"`（保留原有运行时 `defineProps({...})` / `defineEmits([...])` 写法，未改写成泛型语法）；入口 `src/main.ts` 亦已迁移。`tsconfig.json` 开 `allowJs: true` 允许 JS/TS 混存，`strict: true`，且 `noImplicitAny` / `noUnusedLocals` / `noUnusedParameters` 均已开启。`npm run typecheck`（`vue-tsc --noEmit`）已清零 0 报错，可作为门槛使用。没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
 - 新增 / 迁移文件时，指向已迁移 `.ts` 文件（services / stores / composables）的 import 必须写 `.ts` 后缀（Node `--experimental-strip-types` 不会把 `./x.js` 解析到 `x.ts`，只有 Vite / tsc 会）
 - 数据存本机 IndexedDB（`homura_shelf`，v3，4 个 store：`books` / `sources` / `progress` / `collections`）；Tauri 环境额外把书目 / 书库 / 进度镜像到 `$APPDATA/homura-metadata/homura.sqlite3`；原文件按平台写 `$APPDATA/homura-native-sources`、OPFS（`homura-sources`）或 IndexedDB Blob；主题与设置偏好写 localStorage
 
@@ -31,7 +31,7 @@ CBZ / ZIP 与 EPUB 共用原生 ZIP 通道：漫画压缩包只把图片条目�
 | 命令 | 作用 |
 | --- | --- |
 | `npm install` | 安装前端依赖；Tauri 命令找不到时先跑这个 |
-| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 38 个测试文件、270 条用例全绿，约 4 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
+| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 41 个测试文件、287 条用例全绿，约 4 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
 | `npm run typecheck` | `vue-tsc --noEmit`，类型检查 |
 | `npm run dev:vite` | 只起 Vite 开发服务器，固定端口 **5173**（strictPort），带 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`（最常用的快速验证） |
@@ -75,13 +75,13 @@ src/
       theme-picker.css     主题色板
       content.css          阅读内容排版（小说正文 / 章节 / Markdown）
   stores/                  7 个 setup store：theme / shelf / reader / ui / settings / importProgress / updates
-  services/                42 个：解析、存储、平台、原生桥接、更新（不依赖 Vue / Pinia）
-  composables/             11 个：useImporter / useViewport / useShortcuts / useSheetDrag / useShelfDialogs /
+  services/                43 个：解析、存储、平台、原生桥接、更新（不依赖 Vue / Pinia）
+  composables/             12 个：useImporter / useViewport / useShortcuts / useSheetDrag / useSheetSpring / useShelfDialogs /
                            useScrollBounce / useDuplicateImport / useReaderBackDismiss / useAndroidBackExit /
                            useSettingsTransition /
                            useVolumeKeys
   components/              45 个 SFC（视图与交互）
-tests/                     38 个 .test.mjs（node:test + assert/strict + jsdom）
+tests/                     41 个 .test.mjs（node:test + assert/strict + jsdom）
 scripts/                   5 个：check-dark-glow / generate-icons / release-notes / sync-android-icons /
                            patch-android-manifest
 references/                4 份规范：md3-component-guide / tokens / ui-component-spec / desktop-island
@@ -98,7 +98,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 .github/workflows/         三平台 + Android 自动打包
 ```
 
-`src/services/` 的关键分工（42 个文件，别只看名字猜）：
+`src/services/` 的关键分工（43 个文件，别只看名字猜）：
 
 - **解析**：`parsers.ts`（总入口与调度）、`epubParser.ts`、`cbzParser.ts`（CBZ / ZIP 漫画）、`epubType.ts`（漫画/小说判定）、`pdf.ts`、`mobi.ts`、`markdown.ts`、`pagination.ts`（小说智能分页、章节/图片页构建）、`readerLayout.ts`（页宽 / 行高 / 页边距度量）、`textEncoding.ts`
 - **存储**：`storage.ts`（IndexedDB 完整存档 + SQLite 镜像）、`nativeMetadata.ts`、`nativeStorage.ts`、`opfs.ts`、`restore.ts`、`progress.ts`、`mutationQueue.ts`（串行写队列）
@@ -161,7 +161,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 - 展开侧栏在 `900–1079px` 时，书架顶栏搜索框独占一行；`>=1080px` 才嵌入顶栏中段，避免压住标题和右侧按钮。
 - 手机底部导航是悬浮胶囊（`SideNav.vue` 的 `.mobile-nav`）：`left/right 14px`、`height 76px`、`border-radius 38px`、`max-width 560px`、`bottom: calc(14px + env(safe-area-inset-bottom))`；内容区必须挂 `.md-bottom-nav-space`（`6.5rem + safe-area`）。
 - 网格建议只用 `.md-shelf-grid`，跨列用 `.md-featured-cell`；FAB 与桌面灵动胶囊都用 `.md-fab-pos`，尽量避免在组件里另写 `grid-cols-*`。
-- 抽屉：桌面右侧 `w-[372px]`；手机底部 `max-h-[78dvh] rounded-t-[28px]` + 拖拽条 + 安全区 padding。遮罩用 `.md-scrim`，进出场用 `md-sheet-enter-active` / `md-sheet-leave-active`。
+- 抽屉：桌面右侧 `w-[372px]`；手机底部默认 `78dvh`，可整卡上拖到状态栏下方（`100dvh - safe-area-top - 8px`）的展开档位，`rounded-t-[28px]` + 拖拽条 + 安全区 padding。向上拖吸附展开、向下拖先回默认档、继续下拉才关闭。遮罩用 `.md-scrim`；阅读设置 / 字体 / 目录 / 更新日志的进出场用 `useSheetSpring()` 物理弹簧，不再用 `md-sheet-enter-active`。
 - **z-index 阶梯**（新增层先沿用现有层级，别随手写大数）：
 
   | 层 | z-index | 位置 |

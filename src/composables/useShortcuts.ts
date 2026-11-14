@@ -40,8 +40,6 @@ export function useShortcuts(reader: ReaderStore, viewportRef: Ref<HTMLElement |
         ui.closeSettings();
       } else if (ui.tocOpen) {
         ui.closeToc();
-      } else if (ui.collectionTocOpen) {
-        ui.closeCollectionToc();
       } else if (!ui.readerChromeVisible) {
         ui.showChrome();
       } else {

@@ -10,12 +10,13 @@
     <div v-if="ui.fontMenuOpen" class="absolute inset-0 z-40 md-scrim" @click="closeFontMenu()"></div>
   </Transition>
   <Transition
-    enter-active-class="md-sheet-enter-active"
-    :enter-from-class="isCompact ? 'translate-y-full' : 'translate-x-full'"
-    :enter-to-class="isCompact ? 'translate-y-0' : 'translate-x-0'"
-    leave-active-class="md-sheet-leave-active"
-    :leave-from-class="isCompact ? 'translate-y-0' : 'translate-x-0'"
-    :leave-to-class="isCompact ? 'translate-y-full' : 'translate-x-full'"
+    :css="false"
+    @before-enter="onSheetBeforeEnter"
+    @enter="onSheetEnter"
+    @before-leave="onSheetBeforeLeave"
+    @leave="onSheetLeave"
+    @after-leave="onSheetAfterLeave"
+    @leave-cancelled="onSheetLeaveCancelled"
   >
     <aside
       v-if="ui.fontMenuOpen"
@@ -88,6 +89,7 @@ import { useUiStore } from '../stores/ui.ts';
 import { READER_FONT_OPTIONS } from '../services/readerLayout.ts';
 import { useViewport } from '../composables/useViewport.ts';
 import { useSheetDrag } from '../composables/useSheetDrag.ts';
+import { useSheetSpring } from '../composables/useSheetSpring.ts';
 import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
 import MdIcon from './MdIcon.vue';
 
@@ -95,13 +97,22 @@ const reader = useReaderStore();
 const ui = useUiStore();
 const { isCompact } = useViewport();
 const fontMenuOpen = computed(() => ui.fontMenuOpen);
+const sheetSpring = useSheetSpring({ isCompact });
+const {
+  onBeforeEnter: onSheetBeforeEnter,
+  onEnter: onSheetEnter,
+  onBeforeLeave: onSheetBeforeLeave,
+  onLeave: onSheetLeave,
+  onAfterLeave: onSheetAfterLeave,
+  onLeaveCancelled: onSheetLeaveCancelled
+} = sheetSpring;
 const {
   sheetRef: fontMenu,
   onDragStart: onSheetDragStart,
   onDragMove: onSheetDragMove,
   onDragEnd: onSheetDragEnd,
   onDragCancel: onSheetDragCancel
-} = useSheetDrag({ isCompact, isOpen: fontMenuOpen, onClose: () => ui.closeFontMenu() });
+} = useSheetDrag({ isCompact, isOpen: fontMenuOpen, onClose: () => ui.closeFontMenu(), onDragBegin: sheetSpring.cancel });
 const fontQuery = ref('');
 const fontSearchInput = shallowRef<HTMLInputElement | null>(null);
 const normalizedFontQuery = computed(() => fontQuery.value.trim().toLocaleLowerCase());
@@ -117,7 +128,15 @@ watch(fontMenuOpen, async open => {
     await nextTick();
     const selected = fontMenu.value?.querySelector<HTMLElement>('.reader-font-option[aria-pressed="true"]');
     selected?.focus({ preventScroll: true });
-    selected?.scrollIntoView({ block: 'nearest' });
+    const body = fontMenu.value?.querySelector<HTMLElement>('.reader-font-body');
+    if (body && selected) {
+      const bodyRect = body.getBoundingClientRect();
+      const selectedRect = selected.getBoundingClientRect();
+      const top = selectedRect.top - bodyRect.top;
+      const bottom = selectedRect.bottom - bodyRect.bottom;
+      if (top < 0) body.scrollTop += top;
+      else if (bottom > 0) body.scrollTop += bottom;
+    }
   } else {
     await nextTick();
     if (reader.currentBook && !ui.readerDrawerOpen) {

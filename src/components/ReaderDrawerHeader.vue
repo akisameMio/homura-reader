@@ -1,6 +1,7 @@
 <template>
   <div
     v-if="isCompact"
+    data-sheet-drag-handle
     class="mobile-sheet-drag-zone h-9 flex shrink-0 cursor-grab touch-none select-none items-center justify-center active:cursor-grabbing"
     :class="{ 'is-prominent': prominent }"
     @pointerdown="$emit('drag-start', $event)"
@@ -11,7 +12,7 @@
     <span class="h-1 w-8 rounded-full bg-[var(--md-outline-variant)]"></span>
   </div>
 
-  <header class="md-drawer-header" :class="{ 'is-prominent': prominent }">
+  <header class="md-drawer-header" :class="{ 'is-prominent': prominent, 'has-inline-tabs': inlineTabs }">
     <div class="md-drawer-heading">
       <h2 :id="titleId" class="md-drawer-title">{{ title }}</h2>
       <p v-if="subtitle" class="md-drawer-subtitle" :title="subtitle">{{ subtitle }}</p>
@@ -35,6 +36,7 @@ import MdIcon from './MdIcon.vue';
 defineProps({
   isCompact: { type: Boolean, default: false },
   prominent: { type: Boolean, default: false },
+  inlineTabs: { type: Boolean, default: false },
   title: { type: String, required: true },
   subtitle: { type: String, default: '' },
   titleId: { type: String, required: true },
@@ -59,6 +61,9 @@ defineEmits(['close', 'drag-start', 'drag-move', 'drag-end', 'drag-cancel']);
   flex: none;
   background: var(--md-surface);
 }
+.md-drawer-header.has-inline-tabs { gap: 8px; padding-inline: 16px; }
+.has-inline-tabs .md-drawer-title { font-size: 20px; white-space: nowrap; }
+.has-inline-tabs .md-icon-button { width: 44px; height: 44px; }
 @media (max-width: 899px) {
   .md-drawer-header.is-prominent {
     min-height: 76px;

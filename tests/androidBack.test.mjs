@@ -44,11 +44,9 @@ test('Android 返回监听在书架与阅读器之间保持注册', async () => 
     readerDrawerOpen: false,
     settingsOpen: false,
     tocOpen: false,
-    collectionTocOpen: false,
     fontMenuOpen: false,
     closeSettings() { this.settingsOpen = false; this.readerDrawerOpen = false; },
-    closeToc() {},
-    closeCollectionToc() {},
+    closeToc() { this.tocOpen = false; this.readerDrawerOpen = false; },
     closeFontMenu() { this.fontMenuOpen = false; this.readerDrawerOpen = false; }
   });
   const app = createApp({
@@ -69,6 +67,12 @@ test('Android 返回监听在书架与阅读器之间保持注册', async () => 
   ui.readerDrawerOpen = true;
   ui.settingsOpen = true;
   backHandler();
+  assert.equal(ui.readerDrawerOpen, false);
+  assert.ok(reader.currentBook);
+  ui.readerDrawerOpen = true;
+  ui.tocOpen = true;
+  backHandler();
+  assert.equal(ui.tocOpen, false);
   assert.equal(ui.readerDrawerOpen, false);
   assert.ok(reader.currentBook);
   ui.readerDrawerOpen = true;

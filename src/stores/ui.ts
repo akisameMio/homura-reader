@@ -13,12 +13,11 @@ export const useUiStore = defineStore('ui', () => {
   const readerChromeVisible = ref(true);
   const settingsOpen = ref(false);
   const tocOpen = ref(false);
-  const collectionTocOpen = ref(false);
   // 字体浮层：贴顶栏的小菜单，打开期间等同抽屉，钉住工具栏并收起箭头
   const fontMenuOpen = ref(false);
   // 拖动阅读滑条等连续操作期间钉住工具栏，避免 2.2 秒自动隐藏打断手指
   const chromePinned = ref(false);
-  const readerDrawerOpen = computed(() => settingsOpen.value || tocOpen.value || collectionTocOpen.value || fontMenuOpen.value);
+  const readerDrawerOpen = computed(() => settingsOpen.value || tocOpen.value || fontMenuOpen.value);
   const fullscreen = ref(false);
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
   let fullscreenBusy = false;
@@ -66,7 +65,6 @@ export const useUiStore = defineStore('ui', () => {
 
   function openSettings() {
     fontMenuOpen.value = false;
-    collectionTocOpen.value = false;
     settingsOpen.value = true;
     tocOpen.value = false;
     clearHideTimer();
@@ -80,7 +78,6 @@ export const useUiStore = defineStore('ui', () => {
 
   function openToc() {
     fontMenuOpen.value = false;
-    collectionTocOpen.value = false;
     tocOpen.value = true;
     settingsOpen.value = false;
     clearHideTimer();
@@ -92,25 +89,10 @@ export const useUiStore = defineStore('ui', () => {
     showChrome();
   }
 
-  function openCollectionToc() {
-    fontMenuOpen.value = false;
-    collectionTocOpen.value = true;
-    settingsOpen.value = false;
-    tocOpen.value = false;
-    clearHideTimer();
-    readerChromeVisible.value = true;
-  }
-
-  function closeCollectionToc() {
-    collectionTocOpen.value = false;
-    showChrome();
-  }
-
   // 字体抽屉与其他阅读抽屉互斥，打开时钉住工具栏。
   function openFontMenu() {
     settingsOpen.value = false;
     tocOpen.value = false;
-    collectionTocOpen.value = false;
     fontMenuOpen.value = true;
     clearHideTimer();
     readerChromeVisible.value = true;
@@ -129,7 +111,6 @@ export const useUiStore = defineStore('ui', () => {
   // 打开/关闭书籍时复位，避免抽屉状态残留到下一本
   function resetReaderUi() {
     fontMenuOpen.value = false;
-    collectionTocOpen.value = false;
     chromePinned.value = false;
     clearHideTimer();
     settingsOpen.value = false;
@@ -172,11 +153,8 @@ export const useUiStore = defineStore('ui', () => {
     readerChromeVisible,
     settingsOpen,
     tocOpen,
-    collectionTocOpen,
     readerDrawerOpen,
     fontMenuOpen,
-    openCollectionToc,
-    closeCollectionToc,
     openFontMenu,
     closeFontMenu,
     toggleFontMenu,

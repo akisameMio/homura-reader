@@ -1,6 +1,14 @@
 <template>
   <Teleport to="body">
-    <Transition name="changelog-sheet">
+    <Transition
+      :css="false"
+      @before-enter="onSheetBeforeEnter"
+      @enter="onSheetEnter"
+      @before-leave="onSheetBeforeLeave"
+      @leave="onSheetLeave"
+      @after-leave="onSheetAfterLeave"
+      @leave-cancelled="onSheetLeaveCancelled"
+    >
       <div
         v-if="open"
         class="changelog-layer"
@@ -112,6 +120,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch, type PropType } from 'vue';
 import { useSheetDrag } from '../composables/useSheetDrag.ts';
+import { useSheetSpring } from '../composables/useSheetSpring.ts';
 import { openGitHubUrl } from '../services/external.ts';
 import MdIcon from './MdIcon.vue';
 import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
@@ -148,6 +157,19 @@ const statusIcon = computed(() => {
   if (props.status === 'error') return 'error';
   return 'check';
 });
+const sheetSpring = useSheetSpring({
+  isCompact: compactModel,
+  panel: root => root.querySelector<HTMLElement>('.changelog-panel'),
+  fadeRoot: true
+});
+const {
+  onBeforeEnter: onSheetBeforeEnter,
+  onEnter: onSheetEnter,
+  onBeforeLeave: onSheetBeforeLeave,
+  onLeave: onSheetLeave,
+  onAfterLeave: onSheetAfterLeave,
+  onLeaveCancelled: onSheetLeaveCancelled
+} = sheetSpring;
 const {
   sheetRef,
   onDragStart,
@@ -157,7 +179,8 @@ const {
 } = useSheetDrag({
   isCompact: compactModel,
   isOpen: openModel,
-  onClose: () => emit('close')
+  onClose: () => emit('close'),
+  onDragBegin: sheetSpring.cancel
 });
 
 interface ChangelogRelease {
@@ -511,26 +534,6 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
-.changelog-sheet-enter-active,
-.changelog-sheet-leave-active {
-  transition: opacity var(--md-duration-short) var(--md-ease-emphasized);
-}
-
-.changelog-sheet-enter-active .changelog-panel,
-.changelog-sheet-leave-active .changelog-panel {
-  transition: transform var(--md-duration-short) var(--md-ease-emphasized);
-}
-
-.changelog-sheet-enter-from,
-.changelog-sheet-leave-to {
-  opacity: 0;
-}
-
-.changelog-sheet-enter-from .changelog-panel,
-.changelog-sheet-leave-to .changelog-panel {
-  transform: translateX(100%);
-}
-
 @keyframes changelog-pulse {
   from { opacity: 0.48; }
   to { opacity: 1; }
@@ -544,6 +547,7 @@ onBeforeUnmount(() => {
   .changelog-panel.is-compact {
     width: 100%;
     height: 78dvh;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 8px);
     border-radius: 28px 28px 0 0;
     box-shadow: 0 -24px 70px -34px color-mix(in oklab, var(--md-shadow-color-soft) 52%, transparent);
   }
@@ -560,20 +564,9 @@ onBeforeUnmount(() => {
     padding: 4px 16px calc(14px + env(safe-area-inset-bottom));
   }
 
-  .changelog-sheet-enter-from .changelog-panel.is-compact,
-  .changelog-sheet-leave-to .changelog-panel.is-compact {
-    transform: translateY(100%);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .changelog-sheet-enter-active,
-  .changelog-sheet-leave-active,
-  .changelog-sheet-enter-active .changelog-panel,
-  .changelog-sheet-leave-active .changelog-panel {
-    transition: none !important;
-  }
-
   .changelog-skeleton {
     animation: none;
   }

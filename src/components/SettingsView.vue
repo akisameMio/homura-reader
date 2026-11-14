@@ -16,10 +16,6 @@
           <h1>{{ activeSection ? sectionTitles[activeSection] : '设置' }}</h1>
           <p v-if="!activeSection">让阅读，更合你的习惯。</p>
         </div>
-        <span v-if="activeSection !== 'about'" class="settings-save-state">
-          <MdIcon name="check" />
-          <span>{{ activeSection ? '自动保存' : '更改会自动保存' }}</span>
-        </span>
       </div>
     </header>
     <div v-if="isCompact && $slots.status" class="settings-import-status">
@@ -1264,7 +1260,27 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: var(--md-surface-low);
+  background: transparent;
+  pointer-events: none;
+}
+
+/* 模糊层独立淡出，标题保持清晰，卡片在顶栏下方仍可点击。 */
+.settings-topbar::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 -12px;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--md-surface-low) 72%, transparent),
+    color-mix(in oklab, var(--md-surface-low) 32%, transparent) 65%,
+    transparent
+  );
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  -webkit-mask-image: linear-gradient(to bottom, var(--md-surface) 45%, transparent 100%);
+  mask-image: linear-gradient(to bottom, var(--md-surface) 45%, transparent 100%);
 }
 
 .settings-topbar-inner {
@@ -1290,24 +1306,6 @@ onBeforeUnmount(() => {
   margin: 6px 0 0;
   color: var(--md-on-surface-variant);
   font-size: 12px;
-}
-
-.settings-save-state {
-  display: flex;
-  flex: none;
-  gap: 8px;
-  align-items: center;
-  padding: 12px 16px;
-  border-radius: 24px;
-  background: var(--md-surface);
-  color: var(--md-on-surface-variant);
-  font-size: 11px;
-}
-
-.settings-save-state svg {
-  width: 18px;
-  height: 18px;
-  color: var(--md-primary);
 }
 
 .settings-import-status {
@@ -1876,14 +1874,6 @@ onBeforeUnmount(() => {
     font-size: 11px;
   }
 
-  .settings-save-state {
-    padding: 10px;
-  }
-
-  .settings-save-state span {
-    display: none;
-  }
-
   .settings-card-head {
     margin-bottom: 22px;
   }
@@ -2174,6 +2164,7 @@ onBeforeUnmount(() => {
   background: var(--md-surface);
   color: var(--md-on-surface);
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .settings-back-button svg {
@@ -2185,11 +2176,6 @@ onBeforeUnmount(() => {
   justify-content: flex-start;
   max-width: 1036px;
   gap: 20px;
-}
-
-.has-detail .settings-save-state {
-  margin-left: auto;
-  background: transparent;
 }
 
 .settings-detail {

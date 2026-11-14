@@ -23,20 +23,6 @@
         >
           <MdIcon name="toc" />
         </button>
-        <template v-if="reader.currentCollection">
-          <span class="md-reader-topbar-divider" aria-hidden="true"></span>
-          <button
-            type="button"
-            class="md-icon-button md-hit-target"
-            title="本目录"
-            aria-label="本目录"
-            aria-controls="reader-collection-drawer"
-            :aria-expanded="ui.collectionTocOpen"
-            @click="ui.openCollectionToc()"
-          >
-            <MdIcon name="collections_bookmark" />
-          </button>
-        </template>
       </div>
     </div>
 
@@ -56,7 +42,21 @@
         :aria-expanded="ui.fontMenuOpen"
         @click="ui.toggleFontMenu()"
       >
-        <span class="md-reader-type-glyph" aria-hidden="true">字体</span>
+        <svg
+          class="md-reader-type-glyph"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M2.7 18.2 7.35 5.8h.6l4.65 12.4" />
+          <path d="M4.55 13.75h6.8" />
+          <circle cx="17.15" cy="14.25" r="3.35" />
+          <path d="M20.5 10.9v7.3" />
+        </svg>
       </button>
       <button
         type="button"

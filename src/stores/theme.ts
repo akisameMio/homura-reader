@@ -47,7 +47,7 @@ export const TRANSITION_OPTIONS = Object.freeze([
   { value: 'slide', label: '滑动', icon: 'chevron_right' },
   { value: 'curl', label: '卷页', icon: 'auto_stories' },
   { value: 'scroll', label: '滚动', icon: 'expand_more' },
-  { value: 'fade', label: '柔和淡入', icon: 'radio_button_unchecked' }
+  { value: 'fade', label: '淡入', icon: 'radio_button_unchecked' }
 ]);
 export const TRANSITION_LABELS = Object.fromEntries(
   TRANSITION_OPTIONS.map(option => [option.value, option.label])

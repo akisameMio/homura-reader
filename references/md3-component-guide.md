@@ -225,12 +225,13 @@
 </Transition>
 
 <Transition
-  enter-active-class="md-sheet-enter-active"
-  :enter-from-class="isCompact ? 'translate-y-full' : 'translate-x-full'"
-  :enter-to-class="isCompact ? 'translate-y-0' : 'translate-x-0'"
-  leave-active-class="md-sheet-leave-active"
-  :leave-from-class="isCompact ? 'translate-y-0' : 'translate-x-0'"
-  :leave-to-class="isCompact ? 'translate-y-full' : 'translate-x-full'"
+  :css="false"
+  @before-enter="onSheetBeforeEnter"
+  @enter="onSheetEnter"
+  @before-leave="onSheetBeforeLeave"
+  @leave="onSheetLeave"
+  @after-leave="onSheetAfterLeave"
+  @leave-cancelled="onSheetLeaveCancelled"
 >
   <aside
     v-if="open"
@@ -265,15 +266,17 @@
 </Transition>
 ```
 
+进出场统一用 `useSheetSpring()`（`src/composables/useSheetSpring.ts`）的物理弹簧，不再写 `md-sheet-enter-active` 固定时长过渡。
+
 布局规则：
 
 - 桌面 `>=900px`：宽 372px，最大 92%，贴右侧，左侧 28px 圆角。
-- 手机 `<900px`：底部 sheet，最大 `78dvh`，顶部 28px 圆角，保留安全区。
-- 头部固定；`.md-drawer-body` 独立滚动并设置 `overscroll-behavior: contain`；底部操作区固定。
-- 阅读设置使用「排版 / 外观 / 封面」三个页签，大圆角分组卡片；字号预览放在排版滚动区内。`ReaderDrawerHeader prominent` 提供左侧圆形关闭按钮与 `status` 插槽，其他抽屉沿用默认头部。
+- 手机 `<900px`：底部 sheet 默认 `78dvh`，可整卡上拖到 `100dvh - safe-area-top - 8px`，顶部 28px 圆角，保留安全区。
+- 头部固定；`.md-drawer-body` 独立滚动并设置 `overscroll-behavior: contain`；需要底部操作时使用 `.md-drawer-actions`（阅读设置已改为列表内的「恢复默认」卡片）。
+- 阅读设置使用「排版 / 外观 / 封面」三个页签，分类胶囊由 `ReaderDrawerHeader` 的 `inlineTabs` 放在标题右侧，大圆角分组卡片；字号预览放在排版滚动区内。`ReaderDrawerHeader prominent` 提供左侧圆形关闭按钮与 `status` 插槽，其他抽屉沿用默认头部。
 - 顶栏字体入口打开 `ReaderFontDrawer`：桌面使用 372px side sheet，手机使用 78dvh bottom sheet，复用遮罩、拖拽关闭与固定搜索区；默认字体独立一组，可用字体按自身字体展示并支持搜索；字体来源为 `READER_FONT_OPTIONS`，选中后关闭卡片并恢复触发按钮焦点。
 - 阅读纸面用 `SurfaceModePreview surface="reader" cards`：羊皮纸与护眼绿双列，跟随设置外观占满一行；默认缩略图布局不变。字体、行距和页边距复用 `SettingsSelectRow`，选择项保留原始值类型。
-- 手机拖拽条由 `ReaderDrawerHeader` 渲染，手势逻辑统一走 `useSheetDrag()`。
+- 手机拖拽条由 `ReaderDrawerHeader` 渲染，手势逻辑统一走 `useSheetDrag()`；整张卡片都能起手，向上吸附到展开档位，向下先回收默认档位、继续下拉才关闭。
 - 遮罩 z-40，sheet z-50；不要新增 `z-[999]`。
 - 抽屉打开时禁止背景滚动并停止工具栏自动隐藏；关闭后恢复焦点与滚动位置。
 
@@ -318,8 +321,8 @@
 - 书页示意仅作装饰，标记 `aria-hidden`；阅读默认值使用实际控件呈现，不将示意当作排版验证。
 - 二级页使用 `.settings-detail-hero` 与 `.settings-list`，复用 `SettingsInterfacePreview` 绘制随主题变化的缩略图；模式缩略图同时带对应 `data-theme` / `data-mode`，不改全局根节点。
 - 「标准 / 纯黑」沿用分组列表。只通过 `theme.setPureBlackMode()` 修改偏好，组件不自行覆盖根节点或写黑色背景；缩略图可用 `black` 属性独立展示两种夜间表面。
-- 列表选择项复用 `SettingsSelectRow`：右侧上下箭头，展开为 28px 圆角浮动列表，选中项使用中性表面底与勾选。菜单传送到根节点以避免滚动容器裁切，并按视口避让；支持方向键、Home / End、Escape、Tab 与点击外部关闭，选择后恢复焦点，保留单双页值的数字类型。
-- 选择菜单由 `settingsSelectMotion.ts` 驱动物理联动：以胶囊右上角为锚点，从胶囊尺寸向左下展开（`ζ=0.58 / k=400`），按瞬时速度作 `1.08 / 0.95` 果冻形变；以 `ζ=0.85 / k=500` 缩回接触时，将剩余动量交给胶囊，胶囊向左下挤压（`0.92 / 1.07`）并以 `ζ=0.55 / k=450` 回跳归零。两轴共用一条 rAF，中断保留位置与速度；收敛后卸载菜单，减少动态效果时直接落位。菜单右上角对齐胶囊，空间不足时限制高度或作必要避让，缩回仍指向胶囊。
+- 列表选择项复用 `SettingsSelectRow`：右侧上下箭头，展开为 28px 圆角浮动列表，选中项使用中性表面底与勾选。菜单传送到根节点以避免滚动容器裁切，并按视口避让；支持方向键、Home / End、Escape、Tab 与点击外部关闭，选择后恢复焦点，保留单双页值的数字类型。菜单展开前锁定背景滚动，桌面保留原滚动条并固定背景滚动位置，覆盖停驻与收缩全过程，动画完成或组件卸载后释放；菜单自身仍可滚动，收缩中反向展开及多个菜单交替开合时保持锁定。
+- 选择菜单由 `settingsSelectMotion.ts` 驱动物理弹簧，模拟时钟以 `0.8×` 速率播放（展开与收起时长约增加 25%）：参考高清 GIF，卡片先向左下拉出，再回弹至选中项与原胶囊对齐的停驻位置（`ζ=0.58 / k=400`）；收起以 `ζ=0.85 / k=500` 先下探拉成圆囊，再向上合回胶囊。下探轨迹在两端的位移与导数均为零，配合速度驱动的 `1.08 / 0.95` 形变及中段加大的圆角；内容反向补偿以避免文字压扁，按速度模糊并先于外壳淡出。胶囊依据位置与当前速度交叉淡入淡出，不位移、不接收回弹动量；中断保留卡片的位置与速度，收敛后卸载菜单。减少动态效果时直接落位；空间不足时按视口避让。
 
 ## 4. 响应式与布局
 
@@ -435,8 +438,8 @@
 | 页脚页码、本章剩余提示 | `src/components/NovelCard.vue` |
 | 抽屉外壳、拖拽、底部操作 | `src/components/ReaderSettingsDrawer.vue` |
 | 抽屉标题与手机拖拽条 | `src/components/ReaderDrawerHeader.vue` |
-| 章节列表与当前项 | `src/components/ReaderTocDrawer.vue` |
-| 本目录顺序列表 | `src/components/ReaderCollectionDrawer.vue` |
+| 章节 / 页码与本目录合并抽屉 | `src/components/ReaderTocDrawer.vue` |
+| 阅读抽屉标题右侧分类胶囊 | `ReaderDrawerHeader.vue` 的 `prominent` + `inline-tabs`，在 `status` 插槽内使用 `ReaderDrawerTabs.vue` |
 | 分段选择 | `src/components/MdSegmentedControl.vue` |
 | 开关 | `src/components/MdSwitch.vue` |
 | 进度 / 字号滑条 | `src/components/MdRange.vue` |

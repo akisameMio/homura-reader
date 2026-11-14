@@ -32,11 +32,9 @@ interface UiLike {
   readerDrawerOpen: boolean;
   settingsOpen: boolean;
   tocOpen: boolean;
-  collectionTocOpen: boolean;
   fontMenuOpen?: boolean;
   closeSettings: () => void;
   closeToc: () => void;
-  closeCollectionToc: () => void;
   closeFontMenu?: () => void;
 }
 interface BackGesture {
@@ -285,7 +283,6 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
     if (ui.fontMenuOpen) ui.closeFontMenu?.();
     else if (ui.settingsOpen) ui.closeSettings();
     else if (ui.tocOpen) ui.closeToc();
-    else if (ui.collectionTocOpen) ui.closeCollectionToc();
   }
 
   function onNativeBackEvent(event: NativeBackEvent) {
