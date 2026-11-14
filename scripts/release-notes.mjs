@@ -124,6 +124,10 @@ Android 构建命令与 keystore 配置见 README 与 \`docs/features.md\`。桌
 - 书籍元数据、原始文件与阅读进度保存在本机；Tauri 版还会把元数据镜像到本地 SQLite。
 - 卸载应用或清理应用数据会同时清除本地书架，请自行保留原始书籍与重要数据。
 - 欢迎通过 [Issues](${server}/${repo}/issues) 反馈问题与建议。
+
+## 💛 支持项目
+
+<img src="${server}/${repo}/raw/main/.github/assets/sponsorship.jpg" width="360" alt="秋雨凛的赞赏码" />
 `;
 
 if (process.env.GITHUB_OUTPUT) {
