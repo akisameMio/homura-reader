@@ -1,3 +1,4 @@
+**English** | [简体中文](README.md)
 <div align="center">
   <img src="https://github.com/user-attachments/assets/818e7aba-f12a-49e1-8640-8852cb852b8b" width="180" alt="HOMURA" />
   <h1>HOMURA</h1>
@@ -6,7 +7,6 @@
   <img src="https://github.com/user-attachments/assets/049e7a11-e0af-4a94-a77e-8f8c72cb50e7" width="160" alt="HOMURA animation" />
 </div>
 
-**English** | [简体中文](README.md)
 
 > This fish only loads books into your local shelf — don't even think about uploading to the cloud. 🐋
 
