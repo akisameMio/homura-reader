@@ -36,8 +36,10 @@ compiled = compiled.replace(/from ["']vue["']/g, `from '${pathToFileURL(require.
 compiled = compiled.replace("import MdIcon from './MdIcon.vue';", "const MdIcon = { render: () => null };");
 compiled = compiled.replaceAll("'../services/settingsSelectMotion.ts'", `'${new URL('../src/services/settingsSelectMotion.ts', import.meta.url).href}'`);
 compiled = compiled.replaceAll("'../services/settingsSelectScrollLock.ts'", `'${new URL('../src/services/settingsSelectScrollLock.ts', import.meta.url).href}'`);
+compiled = compiled.replaceAll("'../composables/useI18n.ts'", `'${new URL('../src/composables/useI18n.ts', import.meta.url).href}'`);
 const { code } = await transform(compiled, { loader: 'ts', format: 'esm', target: 'esnext' });
 const { default: SettingsSelectRow } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const { useI18n } = await import('../src/composables/useI18n.ts');
 
 function mount() {
   viewport.width = 1440;
@@ -63,6 +65,33 @@ function wheel() {
   document.body.dispatchEvent(event);
   return event.defaultPrevented;
 }
+
+test('切换语言会更新已挂载选择行和菜单，并保留当前值与键盘操作', async () => {
+  const { setLocale } = useI18n();
+  const { app, trigger } = mount();
+  try {
+    setLocale('en');
+    await nextTick();
+    assert.equal(trigger.textContent.includes('Page turn style'), true);
+    assert.equal(trigger.textContent.includes('Fade'), true);
+    trigger.click();
+    await nextTick();
+    await advance(1800);
+    assert.equal(document.querySelector('[aria-selected="true"]').textContent.trim(), 'Fade');
+    setLocale('ja');
+    await nextTick();
+    assert.equal(trigger.getAttribute('aria-label'), 'ページ送りの方式, フェード');
+    assert.equal(document.querySelector('[aria-selected="true"]').textContent.trim(), 'フェード');
+    document.activeElement.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await nextTick();
+    await advance(1800);
+    assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+    assert.equal(document.activeElement, trigger);
+  } finally {
+    setLocale('zh-CN');
+    app.unmount();
+  }
+});
 
 test('锁滚动后异步到达的同尺寸视口事件不会关闭桌面菜单', async () => {
   const { app, trigger } = mount();

@@ -5,6 +5,7 @@
    检查不会各自弹出两套更新界面。网络失败只在用户主动检查时展示。
    ========================================================================== */
 
+import { t } from '../composables/useI18n.ts';
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import packageInfo from '../../package.json';
@@ -202,7 +203,7 @@ export const useUpdateStore = defineStore('updates', () => {
       try {
         await openGitHubUrl(updatePackage.value?.url || RELEASES_PAGE_URL);
       } catch (error) {
-        downloadError.value = { message: '无法打开系统浏览器，请稍后再试。' };
+        downloadError.value = { message: t('无法打开系统浏览器，请稍后再试。') };
         console.warn('打开更新下载页失败', error);
       }
       return;
@@ -212,7 +213,7 @@ export const useUpdateStore = defineStore('updates', () => {
       try {
         await openGitHubUrl(asset.url);
       } catch (error) {
-        downloadError.value = { message: '无法打开系统浏览器，请稍后再试。' };
+        downloadError.value = { message: t('无法打开系统浏览器，请稍后再试。') };
         console.warn('打开更新下载页失败', error);
       }
       return;

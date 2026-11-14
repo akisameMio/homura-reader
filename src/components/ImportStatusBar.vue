@@ -13,7 +13,7 @@
             <button type="button" class="import-status-main min-w-0 flex-1" @click="openDetails">
               <span class="flex min-w-0 items-baseline gap-2">
                 <span class="shrink-0 text-[13px] font-semibold">
-                  导入中
+                  {{ t('导入中') }}
                   <span class="ml-0.5 font-mono">{{ store.done }} / {{ store.total }}</span>
                 </span>
                 <span class="shrink-0 rounded-full bg-[var(--md-primary-container)] px-2 py-0.5 text-[11px] font-semibold text-[var(--md-on-primary-container)]">
@@ -24,19 +24,19 @@
                 </span>
               </span>
               <span class="mt-1 block min-w-0 truncate text-[11px] text-[var(--md-on-surface-variant)]">
-                {{ store.currentName || '准备下一本…' }} · 导入到：{{ store.targetLabel }}
+                {{ t('{0} · 导入到：{1}', { 0: store.currentName || t('准备下一本…'), 1: store.targetLabel }) }}
               </span>
             </button>
             <button
               type="button"
               class="import-stop-button shrink-0"
               :disabled="store.cancelRequested"
-              :title="store.cancelRequested ? '正在停止导入' : '停止导入'"
-              :aria-label="store.cancelRequested ? '正在停止导入' : '停止导入'"
+              :title="store.cancelRequested ? t('正在停止导入') : t('停止导入')"
+              :aria-label="store.cancelRequested ? t('正在停止导入') : t('停止导入')"
               @click="store.requestCancel()"
             >
               <MdIcon name="close" class="h-4 w-4" />
-              <span>{{ store.cancelRequested ? '正在停止…' : '停止' }}</span>
+              <span>{{ store.cancelRequested ? t('正在停止…') : t('停止') }}</span>
             </button>
           </div>
 
@@ -52,7 +52,7 @@
                 {{ summaryTitle }}
               </span>
               <span class="mt-1 block truncate font-mono text-[11px] text-[var(--md-on-surface-variant)]">
-                {{ bytesLabel }} · 导入到：{{ store.targetLabel }}
+                {{ t('{0} · 导入到：{1}', { 0: bytesLabel, 1: store.targetLabel }) }}
               </span>
             </button>
             <div class="flex shrink-0 items-center gap-1.5">
@@ -62,14 +62,14 @@
                 class="import-bar-action import-bar-action--primary"
                 @click="$emit('retry')"
               >
-                重试失败项
+                {{ t('重试失败项') }}
               </button>
               <button
                 type="button"
                 class="import-bar-action"
                 @click="store.dismiss()"
               >
-                关闭
+                {{ t('关闭') }}
               </button>
             </div>
           </div>
@@ -88,6 +88,9 @@ import {
   formatImportBytes
 } from '../stores/importProgress.ts';
 import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 defineEmits(['retry']);
 
@@ -101,9 +104,9 @@ const bytesLabel = computed(() => (
 ));
 const summaryTitle = computed(() => {
   if (store.status === 'cancelled') {
-    return `已停止 · 已添加 ${store.saved} · 跳过 ${store.skipped} · 失败 ${store.failed}`;
+    return t('已停止 · 已添加 {0} · 跳过 {1} · 失败 {2}', { 0: store.saved, 1: store.skipped, 2: store.failed });
   }
-  return `已添加 ${store.saved} · 跳过 ${store.skipped} · 失败 ${store.failed}`;
+  return t('已添加 {0} · 跳过 {1} · 失败 {2}', { 0: store.saved, 1: store.skipped, 2: store.failed });
 });
 
 const liveMessage = ref('');
@@ -128,13 +131,13 @@ watch(
     const current = Date.now();
     if (status === 'running') {
       if (done - lastLiveDone < 5 && current - lastLiveAt < 2000) return;
-      liveMessage.value = `正在导入，已完成 ${done} / ${store.total} 本，当前${phaseLabel.value}。`;
+      liveMessage.value = t('正在导入，已完成 {0} / {1} 本，当前{2}。', { 0: done, 1: store.total, 2: phaseLabel.value });
       lastLiveDone = done;
       lastLiveAt = current;
     } else if (status === 'done') {
-      liveMessage.value = `导入完成，已添加 ${store.saved} 本，跳过 ${store.skipped} 本，失败 ${store.failed} 本。`;
+      liveMessage.value = t('导入完成，已添加 {0} 本，跳过 {1} 本，失败 {2} 本。', { 0: store.saved, 1: store.skipped, 2: store.failed });
     } else if (status === 'cancelled') {
-      liveMessage.value = `导入已停止，已添加 ${store.saved} 本。`;
+      liveMessage.value = t('导入已停止，已添加 {0} 本。', { 0: store.saved });
     }
   }
 );

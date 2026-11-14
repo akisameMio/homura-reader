@@ -1,13 +1,13 @@
 <template>
-  <div class="surface-mode-preview" :class="{ 'is-cards': cards && isReader }" role="group" :aria-label="isReader ? '阅读模式' : '表面'">
+  <div class="surface-mode-preview" :class="{ 'is-cards': cards && isReader }" role="group" :aria-label="isReader ? t('阅读模式') : t('表面')">
     <button
       v-for="option in options"
       :key="option.value"
       type="button"
       class="surface-mode-option"
       :class="{ 'is-selected': selectedValue === option.value, 'is-follow': option.value === 'settings' }"
-      :title="option.title"
-      :aria-label="`${option.label}：${option.note}`"
+      :title="t(option.title)"
+      :aria-label="`${t(option.label)}: ${t(option.note)}`"
       :aria-pressed="selectedValue === option.value"
       @click="selectMode(option.value, $event)"
     >
@@ -19,14 +19,14 @@
       >
         <span class="surface-mode-sheet" :class="sheetClass(option)" aria-hidden="true">
           <template v-if="cards && isReader">
-            <b class="surface-mode-sample-title">阅读时光</b>
+            <b class="surface-mode-sample-title">{{ t('阅读时光') }}</b>
             <span class="surface-mode-sample-lines"><i></i><i></i></span>
           </template>
           <template v-else>
             <span class="surface-mode-palette"><i></i><i></i><i></i></span>
             <span class="surface-mode-copy-block"><i></i><i></i><i></i></span>
             <span class="surface-mode-footer"><i></i><i></i></span>
-            <span v-if="isReader && option.value === 'settings'" class="surface-mode-badge">跟随</span>
+            <span v-if="isReader && option.value === 'settings'" class="surface-mode-badge">{{ t('跟随') }}</span>
           </template>
         </span>
         <span v-if="selectedValue === option.value && !(cards && isReader)" class="surface-mode-check" aria-hidden="true">
@@ -40,8 +40,8 @@
         <span class="surface-mode-icon" aria-hidden="true">
           <MdIcon :name="option.icon" />
         </span>
-        <span class="surface-mode-note">{{ option.label }}</span>
-        <span v-if="cards && isReader" class="surface-mode-description">{{ option.value === 'settings' ? '沿用应用的外观与主题设置' : option.note }}</span>
+        <span class="surface-mode-note">{{ t(option.label) }}</span>
+        <span v-if="cards && isReader" class="surface-mode-description">{{ option.value === 'settings' ? t('沿用应用的外观与主题设置') : t(option.note) }}</span>
       </span>
     </button>
   </div>
@@ -55,6 +55,9 @@ import {
   useThemeStore
 } from '../stores/theme.ts';
 import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 type PreviewOption = {
   value: string;

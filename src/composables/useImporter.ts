@@ -4,6 +4,7 @@
    文件选择、文件夹选择、拖拽导入，以及 File System Access 句柄采集。
    ========================================================================== */
 
+import { t } from './useI18n.ts';
 import { useShelfStore } from '../stores/shelf.ts';
 import { useSettingsStore } from '../stores/settings.ts';
 import { useImportProgressStore, importFailureReason } from '../stores/importProgress.ts';
@@ -345,7 +346,7 @@ export function useImporter() {
 
   function recordTaskFailure(task: ImportTask | null | undefined, error: unknown, fallbackName = '') {
     importProgress.recordFailure({
-      name: task?.title || fallbackName || '未命名文件',
+      name: task?.title || fallbackName || t('未命名文件'),
       reason: task?.failureReason || importFailureReason(error),
       kind: task?.kind || '',
       files: taskFiles(task)
@@ -378,8 +379,8 @@ export function useImporter() {
 
   async function importBatch(files: ImportFile[], targetId: string | null = null, offerCollection: boolean) {
     const targetLabel = targetId
-      ? (shelf.collections.find(item => item.id === targetId)?.title || '全部作品')
-      : '全部作品';
+      ? (shelf.collections.find(item => item.id === targetId)?.title || t('全部作品'))
+      : t('全部作品');
     // 返回本批实际入架的书籍 id，调用方靠它判断导入结果；别把返回值吞在这里。
     const importIntoCurrent = async () => {
       const ids = await importFiles(files, { targetId, targetLabel });
@@ -389,10 +390,11 @@ export function useImporter() {
     if (!settings.importCollectionPrompt) return importIntoCurrent();
     const plan = planFolderCollections(files as unknown as { name: string; webkitRelativePath?: string; customRelativePath?: string }[]);
     if (plan.bookCount < 2 || (!plan.hasDirectories && (!offerCollection || targetId))) return importIntoCurrent();
-    const grouping = plan.hasDirectories ? `按目录分别创建 ${plan.groups.length} 个一级书库` : '将这批作品放进一个新书库';
+    const grouping = plan.hasDirectories ? t('按目录分别创建 {0} 个一级书库', { 0: plan.groups.length }) : t('将这批作品放进一个新书库');
     const create = await askShelfDialog({
-      kind: 'folder', title: '为导入内容创建书库？',
-      message: `检测到 ${plan.bookCount} 本作品。可以${grouping}，也可以直接导入。`
+      kind: 'folder', title: t('为导入内容创建书库？'),
+      bookCount: plan.bookCount, collectionCount: plan.groups.length, groupByFolder: plan.hasDirectories,
+      message: t('检测到 {0} 本作品。可以{1}，也可以直接导入。', { 0: plan.bookCount, 1: grouping })
     });
     if (create === null) return [];
     if (!create) return importIntoCurrent();
@@ -400,8 +402,8 @@ export function useImporter() {
     const groups: { path?: string; bookCount: number; title?: string; files: ImportFile[] }[] = [];
     // 所有名称确认后才导入；中途取消不会留下半批书库。
     for (const group of plan.groups) {
-      const message = group.path ? `目录：${group.path} · ${group.bookCount} 本作品` : `${group.bookCount} 本作品`;
-      const title = await askShelfDialog({ kind: 'name', title: '创建导入书库', message, initialName: availableCollectionName(group.title, reserved), validate: (name: string) => collectionNameError(name, reserved) }) as string | null;
+      const message = group.path ? t('目录：{0} · {1} 本作品', { 0: group.path, 1: group.bookCount }) : t('{0} 本作品', { 0: group.bookCount });
+      const title = await askShelfDialog({ kind: 'name', title: t('创建导入书库'), message, initialName: availableCollectionName(group.title, reserved), validate: (name: string) => collectionNameError(name, reserved) }) as string | null;
       if (title === null) return [];
       reserved.push({ title } as unknown as (typeof reserved)[number]);
       groups.push({ ...group, title } as unknown as (typeof groups)[number]);
@@ -410,7 +412,7 @@ export function useImporter() {
     for (const group of groups) {
       const ids = await importFiles(group.files, {
         targetId: '',
-        targetLabel: `新建书库「${group.title}」`
+        targetLabel: t('新建书库「{0}」', { 0: group.title })
       });
       if (!ids.length) continue;
       savedIds.push(...ids);
@@ -585,7 +587,7 @@ export function useImporter() {
       metrics.parseMs += now() - parseStarted;
     }
     if (!book) {
-      markTaskFailure(task, parseFailure || new Error('无法解析 EPUB'));
+      markTaskFailure(task, parseFailure || new Error(t('无法解析 EPUB')));
       if (nativePath) await removeNativeBookDir(bookId).catch(() => {});
       return null;
     }
@@ -748,7 +750,7 @@ export function useImporter() {
       let group = task.group;
       if (!group) {
         metrics.parseFailed++;
-        markTaskFailure(task, new Error('图片分组缺失'));
+        markTaskFailure(task, new Error(t('图片分组缺失')));
         return null;
       }
       if (group.files.some((file: ImportFile) => isNativeImportFile(file))) {
@@ -778,7 +780,7 @@ export function useImporter() {
             }
           }
           const rebuilt = buildImageFolderBooks(files)[0];
-          if (!rebuilt) throw new Error('图片目录为空');
+          if (!rebuilt) throw new Error(t('图片目录为空'));
           rebuilt.book.id = group.book.id;
           (rebuilt.book as Book).nativeArchiveStaged = nativeEntries.some(Boolean);
           group = rebuilt as unknown as NonNullable<ImportTask['group']>;
@@ -819,7 +821,7 @@ export function useImporter() {
     }
     if (!prepared) {
       metrics.parseFailed++;
-      markTaskFailure(task, new Error('无法解析这个文件'));
+      markTaskFailure(task, new Error(t('无法解析这个文件')));
       return null;
     }
 
@@ -928,7 +930,7 @@ export function useImporter() {
     }
     importProgress.setPhase('save');
     importProgress.setCurrentName(
-      accepted.length === 1 ? (accepted[0].book.title ?? '') : `本批 ${accepted.length} 本作品`
+      accepted.length === 1 ? (accepted[0].book.title ?? '') : t('本批 {0} 本作品', { 0: accepted.length })
     );
     const started = now();
     try {
@@ -1025,7 +1027,7 @@ export function useImporter() {
         bytesTotal: importTasks.reduce((sum: number, task: ImportTask) => sum + (task.size || 0), 0),
         skipped: preflight.skipped,
         targetId,
-        targetLabel: targetLabel || targetCollection?.title || '全部作品'
+        targetLabel: targetLabel || targetCollection?.title || t('全部作品')
       });
 
       const savedBooks: Book[] = [];
@@ -1043,7 +1045,7 @@ export function useImporter() {
               try {
                 const result = await prepareImportTask(task, metrics);
                 if (!result) {
-                  markTaskFailure(task, new Error('无法解析或读取这个文件'));
+                  markTaskFailure(task, new Error(t('无法解析或读取这个文件')));
                   recordTaskFailure(task, new Error(task.failureReason));
                 }
                 return result;
@@ -1071,7 +1073,7 @@ export function useImporter() {
           logImportMetrics(metrics, savedBooks.length);
         }
         importProgress.recordFailure({
-          name: '导入批次',
+          name: t('导入批次'),
           reason: importFailureReason(err),
           kind: 'batch'
         });
@@ -1214,7 +1216,7 @@ export function useImporter() {
   }
 
   async function pickNativeFolder() {
-    const paths = await pickNativeImportPaths({ directory: true, multiple: false, title: '导入文件夹' });
+    const paths = await pickNativeImportPaths({ directory: true, multiple: false, title: t('导入文件夹') });
     if (!paths || paths.length === 0) return false;
     const entries = await scanNativeImportPaths(paths);
     const files = entries.map(makeNativeImportFile);

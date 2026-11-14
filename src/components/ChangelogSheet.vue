@@ -27,9 +27,9 @@
           <ReaderDrawerHeader
             :is-compact="compact"
             prominent
-            title="更新日志"
+            :title="t('更新日志')"
             title-id="changelog-title"
-            close-label="关闭更新日志"
+            :close-label="t('关闭更新日志')"
             @close="$emit('close')"
             @drag-start="onDragStart"
             @drag-move="onDragMove"
@@ -42,7 +42,7 @@
           </ReaderDrawerHeader>
 
           <div class="changelog-scroll">
-            <p class="changelog-intro">查看 HOMURA 每个稳定版本带来的变化。</p>
+            <p class="changelog-intro">{{ t('查看 HOMURA 每个稳定版本带来的变化。') }}</p>
 
             <div v-if="status === 'loading'" class="changelog-state" role="status">
               <div v-for="index in 2" :key="index" class="changelog-card">
@@ -57,9 +57,9 @@
                 <span class="changelog-error-icon" aria-hidden="true">
                   <MdIcon name="error" />
                 </span>
-                <b>暂时无法读取更新日志</b>
-                <p>{{ errorMessage }}</p>
-                <button type="button" class="md-filled-button" @click="$emit('retry')">重试</button>
+                <b>{{ t('暂时无法读取更新日志') }}</b>
+                <p>{{ t(errorMessage) }}</p>
+                <button type="button" class="md-filled-button" @click="$emit('retry')">{{ t('重试') }}</button>
               </div>
             </div>
 
@@ -72,27 +72,27 @@
               >
                 <div class="changelog-version-row">
                   <strong>{{ release.tag }}</strong>
-                  <span v-if="index === 0" class="changelog-badge">最新</span>
-                  <span v-if="isCurrent(release)" class="changelog-badge is-current">当前版本</span>
+                  <span v-if="index === 0" class="changelog-badge">{{ t('最新') }}</span>
+                  <span v-if="isCurrent(release)" class="changelog-badge is-current">{{ t('当前版本') }}</span>
                   <span class="changelog-date">{{ release.dateLabel }}</span>
                 </div>
                 <p v-if="releaseSummary(release)" class="changelog-summary">{{ releaseSummary(release) }}</p>
                 <div v-if="release.notes.groups.length" class="changelog-groups">
                   <div v-for="group in release.notes.groups" :key="group.title" class="changelog-group">
-                    <h3>{{ group.title }}</h3>
+                    <h3>{{ t(group.title) }}</h3>
                     <ul>
                       <li v-for="item in group.items" :key="item">{{ item }}</li>
                     </ul>
                   </div>
                 </div>
-                <p v-else class="changelog-empty">该版本没有提供可展示的更新说明。</p>
+                <p v-else class="changelog-empty">{{ t('该版本没有提供可展示的更新说明。') }}</p>
               </article>
             </template>
 
             <div v-else class="changelog-state">
               <div class="changelog-card changelog-message">
-                <b>还没有版本记录</b>
-                <p>GitHub Releases 中暂时没有可展示的稳定版本。</p>
+                <b>{{ t('还没有版本记录') }}</b>
+                <p>{{ t('GitHub Releases 中暂时没有可展示的稳定版本。') }}</p>
               </div>
             </div>
           </div>
@@ -103,10 +103,10 @@
               <button
                 type="button"
                 class="md-text-button changelog-releases"
-                title="在 GitHub 查看全部发布"
+                :title="t('在 GitHub 查看全部发布')"
                 @click="openReleasesPage"
               >
-                全部发布
+                {{ t('全部发布') }}
                 <MdIcon name="open_in_new" :size="16" />
               </button>
             </div>
@@ -128,6 +128,9 @@ import {
   getUpdateErrorMessage,
   RELEASES_PAGE_URL
 } from '../services/updates.ts';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -147,10 +150,10 @@ const openModel = computed(() => props.open);
 const compactModel = computed(() => props.compact);
 const errorMessage = computed(() => getUpdateErrorMessage(props.error));
 const statusLabel = computed(() => {
-  if (props.status === 'loading') return '读取中';
-  if (props.status === 'error') return '读取失败';
-  if (!props.releases.length) return '暂无版本';
-  return `${props.releases.length} 个版本`;
+  if (props.status === 'loading') return t('读取中');
+  if (props.status === 'error') return t('读取失败');
+  if (!props.releases.length) return t('暂无版本');
+  return t('{0} 个版本', { 0: props.releases.length });
 });
 const statusIcon = computed(() => {
   if (props.status === 'loading') return 'history';
@@ -197,7 +200,7 @@ function isCurrent(release: ChangelogRelease) {
 
 function releaseSummary(release: ChangelogRelease) {
   if (release.notes.intro) return release.notes.intro;
-  if (release.notes.itemCount > 0) return `${release.notes.itemCount} 项更新`;
+  if (release.notes.itemCount > 0) return t('{0} 项更新', { 0: release.notes.itemCount });
   return '';
 }
 
@@ -206,7 +209,7 @@ async function openReleasesPage() {
   try {
     await openGitHubUrl(RELEASES_PAGE_URL);
   } catch (error) {
-    linkError.value = '无法打开系统浏览器，请稍后再试。';
+    linkError.value = t('无法打开系统浏览器，请稍后再试。');
     console.warn('打开 Releases 页面失败', error);
   }
 }
@@ -249,7 +252,7 @@ watch(
       sheetTrigger = document.activeElement as HTMLElement | null;
       window.addEventListener('keydown', onPanelKeydown);
       await nextTick();
-      sheetRef.value?.querySelector<HTMLButtonElement>('[aria-label="关闭更新日志"]')?.focus();
+      sheetRef.value?.querySelector<HTMLButtonElement>('.md-drawer-header button')?.focus();
       return;
     }
     window.removeEventListener('keydown', onPanelKeydown);

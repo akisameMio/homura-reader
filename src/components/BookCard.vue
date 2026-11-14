@@ -1,6 +1,6 @@
 <template>
   <article class="md-card md-card--filled md-shelf-card relative flex flex-col min-w-0" :class="{ 'md-book-selected': selected, 'is-touch-dragging': dragging }" draggable="true" @dragstart="$emit('drag', $event, book.id)" @contextmenu.prevent>
-    <button class="absolute inset-0 z-10 rounded-[12px]" :aria-label="selecting ? `选择书本：${book.title}` : `阅读：${book.title}`" :aria-pressed="selecting ? selected : undefined" @click="onOpen"></button>
+    <button class="absolute inset-0 z-10 rounded-[12px]" :aria-label="selecting ? t('选择书本：{0}', { 0: book.title }) : t('阅读：{0}', { 0: book.title })" :aria-pressed="selecting ? selected : undefined" @click="onOpen"></button>
     <div class="aspect-[3/4] w-full relative overflow-hidden bg-[var(--md-surface-high)]" :data-book-cover-id="selecting ? undefined : book.id">
       <img
         v-if="book.cover"
@@ -31,8 +31,8 @@
         v-if="!selecting"
         @click.stop="$emit('remove', book.id)"
         class="card-remove-btn book-remove-button md-hit-target absolute z-20 top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
-        :title="removeLabel"
-        :aria-label="removeLabel"
+        :title="t(removeLabel)"
+        :aria-label="t(removeLabel)"
       >
         <MdIcon name="close" class="w-3.5 h-3.5" />
       </button>
@@ -51,7 +51,7 @@
       <div class="flex items-baseline justify-between gap-1.5 min-w-0">
         <span class="font-mono text-[10px] min-[768px]:text-[11px] text-[var(--md-on-surface-variant)] truncate">{{ subInfo }}</span>
         <b class="font-mono text-[10px] min-[768px]:text-[11px] font-semibold text-[var(--md-primary)] shrink-0">
-          {{ progress ? `${progress.percent}%` : '阅读 →' }}
+          {{ progress ? `${progress.percent}%` : t('阅读 →') }}
         </b>
       </div>
     </div>
@@ -66,6 +66,9 @@ import { resolveBookFormat } from '../services/utils.ts';
 import { readBookCoverRect } from '../services/bookCover.ts';
 import { playShelfToReaderSplash } from '../services/readerTransition.ts';
 import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const props = defineProps({
   book: { type: Object as PropType<Book>, required: true },
@@ -95,13 +98,13 @@ const badgeText = computed(() => {
   if (format === 'mobi') return 'MOBI';
   if (format === 'markdown') return 'MD';
   if (format === 'txt') return 'TXT';
-  return props.book.type === 'manga' ? '漫画' : (props.book.type === 'epub' ? 'EPUB' : '小说');
+  return props.book.type === 'manga' ? t('漫画') : (props.book.type === 'epub' ? 'EPUB' : t('小说'));
 });
 
 const subInfo = computed(() =>
   props.book.type === 'manga'
-    ? `${props.book.pageCount || (props.book.pageItems ? props.book.pageItems.length : 0)} 页`
-    : `${props.book.pageCount || (props.book.chapters ? props.book.chapters.length : 1)} 章`
+    ? t('{0} 页', { 0: props.book.pageCount || (props.book.pageItems ? props.book.pageItems.length : 0) })
+    : t('{0} 章', { 0: props.book.pageCount || (props.book.chapters ? props.book.chapters.length : 1) })
 );
 </script>
 

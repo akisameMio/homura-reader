@@ -1,14 +1,14 @@
 <template>
   <!-- 阅读器顶栏：通栏书眉，左工具组 / 中书眉 / 右排版与收藏 -->
-  <header class="md-reader-topbar" aria-label="阅读器工具栏">
+  <header class="md-reader-topbar" :aria-label="t('阅读器工具栏')">
     <div class="md-reader-topbar-side">
       <div class="md-reader-topbar-group">
         <button
           type="button"
           @click="emit('back')"
           class="md-icon-button md-hit-target"
-          title="返回书架 (Esc)"
-          aria-label="返回书架"
+          :title="t('返回书架 (Esc)')"
+          :aria-label="t('返回书架')"
         >
           <MdIcon name="arrow_back" />
         </button>
@@ -16,8 +16,8 @@
           type="button"
           @click="ui.openToc()"
           class="md-icon-button md-hit-target"
-          title="目录"
-          aria-label="目录"
+          :title="t('目录')"
+          :aria-label="t('目录')"
           aria-controls="reader-toc-drawer"
           :aria-expanded="ui.tocOpen"
         >
@@ -35,8 +35,8 @@
         type="button"
         class="md-reader-type-button md-icon-button"
         :class="{ 'is-active': ui.fontMenuOpen }"
-        title="字体"
-        aria-label="字体"
+        :title="t('字体')"
+        :aria-label="t('字体')"
         aria-haspopup="dialog"
         aria-controls="reader-font-menu"
         :aria-expanded="ui.fontMenuOpen"
@@ -62,8 +62,8 @@
         type="button"
         class="md-icon-button"
         :class="{ 'is-active': ui.settingsOpen }"
-        :title="isReflowable ? '排版与外观' : '阅读设置'"
-        :aria-label="isReflowable ? '排版与外观' : '阅读设置'"
+        :title="isReflowable ? t('排版与外观') : t('阅读设置')"
+        :aria-label="isReflowable ? t('排版与外观') : t('阅读设置')"
         aria-controls="reader-settings-drawer"
         :aria-expanded="ui.settingsOpen"
         @click="ui.openSettings()"
@@ -76,8 +76,8 @@
         type="button"
         class="md-icon-button"
         :class="{ 'is-favorite': isFavorite }"
-        :title="isFavorite ? '取消收藏' : '收藏本书'"
-        :aria-label="isFavorite ? '取消收藏' : '收藏本书'"
+        :title="isFavorite ? t('取消收藏') : t('收藏本书')"
+        :aria-label="isFavorite ? t('取消收藏') : t('收藏本书')"
         :aria-pressed="isFavorite"
         :disabled="favoriteBusy"
         @click="toggleFavorite"
@@ -90,8 +90,8 @@
         type="button"
         @click="ui.toggleFullscreen()"
         class="md-icon-button is-desktop-only"
-        :title="ui.fullscreen ? '退出全屏 (F)' : '全屏 (F)'"
-        :aria-label="ui.fullscreen ? '退出全屏 (F)' : '全屏 (F)'"
+        :title="ui.fullscreen ? t('退出全屏 (F)') : t('全屏 (F)')"
+        :aria-label="ui.fullscreen ? t('退出全屏 (F)') : t('全屏 (F)')"
         :aria-pressed="ui.fullscreen"
       >
         <MdIcon :name="ui.fullscreen ? 'fullscreen_exit' : 'fullscreen'" />
@@ -118,6 +118,9 @@ import { useShelfStore } from '../stores/shelf.ts';
 import { useSettingsStore } from '../stores/settings.ts';
 import { useUiStore } from '../stores/ui.ts';
 import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const reader = useReaderStore();
 const shelf = useShelfStore();
@@ -144,7 +147,7 @@ async function toggleFavorite() {
   try {
     await shelf.toggleFavorite(id);
   } catch (err) {
-    if (reader.currentBook?.id === id) favoriteError.value = (err as Error).message || '收藏保存失败，请重试';
+    if (reader.currentBook?.id === id) favoriteError.value = (err as Error).message || t('收藏保存失败，请重试');
     console.warn('[HOMURA] 收藏保存失败', err);
   } finally {
     favoriteBusy.value = false;

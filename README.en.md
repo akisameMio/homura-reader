@@ -63,13 +63,13 @@ npm run dev        # tauri dev, runs the Vite pre-step automatically
 npm run build      # tauri build, builds the frontend then packages the installer
 ```
 
-Before committing, run `npm test` (287 unit tests), `npm run typecheck`, and `npm run build:vite`.
+Before committing, run `npm test` (303 unit tests), `npm run typecheck`, and `npm run build:vite`.
 
 ## Status & Limitations
 
 - Version `2.2.7`; both desktop (macOS / Windows / Linux) and Android (arm64 / armv7) are buildable, and the core reading flow is complete and usable.
 - Tags and bookmarks are not implemented yet; DRM, AZW3 / KF8 and encrypted PDF are unsupported, and PDFs cannot reflow.
-- 287 unit tests plus type checking, but no E2E and no ESLint — key flows still need manual regression.
+- 303 unit tests plus type checking, but no E2E and no ESLint — key flows still need manual regression.
 - The macOS installer is unsigned, so first launch needs manual approval.
 - Licensed under the **MIT License** — see [`LICENSE`](LICENSE).
 

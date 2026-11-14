@@ -42,8 +42,8 @@
               type="button"
               class="reader-page-arrow is-prev"
               :class="{ 'is-dim': reader.atFirstPage && !reader.currentCollection }"
-              title="上一页 (←)"
-              aria-label="上一页"
+              :title="t('上一页 (←)')"
+              :aria-label="t('上一页')"
               @click="reader.onLeftButtonClick()"
             >
               <MdIcon name="chevron_left" />
@@ -52,8 +52,8 @@
               type="button"
               class="reader-page-arrow is-next"
               :class="{ 'is-dim': reader.atLastPage && !reader.currentCollection }"
-              title="下一页 (→)"
-              aria-label="下一页"
+              :title="t('下一页 (→)')"
+              :aria-label="t('下一页')"
               @click="reader.onRightButtonClick()"
             >
               <MdIcon name="chevron_right" />
@@ -95,8 +95,8 @@
           :aria-live="reader.openError ? 'assertive' : 'polite'"
         >
           <span v-if="!reader.openError" class="md-reader-spinner" aria-hidden="true"></span>
-          <span class="md-reader-status-copy">{{ reader.openError || '正在打开书本…' }}</span>
-          <button v-if="reader.openError" type="button" class="md-text-button" @click="reader.clearOpenError()">关闭</button>
+          <span class="md-reader-status-copy">{{ reader.openError || t('正在打开书本…') }}</span>
+          <button v-if="reader.openError" type="button" class="md-text-button" @click="reader.clearOpenError()">{{ t('关闭') }}</button>
         </div>
       </Transition>
     </div>
@@ -129,6 +129,9 @@ import ReaderSettingsDrawer from './ReaderSettingsDrawer.vue';
 import ReaderFontDrawer from './ReaderFontDrawer.vue';
 import PaginatedView from './PaginatedView.vue';
 import WebtoonView from './WebtoonView.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const reader = useReaderStore();
 const ui = useUiStore();

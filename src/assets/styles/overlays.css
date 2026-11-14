@@ -727,6 +727,14 @@
       overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
     }
+    /* 页签面板从 display:none 恢复时重新播放；只动透明度和小位移，不参与布局计算。 */
+    .md-drawer-tab-panel {
+      animation: md-drawer-panel-in 220ms var(--md-ease-emphasized) backwards;
+    }
+    @keyframes md-drawer-panel-in {
+      from { opacity: 0; transform: translate3d(0, 6px, 0); }
+      to { opacity: 1; transform: translate3d(0, 0, 0); }
+    }
     .md-drawer-section {
       padding: 20px 0;
       border-top: 1px solid color-mix(in oklab, var(--md-outline-variant) 82%, transparent);
@@ -978,6 +986,7 @@
       .md-reader-bar-enter-active,
       .md-reader-bar-leave-active,
       .md-drawer-list-item,
+      .md-drawer-tab-panel,
       .md-toc-page,
       .md-text-button,
       .md-filled-button,

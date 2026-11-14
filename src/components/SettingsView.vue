@@ -7,14 +7,14 @@
           ref="backButtonRef"
           type="button"
           class="settings-back-button"
-          aria-label="返回设置"
+          :aria-label="t('返回设置')"
           @click="showPreviousSection"
         >
           <MdIcon name="chevron_left" />
         </button>
         <div>
-          <h1>{{ activeSection ? sectionTitles[activeSection] : '设置' }}</h1>
-          <p v-if="!activeSection">让阅读，更合你的习惯。</p>
+          <h1>{{ activeSection ? t(sectionTitles[activeSection]) : t('设置') }}</h1>
+          <p v-if="!activeSection">{{ t('让阅读，更合你的习惯。') }}</p>
         </div>
       </div>
     </header>
@@ -26,7 +26,7 @@
         <button
           type="button"
           class="settings-card-open"
-          aria-label="打开外观设置"
+          :aria-label="t('打开外观设置')"
           @click="openSection('appearance', $event)"
         >
           <span class="settings-card-open-icon">
@@ -37,27 +37,27 @@
           <div class="settings-card-head">
             <h2 id="settings-appearance-title">
               <MdIcon name="palette" />
-              外观
+              {{ t('外观') }}
             </h2>
           </div>
-          <h3>给阅读换个心情</h3>
-          <p>从明亮白昼，到安静的夜间。</p>
+          <h3>{{ t('给阅读换个心情') }}</h3>
+          <p>{{ t('从明亮白昼，到安静的夜间。') }}</p>
           <MdSegmentedControl
             :model-value="theme.surfaceMode"
             :options="surfaceOptions"
-            aria-label="表面模式"
+            :aria-label="t('表面模式')"
             @update:model-value="setSurfaceMode"
           />
         </div>
-        <p class="settings-detail-hint">更多外观设置</p>
+        <p class="settings-detail-hint">{{ t('更多外观设置') }}</p>
         <div class="settings-book-stage" aria-hidden="true">
           <div class="settings-open-book">
             <div class="settings-book-page">
-              <b>夏日的序章</b>
+              <b>{{ t('夏日的序章') }}</b>
               <p>
-                风穿过敞开的窗，
+                {{ t('风穿过敞开的窗，') }}
                 <br />
-                书页轻轻翻动。
+                {{ t('书页轻轻翻动。') }}
               </p>
               <i v-for="line in 5" :key="line"></i>
               <span>12</span>
@@ -69,11 +69,26 @@
           </div>
         </div>
       </section>
+      <section class="settings-card settings-language" aria-labelledby="settings-language-title">
+        <div class="settings-card-head">
+          <h2 id="settings-language-title">
+            <MdIcon name="language" />
+            {{ t('语言') }}
+          </h2>
+          <span>{{ t('立即应用，并自动保存。') }}</span>
+        </div>
+        <SettingsSelectRow
+          :label="t('界面语言')"
+          :model-value="locale"
+          :options="localeOptions"
+          @update:model-value="setLocale"
+        />
+      </section>
       <section class="settings-card settings-reading" aria-labelledby="settings-reading-title">
         <button
           type="button"
           class="settings-card-open"
-          aria-label="打开阅读默认值"
+          :aria-label="t('打开阅读默认值')"
           @click="openSection('reading', $event)"
         >
           <span class="settings-card-open-icon">
@@ -83,58 +98,58 @@
         <div class="settings-card-head">
           <h2 id="settings-reading-title">
             <MdIcon name="auto_stories" />
-            阅读默认值
+            {{ t('阅读默认值') }}
           </h2>
-          <span>首次打开作品时采用</span>
+          <span>{{ t('首次打开作品时采用') }}</span>
         </div>
         <div class="settings-reading-controls">
           <div class="settings-block">
             <div class="settings-head">
-              <span>翻页方式</span>
-              <b>{{ transitionLabel }}</b>
+              <span>{{ t('翻页方式') }}</span>
+              <b>{{ t(transitionLabel) }}</b>
             </div>
             <MdSegmentedControl
               :model-value="settings.transitionStyle"
               :options="transitionOptions"
-              aria-label="翻页方式"
+              :aria-label="t('翻页方式')"
               @update:model-value="settings.setTransitionStyle"
             />
           </div>
           <div class="settings-block">
             <div class="settings-head">
-              <span>阅读方向</span>
-              <b>{{ directionLabel }}</b>
+              <span>{{ t('阅读方向') }}</span>
+              <b>{{ t(directionLabel) }}</b>
             </div>
             <MdSegmentedControl
               :model-value="readerDefaults.pagedDirection"
               :options="directionOptions"
               :disabled="isScrollDefault"
-              aria-label="阅读方向"
+              :aria-label="t('阅读方向')"
               @update:model-value="setDirection"
             />
           </div>
           <div class="settings-block">
             <div class="settings-head">
-              <span>跨页布局</span>
-              <b>{{ spreadLabel }}</b>
+              <span>{{ t('跨页布局') }}</span>
+              <b>{{ t(spreadLabel) }}</b>
             </div>
             <MdSegmentedControl
               :model-value="readerDefaults.spread"
               :options="spreadOptions"
               :disabled="isScrollDefault"
-              aria-label="跨页布局"
+              :aria-label="t('跨页布局')"
               @update:model-value="setSpread"
             />
           </div>
-          <p v-if="isScrollDefault" class="settings-scroll-note">滚动模式沿用上次的分页方向与跨页布局，切回分页后生效。</p>
+          <p v-if="isScrollDefault" class="settings-scroll-note">{{ t('滚动模式沿用上次的分页方向与跨页布局，切回分页后生效。') }}</p>
         </div>
-        <p class="settings-detail-hint">更多阅读设置</p>
+        <p class="settings-detail-hint">{{ t('更多阅读设置') }}</p>
       </section>
       <section class="settings-card settings-storage" aria-labelledby="settings-storage-title">
         <button
           type="button"
           class="settings-card-open"
-          aria-label="打开存储与数据"
+          :aria-label="t('打开存储与数据')"
           @click="openSection('storage', $event)"
         >
           <span class="settings-card-open-icon">
@@ -144,13 +159,13 @@
         <div class="settings-card-head">
           <h2 id="settings-storage-title">
             <MdIcon name="database" />
-            存储与数据
+            {{ t('存储与数据') }}
           </h2>
           <button
             type="button"
             class="settings-icon-button"
-            title="刷新存储用量"
-            aria-label="刷新存储用量"
+            :title="t('刷新存储用量')"
+            :aria-label="t('刷新存储用量')"
             :disabled="storageLoading"
             @click="refreshStorage"
           >
@@ -159,7 +174,7 @@
         </div>
         <template v-if="diskSegments">
           <strong class="storage-number">{{ formatBytes(diskSegments.appBytes) }}</strong>
-          <p class="settings-note">HOMURA 占用 · 共 {{ storageTotalText }}</p>
+          <p class="settings-note">{{ t('HOMURA 占用 · 共 {0}', { 0: storageTotalText }) }}</p>
           <div
             class="storage-stack"
             :class="{ 'is-revealing': storageRevealing }"
@@ -181,24 +196,24 @@
             </div>
             <div>
               <i class="storage-dot storage-seg-other"></i>
-              <span>其他应用</span>
+              <span>{{ t('其他应用') }}</span>
               <b>{{ formatBytes(diskSegments.otherBytes) }}</b>
             </div>
             <div>
               <i class="storage-dot storage-seg-free"></i>
-              <span>可用空间</span>
+              <span>{{ t('可用空间') }}</span>
               <b>{{ formatBytes(diskSegments.freeBytes) }}</b>
             </div>
           </div>
         </template>
         <template v-else>
           <strong class="storage-number">{{ storageUsageText }}</strong>
-          <p class="settings-note">{{ nativeStorageEnabled ? 'WebView 本地数据' : '浏览器本地数据' }}</p>
+          <p class="settings-note">{{ nativeStorageEnabled ? t('WebView 本地数据') : t('浏览器本地数据') }}</p>
           <div
             class="storage-bar"
             :class="{ 'is-revealing': storageRevealing }"
             role="progressbar"
-            aria-label="本地存储用量"
+            :aria-label="t('本地存储用量')"
             aria-valuemin="0"
             aria-valuemax="100"
             :aria-valuenow="storagePercent"
@@ -206,15 +221,15 @@
             <i :style="{ width: storageBarWidth }"></i>
           </div>
           <p class="settings-note">{{ storageQuotaText }}</p>
-          <p v-if="nativeStorageEnabled" class="settings-note">原始文件存入本机，容量受磁盘剩余空间限制。</p>
+          <p v-if="nativeStorageEnabled" class="settings-note">{{ t('原始文件存入本机，容量受磁盘剩余空间限制。') }}</p>
         </template>
-        <p class="settings-detail-hint">管理本机数据</p>
+        <p class="settings-detail-hint">{{ t('管理本机数据') }}</p>
       </section>
       <section class="settings-card settings-about" aria-labelledby="settings-about-title">
         <button
           type="button"
           class="settings-card-open"
-          aria-label="打开关于 HOMURA"
+          :aria-label="t('打开关于 HOMURA')"
           @click="openSection('about', $event)"
         >
           <span class="settings-card-open-icon">
@@ -224,29 +239,29 @@
         <div class="settings-card-head">
           <h2 id="settings-about-title">
             <MdIcon name="info" />
-            关于 HOMURA
+            {{ t('关于 HOMURA') }}
           </h2>
-          <span class="settings-badge">MIT 开源</span>
+          <span class="settings-badge">{{ t('MIT 开源') }}</span>
         </div>
         <div class="about-version">
-          <img :src="logoUrl" alt="HOMURA 应用图标" />
+          <img :src="logoUrl" :alt="t('HOMURA 应用图标')" />
           <div>
             <h3>
               HOMURA
               <span>{{ appVersion }}</span>
             </h3>
-            <p class="settings-note">本地优先的 ACGN 阅读器</p>
+            <p class="settings-note">{{ t('本地优先的 ACGN 阅读器') }}</p>
           </div>
         </div>
         <div class="settings-card-actions">
-          <button type="button" class="settings-tonal-button" @click="updates.handlePrimaryUpdateAction">{{ hasPendingInstall ? '继续安装' : '检查更新' }}</button>
+          <button type="button" class="settings-tonal-button" @click="updates.handlePrimaryUpdateAction">{{ hasPendingInstall ? t('继续安装') : t('检查更新') }}</button>
           <button type="button" class="settings-text-button" @click="updates.openChangelog">
-            更新日志
-            <i v-if="hasNewRelease" class="about-log-new" aria-label="有新版本"></i>
+            {{ t('更新日志') }}
+            <i v-if="hasNewRelease" class="about-log-new" :aria-label="t('有新版本')"></i>
           </button>
         </div>
         <button type="button" class="settings-text-button about-repository" @click="openRepository">
-          开源仓库
+          {{ t('开源仓库') }}
           <MdIcon name="open_in_new" />
         </button>
         <p v-if="aboutLinkError" class="settings-note" role="alert">{{ aboutLinkError }}</p>
@@ -255,7 +270,7 @@
         <button
           type="button"
           class="settings-card-open"
-          aria-label="打开导入偏好"
+          :aria-label="t('打开导入偏好')"
           @click="openSection('import', $event)"
         >
           <span class="settings-card-open-icon">
@@ -265,26 +280,26 @@
         <div class="settings-card-head">
           <h2 id="settings-import-title">
             <MdIcon name="upload_file" />
-            导入偏好
+            {{ t('导入偏好') }}
           </h2>
         </div>
         <MdSwitch
           :model-value="settings.importCollectionPrompt"
-          title="导入多本作品时询问是否创建书库"
+          :title="t('导入多本作品时询问是否创建书库')"
           @update:model-value="settings.setImportCollectionPrompt"
         >
           <span class="settings-value-copy">
-            <b>导入时询问创建书库</b>
-            <span>按目录整理，一次归好类。</span>
+            <b>{{ t('导入时询问创建书库') }}</b>
+            <span>{{ t('按目录整理，一次归好类。') }}</span>
           </span>
         </MdSwitch>
-        <p class="settings-note">{{ settings.importCollectionPrompt ? '导入多本作品时，按目录询问' : '默认直接导入' }}</p>
+        <p class="settings-note">{{ settings.importCollectionPrompt ? t('导入多本作品时，按目录询问') : t('默认直接导入') }}</p>
       </section>
       <section class="settings-card settings-debug" aria-labelledby="settings-debug-title">
         <button
           type="button"
           class="settings-card-open"
-          aria-label="打开调试设置"
+          :aria-label="t('打开调试设置')"
           @click="openSection('debug', $event)"
         >
           <span class="settings-card-open-icon">
@@ -294,12 +309,12 @@
         <div class="settings-card-head">
           <h2 id="settings-debug-title">
             <MdIcon name="science" />
-            调试
+            {{ t('调试') }}
           </h2>
         </div>
-        <p class="settings-debug-copy">调试与实验功能</p>
-        <p class="settings-note">自动检查更新、全屏入口与示例内容。</p>
-        <p class="settings-detail-hint">打开调试设置</p>
+        <p class="settings-debug-copy">{{ t('调试与实验功能') }}</p>
+        <p class="settings-note">{{ t('自动检查更新、全屏入口与示例内容。') }}</p>
+        <p class="settings-detail-hint">{{ t('打开调试设置') }}</p>
       </section>
     </div>
     <div v-else class="settings-detail">
@@ -310,9 +325,9 @@
         <section class="settings-detail-group" aria-labelledby="settings-surface-heading">
           <h2 id="settings-surface-heading">
             <MdIcon name="light_mode" />
-            表面模式
+            {{ t('表面模式') }}
           </h2>
-          <div class="settings-list" role="group" aria-label="表面模式">
+          <div class="settings-list" role="group" :aria-label="t('表面模式')">
             <button
               v-for="option in detailSurfaceOptions"
               :key="option.value"
@@ -323,20 +338,20 @@
             >
               <SettingsInterfacePreview :mode="option.value" thumbnail />
               <span class="settings-value-copy">
-                <b>{{ option.label }}</b>
-                <span>{{ option.description }}</span>
+                <b>{{ t(option.label) }}</b>
+                <span>{{ t(option.description) }}</span>
               </span>
               <MdIcon v-if="theme.surfaceMode === option.value" name="check" class="settings-row-check" />
             </button>
           </div>
-          <p class="settings-detail-note">更改即时应用到整个应用，也会自动保存。</p>
+          <p class="settings-detail-note">{{ t('更改即时应用到整个应用，也会自动保存。') }}</p>
         </section>
         <section class="settings-detail-group" aria-labelledby="settings-black-heading">
           <h2 id="settings-black-heading">
             <MdIcon name="contrast" />
-            纯黑模式
+            {{ t('纯黑模式') }}
           </h2>
-          <div class="settings-list" role="group" aria-label="纯黑模式">
+          <div class="settings-list" role="group" :aria-label="t('纯黑模式')">
             <button
               v-for="option in pureBlackOptions"
               :key="option.black"
@@ -347,18 +362,18 @@
             >
               <SettingsInterfacePreview mode="dark" :black="option.black" thumbnail />
               <span class="settings-value-copy">
-                <b>{{ option.label }}</b>
+                <b>{{ t(option.label) }}</b>
               </span>
               <MdIcon v-if="theme.pureBlackMode === option.value" name="check" class="settings-row-check" />
             </button>
           </div>
-          <p class="settings-detail-note">仅在夜间模式下生效，跟随系统时也会自动应用。</p>
+          <p class="settings-detail-note">{{ t('仅在夜间模式下生效，跟随系统时也会自动应用。') }}</p>
         </section>
         <section class="settings-detail-group" aria-labelledby="settings-colors-heading">
           <h2 id="settings-colors-heading">
             <MdIcon name="palette" />
-            主题色彩
-            <span class="settings-color-name">{{ themeLabel }}</span>
+            {{ t('主题色彩') }}
+            <span class="settings-color-name">{{ t(themeLabel) }}</span>
           </h2>
           <div class="settings-list settings-color-strip">
             <ThemeSwatchGrid strip />
@@ -370,11 +385,11 @@
           <div class="settings-book-stage" aria-hidden="true">
             <div class="settings-open-book">
               <div class="settings-book-page">
-                <b>夏日的序章</b>
+                <b>{{ t('夏日的序章') }}</b>
                 <p>
-                  风穿过敞开的窗，
+                  {{ t('风穿过敞开的窗，') }}
                   <br />
-                  书页轻轻翻动。
+                  {{ t('书页轻轻翻动。') }}
                 </p>
                 <i v-for="line in 5" :key="line"></i>
                 <span>12</span>
@@ -386,29 +401,29 @@
             </div>
           </div>
           <div class="settings-hero-copy">
-            <span class="settings-badge">阅读示意</span>
-            <h2>找到舒服的阅读节奏</h2>
-            <p>首次打开作品时，从这里开始。</p>
+            <span class="settings-badge">{{ t('阅读示意') }}</span>
+            <h2>{{ t('找到舒服的阅读节奏') }}</h2>
+            <p>{{ t('首次打开作品时，从这里开始。') }}</p>
           </div>
         </div>
         <section class="settings-detail-group" aria-labelledby="settings-layout-heading">
-          <h2 id="settings-layout-heading">翻页与布局</h2>
+          <h2 id="settings-layout-heading">{{ t('翻页与布局') }}</h2>
           <div class="settings-list">
             <SettingsSelectRow
-              label="翻页方式"
+              :label="t('翻页方式')"
               :model-value="settings.transitionStyle"
               :options="transitionOptions"
               @update:model-value="settings.setTransitionStyle"
             />
             <SettingsSelectRow
-              label="阅读方向"
+              :label="t('阅读方向')"
               :model-value="readerDefaults.pagedDirection"
               :options="directionOptions"
               :disabled="isScrollDefault"
               @update:model-value="setDirection"
             />
             <SettingsSelectRow
-              label="跨页布局"
+              :label="t('跨页布局')"
               :model-value="readerDefaults.spread"
               :options="spreadOptions"
               :disabled="isScrollDefault"
@@ -418,42 +433,42 @@
               v-if="readerDefaults.spread === 2 && !isScrollDefault"
               class="settings-list-row"
               :model-value="readerDefaults.coverOffset"
-              title="让后续跨页大图保持对齐"
+              :title="t('让后续跨页大图保持对齐')"
               @update:model-value="value => settings.setReaderDefault('coverOffset', value)"
             >
               <span class="settings-value-copy">
-                <b>首页单排</b>
-                <span>让后续跨页大图保持对齐</span>
+                <b>{{ t('首页单排') }}</b>
+                <span>{{ t('让后续跨页大图保持对齐') }}</span>
               </span>
             </MdSwitch>
             <MdSwitch
               class="settings-list-row"
               :model-value="readerDefaults.verticalText"
-              title="文字从上往下，各列从右往左排列，仅作用于小说分页阅读"
+              :title="t('文字从上往下，各列从右往左排列，仅作用于小说分页阅读')"
               @update:model-value="value => settings.setReaderDefault('verticalText', value)"
             >
               <span class="settings-value-copy">
-                <b>竖排文字</b>
-                <span>文字从上往下，各列从右往左</span>
+                <b>{{ t('竖排文字') }}</b>
+                <span>{{ t('文字从上往下，各列从右往左') }}</span>
               </span>
             </MdSwitch>
           </div>
-          <p v-if="isScrollDefault" class="settings-detail-note">滚动模式沿用上次的分页方向与跨页布局，切回分页后生效。</p>
+          <p v-if="isScrollDefault" class="settings-detail-note">{{ t('滚动模式沿用上次的分页方向与跨页布局，切回分页后生效。') }}</p>
         </section>
         <section class="settings-detail-group" aria-labelledby="settings-text-heading">
-          <h2 id="settings-text-heading">文字与滚动</h2>
+          <h2 id="settings-text-heading">{{ t('文字与滚动') }}</h2>
           <div class="settings-list">
             <div class="settings-detail-font">
               <div class="settings-head">
-                <span>默认字号</span>
+                <span>{{ t('默认字号') }}</span>
                 <b>{{ readerDefaults.fontSize }} px</b>
               </div>
               <div class="font-size-control">
                 <button
                   type="button"
                   class="settings-icon-button"
-                  title="减小字号"
-                  aria-label="减小字号"
+                  :title="t('减小字号')"
+                  :aria-label="t('减小字号')"
                   :disabled="readerDefaults.fontSize <= 14"
                   @click="changeDefaultFont(-2)"
                 >
@@ -465,14 +480,14 @@
                   :min="14"
                   :max="28"
                   :step="2"
-                  aria-label="默认字号"
+                  :aria-label="t('默认字号')"
                   @update:model-value="setFontSize"
                 />
                 <button
                   type="button"
                   class="settings-icon-button"
-                  title="增大字号"
-                  aria-label="增大字号"
+                  :title="t('增大字号')"
+                  :aria-label="t('增大字号')"
                   :disabled="readerDefaults.fontSize >= 28"
                   @click="changeDefaultFont(2)"
                 >
@@ -481,7 +496,7 @@
               </div>
             </div>
             <SettingsSelectRow
-              label="滚动宽度"
+              :label="t('滚动宽度')"
               :model-value="readerDefaults.webtoonFit"
               :options="webtoonOptions"
               @update:model-value="value => settings.setReaderDefault('webtoonFit', value)"
@@ -490,28 +505,28 @@
               v-if="isAndroid"
               class="settings-list-row"
               :model-value="settings.volumeKeysTurnPage"
-              title="音量加键上一页、音量减键下一页"
+              :title="t('音量加键上一页、音量减键下一页')"
               @update:model-value="settings.setVolumeKeysTurnPage"
             >
               <span class="settings-value-copy">
-                <b>用音量键翻页</b>
-                <span>音量加键上一页、音量减键下一页</span>
+                <b>{{ t('用音量键翻页') }}</b>
+                <span>{{ t('音量加键上一页、音量减键下一页') }}</span>
               </span>
             </MdSwitch>
           </div>
-          <p class="settings-detail-note">每本书已有的阅读位置与排版记忆会继续保留。</p>
+          <p class="settings-detail-note">{{ t('每本书已有的阅读位置与排版记忆会继续保留。') }}</p>
         </section>
-        <button type="button" class="settings-text-button" @click="settings.resetReaderDefaults">恢复阅读默认值</button>
+        <button type="button" class="settings-text-button" @click="settings.resetReaderDefaults">{{ t('恢复阅读默认值') }}</button>
       </template>
       <template v-else-if="activeSection === 'storage'">
         <div class="settings-detail-hero settings-storage-hero">
           <div class="settings-storage-hero-head">
-            <span>本机存储用量</span>
+            <span>{{ t('本机存储用量') }}</span>
             <button
               type="button"
               class="settings-icon-button"
-              title="刷新存储用量"
-              aria-label="刷新存储用量"
+              :title="t('刷新存储用量')"
+              :aria-label="t('刷新存储用量')"
               :disabled="storageLoading"
               @click="refreshStorage"
             >
@@ -520,7 +535,7 @@
           </div>
           <template v-if="diskSegments">
             <strong class="storage-number">{{ formatBytes(diskSegments.appBytes) }}</strong>
-            <p class="settings-note">HOMURA 占用 · 共 {{ storageTotalText }}</p>
+            <p class="settings-note">{{ t('HOMURA 占用 · 共 {0}', { 0: storageTotalText }) }}</p>
             <div
               class="storage-stack"
               :class="{ 'is-revealing': storageRevealing }"
@@ -545,24 +560,24 @@
               </div>
               <div>
                 <i class="storage-dot storage-seg-other"></i>
-                <span>其他应用</span>
+                <span>{{ t('其他应用') }}</span>
                 <b>{{ formatBytes(diskSegments.otherBytes) }}</b>
               </div>
               <div>
                 <i class="storage-dot storage-seg-free"></i>
-                <span>可用空间</span>
+                <span>{{ t('可用空间') }}</span>
                 <b>{{ formatBytes(diskSegments.freeBytes) }}</b>
               </div>
             </div>
           </template>
           <template v-else>
             <strong class="storage-number">{{ storageUsageText }}</strong>
-            <p class="settings-note">{{ nativeStorageEnabled ? 'WebView 本地数据' : '浏览器本地数据' }}</p>
+            <p class="settings-note">{{ nativeStorageEnabled ? t('WebView 本地数据') : t('浏览器本地数据') }}</p>
             <div
               class="storage-bar"
               :class="{ 'is-revealing': storageRevealing }"
               role="progressbar"
-              aria-label="本地存储用量"
+              :aria-label="t('本地存储用量')"
               aria-valuemin="0"
               aria-valuemax="100"
               :aria-valuenow="storagePercent"
@@ -570,18 +585,18 @@
               <i :style="{ width: storageBarWidth }"></i>
             </div>
             <p class="settings-note">{{ storageQuotaText }}</p>
-            <p v-if="nativeStorageEnabled" class="settings-note">原始文件存入本机，容量受磁盘剩余空间限制。</p>
+            <p v-if="nativeStorageEnabled" class="settings-note">{{ t('原始文件存入本机，容量受磁盘剩余空间限制。') }}</p>
           </template>
         </div>
         <section v-if="diskSegments" class="settings-detail-group" aria-labelledby="settings-usage-heading">
-          <h2 id="settings-usage-heading">本机用量</h2>
+          <h2 id="settings-usage-heading">{{ t('本机用量') }}</h2>
           <div class="settings-list">
             <div class="settings-list-row">
               <span class="settings-row-icon">
                 <MdIcon name="folder_open" />
               </span>
               <span class="settings-value-copy">
-                <b>原始文件与缓存</b>
+                <b>{{ t('原始文件与缓存') }}</b>
               </span>
               <b class="settings-row-value">{{ storageNativeText }}</b>
             </div>
@@ -590,19 +605,19 @@
                 <MdIcon name="database" />
               </span>
               <span class="settings-value-copy">
-                <b>WebView 本地数据</b>
+                <b>{{ t('WebView 本地数据') }}</b>
               </span>
               <b class="settings-row-value">{{ storageWebviewText }}</b>
             </div>
           </div>
         </section>
         <section class="settings-detail-group" aria-labelledby="settings-data-heading">
-          <h2 id="settings-data-heading">数据管理</h2>
+          <h2 id="settings-data-heading">{{ t('数据管理') }}</h2>
           <div class="settings-list">
             <div class="settings-list-row">
               <span class="settings-value-copy">
-                <b>阅读进度</b>
-                <span>{{ progressCount }} 本作品保留阅读位置与排版</span>
+                <b>{{ t('阅读进度') }}</b>
+                <span>{{ t('{0} 本作品保留阅读位置与排版', { 0: progressCount }) }}</span>
               </span>
               <button
                 type="button"
@@ -610,13 +625,13 @@
                 :disabled="progressCount === 0 || actionBusy"
                 @click="requestDataAction('progress')"
               >
-                清空进度
+                {{ t('清空进度') }}
               </button>
             </div>
             <div class="settings-list-row">
               <span class="settings-value-copy">
-                <b>书架与原始文件</b>
-                <span>{{ shelf.library.length }} 部作品，删除后无法恢复</span>
+                <b>{{ t('书架与原始文件') }}</b>
+                <span>{{ t('{0} 部作品，删除后无法恢复', { 0: shelf.library.length }) }}</span>
               </span>
               <button
                 type="button"
@@ -624,37 +639,37 @@
                 :disabled="shelf.library.length === 0 || actionBusy"
                 @click="requestDataAction('shelf')"
               >
-                清空书架
+                {{ t('清空书架') }}
               </button>
             </div>
           </div>
-          <p class="settings-detail-note">清空前会再次确认。删除书架会同时删除原始文件与阅读记录。</p>
+          <p class="settings-detail-note">{{ t('清空前会再次确认。删除书架会同时删除原始文件与阅读记录。') }}</p>
           <p v-if="actionNote" class="settings-detail-note" role="status">{{ actionNote }}</p>
         </section>
       </template>
       <template v-else-if="activeSection === 'about'">
         <div class="settings-detail-hero settings-about-hero">
-          <img :src="logoUrl" alt="HOMURA 应用图标" />
+          <img :src="logoUrl" :alt="t('HOMURA 应用图标')" />
           <h2>HOMURA</h2>
           <span class="settings-badge">{{ appVersion }}</span>
-          <p>把故事留在本机，把阅读留给自己。</p>
+          <p>{{ t('把故事留在本机，把阅读留给自己。') }}</p>
           <p class="settings-note">
-            漫画、轻小说与图集都在设备内解析。
+            {{ t('漫画、轻小说与图集都在设备内解析。') }}
             <br />
-            作品与阅读记录不上传服务器。
+            {{ t('作品与阅读记录不上传服务器。') }}
           </p>
         </div>
         <section class="settings-detail-group" aria-labelledby="settings-update-heading">
-          <h2 id="settings-update-heading">版本与更新</h2>
+          <h2 id="settings-update-heading">{{ t('版本与更新') }}</h2>
           <div class="settings-list">
             <button type="button" class="settings-list-row" @click="updates.handlePrimaryUpdateAction">
               <span class="settings-row-icon">
                 <MdIcon name="update" />
               </span>
               <span class="settings-value-copy">
-                <b>{{ hasPendingInstall ? '继续安装' : '检查更新' }}</b>
+                <b>{{ hasPendingInstall ? t('继续安装') : t('检查更新') }}</b>
               </span>
-              <span class="settings-row-value">{{ hasPendingInstall ? '安装包已就绪' : '手动检查' }}</span>
+              <span class="settings-row-value">{{ hasPendingInstall ? t('安装包已就绪') : t('手动检查') }}</span>
               <MdIcon name="chevron_right" />
             </button>
             <button type="button" class="settings-list-row" @click="updates.openChangelog">
@@ -662,22 +677,22 @@
                 <MdIcon name="article" />
               </span>
               <span class="settings-value-copy">
-                <b>更新日志</b>
+                <b>{{ t('更新日志') }}</b>
               </span>
-              <i v-if="hasNewRelease" class="about-log-new" aria-label="有新版本"></i>
+              <i v-if="hasNewRelease" class="about-log-new" :aria-label="t('有新版本')"></i>
               <MdIcon name="chevron_right" />
             </button>
           </div>
         </section>
         <section class="settings-detail-group" aria-labelledby="settings-open-source-heading">
-          <h2 id="settings-open-source-heading">开源信息</h2>
+          <h2 id="settings-open-source-heading">{{ t('开源信息') }}</h2>
           <div class="settings-list">
             <button type="button" class="settings-list-row" @click="openRepository">
               <span class="settings-row-icon">
                 <MdIcon name="open_in_new" />
               </span>
               <span class="settings-value-copy">
-                <b>开源仓库</b>
+                <b>{{ t('开源仓库') }}</b>
               </span>
               <span class="settings-row-value">GitHub</span>
               <MdIcon name="chevron_right" />
@@ -687,7 +702,7 @@
                 <MdIcon name="info" />
               </span>
               <span class="settings-value-copy">
-                <b>开源许可</b>
+                <b>{{ t('开源许可') }}</b>
               </span>
               <span class="settings-row-value">MIT License</span>
             </div>
@@ -709,91 +724,111 @@
               <i></i>
             </span>
           </div>
-          <h2>让作品，井井有条</h2>
-          <p>从文件夹到书库，保留你熟悉的整理方式。</p>
+          <h2>{{ t('让作品，井井有条') }}</h2>
+          <p>{{ t('从文件夹到书库，保留你熟悉的整理方式。') }}</p>
         </div>
         <section class="settings-detail-group" aria-labelledby="settings-import-behavior-heading">
-          <h2 id="settings-import-behavior-heading">导入行为</h2>
+          <h2 id="settings-import-behavior-heading">{{ t('导入行为') }}</h2>
           <div class="settings-list">
             <MdSwitch
               class="settings-list-row"
               :model-value="settings.importCollectionPrompt"
-              title="导入多本作品时询问是否创建书库"
+              :title="t('导入多本作品时询问是否创建书库')"
               @update:model-value="settings.setImportCollectionPrompt"
             >
               <span class="settings-value-copy">
-                <b>导入时询问创建书库</b>
-                <span>导入多本作品时，按目录询问</span>
+                <b>{{ t('导入时询问创建书库') }}</b>
+                <span>{{ t('导入多本作品时，按目录询问') }}</span>
               </span>
             </MdSwitch>
           </div>
-          <p class="settings-detail-note">关闭后直接导入作品；开启后，目录导入会先询问是否按目录创建一级书库。</p>
+          <p class="settings-detail-note">{{ t('关闭后直接导入作品；开启后，目录导入会先询问是否按目录创建一级书库。') }}</p>
         </section>
-        <p class="settings-quiet-note">偏好会自动保存，仅影响之后的导入。</p>
+        <p class="settings-quiet-note">{{ t('偏好会自动保存，仅影响之后的导入。') }}</p>
       </template>
       <template v-else-if="activeSection === 'debug'">
         <section class="settings-detail-group" aria-labelledby="settings-debug-general-heading">
-          <h2 id="settings-debug-general-heading">更新与界面</h2>
+          <h2 id="settings-debug-general-heading">{{ t('更新与界面') }}</h2>
           <div class="settings-list">
             <MdSwitch
               class="settings-list-row"
               :model-value="settings.debugAutoUpdateCheck"
-              title="启动时自动检查 GitHub 稳定版更新"
+              :title="t('启动时自动检查 GitHub 稳定版更新')"
               @update:model-value="settings.setDebugAutoUpdateCheck"
             >
               <span class="settings-value-copy">
-                <b>启动时静默检查更新</b>
-                <span>启动时请求官方稳定版更新信息</span>
+                <b>{{ t('启动时静默检查更新') }}</b>
+                <span>{{ t('启动时请求官方稳定版更新信息') }}</span>
               </span>
             </MdSwitch>
             <MdSwitch
               class="settings-list-row"
               :model-value="settings.debugForceFullscreen"
-              title="在非 Windows 系统也显示全屏入口"
+              :title="t('在非 Windows 系统也显示全屏入口')"
               @update:model-value="settings.setDebugForceFullscreen"
             >
               <span class="settings-value-copy">
-                <b>强制显示全屏组件</b>
-                <span>{{ isWindows ? 'Windows 默认显示' : '在非 Windows 系统也显示全屏入口' }}</span>
+                <b>{{ t('强制显示全屏组件') }}</b>
+                <span>{{ isWindows ? t('Windows 默认显示') : t('在非 Windows 系统也显示全屏入口') }}</span>
               </span>
             </MdSwitch>
           </div>
-          <p class="settings-detail-note">这些调试偏好只保存在此设备。</p>
+          <p class="settings-detail-note">{{ t('这些调试偏好只保存在此设备。') }}</p>
         </section>
         <section class="settings-detail-group" aria-labelledby="settings-demo-heading">
-          <h2 id="settings-demo-heading">示例内容</h2>
+          <h2 id="settings-demo-heading">{{ t('示例内容') }}</h2>
           <div class="settings-list">
             <div class="settings-list-row">
               <span class="settings-row-icon">
                 <MdIcon name="auto_stories" />
               </span>
               <span class="settings-value-copy">
-                <b>示例漫画</b>
-                <span>6 页分镜样张，检查单双页、日漫方向与滚动阅读。</span>
+                <b>{{ t('示例漫画') }}</b>
+                <span>{{ t('6 页分镜样张，检查单双页、日漫方向与滚动阅读。') }}</span>
               </span>
-              <button type="button" class="settings-text-button" @click="addDemoManga">添加漫画</button>
+              <button type="button" class="settings-text-button" @click="addDemoManga">{{ t('添加漫画') }}</button>
             </div>
             <div class="settings-list-row">
               <span class="settings-row-icon">
                 <MdIcon name="article" />
               </span>
               <span class="settings-value-copy">
-                <b>示例小说</b>
-                <span>2 章 EPUB 样张，检查字号、分页与进度恢复。</span>
+                <b>{{ t('示例小说') }}</b>
+                <span>{{ t('2 章 EPUB 样张，检查字号、分页与进度恢复。') }}</span>
               </span>
-              <button type="button" class="settings-text-button" @click="addDemoNovel">添加小说</button>
+              <button type="button" class="settings-text-button" @click="addDemoNovel">{{ t('添加小说') }}</button>
             </div>
           </div>
-          <p class="settings-detail-note">示例只会加入本机书架，不会替换已有作品。</p>
+          <p class="settings-detail-note">{{ t('示例只会加入本机书架，不会替换已有作品。') }}</p>
           <p v-if="debugNote" class="settings-detail-note" role="status">{{ debugNote }}</p>
         </section>
       </template>
     </div>
     <footer class="settings-footer">
-      <span>阅读记录与作品，只保存在此设备。</span>
+      <span>{{ t('阅读记录与作品，只保存在此设备。') }}</span>
       <span>HOMURA · ACGN GO</span>
     </footer>
-    <Teleport to="body">
+    <MobileBottomSheet v-if="isCompact" :open="!!pendingAction" :title="t(dataDialogTitle)" title-id="mobile-settings-dialog-title"
+      description-id="mobile-settings-dialog-copy" :busy="actionBusy" @close="closeDataDialog" @cancel="closeDataDialog"
+      @opened="mobileCancelButtonRef?.focus()">
+      <p class="md-mobile-sheet-label">{{ t('请确认影响范围') }}</p>
+      <div class="md-mobile-sheet-card">
+        <div class="md-mobile-sheet-row">
+          <span class="md-mobile-sheet-icon is-danger"><MdIcon name="delete" /></span>
+          <span class="md-mobile-sheet-copy"><b>{{ displayedAction === 'shelf' ? t('书架、原始文件与阅读记录') : t('阅读位置与排版记忆') }}</b>
+            <small id="mobile-settings-dialog-copy">{{ t(dataDialogDescription) }}</small>
+          </span>
+        </div>
+      </div>
+      <div class="md-mobile-sheet-card md-mobile-sheet-notice is-danger">
+        <MdIcon name="warning" /><span class="md-mobile-sheet-copy"><b>{{ t('此操作无法撤销') }}</b><small>{{ t('请确认后再继续。') }}</small></span>
+      </div>
+      <template #footer>
+        <button type="button" class="md-filled-button md-mobile-sheet-danger" :disabled="actionBusy" @click="confirmDataAction">{{ actionBusy ? t('正在清空') : t('确认清空') }}</button>
+        <button ref="mobileCancelButtonRef" type="button" class="md-tonal-button" :disabled="actionBusy" @click="closeDataDialog">{{ t('取消') }}</button>
+      </template>
+    </MobileBottomSheet>
+    <Teleport v-if="!isCompact" to="body">
       <Transition
         enter-active-class="settings-dialog-enter-active"
         enter-from-class="settings-dialog-enter"
@@ -814,8 +849,8 @@
             <div class="settings-dialog-icon" aria-hidden="true">
               <MdIcon name="delete" />
             </div>
-            <h3 id="settings-dialog-title">{{ dataDialogTitle }}</h3>
-            <p id="settings-dialog-copy">{{ dataDialogDescription }}</p>
+            <h3 id="settings-dialog-title">{{ t(dataDialogTitle) }}</h3>
+            <p id="settings-dialog-copy">{{ t(dataDialogDescription) }}</p>
             <div class="settings-dialog-actions">
               <button
                 ref="cancelButtonRef"
@@ -824,7 +859,7 @@
                 :disabled="actionBusy"
                 @click="closeDataDialog"
               >
-                取消
+                {{ t('取消') }}
               </button>
               <button
                 ref="confirmButtonRef"
@@ -833,7 +868,7 @@
                 :disabled="actionBusy"
                 @click="confirmDataAction"
               >
-                {{ actionBusy ? '正在清空' : '确认清空' }}
+                {{ actionBusy ? t('正在清空') : t('确认清空') }}
               </button>
             </div>
           </section>
@@ -869,6 +904,7 @@ import { useUpdateStore } from '../stores/updates.ts';
 import { useViewport } from '../composables/useViewport.ts';
 import { useSettingsTransition } from '../composables/useSettingsTransition.ts';
 import MdIcon from './MdIcon.vue';
+import MobileBottomSheet from './MobileBottomSheet.vue';
 import MdRange from './MdRange.vue';
 import MdSegmentedControl from './MdSegmentedControl.vue';
 import MdSwitch from './MdSwitch.vue';
@@ -876,6 +912,9 @@ import ThemeSwatchGrid from './ThemeSwatchGrid.vue';
 import SettingsInterfacePreview from './SettingsInterfacePreview.vue';
 import SettingsSelectRow from './SettingsSelectRow.vue';
 import { scrollAppToTop } from '../services/utils.ts';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t, locale, localeOptions, setLocale } = useI18n();
 
 const logoUrl = import.meta.env.BASE_URL + 'favicon.png';
 const shelf = useShelfStore();
@@ -939,7 +978,7 @@ const surfaceOptions = SURFACE_MODE_OPTIONS.map(option => ({
 
 const themeLabel = computed(() => {
   const option = THEME_OPTIONS.find(item => item.name === theme.themeColor);
-  return option ? option.title.replace(' (默认)', '') : theme.themeColor;
+  return option ? t(option.title.replace(' (默认)', '')) : theme.themeColor;
 });
 const transitionLabel = computed(() => TRANSITION_LABELS[settings.transitionStyle] || '');
 const isScrollDefault = computed(() => readerDefaults.direction === 'vertical');
@@ -947,7 +986,7 @@ const directionLabel = computed(() => {
   const option = directionOptions.find(item => item.value === readerDefaults.pagedDirection);
   return option ? option.label : '';
 });
-const spreadLabel = computed(() => readerDefaults.spread === 2 ? '双页' : '单页');
+const spreadLabel = computed(() => readerDefaults.spread === 2 ? t('双页') : t('单页'));
 const storageInfo = ref<{ usage: number; quota: number; ratio: number } | null>(null);
 const diskStats = ref<DiskStorageStats | null>(null);
 const storageRevealing = ref(false);
@@ -955,6 +994,8 @@ const nativeStorageEnabled = canUseNativeStorage();
 const storageLoading = ref(true);
 const actionNote = ref('');
 const pendingAction = ref<string | null>(null);
+const displayedAction = ref<string | null>(null);
+const mobileCancelButtonRef = shallowRef<HTMLButtonElement | null>(null);
 const actionBusy = ref(false);
 const cancelButtonRef = ref<HTMLButtonElement | null>(null);
 const confirmButtonRef = ref<HTMLButtonElement | null>(null);
@@ -964,15 +1005,15 @@ let previousModalBodyOverflow = '';
 let modalLayerLocked = false;
 
 const storageUsageText = computed(() => {
-  if (storageLoading.value) return '正在读取';
-  if (!storageInfo.value) return '无法估算';
+  if (storageLoading.value) return t('正在读取');
+  if (!storageInfo.value) return t('无法估算');
   return formatBytes(storageInfo.value.usage || 0);
 });
 const storageQuotaText = computed(() => {
   if (storageLoading.value) return '';
-  if (!storageInfo.value || !storageInfo.value.quota) return '当前环境未提供容量信息';
+  if (!storageInfo.value || !storageInfo.value.quota) return t('当前环境未提供容量信息');
   const free = Math.max(0, storageInfo.value.quota - storageInfo.value.usage);
-  return `可用 ${formatBytes(free)}`;
+  return t('可用 {0}', { 0: formatBytes(free) });
 });
 const storagePercent = computed(() => {
   const ratio = (storageInfo.value && storageInfo.value.ratio) || 0;
@@ -1000,18 +1041,18 @@ const storageNativeText = computed(() =>
 const storageWebviewText = computed(() => formatBytes(storageInfo.value?.usage || 0));
 const storageAriaLabel = computed(() => {
   const segments = diskSegments.value;
-  if (!segments) return '磁盘存储用量';
-  return `HOMURA 使用 ${formatBytes(segments.appBytes)}，其他应用使用 ${formatBytes(segments.otherBytes)}，磁盘剩余 ${formatBytes(segments.freeBytes)}`;
+  if (!segments) return t('磁盘存储用量');
+  return t('HOMURA 使用 {0}，其他应用使用 {1}，磁盘剩余 {2}', { 0: formatBytes(segments.appBytes), 1: formatBytes(segments.otherBytes), 2: formatBytes(segments.freeBytes) });
 });
 const progressCount = computed(() => Object.keys(shelf.progressMap || {}).length);
 const dataDialogTitle = computed(() =>
-  pendingAction.value === 'shelf' ? '清空书架与原始文件？' : '清空阅读进度？'
+  displayedAction.value === 'shelf' ? t('清空书架与原始文件？') : t('清空阅读进度？')
 );
 const dataDialogDescription = computed(() => {
-  if (pendingAction.value === 'shelf') {
-    return `将删除 ${shelf.library.length} 部作品、原始文件与阅读记录。此操作无法撤销。`;
+  if (displayedAction.value === 'shelf') {
+    return t('将删除 {0} 部作品、原始文件与阅读记录。此操作无法撤销。', { 0: shelf.library.length });
   }
-  return `将删除 ${progressCount.value} 本作品的阅读位置与排版记忆。作品本身不会被删除。`;
+  return t('将删除 {0} 本作品的阅读位置与排版记忆。作品本身不会被删除。', { 0: progressCount.value });
 });
 
 function setDirection(value: string) {
@@ -1055,7 +1096,7 @@ async function openRepository() {
   try {
     await openGitHubUrl(REPOSITORY_URL);
   } catch (error) {
-    aboutLinkError.value = '无法打开系统浏览器，请稍后再试。';
+    aboutLinkError.value = t('无法打开系统浏览器，请稍后再试。');
     console.warn('打开开源仓库失败', error);
   }
 }
@@ -1135,18 +1176,19 @@ function setSurfaceMode(value: string, origin: { x: number; y: number } | null) 
 function addDemoManga() {
   const book = createDemoManga();
   shelf.unshiftBook(book);
-  debugNote.value = `已添加「${book.title}」`;
+  debugNote.value = t('已添加「{0}」', { 0: book.title });
 }
 
 function addDemoNovel() {
   const book = createDemoNovel();
   shelf.unshiftBook(book);
-  debugNote.value = `已添加「${book.title}」`;
+  debugNote.value = t('已添加「{0}」', { 0: book.title });
 }
 
 function requestDataAction(action: string) {
   if (actionBusy.value) return;
   dialogTrigger = document.activeElement as HTMLElement | null;
+  displayedAction.value = action;
   pendingAction.value = action;
 }
 
@@ -1162,13 +1204,13 @@ async function confirmDataAction() {
   try {
     if (action === 'shelf') {
       await shelf.clearShelf();
-      actionNote.value = '书架与原始文件已清空';
+      actionNote.value = t('书架与原始文件已清空');
     } else {
       await shelf.clearProgress();
-      actionNote.value = '阅读进度已清空';
+      actionNote.value = t('阅读进度已清空');
     }
   } catch (err) {
-    actionNote.value = (err as Error).message || '清空失败，请重试';
+    actionNote.value = (err as Error).message || t('清空失败，请重试');
     console.warn('[HOMURA] 清空数据失败', err);
   } finally {
     await refreshStorage();
@@ -1209,6 +1251,7 @@ function onDialogKeydown(event: KeyboardEvent) {
 }
 
 watch(pendingAction, async (value, previous) => {
+  if (isCompact.value) return;
   if (value) {
     await nextTick();
     cancelButtonRef.value?.focus();
@@ -1380,6 +1423,14 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: flex-start;
   gap: 20px;
+}
+
+.settings-language {
+  grid-column: 1 / -1;
+}
+
+.settings-language .settings-select-row {
+  padding-inline: 0;
 }
 
 .settings-appearance > .settings-detail-hint {

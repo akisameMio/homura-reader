@@ -7,6 +7,7 @@
 
 import { onMounted, onBeforeUnmount, watch } from 'vue';
 import { isAndroid } from '../services/platform.ts';
+import { t } from './useI18n.ts';
 import type { useReaderStore } from '../stores/reader.ts';
 
 type ReaderStore = ReturnType<typeof useReaderStore>;
@@ -39,7 +40,7 @@ export function useAndroidBackExit(reader: ReaderStore, dismissOverlay: () => bo
     if (!core || typeof core.invoke !== 'function') return;
 
     try {
-      await core.invoke('plugin:android-toast|show', { message: EXIT_TOAST_TEXT });
+      await core.invoke('plugin:android-toast|show', { message: t(EXIT_TOAST_TEXT) });
     } catch (err) {
       console.warn('[HOMURA] 显示 Android 退出提示失败', err);
     }

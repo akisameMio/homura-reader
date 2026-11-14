@@ -4,7 +4,7 @@
     :class="{ 'is-wide': wide, 'has-labels': labels && !strip, 'is-strip': strip }"
     :style="{ '--swatch-columns': columns }"
     role="group"
-    aria-label="主题色"
+    :aria-label="t('主题色')"
   >
     <button
       v-for="option in THEME_OPTIONS"
@@ -12,8 +12,8 @@
       type="button"
       class="theme-swatch-tile"
       :class="{ 'is-selected': theme.themeColor === option.name }"
-      :title="option.title"
-      :aria-label="option.title"
+      :title="t(option.title)"
+      :aria-label="t(option.title)"
       :aria-pressed="theme.themeColor === option.name"
       @click="theme.setThemeColor(option.name)"
     >
@@ -21,7 +21,7 @@
       <span v-if="theme.themeColor === option.name" class="theme-swatch-check" aria-hidden="true">
         <MdIcon name="check" />
       </span>
-      <span v-if="labels && !strip" class="theme-swatch-label">{{ option.title.replace(' (默认)', '') }}</span>
+      <span v-if="labels && !strip" class="theme-swatch-label">{{ t(option.title.replace(' (默认)', '')) }}</span>
     </button>
   </div>
 </template>
@@ -29,6 +29,9 @@
 <script setup lang="ts">
 import { THEME_OPTIONS, useThemeStore } from '../stores/theme.ts';
 import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 defineProps({
   columns: { type: Number, default: 5 },

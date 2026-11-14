@@ -1,35 +1,29 @@
 <template>
-  <dialog
-    ref="dialogRef"
-    class="md-bottom-sheet"
-    aria-labelledby="update-island-title"
-    @cancel.prevent="onCancel"
-    @click="onBackdropClick"
-  >
-    <UpdateIslandPanel
-      ref="panelRef"
-      :status="status"
-      :release="release"
-      :current-version="currentVersion"
-      :package-info="packageInfo"
-      :error="error"
-      :download="download"
-      :download-error="downloadError"
-      @close="$emit('close')"
-      @retry="$emit('retry')"
-      @changelog="$emit('changelog')"
-      @download="$emit('download')"
-      @cancel-download="$emit('cancel-download')"
-      @install="$emit('install')"
-    />
-  </dialog>
+  <MobileBottomSheet :open="open" :title="sheetTitle" title-id="mobile-update-title"
+    :backdrop-dismissible="status !== 'downloading'" :draggable="status !== 'downloading'"
+    :close-label="status === 'downloading' ? t('取消下载') : t('关闭软件更新')" @close="onCancel" @cancel="onCancel">
+    <UpdateIslandPanel ref="panelRef" mobile-sheet :status="status" :release="release" :current-version="currentVersion"
+      :package-info="packageInfo" :error="error" :download="download" :download-error="downloadError"
+      @close="$emit('close')" @retry="$emit('retry')" @changelog="$emit('changelog')" @download="$emit('download')"
+      @cancel-download="$emit('cancel-download')" @install="$emit('install')" />
+    <template #footer>
+      <button v-if="primaryAction" type="button" :class="primaryAction.variant === 'tonal' ? 'md-tonal-button' : 'md-filled-button'"
+        :disabled="primaryAction.disabled" @click="panelRef?.runPrimaryAction()"><MdIcon :name="primaryAction.icon" />{{ primaryAction.label }}</button>
+      <button v-if="status !== 'downloading'" type="button" class="md-text-button" @click="$emit('close')">{{ status === 'downloaded' ? t('稍后安装') : status === 'available' ? t('稍后提醒') : t('关闭') }}</button>
+    </template>
+  </MobileBottomSheet>
 </template>
 
 <script setup lang="ts">
-import { nextTick, shallowRef, watch } from 'vue';
+import { computed, shallowRef } from 'vue';
 import type { PropType } from 'vue';
 import type { NormalizedRelease } from '../services/updates.ts';
 import UpdateIslandPanel from './UpdateIslandPanel.vue';
+import MobileBottomSheet from './MobileBottomSheet.vue';
+import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -56,31 +50,14 @@ const props = defineProps({
 });
 const emit = defineEmits(['close', 'retry', 'changelog', 'download', 'cancel-download', 'install']);
 
-const dialogRef = shallowRef<HTMLDialogElement | null>(null);
-const panelRef = shallowRef<{ focusInitial?: () => void } | null>(null);
-
-watch(
-  () => props.open,
-  async open => {
-    await nextTick();
-    if (open) {
-      if (!dialogRef.value?.open) dialogRef.value?.showModal();
-      panelRef.value?.focusInitial?.();
-      return;
-    }
-    dialogRef.value?.close();
-  },
-  { immediate: true }
-);
-
-watch(
-  () => props.status,
-  async () => {
-    if (!props.open) return;
-    await nextTick();
-    panelRef.value?.focusInitial?.();
-  }
-);
+const panelRef = shallowRef<InstanceType<typeof UpdateIslandPanel> | null>(null);
+const primaryAction = computed(() => panelRef.value?.primaryAction);
+const sheetTitle = computed(() => {
+  if (props.status === 'downloading') return t('正在下载更新');
+  if (props.status === 'downloaded') return t('下载完成');
+  if (props.status === 'loading') return t('检查更新');
+  return t('软件更新');
+});
 
 function onCancel() {
   if (props.status === 'downloading') {
@@ -90,9 +67,4 @@ function onCancel() {
   emit('close');
 }
 
-function onBackdropClick(event: MouseEvent) {
-  if (event.target !== dialogRef.value) return;
-  if (props.status === 'downloading') return;
-  emit('close');
-}
 </script>

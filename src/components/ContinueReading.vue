@@ -4,8 +4,8 @@
     v-if="featured"
     type="button"
     class="md-card md-card--featured continue-card md-featured-cell"
-    :title="`${started ? '继续阅读' : '开始阅读'}：${featured.book.title}`"
-    :aria-label="`${started ? '继续阅读' : '开始阅读'}：${featured.book.title}`"
+    :title="started ? t('继续阅读：{0}', { 0: featured.book.title }) : t('开始阅读：{0}', { 0: featured.book.title })"
+    :aria-label="started ? t('继续阅读：{0}', { 0: featured.book.title }) : t('开始阅读：{0}', { 0: featured.book.title })"
     @click="onOpen"
   >
     <!-- 39% 封面：优先真实书封，缺失时使用主题色书封 -->
@@ -35,7 +35,7 @@
 
     <span class="content">
       <span class="eyebrow-row">
-        <span class="eyebrow">{{ started ? '继续阅读' : '开始阅读' }}</span>
+        <span class="eyebrow">{{ started ? t('继续阅读') : t('开始阅读') }}</span>
         <span class="last-read">{{ lastReadLabel }}</span>
       </span>
 
@@ -43,7 +43,7 @@
 
       <span class="meta">
         <span class="position">
-          <template v-if="started">第 {{ (featured.progress?.index ?? 0) + 1 }} / {{ totalPages }} 页</template>
+          <template v-if="started">{{ t('第 {0} / {1} 页', { 0: (featured.progress?.index ?? 0) + 1, 1: totalPages }) }}</template>
           <template v-else>{{ totalPages }} {{ countUnit }}</template>
         </span>
         <span class="status">{{ remainingText }}</span>
@@ -52,7 +52,7 @@
       <span class="footer">
         <span class="progress-wrap">
           <span class="progress-label">
-            <span>阅读进度</span>
+            <span>{{ t('阅读进度') }}</span>
             <b>{{ progressPercent }}%</b>
           </span>
           <span class="progress-track" aria-hidden="true">
@@ -77,6 +77,9 @@ import { playShelfToReaderSplash } from '../services/readerTransition.ts';
 
 const emit = defineEmits(['open']);
 import type { Book } from '../types.ts';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t, locale } = useI18n();
 const props = defineProps({ books: { type: Array as PropType<Book[] | null>, default: null } });
 
 const shelf = useShelfStore();
@@ -119,7 +122,7 @@ const typeLabel = computed(() => {
   if (format === 'mobi') return 'MOBI';
   if (format === 'markdown') return 'MD';
   if (format === 'txt') return 'TXT';
-  return book.type === 'manga' ? '漫画' : (book.type === 'epub' ? 'EPUB' : '轻小说');
+  return book.type === 'manga' ? t('漫画') : (book.type === 'epub' ? 'EPUB' : t('轻小说'));
 });
 
 const totalPages = computed((): number => {
@@ -135,7 +138,7 @@ const totalPages = computed((): number => {
 const started = computed(() => !!featured.value && (featured.value.progress?.updatedAt || 0) > 0);
 
 // 未开始阅读的小说显示章节数，漫画 / PDF 才是页数；读起来之后一律用实际分页。
-const countUnit = computed(() => (featured.value?.book?.type === 'manga' ? '页' : '章'));
+const countUnit = computed(() => (featured.value?.book?.type === 'manga' ? t('页') : t('章')));
 
 // 上次阅读时间：当天只显示时刻，跨天显示日期
 const clockText = computed(() => {
@@ -145,21 +148,21 @@ const clockText = computed(() => {
   const now = new Date();
   const sameDay = date.toDateString() === now.toDateString();
   if (sameDay) {
-    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return date.toLocaleTimeString(locale.value, { hour: '2-digit', minute: '2-digit', hour12: false });
   }
   return `${date.getMonth() + 1}/${date.getDate()}`;
 });
 
 const lastReadLabel = computed(() => {
-  if (!started.value) return '初次阅读';
-  return clockText.value ? `上次 ${clockText.value}` : '上次阅读';
+  if (!started.value) return t('初次阅读');
+  return clockText.value ? t('上次 {0}', { 0: clockText.value }) : t('上次阅读');
 });
 
 const remainingText = computed(() => {
   const item = featured.value;
-  if (!item || !started.value) return '尚未开始';
+  if (!item || !started.value) return t('尚未开始');
   const rest = Math.max(0, totalPages.value - (item.progress?.index ?? 0) - 1);
-  return `剩 ${rest} 页`;
+  return t('剩 {0} 页', { 0: rest });
 });
 
 const progressPercent = computed(() => {

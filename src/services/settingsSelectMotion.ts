@@ -29,7 +29,7 @@ interface MenuAnchor {
 const MENU_OPEN = { stiffness: 400, damping: 0.58 };
 const MENU_CLOSE = { stiffness: 500, damping: 0.85 };
 // 放慢模拟时钟，保留原有弹性、形变和中断时的速度连续性。
-const MOTION_RATE = 0.8;
+const MOTION_RATE = 0.7;
 const POSITION_EPSILON = 0.001;
 const VELOCITY_EPSILON = 0.01;
 

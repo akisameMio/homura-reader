@@ -1,5 +1,64 @@
 <template>
-  <form ref="formRef" v-if="request" class="shelf-dialog-content" @submit.prevent="submitName">
+  <form v-if="mobileSheet && request" ref="formRef" @submit.prevent="submitName">
+    <template v-if="request.kind === 'name'">
+      <p class="md-mobile-sheet-label">{{ t('书库设置') }}</p>
+      <div class="md-mobile-sheet-card is-padded">
+        <label for="mobile-collection-name" class="md-mobile-sheet-field-label">{{ t('书库名称') }}</label>
+        <input id="mobile-collection-name" ref="nameInput" v-model="name" class="md-mobile-sheet-field"
+          maxlength="80" autocomplete="off" :aria-invalid="!!error" aria-describedby="mobile-collection-name-error" />
+        <div class="md-mobile-sheet-field-meta md-mobile-sheet-hint"><span>{{ t('为作品取一个好找的名字') }}</span><span>{{ name.length }} / 80</span></div>
+        <p v-if="error" id="mobile-collection-name-error" role="alert" class="md-mobile-sheet-field-error">{{ t(error) }}</p>
+      </div>
+      <div v-if="request.message" class="md-mobile-sheet-card md-mobile-sheet-notice">
+        <MdIcon name="folder" /><span class="md-mobile-sheet-copy"><small>{{ request.message }}</small></span>
+      </div>
+      <button type="submit" hidden tabindex="-1" aria-hidden="true"></button>
+    </template>
+    <template v-else-if="request.kind === 'folder'">
+      <p class="md-mobile-sheet-label">{{ t('扫描结果') }}</p>
+      <div class="md-mobile-sheet-card">
+        <div class="md-mobile-sheet-row">
+          <span class="md-mobile-sheet-icon is-accent"><MdIcon name="folder_open" /></span>
+          <span class="md-mobile-sheet-copy"><b>{{ t('{0} 本作品等待导入', { 0: requestCountLabel }) }}</b><small>{{ folderScanHint }}</small></span>
+        </div>
+      </div>
+      <p class="md-mobile-sheet-label">{{ t('推荐整理方式') }}</p>
+      <div class="md-mobile-sheet-card">
+        <div class="md-mobile-sheet-row">
+          <span class="md-mobile-sheet-icon is-accent"><MdIcon name="create_new_folder" /></span>
+          <span class="md-mobile-sheet-copy"><b>{{ folderMode }}</b><small>{{ t('目录名会作为书库名，作品会自动归档') }}</small></span>
+          <MdIcon name="check" />
+        </div>
+      </div>
+      <p class="md-mobile-sheet-hint px-3">{{ request.message }}</p>
+    </template>
+    <template v-else-if="request.kind === 'move'">
+      <p class="md-mobile-sheet-label">{{ request.message || t('选择目标书库') }}</p>
+      <div class="md-mobile-sheet-card">
+        <button v-for="option in request.options" :key="option.value" type="button" class="md-mobile-sheet-row" @click="$emit('resolve', option.value)">
+          <span class="md-mobile-sheet-icon"><MdIcon name="folder" /></span>
+          <span class="md-mobile-sheet-copy"><b>{{ option.title }}</b></span><MdIcon name="chevron_right" />
+        </button>
+        <p v-if="!request.options?.length" class="md-mobile-sheet-notice md-mobile-sheet-hint">{{ t('暂无其他书库，请先新建书库。') }}</p>
+      </div>
+    </template>
+    <template v-else>
+      <p class="md-mobile-sheet-label">{{ isDestructive ? t('请确认影响范围') : t('收藏管理') }}</p>
+      <div class="md-mobile-sheet-card">
+        <div class="md-mobile-sheet-row">
+          <span class="md-mobile-sheet-icon" :class="isDestructive ? 'is-danger' : 'is-accent'"><MdIcon :name="dialogIcon" /></span>
+          <span class="md-mobile-sheet-copy"><b>{{ request.title }}</b><small>{{ request.message }}</small></span>
+        </div>
+      </div>
+      <div class="md-mobile-sheet-card md-mobile-sheet-notice" :class="{ 'is-danger': isDestructive }">
+        <MdIcon :name="isDestructive ? 'warning' : 'info'" />
+        <span class="md-mobile-sheet-copy"><b>{{ isDestructive ? t('删除后无法恢复') : t('只调整收藏状态') }}</b>
+          <small>{{ isDestructive ? (removesLocalFiles ? t('本地内容与阅读记录会一起移除，请确认后继续。') : t('请确认上方列出的内容后继续。')) : t('作品与阅读记录仍保留在本机书架。') }}</small>
+        </span>
+      </div>
+    </template>
+  </form>
+  <form ref="formRef" v-else-if="request" class="shelf-dialog-content" @submit.prevent="submitName">
     <div class="md-sheet-grip" aria-hidden="true"></div>
 
     <header class="shelf-dialog-head">
@@ -27,26 +86,26 @@
       <div class="scan-card">
         <b class="scan-number">{{ requestCountLabel }}</b>
         <span class="scan-copy">
-          <b>本作品等待导入</b>
+          <b>{{ t('本作品等待导入') }}</b>
           <small>{{ folderScanHint }}</small>
         </span>
         <span class="scan-mode">
           <MdIcon name="folder" />
-          目录整理
+          {{ t('目录整理') }}
         </span>
       </div>
       <div class="choice-card">
         <span class="choice-icon"><MdIcon name="create_new_folder" /></span>
         <span class="choice-copy">
           <b>{{ folderMode }}</b>
-          <small>目录名会作为书库名，作品会自动归档</small>
+          <small>{{ t('目录名会作为书库名，作品会自动归档') }}</small>
         </span>
-        <span class="choice-badge">推荐</span>
+        <span class="choice-badge">{{ t('推荐') }}</span>
       </div>
     </template>
 
     <template v-else-if="request.kind === 'name'">
-      <label for="collection-name" class="shelf-field-label">书库名称</label>
+      <label for="collection-name" class="shelf-field-label">{{ t('书库名称') }}</label>
       <input
         id="collection-name"
         ref="nameInput"
@@ -58,10 +117,10 @@
         aria-describedby="collection-name-error"
       />
       <div class="shelf-field-meta">
-        <code>COLLECTIONS / {{ name || '未命名' }}</code>
+        <code>COLLECTIONS / {{ name || t('未命名') }}</code>
         <span>{{ name.length }} / 80</span>
       </div>
-      <p id="collection-name-error" v-if="error" role="alert" class="shelf-field-error">{{ error }}</p>
+      <p id="collection-name-error" v-if="error" role="alert" class="shelf-field-error">{{ t(error) }}</p>
       <div v-if="request.message" class="shelf-path-note">
         <MdIcon name="folder" />
         <span>{{ request.message }}</span>
@@ -81,7 +140,7 @@
           <span>{{ option.title }}</span>
           <MdIcon name="chevron_right" />
         </button>
-        <p v-if="!request.options?.length" class="move-empty">暂无其他书库，请先新建书库。</p>
+        <p v-if="!request.options?.length" class="move-empty">{{ t('暂无其他书库，请先新建书库。') }}</p>
       </div>
     </template>
 
@@ -89,14 +148,14 @@
       <div v-if="isDestructive" class="shelf-danger-panel">
         <MdIcon name="warning" />
         <span>
-          <b>{{ removesLocalFiles ? '本地内容与阅读记录会一起移除' : '删除后无法恢复' }}</b>
+          <b>{{ removesLocalFiles ? t('本地内容与阅读记录会一起移除') : t('删除后无法恢复') }}</b>
           <small>{{ request.message }}</small>
         </span>
       </div>
       <div v-else class="shelf-info-panel">
         <MdIcon name="star" />
         <span>
-          <b>只调整收藏状态</b>
+          <b>{{ t('只调整收藏状态') }}</b>
           <small>{{ request.message }}</small>
         </span>
       </div>
@@ -104,14 +163,14 @@
 
     <div class="md-surface-actionbar">
       <div v-if="request.kind !== 'move'" class="md-surface-aux">
-        <button type="button" class="md-surface-text-button" @click="$emit('resolve', null)">取消</button>
+        <button type="button" class="md-surface-text-button" @click="$emit('resolve', null)">{{ t('取消') }}</button>
         <button
           v-if="request.kind === 'folder'"
           type="button"
           class="md-surface-text-button"
           @click="$emit('resolve', false)"
         >
-          直接导入
+          {{ t('直接导入') }}
         </button>
       </div>
 
@@ -123,7 +182,7 @@
           @click="$emit('resolve', true)"
         >
           <MdIcon name="create_new_folder" />
-          创建书库
+          {{ t('创建书库') }}
         </button>
         <button
           v-else-if="request.kind === 'name'"
@@ -141,7 +200,7 @@
           @click="$emit('resolve', true)"
         >
           <MdIcon :name="isDestructive ? 'delete' : 'star'" />
-          {{ request.confirmLabel || '确认' }}
+          {{ request.confirmLabel || t('确认') }}
         </button>
         <button
           v-else
@@ -149,7 +208,7 @@
           class="md-surface-action is-tonal"
           @click="$emit('resolve', null)"
         >
-          取消
+          {{ t('取消') }}
         </button>
       </template>
     </div>
@@ -161,9 +220,13 @@ import { computed, nextTick, ref, shallowRef, watch } from 'vue';
 import type { PropType } from 'vue';
 import MdIcon from './MdIcon.vue';
 import type { ShelfDialogOptions } from '../composables/useShelfDialogs.ts';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const props = defineProps({
   request: { type: Object as PropType<ShelfDialogOptions | null>, default: null },
+  mobileSheet: { type: Boolean, default: false },
   hostPrimaryAction: { type: Boolean, default: false }
 });
 const emit = defineEmits(['resolve']);
@@ -173,15 +236,10 @@ const nameInput = shallowRef<HTMLInputElement | null>(null);
 const name = ref('');
 const error = ref('');
 const isDestructive = computed(() => (
-  props.request?.kind === 'confirm'
-  && (
-    String(props.request.title || '').includes('删除')
-    || String(props.request.confirmLabel || '').includes('删除')
-  )
+  props.request?.kind === 'confirm' && props.request.intent === 'delete'
 ));
 const removesLocalFiles = computed(() => (
-  isDestructive.value
-  && String(props.request?.message || '').includes('原始文件')
+  isDestructive.value && props.request?.removesFiles
 ));
 const dialogIcon = computed(() => {
   if (props.request?.kind === 'confirm') return isDestructive.value ? 'delete' : 'star';
@@ -190,34 +248,35 @@ const dialogIcon = computed(() => {
   return 'local_library';
 });
 const dialogKicker = computed(() => {
-  if (props.request?.kind === 'confirm') return isDestructive.value ? '永久删除' : '收藏管理';
-  if (props.request?.kind === 'folder') return '导入内容';
-  if (props.request?.kind === 'name') return '书库设置';
-  return '书库整理';
+  if (props.request?.kind === 'confirm') return isDestructive.value ? t('永久删除') : t('收藏管理');
+  if (props.request?.kind === 'folder') return t('导入内容');
+  if (props.request?.kind === 'name') return t('书库设置');
+  return t('书库整理');
 });
 const requestCountLabel = computed(() => {
-  const match = String(props.request?.message || '').match(/(\d+)\s*本/);
-  if (!match) return '—';
-  return String(Math.max(0, Number(match[1]) || 0)).padStart(2, '0');
+  const count = props.request?.bookCount;
+  if (count === undefined) return '—';
+  return String(Math.max(0, count)).padStart(2, '0');
 });
 const folderMode = computed(() => (
-  String(props.request?.message || '').includes('按目录')
-    ? '按目录创建书库'
-    : '创建一个新书库'
+  props.request?.groupByFolder
+    ? t('按目录创建书库')
+    : t('创建一个新书库')
 ));
 const folderScanHint = computed(() => {
-  const match = String(props.request?.message || '').match(/按目录分别创建\s*(\d+)\s*个一级书库/);
-  return match ? `预计 ${match[1]} 个书库` : '可整理为一个书库';
+  return props.request?.groupByFolder
+    ? t('预计 {0} 个书库', { 0: props.request.collectionCount })
+    : t('可整理为一个书库');
 });
 const nameActionLabel = computed(() => (
-  String(props.request?.title || '').includes('重命名') ? '保存名称' : '创建书库'
+  props.request?.intent === 'rename' ? t('保存名称') : t('创建书库')
 ));
 const primaryAction = computed(() => {
   const request = props.request;
   if (!request) return null;
   if (request.kind === 'folder') {
     return {
-      label: '创建书库',
+      label: t('创建书库'),
       icon: 'create_new_folder',
       variant: 'primary',
       disabled: false
@@ -233,14 +292,14 @@ const primaryAction = computed(() => {
   }
   if (request.kind === 'confirm') {
     return {
-      label: request.confirmLabel || '确认',
+      label: request.confirmLabel || t('确认'),
       icon: isDestructive.value ? 'delete' : 'star',
       variant: isDestructive.value ? 'danger' : 'tonal',
       disabled: false
     };
   }
   return {
-    label: '取消',
+    label: t('取消'),
     icon: 'close',
     variant: 'tonal',
     disabled: false
@@ -271,7 +330,7 @@ function submitName() {
   const request = props.request;
   if (!request || request.kind !== 'name') return;
   error.value = request.validate?.(name.value) || '';
-  if (!name.value.trim()) error.value = '请输入书库名称';
+  if (!name.value.trim()) error.value = t('请输入书库名称');
   if (!error.value) emit('resolve', name.value.trim());
 }
 

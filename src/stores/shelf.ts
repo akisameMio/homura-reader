@@ -6,6 +6,7 @@
    书籍内部字段的变更通过替换数组或显式触发来驱动视图更新。
    ========================================================================== */
 
+import { t } from '../composables/useI18n.ts';
 import { defineStore } from 'pinia';
 import { shallowRef, ref } from 'vue';
 import { collectionNameError, moveCollectionBooks, restoreCollections } from '../services/collections.ts';
@@ -45,7 +46,7 @@ export const useShelfStore = defineStore('shelf', () => {
       error.value = '';
     });
     collectionQueue = task.catch(err => {
-      error.value = err.message || '书库保存失败，请重试';
+      error.value = err.message || t('书库保存失败，请重试');
       console.warn('[HOMURA] 书库保存失败', err);
     });
     return task;
@@ -85,7 +86,7 @@ export const useShelfStore = defineStore('shelf', () => {
 
   // 新增书籍并落盘；写入失败由导入层汇总记录
   async function addBook(book: Book, source: BookSource, options: { onSaved?: (book: Book) => unknown | Promise<unknown>; [key: string]: unknown } = {}) {
-    if (!source) throw new Error('缺少原文件来源');
+    if (!source) throw new Error(t('缺少原文件来源'));
     try {
       const result = await persistBook(book, source, options);
       if (options.onSaved) {
@@ -133,7 +134,7 @@ export const useShelfStore = defineStore('shelf', () => {
     try {
       await HomuraStore.deleteBook(id);
     } catch (err) {
-      error.value = (err as Error).message || '移除书本失败，请重试';
+      error.value = (err as Error).message || t('移除书本失败，请重试');
       console.error('[HOMURA] 移除书本失败', err);
       throw err;
     }
@@ -163,7 +164,7 @@ export const useShelfStore = defineStore('shelf', () => {
       activeCollectionId.value = null;
       error.value = '';
     }).catch(err => {
-      error.value = err.message || '清空书架失败，请重试';
+      error.value = err.message || t('清空书架失败，请重试');
       console.warn('[HOMURA] 清空书架失败', err);
       throw err;
     });
@@ -194,7 +195,7 @@ export const useShelfStore = defineStore('shelf', () => {
 
   async function setBookCover(id: string, file: File | null) {
     let book = library.value.find(item => item.id === id);
-    if (!book) throw new Error('书本已从书架移除');
+    if (!book) throw new Error(t('书本已从书架移除'));
     const blob = file ? await prepareBookCover(file) : null;
     // 示例内容没有原始文件存档，封面随本次示例一起保留在内存中。
     if (!id.startsWith('demo_')) await HomuraStore.updateBookCover(id, blob as Blob | null);
@@ -212,7 +213,7 @@ export const useShelfStore = defineStore('shelf', () => {
   function updateFavorite(id: string, change: (favorite: boolean) => boolean) {
     const task = favoriteQueue.then(async () => {
       const book = library.value.find(item => item.id === id);
-      if (!book) throw new Error('书本已从书架移除');
+      if (!book) throw new Error(t('书本已从书架移除'));
       const favorite = change(!!book.favorite);
       if (favorite === !!book.favorite) return favorite;
       if (!id.startsWith('demo_')) await HomuraStore.updateBookFavorite(id, favorite);

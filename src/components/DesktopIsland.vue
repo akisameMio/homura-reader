@@ -36,32 +36,32 @@
               : surface === 'update' ? 'update-island-title' : undefined"
         :aria-owns="surfaceKey ? 'homura-island-action' : undefined"
       >
-        <div v-if="surface === 'menu'" class="island-menu" role="menu" aria-label="导入与书库">
+        <div v-if="surface === 'menu'" class="island-menu" role="menu" :aria-label="t('导入与书库')">
           <header class="island-card-head">
-            <p class="md-surface-kicker">导入作品</p>
-            <h2 class="md-surface-title">添加内容</h2>
+            <p class="md-surface-kicker">{{ t('导入作品') }}</p>
+            <h2 class="md-surface-title">{{ t('添加内容') }}</h2>
           </header>
           <div class="island-menu-list">
             <button type="button" role="menuitem" class="island-menu-item is-selected" @click="choose('pick-files')">
               <span class="island-menu-icon"><MdIcon name="upload_file" /></span>
-              <span class="island-menu-copy"><b>导入文件</b><small>EPUB / PDF / MOBI / TXT</small></span>
+              <span class="island-menu-copy"><b>{{ t('导入文件') }}</b><small>EPUB / PDF / MOBI / TXT</small></span>
               <span class="island-menu-check" aria-hidden="true"><MdIcon name="check" /></span>
             </button>
             <button v-if="canPickFolder" type="button" role="menuitem" class="island-menu-item" @click="choose('pick-folder')">
               <span class="island-menu-icon"><MdIcon name="folder_open" /></span>
-              <span class="island-menu-copy"><b>导入文件夹</b><small>图片目录会合并成一本漫画</small></span>
+              <span class="island-menu-copy"><b>{{ t('导入文件夹') }}</b><small>{{ t('图片目录会合并成一本漫画') }}</small></span>
               <span class="island-menu-check is-empty" aria-hidden="true"></span>
             </button>
             <div class="island-menu-divider" aria-hidden="true"></div>
             <button type="button" role="menuitem" class="island-menu-item" @click="choose('create-collection')">
               <span class="island-menu-icon is-plain"><MdIcon name="create_new_folder" /></span>
-              <span class="island-menu-copy"><b>新建书库</b><small>先建一个书库，再放入作品</small></span>
+              <span class="island-menu-copy"><b>{{ t('新建书库') }}</b><small>{{ t('先建一个书库，再放入作品') }}</small></span>
               <span class="island-menu-check is-empty" aria-hidden="true"></span>
             </button>
           </div>
           <div class="md-surface-actionbar">
             <div class="md-surface-aux">
-              <button type="button" class="md-surface-text-button" @click="menuOpen = false">取消</button>
+              <button type="button" class="md-surface-text-button" @click="menuOpen = false">{{ t('取消') }}</button>
             </div>
           </div>
         </div>
@@ -179,7 +179,7 @@
         aria-hidden="true"
       >
         <MdIcon name="upload_file" filled />
-        <span>导入</span>
+        <span>{{ t('导入') }}</span>
       </span>
       <span
         class="island-import-layer"
@@ -210,7 +210,7 @@
         aria-hidden="true"
       >
         <MdIcon :name="importProgress.hasFailures ? 'warning' : 'check'" />
-        <span>{{ importProgress.hasFailures ? '有失败' : '完成' }}</span>
+        <span>{{ importProgress.hasFailures ? t('有失败') : t('完成') }}</span>
       </span>
     </button>
   </div>
@@ -237,6 +237,9 @@ import ShelfDialogContent from './ShelfDialogContent.vue';
 import ImportProgressPanel from './ImportProgressPanel.vue';
 import UpdateIslandPanel from './UpdateIslandPanel.vue';
 import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const props = defineProps({
   activeNav: { type: String, default: 'shelf' }
@@ -336,29 +339,29 @@ const ringLength = 2 * Math.PI * 18;
 const ringOffset = computed(() => ringLength * (1 - importProgress.percent / 100));
 const updateOrbTitle = computed(() => (
   updates.hasPendingInstall
-    ? '更新已下载，打开安装'
+    ? t('更新已下载，打开安装')
     : updates.updateStatus === 'download-error'
-      ? '更新下载失败，打开重试'
+      ? t('更新下载失败，打开重试')
       : updates.updateStatus === 'error'
-        ? '更新检查失败，打开重试'
-        : '有新版本可用'
+        ? t('更新检查失败，打开重试')
+        : t('有新版本可用')
 ));
 const importButtonTitle = computed(() => {
-  if (importProgress.status === 'idle') return '导入作品';
-  if (importProgress.status === 'running') return `导入进度 ${importProgress.done} / ${importProgress.total}`;
-  if (importProgress.status === 'cancelled') return '导入已停止';
-  return importProgress.hasFailures ? '导入完成，有失败项' : '导入完成';
+  if (importProgress.status === 'idle') return t('导入作品');
+  if (importProgress.status === 'running') return t('导入进度 {0} / {1}', { 0: importProgress.done, 1: importProgress.total });
+  if (importProgress.status === 'cancelled') return t('导入已停止');
+  return importProgress.hasFailures ? t('导入完成，有失败项') : t('导入完成');
 });
 const importButtonLabel = computed(() => {
-  if (importProgress.status === 'idle') return '导入作品';
-  return `${importButtonTitle.value}，${importProgress.expanded ? '收起进度详情' : '展开进度详情'}`;
+  if (importProgress.status === 'idle') return t('导入作品');
+  return `${importButtonTitle.value}，${importProgress.expanded ? t('收起进度详情') : t('展开进度详情')}`;
 });
-const menuPrimaryAction = Object.freeze({
-  label: '选择文件',
+const menuPrimaryAction = computed(() => ({
+  label: t('选择文件'),
   icon: 'upload_file',
   variant: 'primary',
   disabled: false
-});
+}));
 const activeContent = computed(() => {
   if (surface.value === 'import') return importPanelRef.value;
   if (surface.value === 'duplicate') return duplicateContentRef.value;
@@ -368,7 +371,7 @@ const activeContent = computed(() => {
 });
 const activeAction = computed(() => {
   if (!surface.value) return null;
-  if (surface.value === 'menu') return menuPrimaryAction;
+  if (surface.value === 'menu') return menuPrimaryAction.value;
   return activeContent.value?.primaryAction || null;
 });
 const buttonWidth = computed(() => {
@@ -382,10 +385,10 @@ const buttonWidth = computed(() => {
   return Math.max(104, Math.ceil(26 + iconWidth + iconGap + labelLength * 13.2));
 });
 const buttonTitle = computed(() => (
-  actionFaceShown.value ? heldAction.value?.label || '处理中' : importButtonTitle.value
+  actionFaceShown.value ? heldAction.value?.label || t('处理中') : importButtonTitle.value
 ));
 const buttonLabel = computed(() => (
-  actionFaceShown.value ? heldAction.value?.label || '处理中' : importButtonLabel.value
+  actionFaceShown.value ? heldAction.value?.label || t('处理中') : importButtonLabel.value
 ));
 const buttonHasPopup = computed(() => {
   if (actionFaceShown.value) return undefined;

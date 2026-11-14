@@ -5,6 +5,7 @@
    取消只关闭调度门闩，已经开始的解析 / 提交会正常收尾。
    ========================================================================== */
 
+import { t } from '../composables/useI18n.ts';
 import { computed, ref, shallowRef } from 'vue';
 import { defineStore } from 'pinia';
 
@@ -34,10 +35,10 @@ export function estimateImportEtaSeconds({ total = 0, done = 0, elapsedMs = 0 } 
 
 export function formatEta(seconds: number | null) {
   if (seconds === null || !Number.isFinite(seconds) || seconds <= 0) return '';
-  if (seconds < 60) return `约 ${Math.round(seconds)} 秒`;
+  if (seconds < 60) return t('约 {0} 秒', { 0: Math.round(seconds) });
   const minutes = Math.floor(seconds / 60);
   const rest = Math.round(seconds % 60);
-  return rest ? `约 ${minutes} 分 ${rest} 秒` : `约 ${minutes} 分钟`;
+  return rest ? t('约 {0} 分 {1} 秒', { 0: minutes, 1: rest }) : t('约 {0} 分钟', { 0: minutes });
 }
 
 export function formatImportBytes(bytes: number) {
@@ -55,22 +56,22 @@ export function formatImportBytes(bytes: number) {
 }
 
 export function importPhaseLabel(phase: string) {
-  return (IMPORT_PHASE_LABELS as Record<string, string>)[phase] || IMPORT_PHASE_LABELS.read;
+  return t((IMPORT_PHASE_LABELS as Record<string, string>)[phase] || IMPORT_PHASE_LABELS.read);
 }
 
 export function importFailureReason(error: unknown) {
-  if (!error) return '无法读取这个文件';
+  if (!error) return t('无法读取这个文件');
   if (typeof error === 'string') return error;
   const err = error as { code?: string; message?: string; name?: string };
-  if (err.code === 'NATIVE_SECURITY_LIMIT') return '文件触发原生安全限制';
+  if (err.code === 'NATIVE_SECURITY_LIMIT') return t('文件触发原生安全限制');
   if (err.code === 'NATIVE_LIMIT_EXCEEDED') {
     const fileLimit = err.message?.match(/单个(?:压缩包|导入文件)超过 \d+ GiB/)?.[0];
-    return fileLimit || '文件超出原生解析限额';
+    return fileLimit || t('文件超出原生解析限额');
   }
   const message = err.message || err.name || '';
-  if (/end of central directory|not a zip|invalid zip/i.test(message)) return '文件不是有效的 EPUB 压缩包';
-  if (/password|encrypted|drm/i.test(message)) return '文件受密码或 DRM 保护';
-  return message || '无法读取这个文件';
+  if (/end of central directory|not a zip|invalid zip/i.test(message)) return t('文件不是有效的 EPUB 压缩包');
+  if (/password|encrypted|drm/i.test(message)) return t('文件受密码或 DRM 保护');
+  return message || t('无法读取这个文件');
 }
 
 function normalizeRetryFiles(files: FileList | File[] | null) {
@@ -90,7 +91,7 @@ export const useImportProgressStore = defineStore('importProgress', () => {
   const skipped = ref(0);
   const failed = ref(0);
   const failures = ref<{ name: string; reason: string; kind: string }[]>([]);
-  const targetLabel = ref('全部作品');
+  const targetLabel = ref(t('全部作品'));
   const targetId = ref('');
   const startedAt = ref(0);
   const finishedAt = ref(0);
@@ -130,7 +131,7 @@ export const useImportProgressStore = defineStore('importProgress', () => {
     skipped.value = Math.max(0, Number(options.skipped) || 0);
     failed.value = 0;
     failures.value = [];
-    targetLabel.value = options.targetLabel || '全部作品';
+    targetLabel.value = options.targetLabel || t('全部作品');
     targetId.value = options.targetId || '';
     startedAt.value = Date.now();
     finishedAt.value = 0;
@@ -168,11 +169,11 @@ export const useImportProgressStore = defineStore('importProgress', () => {
     skipped.value += Math.max(0, Number(count) || 0);
   }
 
-  function recordFailure({ name = '', reason = '无法读取这个文件', kind = '', files = null }: { name?: string; reason?: string; kind?: string; files?: FileList | File[] | null } = {}) {
+  function recordFailure({ name = '', reason = t('无法读取这个文件'), kind = '', files = null }: { name?: string; reason?: string; kind?: string; files?: FileList | File[] | null } = {}) {
     if (status.value !== 'running') return;
     failures.value = [...failures.value, {
-      name: name || currentName.value || '未命名文件',
-      reason: reason || '无法读取这个文件',
+      name: name || currentName.value || t('未命名文件'),
+      reason: reason || t('无法读取这个文件'),
       kind
     }];
     failed.value++;
@@ -211,7 +212,7 @@ export const useImportProgressStore = defineStore('importProgress', () => {
     skipped.value = 0;
     failed.value = 0;
     failures.value = [];
-    targetLabel.value = '全部作品';
+    targetLabel.value = t('全部作品');
     targetId.value = '';
     startedAt.value = 0;
     finishedAt.value = 0;

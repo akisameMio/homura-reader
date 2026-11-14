@@ -1,4 +1,8 @@
 <template>
+  <MobileBottomSheet v-if="isCompact" :open="open" :title="t('外观设置')" title-id="appearance-sheet-title" @close="open = false" @cancel="open = false">
+    <AppearancePanel mobile-sheet />
+    <template #footer><button type="button" class="md-tonal-button" @click="open = false">{{ t('完成') }}</button></template>
+  </MobileBottomSheet>
   <!-- 外观浮层：桌面顶栏右上角弹出卡片 / 手机底部 sheet -->
   <Transition
     enter-active-class="md-fade-enter-active"
@@ -9,48 +13,31 @@
     leave-to-class="opacity-0"
   >
     <div
-      v-if="open"
+      v-if="open && !isCompact"
       class="fixed inset-0 z-40"
-      :class="isCompact ? 'md-scrim-soft' : ''"
       @click="open = false"
     ></div>
   </Transition>
 
   <Transition
     enter-active-class="md-sheet-enter-active"
-    :enter-from-class="isCompact ? 'translate-y-full opacity-0' : 'translate-y-2 opacity-0'"
+    enter-from-class="translate-y-2 opacity-0"
     enter-to-class="translate-y-0 opacity-100"
     leave-active-class="md-sheet-leave-active"
     leave-from-class="translate-y-0 opacity-100"
-    :leave-to-class="isCompact ? 'translate-y-full opacity-0' : 'translate-y-2 opacity-0'"
+    leave-to-class="translate-y-2 opacity-0"
   >
     <div
-      v-if="open"
-      ref="sheetRef"
-      class="fixed z-50 bg-[var(--md-surface-container)] shadow-[0_24px_64px_-34px_color-mix(in_oklab,var(--md-shadow-color-soft)_50%,transparent)]"
-      :class="isCompact
-        ? 'inset-x-0 bottom-0 max-h-[78dvh] overflow-y-auto overscroll-contain rounded-t-[28px] px-5 pt-2.5'
-        : 'right-[28px] top-[68px] w-[280px] max-h-[calc(100dvh-92px)] overflow-y-auto overscroll-contain rounded-[20px] p-4'"
-      :style="isCompact ? 'padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));' : null"
+      v-if="open && !isCompact"
+      class="fixed z-50 right-[28px] top-[68px] w-[280px] max-h-[calc(100dvh-92px)] overflow-y-auto overscroll-contain rounded-[20px] p-4 bg-[var(--md-surface-container)] shadow-[0_24px_64px_-34px_color-mix(in_oklab,var(--md-shadow-color-soft)_50%,transparent)]"
     >
-      <div
-        v-if="isCompact"
-        data-sheet-drag-handle
-        class="mobile-sheet-drag-zone -mx-5 -mt-2.5 h-9 flex items-center justify-center touch-none select-none cursor-grab active:cursor-grabbing"
-        @pointerdown="onSheetDragStart"
-        @pointermove="onSheetDragMove"
-        @pointerup="onSheetDragEnd"
-        @pointercancel="onSheetDragCancel"
-      >
-        <div class="w-8 h-1 rounded-full bg-[var(--md-outline-variant)]"></div>
-      </div>
       <div class="flex items-center justify-between mb-3">
-        <h3 class="text-[17px] font-semibold">外观设置</h3>
+        <h3 class="text-[17px] font-semibold">{{ t('外观设置') }}</h3>
         <button
           @click="open = false"
           class="md-hit-target w-10 h-10 -mr-1 rounded-full grid place-items-center text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-high)] transition-colors"
-          title="关闭"
-          aria-label="关闭外观设置"
+          :title="t('关闭')"
+          :aria-label="t('关闭外观设置')"
         >
           <MdIcon name="close" class="w-4 h-4" />
         </button>
@@ -63,9 +50,12 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useViewport } from '../composables/useViewport.ts';
-import { useSheetDrag } from '../composables/useSheetDrag.ts';
+import MobileBottomSheet from './MobileBottomSheet.vue';
 import AppearancePanel from './AppearancePanel.vue';
 import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const { isCompact } = useViewport();
 const props = defineProps({
@@ -78,16 +68,4 @@ const open = computed({
   set: value => emit('update:open', value)
 });
 
-const {
-  onDragStart: onSheetDragStart,
-  onDragMove: onSheetDragMove,
-  onDragEnd: onSheetDragEnd,
-  onDragCancel: onSheetDragCancel
-} = useSheetDrag({
-  isCompact,
-  isOpen: open,
-  onClose: () => {
-    open.value = false;
-  }
-});
 </script>

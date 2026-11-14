@@ -12,8 +12,8 @@
           :key="title"
           type="button"
           class="group flex items-center gap-1.5 min-w-0 text-left text-[21px] min-[900px]:text-[22px] font-medium tracking-tight"
-          title="重命名书库"
-          :aria-label="`重命名书库：${title}`"
+          :title="t('重命名书库')"
+          :aria-label="t('重命名书库：{0}', { 0: title })"
           @click="$emit('rename')"
         >
           <span class="min-w-0 truncate">{{ title }}</span>
@@ -21,15 +21,15 @@
         </button>
         <h1 v-else :key="title" class="text-[21px] min-[900px]:text-[22px] font-medium tracking-tight min-w-0 truncate">{{ title }}</h1>
       </Transition>
-      <span ref="countBadgeRef" class="hidden min-[360px]:inline-flex shrink-0 px-2.5 py-1 rounded-full bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)] font-mono text-[10px] min-[900px]:text-[12px] font-semibold">{{ count }} 部作品</span>
+      <span ref="countBadgeRef" class="hidden min-[360px]:inline-flex shrink-0 px-2.5 py-1 rounded-full bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)] font-mono text-[10px] min-[900px]:text-[12px] font-semibold">{{ t('{0} 部作品', { 0: count }) }}</span>
 
       <div class="ml-auto flex items-center gap-0.5 min-[900px]:gap-2 shrink-0">
         <button
           v-if="settings.showFullscreenButton"
           @click="ui.toggleFullscreen()"
           class="hidden min-[900px]:grid w-11 h-11 rounded-full place-items-center text-[var(--md-on-surface)] hover:bg-[var(--md-surface-container)] transition-colors duration-200"
-          :title="ui.fullscreen ? '退出全屏 (F)' : '全屏 (F)'"
-          :aria-label="ui.fullscreen ? '退出全屏 (F)' : '全屏 (F)'"
+          :title="ui.fullscreen ? t('退出全屏 (F)') : t('全屏 (F)')"
+          :aria-label="ui.fullscreen ? t('退出全屏 (F)') : t('全屏 (F)')"
           :aria-pressed="ui.fullscreen"
         >
           <MdIcon :name="ui.fullscreen ? 'fullscreen_exit' : 'fullscreen'" class="w-5 h-5" />
@@ -40,8 +40,8 @@
           :class="appearanceOpen
             ? 'bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]'
             : 'text-[var(--md-on-surface)] hover:bg-[var(--md-surface-container)]'"
-          title="外观设置"
-          aria-label="外观设置"
+          :title="t('外观设置')"
+          :aria-label="t('外观设置')"
           aria-haspopup="dialog"
           :aria-expanded="appearanceOpen"
         >
@@ -53,8 +53,8 @@
           <button
             @click="toggleMenu('sort')"
             class="md-hit-target w-11 h-11 rounded-full grid place-items-center text-[var(--md-on-surface)] hover:bg-[var(--md-surface-container)] transition-colors"
-            title="排序方式"
-            aria-label="排序方式"
+            :title="t('排序方式')"
+            :aria-label="t('排序方式')"
             aria-haspopup="menu"
             :aria-expanded="menu === 'sort'"
           >
@@ -65,9 +65,9 @@
             v-if="menu === 'sort'"
             class="absolute right-0 top-full mt-2 w-60 z-30 md-menu"
             role="menu"
-            aria-label="排序方式"
+            :aria-label="t('排序方式')"
           >
-            <p role="presentation" class="md-menu-label">排序方式</p>
+            <p role="presentation" class="md-menu-label">{{ t('排序方式') }}</p>
             <button
               v-for="opt in sortOptions"
               :key="opt.value"
@@ -77,7 +77,7 @@
               @click="pickSort(opt.value)"
               class="md-menu-item"
             >
-              <span class="flex-1">{{ opt.label }}</span>
+              <span class="flex-1">{{ t(opt.label) }}</span>
               <MdIcon v-if="sort === opt.value" name="check" class="md-menu-check" />
             </button>
           </div>
@@ -99,8 +99,8 @@
           autocomplete="off"
           autocapitalize="off"
           spellcheck="false"
-          aria-label="搜索书名、作者"
-          placeholder="搜索书名、作者…"
+          :aria-label="t('搜索书名、作者')"
+          :placeholder="t('搜索书名、作者…')"
           class="library-search-input flex-1 min-w-0 bg-transparent border-none outline-none text-[13px] font-medium text-[var(--md-on-surface)] placeholder:text-[var(--md-on-surface-variant)]"
         />
         <button
@@ -108,8 +108,8 @@
           type="button"
           @click="$emit('update:query', '')"
           class="md-hit-target w-10 h-10 shrink-0 rounded-full grid place-items-center text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-container)] transition-colors"
-          title="清空搜索"
-          aria-label="清空搜索"
+          :title="t('清空搜索')"
+          :aria-label="t('清空搜索')"
         >
           <MdIcon name="close" class="w-4 h-4" />
         </button>
@@ -120,16 +120,16 @@
     <div class="relative px-4 min-[900px]:px-7 pt-1 pb-0 flex items-center gap-2">
       <div class="flex-1 min-w-0 flex items-center gap-2 overflow-x-auto no-scrollbar">
         <button
-          v-for="t in types"
-          :key="t.value"
+          v-for="typeOption in types"
+          :key="typeOption.value"
           type="button"
-          @click="$emit('update:type', t.value)"
+          @click="$emit('update:type', typeOption.value)"
           class="md-filter-chip shrink-0"
-          :class="{ 'is-selected': type === t.value }"
-          :aria-pressed="type === t.value"
+          :class="{ 'is-selected': type === typeOption.value }"
+          :aria-pressed="type === typeOption.value"
         >
-          <MdIcon v-if="type === t.value" name="check" />
-          <span>{{ t.label }}</span>
+          <MdIcon v-if="type === typeOption.value" name="check" />
+          <span>{{ t(typeOption.label) }}</span>
         </button>
       </div>
 
@@ -138,12 +138,12 @@
         @click="toggleMenu('format')"
         class="md-filter-chip shrink-0"
         :class="{ 'is-selected': !!activeFormat }"
-        :title="activeFormat ? `文件格式：${activeFormat.label}` : '按文件格式筛选'"
+        :title="activeFormat ? t('文件格式：{0}', { 0: t(activeFormat.label) }) : t('按文件格式筛选')"
         aria-haspopup="menu"
         :aria-expanded="menu === 'format'"
       >
         <MdIcon v-if="activeFormat" name="check" />
-        <span>{{ activeFormat ? activeFormat.label : '格式' }}</span>
+        <span>{{ activeFormat ? t(activeFormat.label) : t('格式') }}</span>
         <MdIcon
           name="expand_more"
           class="library-format-chevron transition-transform duration-200"
@@ -156,9 +156,9 @@
         v-if="menu === 'format'"
         class="absolute right-4 min-[900px]:right-7 top-full mt-2 w-48 z-30 md-menu"
         role="menu"
-        aria-label="文件格式"
+        :aria-label="t('文件格式')"
       >
-        <p role="presentation" class="md-menu-label">文件格式</p>
+        <p role="presentation" class="md-menu-label">{{ t('文件格式') }}</p>
         <button
           v-for="opt in formatOptions"
           :key="opt.value"
@@ -168,7 +168,7 @@
           @click="pickType(opt.value)"
           class="md-menu-item"
         >
-          <span class="flex-1">{{ opt.label }}</span>
+          <span class="flex-1">{{ t(opt.label) }}</span>
           <MdIcon v-if="type === opt.value" name="check" class="md-menu-check" />
         </button>
       </div>
@@ -182,6 +182,9 @@ import { useSettingsStore } from '../stores/settings.ts';
 import { useUiStore } from '../stores/ui.ts';
 import { useViewport } from '../composables/useViewport.ts';
 import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const props = defineProps({
   title: { type: String, default: '书架' },

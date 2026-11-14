@@ -9,6 +9,7 @@
    webtoonScrollTo），store 动作只负责状态流转后触发对应函数。
    ========================================================================== */
 
+import { t } from '../composables/useI18n.ts';
 import { defineStore } from 'pinia';
 import { ref, shallowRef, reactive, computed, nextTick } from 'vue';
 import { useShelfStore } from './shelf.ts';
@@ -454,7 +455,7 @@ export const useReaderStore = defineStore('reader', () => {
     openError.value = '';
     try {
       if (book.restored) {
-        if (!(await hydrateBook(book))) throw new Error('本地存档无法读取，请重新导入');
+        if (!(await hydrateBook(book))) throw new Error(t('本地存档无法读取，请重新导入'));
         if (token !== openRequestToken) return false;
         shelf.touchBook(book);
       }
@@ -480,7 +481,7 @@ export const useReaderStore = defineStore('reader', () => {
           : undefined;
       const pagePlan = planNovelPages(book, nextLayout, explicitAnchor);
       const pages = pagePlan.pages;
-      if (!pages.length) throw new Error('没有可阅读的页面');
+      if (!pages.length) throw new Error(t('没有可阅读的页面'));
       // 固定进入阅读器时的顺序，防止“最近阅读”时间更新后前后本突然重排。
       const order = options.preserveCollectionOrder && collection?.id === currentCollection.value?.id
         ? collectionBooks.value.map(item => item.id)
@@ -526,7 +527,7 @@ export const useReaderStore = defineStore('reader', () => {
       return true;
     } catch (err: unknown) {
       if (token === openRequestToken) {
-        openError.value = `无法打开《${book.title}》：${(err as Error).message || '请检查本地存档'}`;
+        openError.value = t('无法打开《{0}》：{1}', { 0: book.title, 1: (err as Error).message || t('请检查本地存档') });
         console.warn('[HOMURA] 打开书本失败', err);
       }
       return false;

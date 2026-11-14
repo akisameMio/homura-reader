@@ -16,8 +16,8 @@
           class="w-12 h-12 shrink-0 select-none pointer-events-none"
           draggable="false"
         />
-        <h2 class="text-base font-display font-bold tracking-tight">松手即可加入书架</h2>
-        <p class="text-xs text-[var(--fg-muted)]">支持 EPUB / PDF / MOBI / CBZ / ZIP / TXT / MD 以及图片文件夹</p>
+        <h2 class="text-base font-display font-bold tracking-tight">{{ t('松手即可加入书架') }}</h2>
+        <p class="text-xs text-[var(--fg-muted)]">{{ t('支持 EPUB / PDF / MOBI / CBZ / ZIP / TXT / MD 以及图片文件夹') }}</p>
       </div>
     </div>
   </transition>
@@ -27,6 +27,9 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useImporter } from '../composables/useImporter.ts';
 import { canDragImport } from '../services/platform.ts';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 const logoUrl = import.meta.env.BASE_URL + 'favicon.png';
 
 const importer = useImporter();

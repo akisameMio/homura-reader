@@ -28,6 +28,7 @@ async function compile(name, replacements = []) {
     compiled = `const _Transition = { inheritAttrs: false, emits: ['after-enter'], setup: (_, { slots }) => () => slots.default?.() };\n${compiled}`;
   }
   for (const [from, to] of replacements) compiled = compiled.replaceAll(from, to);
+  compiled = compiled.replaceAll("'../composables/useI18n.ts'", `'${new URL('../src/composables/useI18n.ts', import.meta.url).href}'`);
   const { code } = await transform(compiled, { loader: 'ts', format: 'esm', target: 'esnext' });
   return `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
 }

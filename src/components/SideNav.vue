@@ -9,8 +9,8 @@
       <button
         type="button"
         class="sidenav-icon-btn"
-        :title="collapsed ? '展开侧栏' : '折叠侧栏'"
-        :aria-label="collapsed ? '展开侧栏' : '折叠侧栏'"
+        :title="collapsed ? t('展开侧栏') : t('折叠侧栏')"
+        :aria-label="collapsed ? t('展开侧栏') : t('折叠侧栏')"
         :aria-expanded="!collapsed"
         @click="toggleSidebar"
       >
@@ -20,15 +20,15 @@
       <button
         type="button"
         class="sidenav-avatar"
-        title="HOMURA · 返回主页"
-        aria-label="HOMURA，返回主页"
+        :title="t('HOMURA · 返回主页')"
+        :aria-label="t('HOMURA，返回主页')"
         @click="select('shelf')"
       >
         <img :src="logoUrl" alt="" draggable="false" />
       </button>
     </div>
 
-    <nav ref="desktopNavRef" class="sidenav-list" aria-label="主导航">
+    <nav ref="desktopNavRef" class="sidenav-list" :aria-label="t('主导航')">
       <span
         class="sidenav-indicator"
         :class="{ 'is-ready': desktopReady }"
@@ -41,13 +41,13 @@
         type="button"
         class="sidenav-item"
         :class="{ 'is-active': active === item.key }"
-        :title="item.label"
+        :title="t(item.label)"
         :aria-current="active === item.key ? 'page' : undefined"
         @click="select(item.key)"
       >
         <MdIcon :name="item.icon" :filled="active === item.key" />
-        <span class="sidenav-label sidenav-label-wide">{{ item.label }}</span>
-        <span class="sidenav-label sidenav-label-compact" aria-hidden="true">{{ item.label }}</span>
+        <span class="sidenav-label sidenav-label-wide">{{ t(item.label) }}</span>
+        <span class="sidenav-label sidenav-label-compact" aria-hidden="true">{{ t(item.label) }}</span>
       </button>
     </nav>
 
@@ -58,7 +58,7 @@
     <nav
       ref="mobileNavRef"
       class="mobile-nav"
-      aria-label="主导航"
+      :aria-label="t('主导航')"
       @pointerdown="onMobilePointerDown"
     >
       <span
@@ -73,12 +73,12 @@
         type="button"
         class="mobile-nav-item"
         :class="{ 'is-active': active === item.key }"
-        :title="item.label"
+        :title="t(item.label)"
         :aria-current="active === item.key ? 'page' : undefined"
         @click="select(item.key)"
       >
         <MdIcon :name="item.icon" :filled="active === item.key" />
-        <span>{{ item.label }}</span>
+        <span>{{ t(item.label) }}</span>
       </button>
     </nav>
   </Teleport>
@@ -88,6 +88,9 @@
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { useViewport } from '../composables/useViewport.ts';
 import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const SIDEBAR_STORAGE_KEY = 'homura_sidenav_collapsed';
 

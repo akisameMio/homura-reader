@@ -3,7 +3,7 @@
     class="md-segmented"
     :class="{ 'has-selection': activeIndex >= 0, 'has-many-options': options.length >= 3, 'is-disabled': disabled }"
     role="group"
-    :aria-label="ariaLabel || undefined"
+    :aria-label="ariaLabel ? t(ariaLabel) : undefined"
     :aria-disabled="disabled || undefined"
     :style="{
       '--md-segment-count': Math.max(1, options.length),
@@ -22,7 +22,7 @@
         [`icon-${option.icon}`]: Boolean(option.icon)
       }"
       :aria-pressed="option.value === modelValue"
-      :title="option.title || undefined"
+      :title="option.title ? t(option.title) : undefined"
       :disabled="disabled"
       @click="select(option.value, $event)"
     >
@@ -32,7 +32,7 @@
         :name="option.icon"
         :size="16"
       />
-      <span>{{ option.label }}</span>
+      <span>{{ t(option.label) }}</span>
     </button>
   </div>
 </template>
@@ -40,6 +40,9 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, type PropType } from 'vue';
 import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const props = defineProps({
   modelValue: { type: [String, Number], required: true },

@@ -5,6 +5,7 @@
 > 不适用：`design-preview/` 原型、README 配图与一次性演示页。
 
 > **新增或重做组件时，先读 [md3-component-guide.md](./md3-component-guide.md)。**
+> **新增或重做 bottom sheet 时，还必须读 [bottom-sheet-spec.md](./bottom-sheet-spec.md)。**
 > 本文保留系统级布局、行为与历史约束；若与当前 `src/` 或该手册冲突，以当前代码和手册为准。
 
 本文定义 HOMURA 新增、修改和审查 UI 组件时的最低要求。颜色全表见
@@ -155,7 +156,9 @@ HOMURA 是一个本地优先、内容优先的 ACGN 阅读器。界面首先服�
 | 层级 | 规范字号 | 默认字重 | 使用位置 |
 | --- | --- | --- | --- |
 | 页面标题 | 桌面 22 / 手机 21 | 500 | 书架等主页面 |
-| Sheet 标题 | 17 | 600 | 阅读设置、目录、外观 |
+| 新 Sheet 标题 | 22；同行页签 20 | 600 | `ReaderDrawerHeader prominent` |
+| 存量默认抽屉标题 | 17 | 600 | 非 prominent 头部 |
+| 手机 Sheet 输入 | 16 | 400–600 | 防止移动浏览器聚焦缩放 |
 | 正文、输入、主按钮 | 13 | 400–600 | 搜索、主行动、说明 |
 | 紧凑控件文字 | 12 | 600 | 菜单项、开关行、页码 |
 | 分组标签 | 11 | 600 | 设置分组、菜单分组 |
@@ -163,7 +166,7 @@ HOMURA 是一个本地优先、内容优先的 ACGN 阅读器。界面首先服�
 | 分段控件 | 10.5 | 600 | 单页/双页、阅读方向 |
 | 元信息、徽章 | 8–8.5 | 500–600 | 书卡元信息、极小辅助标签 |
 
-禁止随手插入 14 / 15 / 16px 等中间档。存量组件中已经存在的 12px 元信息属于历史密度选择，
+除上述输入场景外，禁止随手插入 14 / 15 / 16px 等中间档。存量组件中已经存在的 12px 元信息属于历史密度选择，
 只在重做该组件时按上表逐步收敛；新增组件不得再扩大字号档位。
 
 ### 3.5 间距、尺寸与圆角
@@ -185,9 +188,9 @@ HOMURA 是一个本地优先、内容优先的 ACGN 阅读器。界面首先服�
 | 桌面浮动侧栏 | 展开 220px / 折叠 104px |
 | 阅读器页脚 | 手机约 55px / 桌面约 59px（另加安全区） |
 | 桌面设置 side sheet | 372px 宽 |
-| 目录 side sheet | 320px 宽，最大 88% |
+| 目录 side sheet | 372px 宽，最大 92% |
 | 桌面外观浮层 | 280px 宽 |
-| 手机 bottom sheet | 最大 `78dvh` |
+| 手机 bottom sheet | 默认 `78dvh`，可上拖到状态栏下方 |
 | Bottom sheet 拖拽条 | `32px × 4px` |
 
 书架与页面的横向节奏：
@@ -207,8 +210,9 @@ HOMURA 是一个本地优先、内容优先的 ACGN 阅读器。界面首先服�
 | 8px | 紧凑按钮、分段 chip、小型页码格 |
 | 10px | 菜单条目 |
 | 12px | 书架卡、书库卡、特色卡、编辑式卡片、特殊插画卡 |
-| 16px | sheet 内卡片 |
+| 16px | 手机 sheet 输入框 |
 | 20px | 分段控件、桌面外观浮层 |
+| 26px | 新 bottom sheet 分组卡片 |
 | 28px | 桌面 side sheet 与手机 bottom sheet |
 | `999px` | 胶囊、圆形图标按钮、滑条拇指 |
 
@@ -231,8 +235,8 @@ HOMURA 是一个本地优先、内容优先的 ACGN 阅读器。界面首先服�
 规则：
 
 - 常规交互统一 200ms；卡片 hover 最长 280ms。
-- 只过渡颜色、透明度、位移、阴影和 transform；禁止给宽高、padding、grid 等布局属性加 transition。
-- Sheet 使用 `.md-sheet-enter-active` / `.md-sheet-leave-active`，淡入遮罩使用 `.md-fade-*`。
+- 只过渡颜色、透明度、位移、阴影和 transform；布局过渡仅沿用已有侧栏、桌面灵动胶囊、共享 sheet 吸附高度和页签滑块宽度，不在业务组件新增。
+- Sheet 进出场使用 `useSheetSpring()`；`.md-sheet-enter-active` / `.md-sheet-leave-active` 只保留给存量非 sheet 浮层。
 - `prefers-reduced-motion: reduce` 下必须关闭非必要位移与动画，并保留最终状态。
 - 表面切换 720ms 与阅读器预测式返回是系统级例外，不在普通组件里复制。
 - 高频手势期间直接写 DOM style 或使用 Web Animations API，不让每一帧触发 Vue 响应式重渲染。
@@ -627,11 +631,13 @@ Hover 规则：
 
 ## 9. 浮层、抽屉与确认
 
+> Bottom sheet 的详细结构、拖拽、弹簧与验收标准以 [bottom-sheet-spec.md](./bottom-sheet-spec.md) 为准。
+
 ### 9.1 遮罩
 
 - 常规遮罩使用 `.md-scrim`，轻遮罩使用 `.md-scrim-soft`。
 - 遮罩是关闭动作的一部分，但本身不是按钮；不要在其内部放文案或图标。
-- 遮罩和 sheet 必须分层，遮罩 z-40、sheet z-50。
+- 自定义阅读器遮罩和 sheet 分层，遮罩 z-40、sheet z-50；`MobileBottomSheet` 使用原生 dialog 的 top layer 与 `::backdrop`，不添加高 z-index 或第二层遮罩。
 - 打开 sheet 时，背景页面不得继续滚动；关闭后必须恢复原滚动位置。
 
 ### 9.2 桌面侧边 Sheet
@@ -639,21 +645,24 @@ Hover 规则：
 | Sheet | 宽度 | 边角 | 使用场景 |
 | --- | --- | --- | --- |
 | 阅读设置 | 372px，最大 92% | 左侧 28px 圆角 | 右侧打开 |
-| 目录 | 320px，最大 88% | 右侧 28px 圆角 | 左侧打开 |
+| 目录 | 372px，最大 92% | 左侧 28px 圆角 | 右侧打开 |
 
-- 桌面进出场使用水平位移 + 200ms `.md-sheet-enter-active`。
+- 桌面进出场使用水平物理弹簧；不要新增固定时长的 `.md-sheet-enter-active`。
 - 头部固定，内容区 `flex-1 overflow-y-auto overscroll-contain`。
 - 底部操作区固定，不得随长内容滚走。
 - 阅读设置打开时，正文预留 372px，而不是在 sheet 下继续绘制可点击内容。
 
 ### 9.3 手机 Bottom Sheet
 
-- 宽度 100%，底部对齐，最大高度 `78dvh`，顶部 28px 圆角。
-- 顶部必须有 36px 高的拖拽区和 `32px × 4px` 拖拽条。
+- 通用手机流程必须复用 `MobileBottomSheet.vue` 与 `.md-mobile-sheet-*`；阅读器使用 `.md-drawer` 响应式模板。阅读目录、字体选择、更新日志按用户要求保留当前设计。
+- 宽度 100%，底部对齐，默认高度 `78dvh`，顶部 28px 圆角。
+- 可整卡上拖到 `100dvh - safe-area-top - 8px`；向下拖先回默认档，再继续下拉才关闭。
+- 允许拖动时顶部显示 `32px × 4px` 拖拽条；新 prominent 头部拖拽区高 24px，存量默认头部为 36px。
 - 内容区独立滚动，`overscroll-contain`，底部留安全区。
 - 关闭后焦点和背景滚动都必须恢复。
-- 拖拽阈值：`min(112px, sheet 高度 × 22%)`；或位移超过 24px 且速度大于 0.6。
-- 关闭/回弹使用 200ms `--md-ease-emphasized`；减少动态效果时直接落位。
+- 拖拽阈值：`min(112px, 基础档高度 × 22%)`；或位移超过 24px 且速度大于 0.6。
+- 进出场使用 `useSheetSpring()`；拖动松手使用 200ms 吸附。减少动态效果时直接落位。
+- 通用外壳同时处理 `close` / `cancel`，以 `open=false` 触发退场，不能用 `v-if="open"` 直接卸载；内容与结果在 `closed` 后清理。
 
 ### 9.4 桌面外观浮层
 
@@ -864,7 +873,7 @@ Hover 规则：
   `bg-[var(--md-surface-container)]`、`min-[900px]:h-16`。
 - 组件内部复杂状态、伪元素、轨道路径等使用 scoped CSS。
 - 全项目共享的类放在 `src/assets/homura.css`，例如 `.md-shelf-grid`、`.md-range`、
-  `.md-sheet-enter-active`。
+  `.md-scrim`、`.md-drawer-tab-panel`。
 - 不允许在组件内定义一套私有颜色变量覆盖 `--md-*` 语义。
 - 新增共享类后，必须同步更新 [tokens.md](./tokens.md) 的组件类清单。
 

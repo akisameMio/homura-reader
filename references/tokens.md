@@ -95,6 +95,9 @@
 
 ## 5. 组件类清单
 
+Bottom sheet 的选型和完整契约见 [bottom-sheet-spec.md](./bottom-sheet-spec.md)。
+通用手机面板类统一维护于 `src/assets/styles/mobile-sheets.css`，不在业务组件复制尺寸或动画参数。
+
 | 类名 | 作用 / 关键值 |
 |---|---|
 | `.md-shelf-grid` | 书架网格：手机 3 列 gap12 pad16/16；768–899 5 列 gap16；≥900 4 列 gap16 pad16/28；≥1080 5 列；≥1280 6 列；≥1600 8 列 gap24 pad36 |
@@ -105,13 +108,20 @@
 | `.md-fab-pos` | FAB 定位：桌面 right28/bottom26；手机 right18/bottom `calc(5rem + env(safe-area-inset-bottom))` |
 | `.md-bottom-nav-space` | 手机底部导航留白 `calc(5.5rem + env(safe-area-inset-bottom))` |
 | `.md-scrim` / `.md-scrim-soft` | 遮罩：shadow-color 32% / 30% |
-| `.md-sheet-enter-active` 等 | sheet/浮层动效：0.2s cubic-bezier(.2,0,0,1)，含 fade 版 `.md-fade-*` |
+| `.md-sheet-enter-active` 等 | 历史浮层动效：0.2s cubic-bezier(.2,0,0,1)，含 fade 版 `.md-fade-*`；新 sheet 一律用 `useSheetSpring()` |
 | `.md-range` | 滑条：16px 点阵胶囊轨道、4×36px 竖条手柄、4px 表面色光环，48px 触控高度 |
 | `.md-icon-button` | 48px 圆形图标按钮；支持 `is-outlined` / `is-filled` / `is-desktop-only` / `is-favorite` |
 | `.md-text-button` / `.md-filled-button` / `.md-tonal-button` | 48px 胶囊按钮三档：低强调 / 主行动 / 次要行动 |
 | `.md-filter-chip` | 筛选 chip：32px 视觉高度、48px 命中区，选中态 secondary-container |
 | `.md-menu` / `.md-menu-item` | 菜单容器与 48px 条目，surface-container + shadow-color |
-| `.md-drawer` | 统一抽屉外壳：桌面右侧 372px / 手机底部 78dvh、28px 圆角 |
+| `.md-drawer` | 统一抽屉外壳：桌面右侧 372px / 手机底部默认 78dvh、可上拖展开、28px 圆角 |
+| `.md-mobile-sheet-dialog` / `.md-mobile-sheet` | 原生模态 top layer / 手机面板；78dvh、顶部 28px 圆角，外壳由 `MobileBottomSheet.vue` 管理 |
+| `.md-mobile-sheet-body` / `.md-mobile-sheet-footer` | 独立滚动内容 / 固定操作区；水平留白 18px，安全区由外壳处理 |
+| `.md-mobile-sheet-card` / `.is-padded` | surface 分组卡片，26px 圆角、间距 18px；`is-padded` 是该卡片的内边距修饰类 |
+| `.md-mobile-sheet-label` / `.md-mobile-sheet-row` | 12px / 600 分组标签；最小 64px 列表行 |
+| `.md-mobile-sheet-icon` / `.md-mobile-sheet-copy` / `.md-mobile-sheet-meta` | 40px 图标容器 / 13px 主文和 11px 辅文 / 等宽数字元信息 |
+| `.md-mobile-sheet-field` / `.md-mobile-sheet-field-error` | 52px 高、16px 圆角、16px 输入字；语义错误色提示 |
+| `.md-mobile-sheet-notice` / `.md-mobile-sheet-danger` | 行内提示容器 / error 与 on-error 危险操作按钮配色 |
 | `.md-drawer-section` / `.md-drawer-group-head` | 抽屉分组与 label/value 行 |
 | `.md-drawer-list-item` / `.md-toc-page` | 目录列表与页码格；当前项使用 secondary-container 对 |
 | `.md-hit-target` | 把视觉更小的控件命中区补到至少 44px |

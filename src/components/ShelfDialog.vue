@@ -1,54 +1,36 @@
 <template>
-  <dialog
-    ref="dialogRef"
-    class="md-bottom-sheet"
-    aria-labelledby="shelf-dialog-title"
-    @cancel.prevent="resolveShelfDialog()"
-    @click="onBackdropClick"
-    @keydown.stop="onKeydown"
-  >
-    <ShelfDialogContent ref="contentRef" :request="shelfDialogRequestForDisplay" @resolve="resolveShelfDialog" />
-  </dialog>
+  <MobileBottomSheet :open="!!pendingShelfDialog" :title="displayRequest?.title || t('书库管理')" title-id="mobile-shelf-dialog-title"
+    @close="resolveShelfDialog()" @cancel="resolveShelfDialog()" @opened="contentRef?.focusInitial()" @closed="clearDisplay">
+    <ShelfDialogContent ref="contentRef" mobile-sheet :request="displayRequest" @resolve="resolveShelfDialog" />
+    <template #footer>
+      <button v-if="displayRequest?.kind !== 'move' && primaryAction" type="button"
+        :class="[primaryAction.variant === 'tonal' ? 'md-tonal-button' : 'md-filled-button', { 'md-mobile-sheet-danger': primaryAction.variant === 'danger' }]"
+        @click="contentRef?.runPrimaryAction()"><MdIcon :name="primaryAction.icon" />{{ primaryAction.label }}</button>
+      <button v-if="displayRequest?.kind === 'folder'" type="button" class="md-tonal-button" @click="resolveShelfDialog(false)">{{ t('直接导入') }}</button>
+      <button type="button" class="md-text-button" @click="resolveShelfDialog()">{{ t('取消') }}</button>
+    </template>
+  </MobileBottomSheet>
 </template>
 
 <script setup lang="ts">
-import { shallowRef, computed, watch, nextTick } from 'vue';
+import { computed, shallowRef, watch } from 'vue';
 import { useShelfDialogs } from '../composables/useShelfDialogs.ts';
+import type { ShelfDialogOptions } from '../composables/useShelfDialogs.ts';
 import ShelfDialogContent from './ShelfDialogContent.vue';
+import MobileBottomSheet from './MobileBottomSheet.vue';
+import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const { pendingShelfDialog, resolveShelfDialog } = useShelfDialogs();
-const dialogRef = shallowRef<HTMLDialogElement | null>(null);
+const displayRequest = shallowRef<ShelfDialogOptions | null>(null);
 const contentRef = shallowRef<InstanceType<typeof ShelfDialogContent> | null>(null);
-const shelfDialogRequestForDisplay = computed(() => pendingShelfDialog.value);
-
-watch(pendingShelfDialog, async pending => {
-  if (!pending) {
-    dialogRef.value?.close();
-    return;
-  }
-  await nextTick();
-  if (!pendingShelfDialog.value || !dialogRef.value) return;
-  if (!dialogRef.value.open) dialogRef.value.showModal();
-  contentRef.value?.focusInitial();
+const primaryAction = computed(() => contentRef.value?.primaryAction);
+watch(pendingShelfDialog, request => {
+  if (request) displayRequest.value = request;
 }, { immediate: true });
-
-function onKeydown(event: KeyboardEvent) {
-  if (event.key !== 'Tab') return;
-  if (!dialogRef.value) return;
-  const elements = [...dialogRef.value.querySelectorAll('button, input')] as HTMLElement[];
-  const first = elements[0];
-  const last = elements[elements.length - 1];
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault();
-    first.focus();
-  }
+function clearDisplay() {
+  if (!pendingShelfDialog.value) displayRequest.value = null;
 }
-
-function onBackdropClick(event: MouseEvent) {
-  if (event.target === dialogRef.value) resolveShelfDialog();
-}
-
 </script>

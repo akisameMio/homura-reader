@@ -3,18 +3,18 @@
     ref="triggerRef"
     type="button"
     class="settings-select-row"
-    :class="{ 'is-open': open }"
+    :class="{ 'is-open': menuVisible }"
     :disabled="disabled"
     aria-haspopup="listbox"
     :aria-expanded="open"
     :aria-controls="menuId"
-    :aria-label="`${label}，${selectedLabel}`"
+    :aria-label="`${t(label)}, ${t(selectedLabel)}`"
     @click="toggle"
     @keydown="onTriggerKeydown"
   >
-    <span class="settings-select-label">{{ label }}</span>
+    <span class="settings-select-label">{{ t(label) }}</span>
     <span ref="controlRef" class="settings-select-control">
-      <span class="settings-select-value">{{ selectedLabel }}</span>
+      <span class="settings-select-value">{{ t(selectedLabel) }}</span>
       <span class="settings-select-arrows" aria-hidden="true">
         <MdIcon name="expand_more" :size="14" />
         <MdIcon name="expand_more" :size="14" />
@@ -30,7 +30,7 @@
         :aria-hidden="!open"
         :inert="!open"
         role="listbox"
-        :aria-label="label"
+        :aria-label="t(label)"
         :style="menuStyle"
         @keydown="onMenuKeydown"
       >
@@ -47,7 +47,7 @@
             @focus="activeIndex = index"
             @click="select(option.value)"
           >
-            <span>{{ option.label }}</span>
+            <span>{{ t(option.label) }}</span>
             <MdIcon v-if="option.value === modelValue" name="check" :size="21" />
           </button>
         </div>
@@ -61,6 +61,9 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, useId, watch, typ
 import MdIcon from './MdIcon.vue';
 import { createSettingsSelectMotion } from '../services/settingsSelectMotion.ts';
 import { lockSettingsSelectScroll } from '../services/settingsSelectScrollLock.ts';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const props = defineProps({
   label: { type: String, required: true },

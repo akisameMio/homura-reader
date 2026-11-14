@@ -51,7 +51,7 @@
           :aria-busy="importProgress.isRunning"
           data-app-scroll
         >
-          <p v-if="shelf.error || (!reader.currentBook && reader.openError)" role="alert" class="mx-4 min-[900px]:mx-7 mt-3 text-[13px] text-[var(--md-error)]">{{ shelf.error || reader.openError }}</p>
+          <p v-if="shelf.error || (!reader.currentBook && reader.openError)" role="alert" class="mx-4 min-[900px]:mx-7 mt-3 text-[13px] text-[var(--md-error)]">{{ t(shelf.error || reader.openError) }}</p>
           <BookShelf v-if="favoritesOnly || shelf.library.length || shelf.collections.length" :books="visibleBooks" :favorites-only="favoritesOnly" :sort-key="sortKey" :query="query" :has-filter="!!query.trim() || typeFilter !== 'all'" :home-request="shelfHomeRequest" @open="openBookWithTransition" @browse="query = ''; typeFilter = 'all'" />
           <EmptyShelf v-else @pick-file="openFilePicker" @pick-folder="openFolderPicker" />
         </main>
@@ -86,7 +86,7 @@
     :phase="readerLoadingPhase"
     :title="readerLoadingBook?.title || ''"
     :cover="readerLoadingBook?.cover || ''"
-    :message="reader.openError || '无法加载这本书，请重试。'"
+    :message="reader.openError || t('无法加载这本书，请重试。')"
     @retry="retryReaderOpen"
     @cancel="cancelReaderOpen"
   />
@@ -170,6 +170,9 @@ import UpdateDialog from './components/UpdateDialog.vue';
 import ChangelogSheet from './components/ChangelogSheet.vue';
 import DuplicateImportDialog from './components/DuplicateImportDialog.vue';
 import ShelfDialog from './components/ShelfDialog.vue';
+import { useI18n } from './composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const theme = useThemeStore();
 const shelf = useShelfStore();
@@ -320,9 +323,9 @@ const activeCollectionBookCount = computed(() => {
   return shelf.library.filter(book => ids.has(book.id)).length;
 });
 const headerTitle = computed(() => {
-  if (activeNav.value === 'favorite') return '收藏';
-  if (activeNav.value === 'recent') return '最近';
-  return activeCollection.value?.title || '书架';
+  if (activeNav.value === 'favorite') return t('收藏');
+  if (activeNav.value === 'recent') return t('最近');
+  return activeCollection.value?.title || t('书架');
 });
 const headerCount = computed(() => activeCollection.value ? activeCollectionBookCount.value : favoritesOnly.value ? favoriteBooks.value.length : shelf.library.length);
 const desktopIslandVisible = computed(() => (
@@ -429,7 +432,7 @@ watch(() => reader.currentBook, book => {
 
 async function createCollection() {
   importMenuOpen.value = false;
-  const title = await askShelfDialog({ kind: 'name', title: '新建书库', initialName: availableCollectionName('新建书库', shelf.collections), validate: name => collectionNameError(name, shelf.collections) });
+  const title = await askShelfDialog({ kind: 'name', title: t('新建书库'), initialName: availableCollectionName(t('新建书库'), shelf.collections), validate: name => collectionNameError(name, shelf.collections) });
   if (title === null) return;
   try { await shelf.createCollection(title); } catch (err) { console.warn('[HOMURA] 新建书库失败', err); }
 }
@@ -439,7 +442,8 @@ async function renameActiveCollection() {
   if (!item) return;
   const title = await askShelfDialog({
     kind: 'name',
-    title: '重命名书库',
+    intent: 'rename',
+    title: t('重命名书库'),
     initialName: item.title,
     validate: name => collectionNameError(name, shelf.collections, item.id)
   });
@@ -447,7 +451,7 @@ async function renameActiveCollection() {
   try {
     await shelf.renameCollection(item.id, title);
   } catch (err) {
-    shelf.error = err.message || '重命名书库失败，请重试';
+    shelf.error = err.message || t('重命名书库失败，请重试');
     console.warn('[HOMURA] 重命名书库失败', err);
   }
 }
@@ -478,8 +482,8 @@ async function openFilePicker() {
       if (!shouldFallbackNativeImport(err) || err?.nativeSavedCount > 0) {
         console.warn('[HOMURA] 原生文件选择失败', err);
         shelf.error = err?.nativeSavedCount > 0
-          ? '部分文件已导入，其余文件读取失败，请选择剩余文件'
-          : '读取所选文件失败，请重新选择';
+          ? t('部分文件已导入，其余文件读取失败，请选择剩余文件')
+          : t('读取所选文件失败，请重新选择');
         return;
       }
       console.warn('[HOMURA] 原生文件选择不可用，回退浏览器选择器', err);
@@ -502,7 +506,7 @@ async function openFolderPicker() {
     } catch (err) {
       if (!shouldFallbackNativeImport(err)) {
         console.warn('[HOMURA] 桌面原生文件夹选择失败', err);
-        shelf.error = '读取所选文件夹失败，请重新选择';
+        shelf.error = t('读取所选文件夹失败，请重新选择');
         return;
       }
       console.warn('[HOMURA] 桌面原生文件夹选择不可用，回退浏览器选择器', err);

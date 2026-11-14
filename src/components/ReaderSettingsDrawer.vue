@@ -33,9 +33,9 @@
         :is-compact="isCompact"
         prominent
         inline-tabs
-        title="阅读设置"
+        :title="t('阅读设置')"
         title-id="reader-settings-title"
-        close-label="关闭阅读设置"
+        :close-label="t('关闭阅读设置')"
         @close="ui.closeSettings()"
         @drag-start="onSheetDragStart"
         @drag-move="onSheetDragMove"
@@ -43,7 +43,7 @@
         @drag-cancel="onSheetDragCancel"
       >
         <template #status>
-          <ReaderDrawerTabs :model-value="activeTab" :options="tabs" id-prefix="reader-settings" label="阅读设置分类" @update:model-value="selectTab" />
+          <ReaderDrawerTabs :model-value="activeTab" :options="tabs" id-prefix="reader-settings" :label="t('阅读设置分类')" @update:model-value="selectTab" />
         </template>
       </ReaderDrawerHeader>
 
@@ -51,26 +51,27 @@
         <div
           v-show="activeTab === 'layout'"
           id="reader-settings-panel-layout"
+          class="md-drawer-tab-panel"
           role="tabpanel"
           aria-labelledby="reader-settings-tab-layout"
         >
           <!-- 预览随设置一起滚动，给实际控件留足空间。 -->
           <template v-if="!isManga">
-            <section class="reader-settings-card reader-settings-preview" :style="{ paddingInline: previewPadX }" aria-label="排版预览">
+            <section class="reader-settings-card reader-settings-preview" :style="{ paddingInline: previewPadX }" :aria-label="t('排版预览')">
               <div class="reader-settings-preview-head">
-                <span><MdIcon name="auto_stories" :size="14" />排版预览</span>
-                <span>{{ config.fontSize }} px · {{ fontLabel }}</span>
+                <span><MdIcon name="auto_stories" :size="14" />{{ t('排版预览') }}</span>
+                <span>{{ config.fontSize }} px · {{ t(fontLabel) }}</span>
               </div>
-              <p :style="previewTextStyle">夜色漫上来，海风把纸页吹得沙沙作响。</p>
+              <p :style="previewTextStyle">{{ t('夜色漫上来，海风把纸页吹得沙沙作响。') }}</p>
             </section>
 
             <section class="reader-settings-card reader-settings-font" aria-labelledby="reader-font-size-label">
               <div class="reader-settings-row-head">
-                <h3 id="reader-font-size-label">字号</h3>
+                <h3 id="reader-font-size-label">{{ t('字号') }}</h3>
                 <span>{{ config.fontSize }} px</span>
               </div>
               <div class="reader-font-control">
-                <button type="button" class="reader-font-step" :disabled="config.fontSize <= NOVEL_FONT_MIN" title="减小字号" aria-label="减小字号" @click="reader.changeFontSize(-NOVEL_FONT_STEP)">A−</button>
+                <button type="button" class="reader-font-step" :disabled="config.fontSize <= NOVEL_FONT_MIN" :title="t('减小字号')" :aria-label="t('减小字号')" @click="reader.changeFontSize(-NOVEL_FONT_STEP)">A−</button>
                 <MdRange
                   class="reader-font-range"
                   variant="bubble"
@@ -79,75 +80,76 @@
                   :max="NOVEL_FONT_MAX"
                   :step="NOVEL_FONT_STEP"
                   :value-label="String(config.fontSize)"
-                  aria-label="小说字号滑块"
+                  :aria-label="t('小说字号滑块')"
                   @update:model-value="reader.setFontSize"
                 />
-                <button type="button" class="reader-font-step" :disabled="config.fontSize >= NOVEL_FONT_MAX" title="增大字号" aria-label="增大字号" @click="reader.changeFontSize(NOVEL_FONT_STEP)">A+</button>
+                <button type="button" class="reader-font-step" :disabled="config.fontSize >= NOVEL_FONT_MAX" :title="t('增大字号')" :aria-label="t('增大字号')" @click="reader.changeFontSize(NOVEL_FONT_STEP)">A+</button>
               </div>
-              <p class="reader-settings-hint">{{ NOVEL_FONT_MIN }}–{{ NOVEL_FONT_MAX }} px · 自动分页，按书记忆</p>
+              <p class="reader-settings-hint">{{ t('{0}–{1} px · 自动分页，按书记忆', { 0: NOVEL_FONT_MIN, 1: NOVEL_FONT_MAX }) }}</p>
             </section>
 
-            <section class="reader-settings-card reader-settings-selects" aria-label="文字排版">
-              <SettingsSelectRow label="字体" :model-value="config.fontFamily" :options="fontOptions" @update:model-value="value => reader.setFontFamily(String(value))" />
-              <SettingsSelectRow label="行距" :model-value="config.lineHeight" :options="lineHeightOptions" @update:model-value="value => reader.setLineHeight(String(value))" />
-              <SettingsSelectRow v-if="!isVertical" label="页边距" :model-value="config.pageMargin" :options="pageMarginOptions" @update:model-value="value => reader.setPageMargin(String(value))" />
+            <section class="reader-settings-card reader-settings-selects" :aria-label="t('文字排版')">
+              <SettingsSelectRow :label="t('字体')" :model-value="config.fontFamily" :options="fontOptions" @update:model-value="value => reader.setFontFamily(String(value))" />
+              <SettingsSelectRow :label="t('行距')" :model-value="config.lineHeight" :options="lineHeightOptions" @update:model-value="value => reader.setLineHeight(String(value))" />
+              <SettingsSelectRow v-if="!isVertical" :label="t('页边距')" :model-value="config.pageMargin" :options="pageMarginOptions" @update:model-value="value => reader.setPageMargin(String(value))" />
             </section>
           </template>
 
           <template v-if="!isVertical || isManga">
-            <h3 class="reader-settings-group-label">{{ isVertical ? '滚动尺寸' : '翻页布局' }}</h3>
+            <h3 class="reader-settings-group-label">{{ isVertical ? t('滚动尺寸') : t('翻页布局') }}</h3>
             <section class="reader-settings-card">
               <div v-if="!isVertical" class="reader-settings-row">
-                <h4 class="reader-settings-control-label">阅读方向</h4>
-                <MdSegmentedControl class="reader-settings-segment" :model-value="config.direction" :options="directions" aria-label="阅读方向" @update:model-value="reader.setDirection" />
+                <h4 class="reader-settings-control-label">{{ t('阅读方向') }}</h4>
+                <MdSegmentedControl class="reader-settings-segment" :model-value="config.direction" :options="directions" :aria-label="t('阅读方向')" @update:model-value="reader.setDirection" />
               </div>
               <div v-if="!isVertical" class="reader-settings-row">
-                <h4 class="reader-settings-control-label">页面布局</h4>
-                <MdSegmentedControl v-if="allowSpreadChoice" class="reader-settings-segment" :model-value="config.spread" :options="spreadOptions" aria-label="翻页布局" @update:model-value="value => reader.setSpreadCount(Number(value))" />
-                <p v-else class="reader-settings-hint">当前屏幕按单页显示，窗口变宽后可选择双页。</p>
+                <h4 class="reader-settings-control-label">{{ t('页面布局') }}</h4>
+                <MdSegmentedControl v-if="allowSpreadChoice" class="reader-settings-segment" :model-value="config.spread" :options="spreadOptions" :aria-label="t('翻页布局')" @update:model-value="value => reader.setSpreadCount(Number(value))" />
+                <p v-else class="reader-settings-hint">{{ t('当前屏幕按单页显示，窗口变宽后可选择双页。') }}</p>
               </div>
               <div v-if="!isManga && !isVertical" class="reader-settings-row reader-settings-switch">
-                <MdSwitch :model-value="config.verticalText" title="文字从上往下，各列从右往左排列" @update:model-value="reader.setVerticalText">竖排文字</MdSwitch>
+                <MdSwitch :model-value="config.verticalText" :title="t('文字从上往下，各列从右往左排列')" @update:model-value="reader.setVerticalText">{{ t('竖排文字') }}</MdSwitch>
               </div>
               <div v-if="!isVertical && allowSpreadChoice && config.spread === 2" class="reader-settings-row reader-settings-switch">
-                <MdSwitch :model-value="config.coverOffset" title="双页模式下首页单独显示，确保后续跨页大图对齐" @update:model-value="reader.toggleCoverOffset()">首页单排</MdSwitch>
+                <MdSwitch :model-value="config.coverOffset" :title="t('双页模式下首页单独显示，确保后续跨页大图对齐')" @update:model-value="reader.toggleCoverOffset()">{{ t('首页单排') }}</MdSwitch>
               </div>
               <div v-if="isVertical && isManga" class="reader-settings-row">
-                <MdSegmentedControl class="reader-settings-segment" :model-value="config.webtoonFit" :options="webtoonFits" aria-label="滚动尺寸" @update:model-value="reader.setWebtoonFit" />
+                <MdSegmentedControl class="reader-settings-segment" :model-value="config.webtoonFit" :options="webtoonFits" :aria-label="t('滚动尺寸')" @update:model-value="reader.setWebtoonFit" />
               </div>
             </section>
           </template>
 
           <template v-if="isAndroid">
-            <h3 class="reader-settings-group-label">翻页控制</h3>
+            <h3 class="reader-settings-group-label">{{ t('翻页控制') }}</h3>
             <section class="reader-settings-card reader-settings-row">
-              <MdSwitch :model-value="settings.volumeKeysTurnPage" title="音量加键上一页、音量减键下一页" @update:model-value="settings.setVolumeKeysTurnPage">音量键翻页</MdSwitch>
-              <p class="reader-settings-hint">音量加键上一页、音量减键下一页；该设置全局生效。</p>
+              <MdSwitch :model-value="settings.volumeKeysTurnPage" :title="t('音量加键上一页、音量减键下一页')" @update:model-value="settings.setVolumeKeysTurnPage">{{ t('音量键翻页') }}</MdSwitch>
+              <p class="reader-settings-hint">{{ t('音量加键上一页、音量减键下一页；该设置全局生效。') }}</p>
             </section>
           </template>
 
           <section class="reader-settings-card reader-settings-reset-card">
-            <button type="button" class="md-text-button reader-settings-reset" @click="resetDefaults">恢复默认</button>
+            <button type="button" class="md-text-button reader-settings-reset" @click="resetDefaults">{{ t('恢复默认') }}</button>
           </section>
         </div>
 
         <div
           v-show="activeTab === 'appearance'"
           id="reader-settings-panel-appearance"
+          class="md-drawer-tab-panel"
           role="tabpanel"
           aria-labelledby="reader-settings-tab-appearance"
         >
-          <h3 class="reader-settings-group-label">阅读纸面</h3>
+          <h3 class="reader-settings-group-label">{{ t('阅读纸面') }}</h3>
           <SurfaceModePreview surface="reader" cards />
-          <p class="reader-settings-paper-hint">只调整阅读纸面，应用外观仍沿用全局设置。</p>
-          <h3 class="reader-settings-group-label">翻页方式</h3>
+          <p class="reader-settings-paper-hint">{{ t('只调整阅读纸面，应用外观仍沿用全局设置。') }}</p>
+          <h3 class="reader-settings-group-label">{{ t('翻页方式') }}</h3>
           <section class="reader-settings-card">
             <div class="reader-settings-animation" :class="`is-${reader.transitionStyle}`" aria-hidden="true">
               <span class="reader-settings-page"><i></i><i></i><i></i><i></i><i></i></span>
               <span class="reader-settings-page"><i></i><i></i><i></i><i></i><i></i></span>
             </div>
             <div class="reader-settings-row">
-              <MdSegmentedControl class="reader-settings-segment" :model-value="reader.transitionStyle" :options="transitionOptions" aria-label="翻页方式" @update:model-value="reader.setTransitionStyle" />
+              <MdSegmentedControl class="reader-settings-segment" :model-value="reader.transitionStyle" :options="transitionOptions" :aria-label="t('翻页方式')" @update:model-value="reader.setTransitionStyle" />
             </div>
           </section>
         </div>
@@ -155,26 +157,27 @@
         <div
           v-show="activeTab === 'cover'"
           id="reader-settings-panel-cover"
+          class="md-drawer-tab-panel"
           role="tabpanel"
           aria-labelledby="reader-settings-tab-cover"
         >
-          <h3 class="reader-settings-group-label">当前书本</h3>
+          <h3 class="reader-settings-group-label">{{ t('当前书本') }}</h3>
           <section class="reader-settings-card reader-settings-cover">
             <div class="reader-cover-preview">
-              <img v-if="currentCover" :src="currentCover" alt="当前书本封面" />
+              <img v-if="currentCover" :src="currentCover" :alt="t('当前书本封面')" />
               <div v-else class="reader-cover-placeholder" aria-hidden="true"><MdIcon name="auto_stories" :size="32" /><span>{{ reader.currentBook?.title }}</span></div>
             </div>
             <h3>{{ reader.currentBook?.title }}</h3>
-            <p class="reader-settings-hint">为这本书换一张喜欢的封面</p>
-            <input ref="coverInput" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.avif,.bmp" class="hidden" aria-label="选择自定义封面图片" @change="onCoverSelected" />
-            <button type="button" class="md-tonal-button reader-settings-upload" :disabled="coverBusy" @click="coverInput?.click()"><MdIcon name="upload_file" :size="18" />{{ coverBusy ? '正在保存…' : '选择封面图片' }}</button>
-            <button v-if="hasCustomCover" type="button" class="md-text-button reader-settings-restore-cover" :disabled="coverBusy" @click="saveCover(null)">恢复原封面</button>
-            <p v-if="reader.currentBook?.id.startsWith('demo_')" class="reader-settings-hint">示例书封面仅在本次打开期间保留。</p>
+            <p class="reader-settings-hint">{{ t('为这本书换一张喜欢的封面') }}</p>
+            <input ref="coverInput" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.avif,.bmp" class="hidden" :aria-label="t('选择自定义封面图片')" @change="onCoverSelected" />
+            <button type="button" class="md-tonal-button reader-settings-upload" :disabled="coverBusy" @click="coverInput?.click()"><MdIcon name="upload_file" :size="18" />{{ coverBusy ? t('正在保存…') : t('选择封面图片') }}</button>
+            <button v-if="hasCustomCover" type="button" class="md-text-button reader-settings-restore-cover" :disabled="coverBusy" @click="saveCover(null)">{{ t('恢复原封面') }}</button>
+            <p v-if="reader.currentBook?.id.startsWith('demo_')" class="reader-settings-hint">{{ t('示例书封面仅在本次打开期间保留。') }}</p>
             <p v-if="coverError" role="alert" class="reader-settings-cover-error">{{ coverError }}</p>
           </section>
           <div class="reader-settings-card reader-settings-cover-note">
             <MdIcon name="folder_open" :size="20" />
-            <div><p>仅保存在本机</p><p class="reader-settings-hint">更换封面不会修改原书文件。</p></div>
+            <div><p>{{ t('仅保存在本机') }}</p><p class="reader-settings-hint">{{ t('更换封面不会修改原书文件。') }}</p></div>
           </div>
         </div>
       </div>
@@ -209,6 +212,9 @@ import MdSwitch from './MdSwitch.vue';
 import SurfaceModePreview from './SurfaceModePreview.vue';
 import SettingsSelectRow from './SettingsSelectRow.vue';
 import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const reader = useReaderStore();
 const shelf = useShelfStore();
@@ -228,7 +234,7 @@ async function saveCover(file: File | null) {
   try {
     await reader.setCustomCover(file);
   } catch (err) {
-    coverError.value = (err as Error).message || '封面保存失败，请重试';
+    coverError.value = (err as Error).message || t('封面保存失败，请重试');
   } finally {
     coverBusy.value = false;
   }
@@ -326,7 +332,7 @@ watch(settingsOpen, async open => {
     settingsTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     activeTab.value = 'layout';
     await nextTick();
-    settingsSheetRef.value?.querySelector<HTMLButtonElement>('[aria-label="关闭阅读设置"]')?.focus({ preventScroll: true });
+    settingsSheetRef.value?.querySelector<HTMLButtonElement>('.md-drawer-header .md-icon-button')?.focus({ preventScroll: true });
   } else {
     await nextTick();
     if (settingsTrigger?.isConnected && reader.currentBook && !ui.readerDrawerOpen) {

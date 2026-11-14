@@ -1,5 +1,66 @@
 <template>
+  <section v-if="mobileSheet" :aria-busy="status === 'loading' || status === 'downloading'">
+    <p class="md-mobile-sheet-label">{{ t('HOMURA · 稳定通道') }}</p>
+    <div class="md-mobile-sheet-card">
+      <div class="md-mobile-sheet-row">
+        <span class="md-mobile-sheet-icon is-accent"><MdIcon :name="status === 'downloaded' || status === 'latest' ? 'check' : 'update'" /></span>
+        <span class="md-mobile-sheet-copy">
+          <b>{{ status === 'downloaded' ? t('v{0} 已准备就绪', { 0: download.version }) : status === 'downloading' ? t('正在下载 v{0}', { 0: release?.version || currentVersion }) : title }}</b>
+          <small>{{ t('当前版本 v{0}', { 0: currentVersion }) }}<template v-if="release?.dateLabel"> · {{ release.dateLabel }}</template></small>
+        </span>
+      </div>
+    </div>
+    <template v-if="status === 'loading'">
+      <div class="md-mobile-sheet-card md-mobile-sheet-notice" role="status">
+        <span class="update-spinner" aria-hidden="true"></span>
+        <span class="md-mobile-sheet-copy"><b>{{ t('正在连接 GitHub Releases') }}</b><small>{{ t('读取稳定版本与安装包信息，请稍候。') }}</small></span>
+      </div>
+    </template>
+    <template v-else-if="status === 'available' && release">
+      <p class="md-mobile-sheet-label">{{ t('本次更新') }}</p>
+      <div class="md-mobile-sheet-card is-padded">
+        <ul v-if="summaryItems.length" class="mobile-update-notes"><li v-for="item in summaryItems" :key="item">{{ item }}</li></ul>
+        <p v-else class="md-mobile-sheet-hint">{{ t('该版本没有提供可展示的更新摘要。') }}</p>
+      </div>
+      <div class="md-mobile-sheet-card">
+        <div class="md-mobile-sheet-row">
+          <span class="md-mobile-sheet-icon"><MdIcon name="download" /></span>
+          <span class="md-mobile-sheet-copy"><b>{{ t(packageInfo.label) }}</b><small>{{ t(packageInfo.note) }}</small></span>
+        </div>
+        <button type="button" class="md-mobile-sheet-row" @click="openDetails">
+          <span class="md-mobile-sheet-copy"><b>{{ t('查看完整更新说明') }}</b></span><MdIcon name="chevron_right" />
+        </button>
+      </div>
+    </template>
+    <template v-else-if="status === 'downloading'">
+      <div class="md-mobile-sheet-card is-padded">
+        <div class="update-progress-meta"><b>{{ downloadPercentLabel }}</b><span>{{ downloadSizeLabel }}</span></div>
+        <div class="update-track" role="progressbar" :aria-label="t('更新下载进度')" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round(downloadPercent * 10) / 10">
+          <i :style="{ transform: `scaleX(${downloadPercent / 100})` }"></i>
+        </div>
+      </div>
+      <div class="md-mobile-sheet-card md-mobile-sheet-notice">
+        <MdIcon name="download" /><span class="md-mobile-sheet-copy"><b>{{ download.fileName || t(packageInfo.label) }}</b><small>{{ t('下载完成后可立即安装。') }}</small></span>
+      </div>
+    </template>
+    <template v-else-if="status === 'downloaded'">
+      <div class="md-mobile-sheet-card md-mobile-sheet-notice">
+        <MdIcon name="info" /><span class="md-mobile-sheet-copy"><b>{{ t('安装提示') }}</b><small>{{ installWarning }}</small></span>
+      </div>
+      <p class="md-mobile-sheet-label">{{ t('文件位置') }}</p>
+      <div class="md-mobile-sheet-card is-padded md-mobile-sheet-hint">{{ download.path }}</div>
+      <p v-if="downloadError" class="md-mobile-sheet-field-error" role="alert">{{ t(downloadErrorMessage) }}</p>
+    </template>
+    <div v-else-if="status === 'latest'" class="md-mobile-sheet-card md-mobile-sheet-notice">
+      <MdIcon name="check" /><span class="md-mobile-sheet-copy"><b>{{ t('已经是最新稳定版') }}</b><small>{{ t('当前安装的 HOMURA 与 GitHub 最新版本一致。') }}</small></span>
+    </div>
+    <div v-else class="md-mobile-sheet-card md-mobile-sheet-notice is-danger" role="alert">
+      <MdIcon name="error" /><span class="md-mobile-sheet-copy"><b>{{ status === 'download-error' ? t('下载没有完成') : t('暂时无法检查更新') }}</b><small>{{ t(errorMessage) }}</small></span>
+    </div>
+    <p v-if="linkError" class="md-mobile-sheet-field-error" role="alert">{{ linkError }}</p>
+  </section>
   <section
+    v-else
     ref="panelRef"
     class="update-island-panel"
     role="group"
@@ -11,10 +72,10 @@
 
     <template v-if="status === 'downloading'">
       <header>
-        <p class="md-surface-kicker">软件更新</p>
-        <h2 id="update-island-title" class="md-surface-title">正在下载更新</h2>
+        <p class="md-surface-kicker">{{ t('软件更新') }}</p>
+        <h2 id="update-island-title" class="md-surface-title">{{ t('正在下载更新') }}</h2>
         <p class="md-surface-subtitle">
-          HOMURA v{{ release?.version || currentVersion }} · {{ download.packageLabel || packageInfo.label }}
+          HOMURA v{{ release?.version || currentVersion }} · {{ t(download.packageLabel || packageInfo.label) }}
         </p>
       </header>
 
@@ -22,7 +83,7 @@
         <div
           class="update-track"
           role="progressbar"
-          aria-label="更新下载进度"
+          :aria-label="t('更新下载进度')"
           aria-valuemin="0"
           aria-valuemax="100"
           :aria-valuenow="Math.round(downloadPercent * 10) / 10"
@@ -37,8 +98,8 @@
 
       <div class="update-current">
         <MdIcon name="download" />
-        <span>下载完成后可立即安装</span>
-        <code>{{ download.fileName || packageInfo.label }}</code>
+        <span>{{ t('下载完成后可立即安装') }}</span>
+        <code>{{ download.fileName || t(packageInfo.label) }}</code>
       </div>
 
       <div class="md-surface-actionbar">
@@ -50,33 +111,33 @@
           @click="$emit('cancel-download')"
         >
           <MdIcon name="close" />
-          取消下载
+          {{ t('取消下载') }}
         </button>
       </div>
     </template>
 
     <template v-else-if="status === 'downloaded'">
       <header>
-        <p class="md-surface-kicker">软件更新</p>
-        <h2 id="update-island-title" class="md-surface-title">下载完成</h2>
+        <p class="md-surface-kicker">{{ t('软件更新') }}</p>
+        <h2 id="update-island-title" class="md-surface-title">{{ t('下载完成') }}</h2>
       </header>
 
       <div class="update-success">
         <span class="update-success-icon" aria-hidden="true"><MdIcon name="check" /></span>
         <span>
-          <b>HOMURA v{{ download.version }} 已准备就绪</b>
+          <b>{{ t('HOMURA v{0} 已准备就绪', { 0: download.version }) }}</b>
           <small>{{ installWarning }}</small>
         </span>
       </div>
 
       <div class="update-file">
-        <span>文件位置</span>
+        <span>{{ t('文件位置') }}</span>
         <code><template v-for="(part, index) in downloadPathParts" :key="`${index}-${part}`">{{ part }}<wbr v-if="part === '/' || part === '\\'" /></template></code>
       </div>
 
       <div class="md-surface-actionbar">
         <div class="md-surface-aux">
-          <button type="button" class="md-surface-text-button" @click="$emit('close')">稍后安装</button>
+          <button type="button" class="md-surface-text-button" @click="$emit('close')">{{ t('稍后安装') }}</button>
         </div>
         <button
           v-if="!hostPrimaryAction"
@@ -86,24 +147,24 @@
           @click="$emit('install')"
         >
           <MdIcon name="check" />
-          立即安装
+          {{ t('立即安装') }}
         </button>
       </div>
 
-      <p v-if="downloadError" class="update-error" role="alert">{{ downloadErrorMessage }}</p>
+      <p v-if="downloadError" class="update-error" role="alert">{{ t(downloadErrorMessage) }}</p>
     </template>
 
     <template v-else>
       <header>
-        <p class="md-surface-kicker">软件更新</p>
+        <p class="md-surface-kicker">{{ t('软件更新') }}</p>
         <h2 id="update-island-title" class="md-surface-title">{{ title }}</h2>
-        <p class="md-surface-subtitle">当前版本 v{{ currentVersion }} · 稳定通道</p>
+        <p class="md-surface-subtitle">{{ t('当前版本 v{0} · 稳定通道', { 0: currentVersion }) }}</p>
       </header>
 
       <template v-if="status === 'loading'">
         <div class="update-state" role="status">
           <span class="update-spinner" aria-hidden="true"></span>
-          <span><b>正在连接 GitHub Releases</b><small>读取稳定版本与安装包信息，请稍候。</small></span>
+          <span><b>{{ t('正在连接 GitHub Releases') }}</b><small>{{ t('读取稳定版本与安装包信息，请稍候。') }}</small></span>
         </div>
         <div v-if="hostPrimaryAction" class="md-surface-actionbar" aria-hidden="true"></div>
       </template>
@@ -117,23 +178,23 @@
         </div>
 
         <div class="update-release-notes">
-          <h3>本次更新</h3>
+          <h3>{{ t('本次更新') }}</h3>
           <ul v-if="summaryItems.length">
             <li v-for="item in summaryItems" :key="item">{{ item }}</li>
           </ul>
-          <p v-else>该版本没有提供可展示的更新摘要。</p>
+          <p v-else>{{ t('该版本没有提供可展示的更新摘要。') }}</p>
         </div>
 
-        <button type="button" class="update-package-row" :title="`下载 ${packageInfo.label}`" @click="$emit('download')">
+        <button type="button" class="update-package-row" :title="t('下载 {0}', { 0: t(packageInfo.label) })" @click="$emit('download')">
           <span class="update-package-icon"><MdIcon name="download" /></span>
-          <span class="update-package-copy"><b>{{ packageInfo.label }}</b><small>{{ packageInfo.note }}</small></span>
+          <span class="update-package-copy"><b>{{ t(packageInfo.label) }}</b><small>{{ t(packageInfo.note) }}</small></span>
           <MdIcon name="chevron_right" />
         </button>
 
         <div class="md-surface-actionbar">
           <div class="md-surface-aux">
-            <button type="button" class="md-surface-text-button" @click="$emit('close')">稍后提醒</button>
-            <button type="button" class="md-surface-text-button" @click="openDetails">查看详情</button>
+            <button type="button" class="md-surface-text-button" @click="$emit('close')">{{ t('稍后提醒') }}</button>
+            <button type="button" class="md-surface-text-button" @click="openDetails">{{ t('查看详情') }}</button>
           </div>
           <button
             v-if="!hostPrimaryAction"
@@ -143,7 +204,7 @@
             @click="$emit('download')"
           >
             <MdIcon name="download" />
-            下载更新
+            {{ t('下载更新') }}
           </button>
         </div>
       </template>
@@ -151,14 +212,14 @@
       <template v-else-if="status === 'latest'">
         <div class="update-state is-success">
           <span class="update-state-icon" aria-hidden="true"><MdIcon name="check" /></span>
-          <span><b>已经是最新稳定版</b><small>当前安装的 HOMURA 与 GitHub 最新版本一致。</small></span>
+          <span><b>{{ t('已经是最新稳定版') }}</b><small>{{ t('当前安装的 HOMURA 与 GitHub 最新版本一致。') }}</small></span>
         </div>
         <div class="md-surface-actionbar">
           <div class="md-surface-aux">
-            <button type="button" class="md-surface-text-button" @click="$emit('close')">关闭</button>
+            <button type="button" class="md-surface-text-button" @click="$emit('close')">{{ t('关闭') }}</button>
           </div>
           <button v-if="!hostPrimaryAction" ref="primaryActionRef" type="button" class="md-surface-action is-primary" @click="$emit('changelog')">
-            查看更新日志
+            {{ t('查看更新日志') }}
           </button>
         </div>
       </template>
@@ -167,13 +228,13 @@
         <div class="update-state is-error" role="alert">
           <span class="update-state-icon" aria-hidden="true"><MdIcon name="error" /></span>
           <span>
-            <b>{{ status === 'download-error' ? '下载没有完成' : '暂时无法检查更新' }}</b>
-            <small>{{ errorMessage }}</small>
+            <b>{{ status === 'download-error' ? t('下载没有完成') : t('暂时无法检查更新') }}</b>
+            <small>{{ t(errorMessage) }}</small>
           </span>
         </div>
         <div class="md-surface-actionbar">
           <div class="md-surface-aux">
-            <button type="button" class="md-surface-text-button" @click="$emit('close')">关闭</button>
+            <button type="button" class="md-surface-text-button" @click="$emit('close')">{{ t('关闭') }}</button>
           </div>
           <button
             v-if="!hostPrimaryAction"
@@ -182,7 +243,7 @@
             class="md-surface-action is-primary"
             @click="$emit(status === 'download-error' ? 'download' : 'retry')"
           >
-            {{ status === 'download-error' ? '重新下载' : '再试一次' }}
+            {{ status === 'download-error' ? t('重新下载') : t('再试一次') }}
           </button>
         </div>
       </template>
@@ -201,8 +262,12 @@ import { formatBytes } from '../services/platform.ts';
 import { getUpdateErrorMessage } from '../services/updates.ts';
 import { getDownloadErrorMessage } from '../services/updateDownload.ts';
 import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const props = defineProps({
+  mobileSheet: { type: Boolean, default: false },
   status: { type: String, default: 'idle' },
   hostPrimaryAction: { type: Boolean, default: false },
   release: { type: Object as PropType<NormalizedRelease | null>, default: null },
@@ -233,11 +298,11 @@ const primaryActionRef = shallowRef<HTMLElement | null>(null);
 const linkError = ref('');
 
 const title = computed(() => {
-  if (props.status === 'loading') return '正在检查更新';
-  if (props.status === 'available' && props.release) return `发现新版本 ${props.release.version}`;
-  if (props.status === 'latest') return '已是最新版本';
-  if (props.status === 'download-error') return '下载未完成';
-  return '检查更新失败';
+  if (props.status === 'loading') return t('正在检查更新');
+  if (props.status === 'available' && props.release) return t('发现新版本 {0}', { 0: props.release.version });
+  if (props.status === 'latest') return t('已是最新版本');
+  if (props.status === 'download-error') return t('下载未完成');
+  return t('检查更新失败');
 });
 
 const downloadErrorMessage = computed(() => getDownloadErrorMessage(props.downloadError));
@@ -264,10 +329,10 @@ const downloadPathParts = computed(() =>
 );
 const installWarning = computed(() => {
   const platform = props.download.platform || props.packageInfo.platform;
-  if (platform === 'android' || platform === 'windows') return '安装过程中应用将会退出';
-  if (platform === 'macos') return '打开 DMG 后，将 HOMURA 拖入“应用程序”';
-  if (platform === 'linux') return '将交由系统软件中心处理安装包';
-  return '将使用系统默认程序打开安装包';
+  if (platform === 'android' || platform === 'windows') return t('安装过程中应用将会退出');
+  if (platform === 'macos') return t('打开 DMG 后，将 HOMURA 拖入“应用程序”');
+  if (platform === 'linux') return t('将交由系统软件中心处理安装包');
+  return t('将使用系统默认程序打开安装包');
 });
 const summaryItems = computed(() => {
   if (!props.release) return [];
@@ -283,7 +348,7 @@ const summaryItems = computed(() => {
 const primaryAction = computed(() => {
   if (props.status === 'loading') {
     return {
-      label: '检查中',
+      label: t('检查中'),
       icon: 'update',
       variant: 'primary',
       disabled: true
@@ -291,7 +356,7 @@ const primaryAction = computed(() => {
   }
   if (props.status === 'downloading') {
     return {
-      label: '取消下载',
+      label: t('取消下载'),
       icon: 'close',
       variant: 'tonal',
       disabled: false
@@ -299,7 +364,7 @@ const primaryAction = computed(() => {
   }
   if (props.status === 'downloaded') {
     return {
-      label: '立即安装',
+      label: t('立即安装'),
       icon: 'check',
       variant: 'primary',
       disabled: false
@@ -307,7 +372,7 @@ const primaryAction = computed(() => {
   }
   if (props.status === 'available') {
     return {
-      label: '下载更新',
+      label: t('下载更新'),
       icon: 'download',
       variant: 'primary',
       disabled: false
@@ -315,7 +380,7 @@ const primaryAction = computed(() => {
   }
   if (props.status === 'latest') {
     return {
-      label: '查看更新日志',
+      label: t('查看更新日志'),
       icon: 'article',
       variant: 'primary',
       disabled: false
@@ -323,7 +388,7 @@ const primaryAction = computed(() => {
   }
   if (props.status === 'download-error') {
     return {
-      label: '重新下载',
+      label: t('重新下载'),
       icon: 'update',
       variant: 'primary',
       disabled: false
@@ -331,14 +396,14 @@ const primaryAction = computed(() => {
   }
   if (props.status === 'error') {
     return {
-      label: '再试一次',
+      label: t('再试一次'),
       icon: 'update',
       variant: 'primary',
       disabled: false
     };
   }
   return {
-    label: '关闭',
+    label: t('关闭'),
     icon: 'close',
     variant: 'tonal',
     disabled: false
@@ -351,7 +416,7 @@ async function openDetails() {
   try {
     await openGitHubUrl(props.release.htmlUrl);
   } catch (error) {
-    linkError.value = '无法打开系统浏览器，请稍后再试。';
+    linkError.value = t('无法打开系统浏览器，请稍后再试。');
     console.warn('打开更新链接失败', error);
   }
 }

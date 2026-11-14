@@ -9,8 +9,8 @@
         draggable="false"
       />
       <div class="space-y-1.5">
-        <h2 class="text-base font-display font-bold tracking-tight">书架还是空的</h2>
-        <p class="text-xs text-[var(--md-on-surface-variant)] leading-relaxed">{{ isPhone ? '选择本地文件或文件夹导入作品' : '把文件拖进窗口，或直接选择本地文件 / 文件夹' }}</p>
+        <h2 class="text-base font-display font-bold tracking-tight">{{ t('书架还是空的') }}</h2>
+        <p class="text-xs text-[var(--md-on-surface-variant)] leading-relaxed">{{ isPhone ? t('选择本地文件或文件夹导入作品') : t('把文件拖进窗口，或直接选择本地文件 / 文件夹') }}</p>
       </div>
       <div class="flex flex-wrap items-center justify-center gap-1.5 font-mono text-[12px]">
         <span class="px-2 py-0.5 rounded-md bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] border-[0.5px] border-[var(--md-outline-variant)] font-semibold">.EPUB</span>
@@ -18,14 +18,14 @@
         <span class="px-2 py-0.5 rounded-md bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] border-[0.5px] border-[var(--md-outline-variant)] font-semibold">.PDF</span>
         <span class="px-2 py-0.5 rounded-md bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] border-[0.5px] border-[var(--md-outline-variant)] font-semibold">.TXT / .MD</span>
         <span class="px-2 py-0.5 rounded-md bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] border-[0.5px] border-[var(--md-outline-variant)] font-semibold">.MOBI</span>
-        <span class="px-2 py-0.5 rounded-md bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] border-[0.5px] border-[var(--md-outline-variant)] font-semibold">图片文件夹</span>
+        <span class="px-2 py-0.5 rounded-md bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] border-[0.5px] border-[var(--md-outline-variant)] font-semibold">{{ t('图片文件夹') }}</span>
       </div>
       <div v-if="!isCompact" class="flex items-center gap-2.5 pt-1">
-        <button @click="$emit('pick-file')" class="uiverse-btn-primary">选择文件</button>
-        <button @click="$emit('pick-folder')" class="uiverse-btn">选择文件夹</button>
+        <button @click="$emit('pick-file')" class="uiverse-btn-primary">{{ t('选择文件') }}</button>
+        <button @click="$emit('pick-folder')" class="uiverse-btn">{{ t('选择文件夹') }}</button>
       </div>
       <p v-else class="text-[12px] font-medium text-[var(--md-on-surface-variant)] pt-1">
-        使用右下角「导入」选择本地文件或文件夹
+        {{ t('使用右下角「导入」选择本地文件或文件夹') }}
       </p>
     </div>
   </section>
@@ -33,6 +33,9 @@
 
 <script setup lang="ts">
 import { useViewport } from '../composables/useViewport.ts';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const logoUrl = import.meta.env.BASE_URL + 'favicon.png';
 

@@ -7,6 +7,7 @@
 新增 UI 前先读本文，再按需查：
 
 - [AGENTS.md](../AGENTS.md)：项目硬约束与不能破坏的行为。
+- [bottom-sheet-spec.md](./bottom-sheet-spec.md)：bottom sheet 的结构、尺寸、拖拽与弹簧规范。
 - [tokens.md](./tokens.md)：主题色、表面阶与 token 速查。
 - [ui-component-spec.md](./ui-component-spec.md)：系统级布局与历史组件说明。
 
@@ -26,7 +27,8 @@
 | 布尔开关 | `MdSwitch.vue` | 自绘 checkbox 或点整行文字冒充开关 |
 | 设置列表 / 目录条目 | `.md-drawer-list-item` | 临时拼 `div + @click` |
 | 漫画页码 | `.md-toc-grid` + `.md-toc-page` | 五颜六色的页码按钮 |
-| 右侧设置 / 目录面板 | `.md-drawer` + `ReaderDrawerHeader.vue` | 新写一套 sheet 外壳 |
+| 通用手机 bottom sheet | `MobileBottomSheet.vue` + `.md-mobile-sheet-*` | 私写 dialog / 遮罩 / 进出动画 |
+| 阅读器设置 / 目录面板 | `.md-drawer` + `ReaderDrawerHeader.vue` | 新写一套 sheet 外壳 |
 | 遮罩 | `.md-scrim` | 新建半透明黑色 |
 | 进度 / 字号滑条 | `MdRange.vue` + `.md-range` | 原生蓝轨道、圆形小拇指、手写活动轨道、另写 range 皮肤 |
 | 书架内容卡 | `.md-card` + `.md-shelf-card` / `.md-collection-card` | 私有圆角、私有阴影 |
@@ -76,13 +78,15 @@
 | 层级 | 字号 | 字重 | 用途 |
 | --- | --- | --- | --- |
 | 页面标题 | 21 / 22px | 600 | 桌面 22、手机 21 |
-| 抽屉标题 | 17px | 600 | `md-drawer-title` |
+| 新 bottom sheet 标题 | 22px；同行页签 20px | 600 | `ReaderDrawerHeader prominent` |
+| 存量默认抽屉标题 | 17px | 600 | 非 prominent 的 `md-drawer-title` |
+| 手机 sheet 输入 | 16px | 常规 | `.md-mobile-sheet-field`，避免聚焦缩放 |
 | 正文、输入、按钮 | 13px | 500–600 | 主要可读文字 |
 | 紧凑控件 | 12px | 600 | 分段控件、菜单补充文字 |
 | 分组标签 | 11px | 600 | `md-drawer-group-label` |
 | 元信息 | 10.5px | 500–600 | 页码、百分比、mono 信息 |
 
-新组件不要随手插入 14 / 15 / 16px。数字类信息必须使用等宽字体和 `font-variant-numeric: tabular-nums`，避免更新时抖动。
+除上述输入场景外，新组件不要随手插入 14 / 15 / 16px。数字类信息必须使用等宽字体和 `font-variant-numeric: tabular-nums`，避免更新时抖动。
 
 ### 2.4 间距节奏
 
@@ -147,7 +151,7 @@
 - 选中态改用 `filled`，不要自制实心/描边两套几何。
 - 同一个工具栏保持 48px 等宽，不按图标视觉大小改容器。
 - 只用图标时，`title` 与 `aria-label` 至少有一个；两者同时存在时文案一致。
-- 触发抽屉的按钮必须同时设置 `aria-controls` 和 `aria-expanded`。
+- 触发模态抽屉的按钮设置 `aria-haspopup="dialog"` 和 `aria-expanded`；有真实容器 ID 时再加 `aria-controls`，不能指向标题 ID。
 
 ### 3.3 分段控件
 
@@ -206,7 +210,12 @@
 
 ### 3.6 抽屉与 Sheet
 
-新抽屉必须复用当前外壳和拖拽行为。不要再造第三套 side sheet。
+新组件必须按 [bottom-sheet-spec.md](./bottom-sheet-spec.md) 选型：
+通用手机流程直接用 `MobileBottomSheet.vue`，复用头部、卡片类、dialog、焦点、滚动锁和弹簧。
+通过 `open` 控制开关，同时处理 `close` / `cancel`；保持外壳挂载，内容到 `closed` 后再清理。
+完整可复制的通用示例见专用规范第 7.1 节。
+
+以下仅为**阅读器响应式抽屉**的结构片段；还需接入焦点圈定、滚动锁与阅读器返回处理：
 
 ```html
 <Transition
@@ -237,10 +246,13 @@
     v-if="open"
     ref="sheetRef"
     class="md-drawer"
+    role="dialog"
+    aria-modal="true"
     aria-labelledby="example-sheet-title"
   >
     <ReaderDrawerHeader
       :is-compact="isCompact"
+      prominent
       title="示例设置"
       subtitle="一句可选的上下文"
       title-id="example-sheet-title"
@@ -253,7 +265,7 @@
     />
 
     <div class="md-drawer-body px-5 min-[900px]:px-6">
-      <section class="md-drawer-section">
+      <section class="md-mobile-sheet-card is-padded">
         <!-- 控件 -->
       </section>
     </div>
@@ -266,14 +278,14 @@
 </Transition>
 ```
 
-进出场统一用 `useSheetSpring()`（`src/composables/useSheetSpring.ts`）的物理弹簧，不再写 `md-sheet-enter-active` 固定时长过渡。
+进出场统一用 `useSheetSpring()`（`src/composables/useSheetSpring.ts`）的物理弹簧，不再写 `md-sheet-enter-active` 固定时长过渡。完整结构、手势、档位与验收标准见 [bottom-sheet-spec.md](./bottom-sheet-spec.md)。
 
 布局规则：
 
 - 桌面 `>=900px`：宽 372px，最大 92%，贴右侧，左侧 28px 圆角。
 - 手机 `<900px`：底部 sheet 默认 `78dvh`，可整卡上拖到 `100dvh - safe-area-top - 8px`，顶部 28px 圆角，保留安全区。
 - 头部固定；`.md-drawer-body` 独立滚动并设置 `overscroll-behavior: contain`；需要底部操作时使用 `.md-drawer-actions`（阅读设置已改为列表内的「恢复默认」卡片）。
-- 阅读设置使用「排版 / 外观 / 封面」三个页签，分类胶囊由 `ReaderDrawerHeader` 的 `inlineTabs` 放在标题右侧，大圆角分组卡片；字号预览放在排版滚动区内。`ReaderDrawerHeader prominent` 提供左侧圆形关闭按钮与 `status` 插槽，其他抽屉沿用默认头部。
+- 阅读设置使用「排版 / 外观 / 封面」三个页签，分类胶囊由 `ReaderDrawerHeader` 的 `inlineTabs` 放在标题右侧，大圆角分组卡片；字号预览放在排版滚动区内。新 sheet 默认使用 `ReaderDrawerHeader prominent` 的左侧圆形关闭按钮与 `status` 插槽；通用外壳当前不暴露 `inlineTabs`。阅读目录、字体选择、更新日志保留当前设计。
 - 顶栏字体入口打开 `ReaderFontDrawer`：桌面使用 372px side sheet，手机使用 78dvh bottom sheet，复用遮罩、拖拽关闭与固定搜索区；默认字体独立一组，可用字体按自身字体展示并支持搜索；字体来源为 `READER_FONT_OPTIONS`，选中后关闭卡片并恢复触发按钮焦点。
 - 阅读纸面用 `SurfaceModePreview surface="reader" cards`：羊皮纸与护眼绿双列，跟随设置外观占满一行；默认缩略图布局不变。字体、行距和页边距复用 `SettingsSelectRow`，选择项保留原始值类型。
 - 手机拖拽条由 `ReaderDrawerHeader` 渲染，手势逻辑统一走 `useSheetDrag()`；整张卡片都能起手，向上吸附到展开档位，向下先回收默认档位、继续下拉才关闭。
@@ -322,7 +334,7 @@
 - 二级页使用 `.settings-detail-hero` 与 `.settings-list`，复用 `SettingsInterfacePreview` 绘制随主题变化的缩略图；模式缩略图同时带对应 `data-theme` / `data-mode`，不改全局根节点。
 - 「标准 / 纯黑」沿用分组列表。只通过 `theme.setPureBlackMode()` 修改偏好，组件不自行覆盖根节点或写黑色背景；缩略图可用 `black` 属性独立展示两种夜间表面。
 - 列表选择项复用 `SettingsSelectRow`：右侧上下箭头，展开为 28px 圆角浮动列表，选中项使用中性表面底与勾选。菜单传送到根节点以避免滚动容器裁切，并按视口避让；支持方向键、Home / End、Escape、Tab 与点击外部关闭，选择后恢复焦点，保留单双页值的数字类型。菜单展开前锁定背景滚动，桌面保留原滚动条并固定背景滚动位置，覆盖停驻与收缩全过程，动画完成或组件卸载后释放；菜单自身仍可滚动，收缩中反向展开及多个菜单交替开合时保持锁定。
-- 选择菜单由 `settingsSelectMotion.ts` 驱动物理弹簧，模拟时钟以 `0.8×` 速率播放（展开与收起时长约增加 25%）：参考高清 GIF，卡片先向左下拉出，再回弹至选中项与原胶囊对齐的停驻位置（`ζ=0.58 / k=400`）；收起以 `ζ=0.85 / k=500` 先下探拉成圆囊，再向上合回胶囊。下探轨迹在两端的位移与导数均为零，配合速度驱动的 `1.08 / 0.95` 形变及中段加大的圆角；内容反向补偿以避免文字压扁，按速度模糊并先于外壳淡出。胶囊依据位置与当前速度交叉淡入淡出，不位移、不接收回弹动量；中断保留卡片的位置与速度，收敛后卸载菜单。减少动态效果时直接落位；空间不足时按视口避让。
+- 选择菜单由 `settingsSelectMotion.ts` 驱动物理弹簧，模拟时钟以 `0.7×` 速率播放：参考高清 GIF，卡片先向左下拉出，再回弹至选中项与原胶囊对齐的停驻位置（`ζ=0.58 / k=400`）；收起以 `ζ=0.85 / k=500` 先下探拉成圆囊，再向上合回胶囊。下探轨迹在两端的位移与导数均为零，配合速度驱动的 `1.08 / 0.95` 形变及中段加大的圆角；内容反向补偿以避免文字压扁，按速度模糊并先于外壳淡出。胶囊依据位置与当前速度交叉淡入淡出，不位移、不接收回弹动量；胶囊背景高亮保持至菜单完全收回，再交还正常的悬浮与焦点样式；中断保留卡片的位置与速度，收敛后卸载菜单。减少动态效果时直接落位；空间不足时按视口避让。
 
 ## 4. 响应式与布局
 
@@ -380,7 +392,7 @@
 - 图标按钮至少有 `title` 或 `aria-label`；装饰 SVG 加 `aria-hidden="true"`。
 - 开关：`role="switch"` + `aria-checked`，当前由 `MdSwitch` 统一实现。
 - 互斥按钮：`aria-pressed`；当前页/章节：`aria-current`。
-- 抽屉触发器：`aria-controls` + `aria-expanded`。
+- 模态抽屉触发器：`aria-haspopup="dialog"` + `aria-expanded`；`aria-controls` 仅关联真实容器 ID。
 - 输入控件必须有 label 或 `aria-label`，placeholder 不算 label。
 - 动态页码、百分比和当前状态必须用文本表达，不能只靠颜色。
 - 视觉图标可以小，但交互命中区不得小于 44px。
@@ -389,14 +401,16 @@
 
 | 场景 | 时长 / 曲线 |
 | --- | --- |
-| 常规颜色、透明度、浮层进出 | 200ms / `--md-ease-emphasized` |
+| 常规颜色、透明度、非 sheet 浮层进出 | 200ms / `--md-ease-emphasized` |
+| Sheet 进出场 | `useSheetSpring()`；入场 380 / 0.86，退场 760 / 1（刚度 / 阻尼比） |
+| Sheet 松手吸附 | `useSheetDrag()`；200ms / `cubic-bezier(0.2, 0, 0, 1)` |
 | 分段控件滑块 | 280ms / `--md-ease-expressive` |
 | 开关滑块 | 280ms / `--md-ease-spring` |
 | 卡片 hover | 200ms，只改状态层透明度 |
 
 规则：
 
-- 只过渡颜色、透明度、transform、shadow；不要给 width、height、padding、grid 加 transition。
+- 只过渡颜色、透明度、transform、shadow；布局过渡仅沿用已有侧栏、桌面灵动胶囊、共享 sheet 拖动吸附高度与页签滑块宽度，不在业务组件新增。
 - 新增动效必须写 `prefers-reduced-motion: reduce` 分支。
 - 高频手势、双缓冲动画、timer、DOM 引用使用 `shallowRef` 或普通变量，不能进 Vue 深度响应式代理。
 - 表面切换 720ms reveal 是系统级能力，只在 `theme.js` 维护，普通组件不要复制。
@@ -434,6 +448,7 @@
 
 | 需要抄的结构 | 参考文件 |
 | --- | --- |
+| 通用手机 bottom sheet 与卡片 | `src/components/MobileBottomSheet.vue` + `src/assets/styles/mobile-sheets.css` |
 | 图标按钮、浮动顶栏 | `src/components/ReaderTopBar.vue` |
 | 页脚页码、本章剩余提示 | `src/components/NovelCard.vue` |
 | 抽屉外壳、拖拽、底部操作 | `src/components/ReaderSettingsDrawer.vue` |

@@ -21,7 +21,7 @@
           :height="p.imageHeight || undefined"
           class="manga-page-img bg-[var(--bg-card)] shadow-[0_1px_3px_color-mix(in_oklab,var(--md-shadow-color-soft)_24%,transparent)] rounded-sm select-none"
           :class="webtoonImageClass(p)"
-          :alt="'第 ' + p.pageNumber + ' 页'"
+          :alt="t('第 {0} 页', { 0: p.pageNumber })"
           decoding="async"
           draggable="false"
         />
@@ -48,7 +48,7 @@
           <div class="text-xs font-bold text-[var(--md-reader-ink-soft)] mb-4 flex items-center gap-2">
             <span class="truncate">{{ p.title }}</span>
             <i class="block w-[0.5px] h-3 shrink-0 bg-current opacity-30"></i>
-            <span class="shrink-0">第 {{ p.pageNumber }} 章</span>
+            <span class="shrink-0">{{ t('第 {0} 章', { 0: p.pageNumber }) }}</span>
           </div>
           <div class="epub-content md-reader-prose" v-html="p.html"></div>
         </section>
@@ -74,6 +74,9 @@ import { decodePageImage, releaseDistantPageUrls, type MangaPageItem } from '../
 import { resolveProseStyle } from '../services/readerLayout.ts';
 import type { ReaderPage } from '../types.ts';
 import ReaderFooter from './ReaderFooter.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const MANGA_DECODE_CONCURRENCY = 2;
 const MANGA_VISIBLE_MARGIN = 2;

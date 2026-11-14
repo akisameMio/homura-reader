@@ -25,17 +25,17 @@
         </div>
         <div class="rlp-meta">
           <p class="rlp-title">{{ title }}</p>
-          <p class="rlp-status font-mono">{{ statusText }}</p>
+          <p class="rlp-status font-mono">{{ t(statusText) }}</p>
         </div>
         <div class="rlp-bar" aria-hidden="true"><i></i></div>
-        <p class="rlp-hint font-mono">加载内容与排版数据</p>
+        <p class="rlp-hint font-mono">{{ t('加载内容与排版数据') }}</p>
       </template>
 
       <template v-else>
         <div class="rlp-err-icon" aria-hidden="true">!</div>
         <p class="rlp-err-msg">{{ message }}</p>
-        <button type="button" class="rlp-retry md-hit-target" @click="$emit('retry')">重新加载</button>
-        <button type="button" class="rlp-back font-mono" @click="$emit('cancel')">返回书架</button>
+        <button type="button" class="rlp-retry md-hit-target" @click="$emit('retry')">{{ t('重新加载') }}</button>
+        <button type="button" class="rlp-back font-mono" @click="$emit('cancel')">{{ t('返回书架') }}</button>
       </template>
     </div>
   </Transition>
@@ -45,6 +45,9 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { PropType } from 'vue';
 import { makeAxis, runSpring, prefersReducedMotion } from '../services/spring.ts';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -71,7 +74,7 @@ function stopTicker() {
   if (timer) { clearInterval(timer); timer = null; }
 }
 
-const statusText = computed(() => props.phase === 'loading' ? STEPS[step.value] : '');
+const statusText = computed(() => props.phase === 'loading' ? t(STEPS[step.value]) : '');
 
 // shown 控制 v-if 挂载；leaving 标记正在播离场弹簧（此期间根背景同步淡出）。
 // 用内部状态而非直接绑 props.visible，是为了在离场弹簧跑完后再卸载，让封面展开消散演完。

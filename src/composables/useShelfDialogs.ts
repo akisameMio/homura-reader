@@ -3,7 +3,12 @@ import { shallowRef } from 'vue';
 export interface ShelfDialogOptions {
   kind: string;
   title: string;
-  message: string;
+  message?: string;
+  intent?: 'create' | 'rename' | 'delete' | 'favorite';
+  removesFiles?: boolean;
+  bookCount?: number;
+  collectionCount?: number;
+  groupByFolder?: boolean;
   initialName?: string;
   options?: Array<{ value: string; title?: string }>;
   confirmLabel?: string;

@@ -1,0 +1,177 @@
+/* 移动端面板沿用阅读设置的表面、卡片与标题层级；独立命名避免影响阅读器抽屉。 */
+.md-mobile-sheet-dialog {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: transparent;
+  color: var(--md-on-surface);
+}
+.md-mobile-sheet-dialog::backdrop {
+  background: color-mix(in oklab, var(--md-shadow-color) 32%, transparent);
+}
+.md-mobile-sheet {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 78dvh;
+  max-height: calc(var(--md-sheet-viewport-height, 100dvh) - env(safe-area-inset-top, 0px) - 8px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+  border-radius: 28px 28px 0 0;
+  background: color-mix(in oklab, var(--md-surface-container) 65%, var(--md-surface-low));
+  color: var(--md-on-surface);
+  box-shadow: 0 -12px 50px -28px var(--md-shadow-color-soft);
+}
+.md-mobile-sheet .md-drawer-header { padding-inline: 18px; }
+.md-mobile-sheet .md-drawer-heading { flex: 1; }
+.md-mobile-sheet .md-drawer-header > .md-icon-button:disabled { opacity: 0.45; }
+.md-mobile-sheet-dialog[aria-busy="true"] .md-drawer-header > .md-icon-button { opacity: 0.45; cursor: default; }
+.md-mobile-sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 18px 20px;
+  scroll-padding-block: 20px;
+  scrollbar-width: thin;
+}
+.md-mobile-sheet-body:last-child { padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
+.md-mobile-sheet-footer {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 18px max(16px, env(safe-area-inset-bottom, 0px));
+}
+.md-mobile-sheet-card {
+  margin-bottom: 18px;
+  overflow: hidden;
+  border-radius: 26px;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+}
+.md-mobile-sheet-card:last-child { margin-bottom: 0; }
+.md-mobile-sheet-card.is-padded { padding: 18px; }
+.md-mobile-sheet-label {
+  margin: 20px 14px 10px;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  font-weight: 600;
+}
+.md-mobile-sheet-label:first-child { margin-top: 2px; }
+.md-mobile-sheet-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 14px 18px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.md-mobile-sheet-row + .md-mobile-sheet-row::before {
+  position: absolute;
+  inset: 0 18px auto;
+  height: 1px;
+  background: color-mix(in oklab, var(--md-outline-variant) 55%, transparent);
+  content: '';
+}
+.md-mobile-sheet-icon {
+  display: grid;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--md-surface-low);
+  color: var(--md-on-surface-variant);
+}
+.md-mobile-sheet-icon.is-accent {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.md-mobile-sheet-icon.is-danger {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.md-mobile-sheet-icon svg { width: 21px; height: 21px; }
+.md-mobile-sheet-copy { flex: 1; min-width: 0; }
+.md-mobile-sheet-copy b {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.md-mobile-sheet-copy small,
+.md-mobile-sheet-hint {
+  display: block;
+  margin-top: 4px;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.md-mobile-sheet-meta {
+  flex: none;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.md-mobile-sheet-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px;
+}
+.md-mobile-sheet-notice > svg { flex: none; margin-top: 2px; color: var(--md-on-surface-variant); }
+.md-mobile-sheet-notice.is-danger > svg { color: var(--md-error); }
+.md-mobile-sheet-actions { display: flex; gap: 8px; }
+.md-mobile-sheet-footer .md-filled-button,
+.md-mobile-sheet-footer .md-tonal-button,
+.md-mobile-sheet-footer .md-text-button { width: 100%; min-height: 48px; justify-content: center; }
+.md-mobile-sheet-actions > button { flex: 1; min-width: 0; }
+.md-mobile-sheet-danger {
+  background: var(--md-error);
+  color: var(--md-on-error);
+}
+.md-mobile-sheet-footer .md-mobile-sheet-danger:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--md-error) 92%, var(--md-on-error));
+}
+.md-mobile-sheet-footer .md-mobile-sheet-danger:active:not(:disabled) {
+  background: color-mix(in oklab, var(--md-error) 86%, var(--md-on-error));
+}
+.md-mobile-sheet-footer button:disabled { opacity: 0.45; cursor: default; }
+.md-mobile-sheet-field {
+  display: block;
+  width: 100%;
+  height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 16px;
+  background: var(--md-surface-low);
+  color: var(--md-on-surface);
+  font-size: 16px;
+}
+.md-mobile-sheet-field:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+.md-mobile-sheet-field-label { display: block; margin-bottom: 12px; font-size: 12px; font-weight: 600; }
+.md-mobile-sheet-field-meta { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.md-mobile-sheet-field-error { margin-top: 10px; color: var(--md-error); font-size: 12px; }
+@media (hover: hover) and (pointer: fine) {
+  button.md-mobile-sheet-row:hover { background: var(--md-surface-low); }
+}
+.mobile-update-notes { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.85; }
+.mobile-update-notes li + li { margin-top: 8px; }
+.md-mobile-sheet .update-progress-meta { margin: 0 0 16px; }

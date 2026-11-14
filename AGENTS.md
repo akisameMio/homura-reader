@@ -9,7 +9,7 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 
 - 当前版本 `2.2.7`
 - 技术栈：Vue 3 + Pinia + Vite 6 + Tauri 2（Rust）
-- **TypeScript**：`src/services/`（43 个）、`src/stores/`（7 个）、`src/composables/`（12 个）三层的逻辑代码已全部迁移为 `.ts`；`components/`（45 个 `.vue`）的 `<script setup>` 已全部升级为 `lang="ts"`（保留原有运行时 `defineProps({...})` / `defineEmits([...])` 写法，未改写成泛型语法）；入口 `src/main.ts` 亦已迁移。`tsconfig.json` 开 `allowJs: true` 允许 JS/TS 混存，`strict: true`，且 `noImplicitAny` / `noUnusedLocals` / `noUnusedParameters` 均已开启。`npm run typecheck`（`vue-tsc --noEmit`）已清零 0 报错，可作为门槛使用。没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
+- **TypeScript**：`src/services/`（44 个）、`src/stores/`（7 个）、`src/composables/`（13 个）三层的逻辑代码已全部迁移为 `.ts`；`components/`（46 个 `.vue`）的 `<script setup>` 已全部升级为 `lang="ts"`（保留原有运行时 `defineProps({...})` / `defineEmits([...])` 写法，未改写成泛型语法）；入口 `src/main.ts` 亦已迁移。`tsconfig.json` 开 `allowJs: true` 允许 JS/TS 混存，`strict: true`，且 `noImplicitAny` / `noUnusedLocals` / `noUnusedParameters` 均已开启。`npm run typecheck`（`vue-tsc --noEmit`）已清零 0 报错，可作为门槛使用。没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
 - 新增 / 迁移文件时，指向已迁移 `.ts` 文件（services / stores / composables）的 import 必须写 `.ts` 后缀（Node `--experimental-strip-types` 不会把 `./x.js` 解析到 `x.ts`，只有 Vite / tsc 会）
 - 数据存本机 IndexedDB（`homura_shelf`，v3，4 个 store：`books` / `sources` / `progress` / `collections`）；Tauri 环境额外把书目 / 书库 / 进度镜像到 `$APPDATA/homura-metadata/homura.sqlite3`；原文件按平台写 `$APPDATA/homura-native-sources`、OPFS（`homura-sources`）或 IndexedDB Blob；主题与设置偏好写 localStorage
 
@@ -31,7 +31,7 @@ CBZ / ZIP 与 EPUB 共用原生 ZIP 通道：漫画压缩包只把图片条目�
 | 命令 | 作用 |
 | --- | --- |
 | `npm install` | 安装前端依赖；Tauri 命令找不到时先跑这个 |
-| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 41 个测试文件、287 条用例全绿，约 4 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
+| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 44 个测试文件、303 条用例全绿，约 4 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
 | `npm run typecheck` | `vue-tsc --noEmit`，类型检查 |
 | `npm run dev:vite` | 只起 Vite 开发服务器，固定端口 **5173**（strictPort），带 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`（最常用的快速验证） |
@@ -69,19 +69,21 @@ src/
       base.css             根布局、平台标记、手机底栏根节点、阅读器返回遮罩与边缘
       library.css          书架、书库卡、网格、FAB、拖拽 ghost、手机底部胶囊
       overlays.css         阅读器顶栏 / 抽屉 / 菜单 / 弹层
+      mobile-sheets.css    通用手机 bottom sheet 的表面 / 卡片 / 列表 / 表单
       controls.css         按钮、开关、分段控件、44px 命中区
       canvas.css           阅读表面、翻页舞台、surface-reveal 主题切换遮罩
       legacy.css           历史遗留组件样式（.uiverse-btn 等）
       theme-picker.css     主题色板
       content.css          阅读内容排版（小说正文 / 章节 / Markdown）
   stores/                  7 个 setup store：theme / shelf / reader / ui / settings / importProgress / updates
-  services/                43 个：解析、存储、平台、原生桥接、更新（不依赖 Vue / Pinia）
-  composables/             12 个：useImporter / useViewport / useShortcuts / useSheetDrag / useSheetSpring / useShelfDialogs /
+  services/                44 个：解析、存储、平台、原生桥接、更新、i18n（不依赖 Vue / Pinia）
+  composables/             13 个：useImporter / useViewport / useShortcuts / useSheetDrag / useSheetSpring / useShelfDialogs / useI18n /
                            useScrollBounce / useDuplicateImport / useReaderBackDismiss / useAndroidBackExit /
                            useSettingsTransition /
                            useVolumeKeys
-  components/              45 个 SFC（视图与交互）
-tests/                     41 个 .test.mjs（node:test + assert/strict + jsdom）
+  locales/                 界面文案目录：messages / en / ja（中文原文作 key）
+  components/              46 个 SFC（视图与交互）
+tests/                     44 个 .test.mjs（node:test + assert/strict + jsdom）
 scripts/                   5 个：check-dark-glow / generate-icons / release-notes / sync-android-icons /
                            patch-android-manifest
 references/                4 份规范：md3-component-guide / tokens / ui-component-spec / desktop-island
@@ -98,7 +100,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 .github/workflows/         三平台 + Android 自动打包
 ```
 
-`src/services/` 的关键分工（43 个文件，别只看名字猜）：
+`src/services/` 的关键分工（44 个文件，别只看名字猜）：
 
 - **解析**：`parsers.ts`（总入口与调度）、`epubParser.ts`、`cbzParser.ts`（CBZ / ZIP 漫画）、`epubType.ts`（漫画/小说判定）、`pdf.ts`、`mobi.ts`、`markdown.ts`、`pagination.ts`（小说智能分页、章节/图片页构建）、`readerLayout.ts`（页宽 / 行高 / 页边距度量）、`textEncoding.ts`
 - **存储**：`storage.ts`（IndexedDB 完整存档 + SQLite 镜像）、`nativeMetadata.ts`、`nativeStorage.ts`、`opfs.ts`、`restore.ts`、`progress.ts`、`mutationQueue.ts`（串行写队列）
@@ -128,6 +130,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 - 原生页缓存（Android Kotlin / 桌面 Rust）按最近访问时间 LRU 淘汰（24 个文件 / 192MB）。EPUB 的条目索引和阅读页序无关，禁止按 index 前后窗口删缓存或预取；前端页图 URL 回收也必须跟翻页同步执行，不能依赖延时的预载任务。
 - 图标统一走 `src/components/MdIcon.vue`（Material Symbols 24dp 内联路径），选中态用 `filled`；不引入图标库 / 组件库。新增依赖需要明确理由。
 - 注释用中文；复杂模块顶部保留现有的 banner 注释风格。只在逻辑不直观处写注释，不要给没改动的代码补注释。
+- 界面文案统一走 `useI18n()` 的 `t()`：中文原文即 key，英文 / 日文在 `src/locales/` 覆盖；插值用 `{0}` 这类占位符，不要在组件里手拼语言分支。
 - 全局 Toast 已移除：不要重新引入 toast / alert；可恢复错误记录到 console。唯一例外是 Android 原生返回提示（`plugin:android-toast|show`，文案「再按一次退出」）。
 
 ## 5. UI 规则（弱约束 / 倾向性指引）
@@ -161,7 +164,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 - 展开侧栏在 `900–1079px` 时，书架顶栏搜索框独占一行；`>=1080px` 才嵌入顶栏中段，避免压住标题和右侧按钮。
 - 手机底部导航是悬浮胶囊（`SideNav.vue` 的 `.mobile-nav`）：`left/right 14px`、`height 76px`、`border-radius 38px`、`max-width 560px`、`bottom: calc(14px + env(safe-area-inset-bottom))`；内容区必须挂 `.md-bottom-nav-space`（`6.5rem + safe-area`）。
 - 网格建议只用 `.md-shelf-grid`，跨列用 `.md-featured-cell`；FAB 与桌面灵动胶囊都用 `.md-fab-pos`，尽量避免在组件里另写 `grid-cols-*`。
-- 抽屉：桌面右侧 `w-[372px]`；手机底部默认 `78dvh`，可整卡上拖到状态栏下方（`100dvh - safe-area-top - 8px`）的展开档位，`rounded-t-[28px]` + 拖拽条 + 安全区 padding。向上拖吸附展开、向下拖先回默认档、继续下拉才关闭。遮罩用 `.md-scrim`；阅读设置 / 字体 / 目录 / 更新日志的进出场用 `useSheetSpring()` 物理弹簧，不再用 `md-sheet-enter-active`。
+- 抽屉：桌面右侧 `w-[372px]`；手机底部默认 `78dvh`，可整卡上拖到状态栏下方（`100dvh - safe-area-top - 8px`）的展开档位，`rounded-t-[28px]` + 拖拽条 + 安全区 padding。向上拖吸附展开、向下拖先回默认档、继续下拉才关闭。阅读器遮罩用 `.md-scrim`；通用手机面板用 `MobileBottomSheet.vue` 的原生 dialog / backdrop。进出场统一 `useSheetSpring()`，拖动统一 `useSheetDrag()`，不再新增 `md-sheet-enter-active`。**新增 bottom sheet 必须遵守 [references/bottom-sheet-spec.md](references/bottom-sheet-spec.md)**：页面级复用 `MobileBottomSheet.vue`，阅读器复用 `.md-drawer` + `ReaderDrawerHeader`，不能私造外壳或动画。阅读目录、字体选择、更新日志按用户要求保留当前设计，不因新增规范重新设计。
 - **z-index 阶梯**（新增层先沿用现有层级，别随手写大数）：
 
   | 层 | z-index | 位置 |
@@ -179,14 +182,14 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 ### 5.4 文字与动效
 
 - 字体：`font-sans` 正文（Inter/PingFang），`font-display` 书封标题，`font-mono` 元信息，竖排书封用宋体 / Instrument Serif。
-- 字号建议沿用现有档位：正文/输入 13、次要 12、分组标签与元信息 11 / 10 / 10.5、页面标题 21–22、sheet 标题 17、极小徽标 8–9.5。3 个连续的小字号（如 14 / 15 / 16）容易让层次糊掉，能避开就避开。
-- 动效统一 200ms `cubic-bezier(0.2, 0, 0, 1)`；卡片 hover 可用 280ms `cubic-bezier(0.16, 1, 0.3, 1)`。只过渡颜色/位移/阴影，不给布局属性加 transition；侧栏展开/折叠、桌面灵动胶囊分裂/合并的宽度与内部重排过渡是仅有的例外。
+- 字号建议沿用现有档位：正文/输入 13、次要 12、分组标签与元信息 11 / 10 / 10.5、页面标题 21–22、极小徽标 8–9.5。新 bottom sheet 用 prominent 标题 22px（同行页签 20px），17px 保留给存量默认抽屉；手机 sheet 输入框用 16px 防止聚焦缩放。其他组件避免随手添加相近字号档位。
+- 常规动效统一 200ms `cubic-bezier(0.2, 0, 0, 1)`；卡片 hover 可用 280ms `cubic-bezier(0.16, 1, 0.3, 1)`。Sheet 进出场使用物理弹簧，具体参数见 bottom sheet 规范。只过渡颜色/位移/阴影，不给布局属性加 transition；例外为已有侧栏 / 桌面灵动胶囊，以及共享 sheet 拖动吸附高度和页签滑块宽度，不扩散到业务组件。
 - 尊重 `prefers-reduced-motion`。图标按钮建议带 `title` 或 `aria-label`；开关用 `role="switch"`；用 `<div @click>` 当按钮的可访问性与键盘支持较差，优先用原生 `<button>`。
 - 触控命中区：小图标按钮挂 `.md-hit-target`（命中区补到 `max(100%, 44px)`）；手机菜单条目挂 `.md-mobile-menu-item`（`min-height: 44px`）。
 
 ### 5.5 参考
 
-- 新增或重做组件前，先读 [references/md3-component-guide.md](references/md3-component-guide.md)；里面有按钮、开关、分段控件、列表和抽屉的直接写法。
+- 新增或重做组件前，先读 [references/md3-component-guide.md](references/md3-component-guide.md)；里面有按钮、开关、分段控件、列表和抽屉的直接写法。新增 bottom sheet 还必须遵守 [references/bottom-sheet-spec.md](references/bottom-sheet-spec.md)。
 - Token 全表见 [references/tokens.md](references/tokens.md)，系统级布局说明见 [references/ui-component-spec.md](references/ui-component-spec.md)。
 - 桌面灵动胶囊的状态机、尺寸、分裂 / 合并动效与焦点规则见 [references/desktop-island.md](references/desktop-island.md)；实现是 `DesktopIsland.vue` + `ImportMenuSheet.vue` + `ImportProgressPanel.vue` + `UpdateIslandPanel.vue`。
 - 旧笔记 `.trae/skills/homura-md3-ui/SKILL.md` 只作补充；`.trae/` 被 gitignore，克隆仓库后可能不存在。与上述文档或当前 `src/` 冲突时，以当前代码和 `references/md3-component-guide.md` 为准。
@@ -253,6 +256,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 - [ ] 浏览器 390px / 899px / 900px / 1440px 四档宽度下无横向溢出、底部导航和 FAB 不压内容。
 - [ ] 白昼 / 护眼 / 夜间三种表面逐屏检查，没有硬编码白字或暗底发灰。
 - [ ] 改 UI：10 套主题都能切，外观面板 280px 双行五列，sheet 可关闭，`prefers-reduced-motion` 不崩。
+- [ ] 新增 / 重做 bottom sheet：通过 [专用验收清单](references/bottom-sheet-spec.md#8-验收清单)，复用共享外壳；关闭动画结束后才清理内容，焦点与滚动锁正确恢复。
 - [ ] 改阅读器：LTR / RTL / 竖排、单页 / 双页、翻页动画、进度恢复都正常。
 - [ ] 改导入 / 解析：用真实样本验证对应格式；PDF 需覆盖中文文本与扫描件；Markdown 需测 `<script>` 与 `javascript:` 链接。
 - [ ] 改书库 / 收藏：建库改名删库、书本搬移、连读顺序、重启后恢复都正常。

@@ -35,9 +35,9 @@
         :is-compact="isCompact"
         prominent
         inline-tabs
-        title="目录"
+        :title="t('目录')"
         title-id="reader-toc-title"
-        close-label="关闭目录"
+        :close-label="t('关闭目录')"
         @close="ui.closeToc()"
         @drag-start="onSheetDragStart"
         @drag-move="onSheetDragMove"
@@ -45,7 +45,7 @@
         @drag-cancel="onSheetDragCancel"
       >
         <template v-if="reader.currentCollection" #status>
-          <ReaderDrawerTabs v-model="activeTab" :options="tabs" id-prefix="reader-toc" label="目录分类" />
+          <ReaderDrawerTabs v-model="activeTab" :options="tabs" id-prefix="reader-toc" :label="t('目录分类')" />
         </template>
       </ReaderDrawerHeader>
 
@@ -53,6 +53,7 @@
         <section
           v-show="activeTab === 'book'"
           id="reader-toc-panel-book"
+          class="md-drawer-tab-panel"
           :role="reader.currentCollection ? 'tabpanel' : undefined"
           :aria-labelledby="reader.currentCollection ? 'reader-toc-tab-book' : 'reader-toc-title'"
         >
@@ -60,7 +61,7 @@
             <MdIcon :name="isManga ? 'auto_stories' : 'toc'" :size="18" />
             <div><h3 :title="reader.currentBook?.title">{{ reader.currentBook?.title }}</h3><p>{{ tocSubtitle }}</p></div>
           </div>
-          <nav v-if="isManga" class="reader-toc-card reader-toc-pages md-toc-grid" aria-label="漫画页码">
+          <nav v-if="isManga" class="reader-toc-card reader-toc-pages md-toc-grid" :aria-label="t('漫画页码')">
             <button
               v-for="(_page, idx) in reader.activePages"
               :key="idx"
@@ -68,12 +69,12 @@
               @click="jumpTo(idx)"
               class="md-toc-page"
               :class="{ 'is-active': idx === reader.currentIndex }"
-              :aria-label="`跳转到第 ${idx + 1} 页`"
+              :aria-label="t('跳转到第 {0} 页', { 0: idx + 1 })"
               :aria-current="idx === reader.currentIndex ? 'page' : undefined"
             >{{ idx + 1 }}</button>
           </nav>
 
-          <nav v-else class="reader-toc-card reader-toc-list" aria-label="章节目录">
+          <nav v-else class="reader-toc-card reader-toc-list" :aria-label="t('章节目录')">
             <button
               v-for="(group, index) in groups"
               :key="group.key"
@@ -88,7 +89,7 @@
               <span class="md-drawer-item-label">{{ group.title }}</span>
               <MdIcon v-if="isCurrentChapter(group)" class="reader-toc-current" name="auto_stories" :size="18" />
             </button>
-            <p v-if="groups.length === 0" class="reader-toc-empty">暂无章节信息</p>
+            <p v-if="groups.length === 0" class="reader-toc-empty">{{ t('暂无章节信息') }}</p>
           </nav>
         </section>
 
@@ -96,14 +97,15 @@
           v-if="reader.currentCollection"
           v-show="activeTab === 'collection'"
           id="reader-toc-panel-collection"
+          class="md-drawer-tab-panel"
           role="tabpanel"
           aria-labelledby="reader-toc-tab-collection"
         >
           <div class="reader-toc-summary">
             <MdIcon name="collections_bookmark" :size="18" />
-            <div><h3 :title="reader.currentCollection.title">{{ reader.currentCollection.title }}</h3><p>{{ reader.collectionBooks.length }} 本 · 按书库顺序阅读</p></div>
+            <div><h3 :title="reader.currentCollection.title">{{ reader.currentCollection.title }}</h3><p>{{ t('{0} 本 · 按书库顺序阅读', { 0: reader.collectionBooks.length }) }}</p></div>
           </div>
-          <nav class="reader-toc-card reader-toc-list" aria-label="本书库书本顺序">
+          <nav class="reader-toc-card reader-toc-list" :aria-label="t('本书库书本顺序')">
             <ol>
               <li v-for="(book, index) in reader.collectionBooks" :key="book.id">
                 <button
@@ -111,7 +113,7 @@
                   class="md-drawer-list-item"
                   :class="{ 'is-active': book.id === reader.currentBook?.id }"
                   :aria-current="book.id === reader.currentBook?.id ? 'true' : undefined"
-                  :aria-label="`打开书库书本：${book.title}${book.id === reader.currentBook?.id ? '，正在阅读' : ''}`"
+                  :aria-label="t('打开书库书本：{0}{1}', { 0: book.title, 1: book.id === reader.currentBook?.id ? t('，正在阅读') : '' })"
                   :disabled="reader.openingBook"
                   :title="book.title"
                   @click="openBook(book.id)"
@@ -140,6 +142,9 @@ import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
 import ReaderDrawerTabs from './ReaderDrawerTabs.vue';
 import MdIcon from './MdIcon.vue';
 import type { ReaderPage } from '../types.ts';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const reader = useReaderStore();
 const ui = useUiStore();
@@ -149,7 +154,7 @@ const tocBodyRef = shallowRef<HTMLElement | null>(null);
 const activeTab = ref('book');
 const tabs = [
   { value: 'book', label: '目录' },
-  { value: 'collection', label: '本目录' }
+  { value: 'collection', label: '书库' }
 ];
 const sheetSpring = useSheetSpring({ isCompact });
 const {
@@ -184,7 +189,7 @@ const groups = computed(() => {
     if (!map.has(key)) {
       map.set(key, {
         key,
-        title: page.title || `第 ${key + 1} 章`,
+        title: page.title || t('第 {0} 章', { 0: key + 1 }),
         index: idx,
         end: idx
       });
@@ -196,8 +201,8 @@ const groups = computed(() => {
 
 const tocSubtitle = computed(() => {
   const pages = reader.activePages.length;
-  if (isManga.value) return `${pages} 页`;
-  return `${groups.value.length} 章 · ${pages} 页`;
+  if (isManga.value) return t('{0} 页', { 0: pages });
+  return t('{0} 章 · {1} 页', { 0: groups.value.length, 1: pages });
 });
 
 function isCurrentChapter(group: { index: number; end: number }) {
@@ -226,7 +231,7 @@ watch(tocOpen, async open => {
   tocTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   activeTab.value = 'book';
   await nextTick();
-  tocSheetRef.value?.querySelector<HTMLButtonElement>('[aria-label="关闭目录"]')?.focus({ preventScroll: true });
+  tocSheetRef.value?.querySelector<HTMLButtonElement>('.md-drawer-header .md-icon-button')?.focus({ preventScroll: true });
   scrollCurrentIntoView();
 });
 

@@ -31,9 +31,9 @@
       <ReaderDrawerHeader
         :is-compact="isCompact"
         prominent
-        title="字体"
+        :title="t('字体')"
         title-id="reader-font-title"
-        close-label="关闭字体卡片"
+        :close-label="t('关闭字体卡片')"
         @close="closeFontMenu"
         @drag-start="onSheetDragStart"
         @drag-move="onSheetDragMove"
@@ -41,10 +41,10 @@
         @drag-cancel="onSheetDragCancel"
       >
         <template #status>
-          <button type="button" class="reader-font-tool" title="搜索字体" aria-label="搜索字体" @click="fontSearchInput?.focus()"><MdIcon name="search" /></button>
+          <button type="button" class="reader-font-tool" :title="t('搜索字体')" :aria-label="t('搜索字体')" @click="fontSearchInput?.focus()"><MdIcon name="search" /></button>
         </template>
       </ReaderDrawerHeader>
-      <div class="md-drawer-body reader-font-body" role="group" aria-label="选择正文字体">
+      <div class="md-drawer-body reader-font-body" role="group" :aria-label="t('选择正文字体')">
         <button
           v-if="showDefaultFont"
           type="button"
@@ -52,10 +52,10 @@
           class="reader-font-default reader-font-option"
           @click="pickFont('system')"
         >
-          <span>默认</span>
+          <span>{{ t('默认') }}</span>
           <MdIcon v-if="reader.layoutConfig.fontFamily === 'system'" name="check" />
         </button>
-        <h3 class="reader-font-group-title">可用字体</h3>
+        <h3 class="reader-font-group-title">{{ t('可用字体') }}</h3>
         <div v-if="filteredFonts.length" class="reader-font-list">
           <button
             v-for="option in filteredFonts"
@@ -65,17 +65,17 @@
             class="reader-font-option"
             @click="pickFont(option.value)"
           >
-            <span class="reader-font-name" :style="{ fontFamily: option.stack }">{{ option.label }}</span>
+            <span class="reader-font-name" :style="{ fontFamily: option.stack }">{{ t(option.label) }}</span>
             <MdIcon v-if="reader.layoutConfig.fontFamily === option.value" name="check" />
           </button>
         </div>
-        <p v-else class="reader-font-empty" role="status">没有找到匹配的字体</p>
+        <p v-else class="reader-font-empty" role="status">{{ t('没有找到匹配的字体') }}</p>
       </div>
       <div class="reader-font-search-wrap">
         <div class="reader-font-search">
           <MdIcon name="search" :size="20" />
-          <input ref="fontSearchInput" v-model="fontQuery" type="search" placeholder="搜索字体" aria-label="搜索可用字体" autocomplete="off" />
-          <button v-if="fontQuery" type="button" class="reader-font-clear" aria-label="清除字体搜索" @click="clearFontSearch"><MdIcon name="close" :size="18" /></button>
+          <input ref="fontSearchInput" v-model="fontQuery" type="search" :placeholder="t('搜索字体')" :aria-label="t('搜索可用字体')" autocomplete="off" />
+          <button v-if="fontQuery" type="button" class="reader-font-clear" :aria-label="t('清除字体搜索')" @click="clearFontSearch"><MdIcon name="close" :size="18" /></button>
         </div>
       </div>
     </aside>
@@ -92,6 +92,9 @@ import { useSheetDrag } from '../composables/useSheetDrag.ts';
 import { useSheetSpring } from '../composables/useSheetSpring.ts';
 import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
 import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const reader = useReaderStore();
 const ui = useUiStore();
@@ -117,8 +120,8 @@ const fontQuery = ref('');
 const fontSearchInput = shallowRef<HTMLInputElement | null>(null);
 const normalizedFontQuery = computed(() => fontQuery.value.trim().toLocaleLowerCase());
 const filteredFonts = computed(() => READER_FONT_OPTIONS.filter(option => option.value !== 'system'
-  && `${option.label} ${option.value} ${option.stack}`.toLocaleLowerCase().includes(normalizedFontQuery.value)));
-const showDefaultFont = computed(() => !normalizedFontQuery.value || '默认 原始 system default'.includes(normalizedFontQuery.value));
+  && `${t(option.label)} ${option.label} ${option.value} ${option.stack}`.toLocaleLowerCase().includes(normalizedFontQuery.value)));
+const showDefaultFont = computed(() => !normalizedFontQuery.value || `${t('默认')} ${t('原始')} 默认 原始 system default`.toLocaleLowerCase().includes(normalizedFontQuery.value));
 let fontTrigger: HTMLElement | null = null;
 
 watch(fontMenuOpen, async open => {

@@ -20,8 +20,9 @@
     <button
       type="button"
       class="md-icon-button"
-      :title="closeLabel"
-      :aria-label="closeLabel"
+      :title="t(closeLabel)"
+      :aria-label="t(closeLabel)"
+      :disabled="closeDisabled"
       @click="$emit('close')"
     >
       <MdIcon name="close" />
@@ -32,6 +33,9 @@
 
 <script setup lang="ts">
 import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 defineProps({
   isCompact: { type: Boolean, default: false },
@@ -40,7 +44,8 @@ defineProps({
   title: { type: String, required: true },
   subtitle: { type: String, default: '' },
   titleId: { type: String, required: true },
-  closeLabel: { type: String, default: '关闭' }
+  closeLabel: { type: String, default: '关闭' },
+  closeDisabled: { type: Boolean, default: false }
 });
 
 defineEmits(['close', 'drag-start', 'drag-move', 'drag-end', 'drag-cancel']);

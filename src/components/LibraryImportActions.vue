@@ -19,7 +19,7 @@
     >
       <span class="import-fab-layer" :class="{ 'is-hidden': !isIdle }" aria-hidden="true">
         <MdIcon name="upload_file" filled :class="compact ? 'w-5 h-5' : 'w-6 h-6'" />
-        <span v-if="!compact" class="import-fab-label">导入</span>
+        <span v-if="!compact" class="import-fab-label">{{ t('导入') }}</span>
       </span>
 
       <span class="import-fab-layer" :class="{ 'is-hidden': isIdle }" aria-hidden="true">
@@ -54,6 +54,9 @@
 import { computed } from 'vue';
 import { useImportProgressStore } from '../stores/importProgress.ts';
 import MdIcon from './MdIcon.vue';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const props = defineProps({
   compact: Boolean,
@@ -68,15 +71,15 @@ const isIdle = computed(() => store.status === 'idle');
 const ringLength = 2 * Math.PI * 18;
 const ringOffset = computed(() => ringLength * (1 - store.percent / 100));
 const buttonTitle = computed(() => {
-  if (isIdle.value) return '导入作品';
-  if (store.status === 'running') return `导入进度 ${store.done} / ${store.total}`;
-  if (store.status === 'cancelled') return '导入已停止';
-  return store.hasFailures ? '导入完成，有失败项' : '导入完成';
+  if (isIdle.value) return t('导入作品');
+  if (store.status === 'running') return t('导入进度 {0} / {1}', { 0: store.done, 1: store.total });
+  if (store.status === 'cancelled') return t('导入已停止');
+  return store.hasFailures ? t('导入完成，有失败项') : t('导入完成');
 });
 const buttonLabel = computed(() => {
-  if (isIdle.value) return '导入作品';
-  if (props.compact) return `${buttonTitle.value}，查看导入状态`;
-  return `${buttonTitle.value}，${store.expanded ? '收起进度详情' : '展开进度详情'}`;
+  if (isIdle.value) return t('导入作品');
+  if (props.compact) return t('{0}，查看导入状态', { 0: buttonTitle.value });
+  return `${buttonTitle.value}，${store.expanded ? t('收起进度详情') : t('展开进度详情')}`;
 });
 
 function onFabClick() {

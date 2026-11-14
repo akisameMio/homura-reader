@@ -2,7 +2,7 @@
   <footer
     v-if="reader.currentBook"
     class="md-reader-footer"
-    aria-label="阅读进度"
+    :aria-label="t('阅读进度')"
     :style="{ '--reader-footer-progress': `${progress}%` }"
     @pointerdown.stop
     @click.stop
@@ -13,8 +13,8 @@
           v-if="previousPageNumber"
           type="button"
           class="md-reader-footer-history"
-          :title="`回到上次位置（第 ${previousPageNumber} 页）`"
-          :aria-label="`回到上次位置，第 ${previousPageNumber} 页`"
+          :title="t('回到上次位置（第 {0} 页）', { 0: previousPageNumber })"
+          :aria-label="t('回到上次位置，第 {0} 页', { 0: previousPageNumber })"
           @click="reader.returnToPreviousLocation()"
         >
           <span class="md-reader-footer-history-icon" aria-hidden="true">
@@ -44,13 +44,13 @@
             <span
               :key="`${pageCountVisible ? 'total' : 'current'}-${folio.pageNumber}`"
               class="md-reader-footer-page-label"
-            >{{ pageCountVisible ? `${folio.pageNumber}/${total}页` : `${folio.pageNumber}页` }}</span>
+            >{{ pageCountVisible ? t('{0}/{1}页', { 0: folio.pageNumber, 1: total }) : t('{0}页', { 0: folio.pageNumber }) }}</span>
           </Transition>
         </div>
       </div>
 
       <div class="md-reader-footer-side is-end">
-        <span v-if="showChapterRemaining" class="md-reader-footer-remaining">本章还剩 {{ chapterRemaining }} 页</span>
+        <span v-if="showChapterRemaining" class="md-reader-footer-remaining">{{ t('本章还剩 {0} 页', { 0: chapterRemaining }) }}</span>
       </div>
     </div>
 
@@ -69,8 +69,8 @@
         step="any"
         :value="sliderValue"
         :disabled="maxIndex === 0"
-        aria-label="阅读进度"
-        :aria-valuetext="`${previewChapterTitle}，第 ${previewPageNumber} 页`"
+        :aria-label="t('阅读进度')"
+        :aria-valuetext="t('{0}，第 {1} 页', { 0: previewChapterTitle, 1: previewPageNumber })"
         @input="onInput"
         @change="onRangeChange"
         @pointerdown="onPointerDown"
@@ -93,7 +93,7 @@
     >
       <div v-if="bubbleVisible" class="md-reader-footer-bubble" aria-hidden="true">
         <p class="md-reader-footer-bubble-title">{{ previewChapterTitle }}</p>
-        <p class="md-reader-footer-bubble-page">第 {{ previewPageNumber }} 页</p>
+        <p class="md-reader-footer-bubble-page">{{ t('第 {0} 页', { 0: previewPageNumber }) }}</p>
       </div>
     </Transition>
   </footer>
@@ -115,6 +115,9 @@ import { isAndroid } from '../services/platform.ts';
 import { resolveReaderFolios } from '../services/readerLayout.ts';
 import MdIcon from './MdIcon.vue';
 import type { ReaderPage } from '../types.ts';
+import { useI18n } from '../composables/useI18n.ts';
+
+const { t } = useI18n();
 
 const reader = useReaderStore();
 const ui = useUiStore();
