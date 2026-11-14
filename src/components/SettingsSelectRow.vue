@@ -13,7 +13,7 @@
     @keydown="onTriggerKeydown"
   >
     <span class="settings-select-label">{{ label }}</span>
-    <span class="settings-select-control">
+    <span ref="controlRef" class="settings-select-control">
       <span class="settings-select-value">{{ selectedLabel }}</span>
       <span class="settings-select-arrows" aria-hidden="true">
         <MdIcon name="expand_more" :size="14" />
@@ -21,34 +21,35 @@
       </span>
     </span>
     <Teleport to="body">
-      <Transition name="settings-menu">
-        <div
-          v-if="open"
-          :id="menuId"
-          ref="menuRef"
-          class="settings-select-menu"
-          role="listbox"
-          :aria-label="label"
-          :style="menuStyle"
-          @keydown="onMenuKeydown"
+      <div
+        v-if="menuVisible"
+        :id="menuId"
+        ref="menuRef"
+        class="settings-select-menu"
+        :class="{ 'is-closing': !open }"
+        :aria-hidden="!open"
+        :inert="!open"
+        role="listbox"
+        :aria-label="label"
+        :style="menuStyle"
+        @keydown="onMenuKeydown"
+      >
+        <button
+          v-for="(option, index) in options"
+          :key="option.value"
+          type="button"
+          class="settings-select-option"
+          :class="{ 'is-selected': option.value === modelValue }"
+          role="option"
+          :aria-selected="option.value === modelValue"
+          :tabindex="index === activeIndex ? 0 : -1"
+          @focus="activeIndex = index"
+          @click="select(option.value)"
         >
-          <button
-            v-for="(option, index) in options"
-            :key="option.value"
-            type="button"
-            class="settings-select-option"
-            :class="{ 'is-selected': option.value === modelValue }"
-            role="option"
-            :aria-selected="option.value === modelValue"
-            :tabindex="index === activeIndex ? 0 : -1"
-            @focus="activeIndex = index"
-            @click="select(option.value)"
-          >
-            <span>{{ option.label }}</span>
-            <MdIcon v-if="option.value === modelValue" name="check" :size="21" />
-          </button>
-        </div>
-      </Transition>
+          <span>{{ option.label }}</span>
+          <MdIcon v-if="option.value === modelValue" name="check" :size="21" />
+        </button>
+      </div>
     </Teleport>
   </button>
 </template>
@@ -56,6 +57,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, useId, watch, type PropType } from 'vue';
 import MdIcon from './MdIcon.vue';
+import { createSettingsSelectMotion } from '../services/settingsSelectMotion.ts';
 
 const props = defineProps({
   label: { type: String, required: true },
@@ -66,34 +68,59 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue']);
 const menuId = `settings-select-${useId()}`;
 const triggerRef = shallowRef<HTMLButtonElement | null>(null);
+const controlRef = shallowRef<HTMLSpanElement | null>(null);
 const menuRef = shallowRef<HTMLDivElement | null>(null);
 const open = ref(false);
+const menuVisible = ref(false);
 const activeIndex = ref(0);
 const menuStyle = ref({ left: '0px', top: '0px', width: '224px', maxHeight: '320px' });
 const selectedLabel = computed(() => props.options.find(option => option.value === props.modelValue)?.label || '');
+const motion = createSettingsSelectMotion({
+  control: () => controlRef.value,
+  menu: () => menuRef.value,
+  onClosed: () => {
+    if (!open.value) {
+      menuVisible.value = false;
+      removeViewportListeners();
+    }
+  }
+});
 
 function focusOption(index: number) {
   activeIndex.value = index;
-  menuRef.value?.querySelectorAll<HTMLButtonElement>('[role="option"]')[index]?.focus({ preventScroll: true });
-  menuRef.value?.querySelectorAll<HTMLButtonElement>('[role="option"]')[index]?.scrollIntoView({ block: 'nearest' });
+  const menu = menuRef.value;
+  const option = menu?.querySelectorAll<HTMLButtonElement>('[role="option"]')[index];
+  if (!menu || !option) return;
+  option.focus({ preventScroll: true });
+  // 只滚动菜单自身，scrollIntoView 会连带移动背景并误触发关闭。
+  if (option.offsetTop < menu.scrollTop) menu.scrollTop = option.offsetTop;
+  else if (option.offsetTop + option.offsetHeight > menu.scrollTop + menu.clientHeight) {
+    menu.scrollTop = option.offsetTop + option.offsetHeight - menu.clientHeight;
+  }
 }
 
 async function showMenu() {
   if (props.disabled || !props.options.length || !triggerRef.value) return;
   // 菜单传送到根节点，避免设置卡片与抽屉的滚动容器裁切。
-  const rect = triggerRef.value.getBoundingClientRect();
+  const rect = (controlRef.value || triggerRef.value).getBoundingClientRect();
   const viewport = window.visualViewport;
   const viewportLeft = viewport?.offsetLeft ?? 0;
   const viewportTop = viewport?.offsetTop ?? 0;
   const width = Math.min(224, (viewport?.width ?? window.innerWidth) - 24);
-  const maxHeight = Math.min(320, (viewport?.height ?? window.innerHeight) - 24);
+  const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
   const index = Math.max(0, props.options.findIndex(option => option.value === props.modelValue));
-  const height = Math.min(maxHeight, props.options.length * 56 + 16);
-  const left = Math.max(viewportLeft + 12, Math.min(rect.right - width - 12, viewportLeft + (viewport?.width ?? window.innerWidth) - width - 12));
-  const top = Math.max(viewportTop + 12, Math.min(rect.top + (rect.height - 56) / 2 - 8 - index * 56, viewportTop + (viewport?.height ?? window.innerHeight) - height - 12));
-  menuStyle.value = { left: `${left}px`, top: `${top}px`, width: `${width}px`, maxHeight: `${maxHeight}px` };
+  const desiredHeight = Math.min(320, props.options.length * 56 + 16);
+  const availableHeight = viewportBottom - 12 - rect.top;
+  const maxHeight = Math.min(desiredHeight, Math.max(72, availableHeight), viewportBottom - viewportTop - 24);
+  const left = Math.max(viewportLeft + 12, Math.min(rect.right - width, viewportLeft + (viewport?.width ?? window.innerWidth) - width - 12));
+  const top = Math.max(viewportTop + 12, Math.min(rect.top, viewportBottom - maxHeight - 12));
+  // 反向重开时沿用原锚点，不能用新的布局位置覆盖正在运动的姿态。
+  if (!menuVisible.value) {
+    menuStyle.value = { left: `${left}px`, top: `${top}px`, width: `${width}px`, maxHeight: `${maxHeight}px` };
+  }
   activeIndex.value = index;
   open.value = true;
+  menuVisible.value = true;
   document.addEventListener('pointerdown', onOutsidePointer, true);
   document.addEventListener('focusin', onFocusIn);
   document.addEventListener('keydown', onDocumentKeydown, true);
@@ -102,22 +129,29 @@ async function showMenu() {
   viewport?.addEventListener('resize', onViewportChange);
   viewport?.addEventListener('scroll', onViewportChange);
   await nextTick();
-  if (open.value) focusOption(index);
+  if (open.value) {
+    motion.setOpen(true);
+    focusOption(index);
+  }
 }
 
 function removeListeners() {
   document.removeEventListener('pointerdown', onOutsidePointer, true);
   document.removeEventListener('focusin', onFocusIn);
   document.removeEventListener('keydown', onDocumentKeydown, true);
+}
+
+function removeViewportListeners() {
   document.removeEventListener('scroll', onScroll, true);
   window.removeEventListener('resize', onViewportChange);
   window.visualViewport?.removeEventListener('resize', onViewportChange);
   window.visualViewport?.removeEventListener('scroll', onViewportChange);
 }
 
-function close(restoreFocus = false) {
+function close(restoreFocus = false, immediate = false) {
   open.value = false;
   removeListeners();
+  motion.setOpen(false, immediate);
   if (restoreFocus) triggerRef.value?.focus({ preventScroll: true });
 }
 
@@ -145,11 +179,11 @@ function onFocusIn(event: FocusEvent) {
 
 function onScroll(event: Event) {
   if (event.target instanceof Node && menuRef.value?.contains(event.target)) return;
-  close();
+  close(false, true);
 }
 
 function onViewportChange() {
-  close();
+  close(false, true);
 }
 
 function onDocumentKeydown(event: KeyboardEvent) {
@@ -184,8 +218,14 @@ function onMenuKeydown(event: KeyboardEvent) {
   focusOption(index);
 }
 
-watch(() => [props.disabled, props.options, props.modelValue], () => close());
-onBeforeUnmount(removeListeners);
+watch(() => [props.disabled, props.options, props.modelValue], () => {
+  if (open.value) close(true);
+});
+onBeforeUnmount(() => {
+  removeListeners();
+  removeViewportListeners();
+  motion.dispose();
+});
 </script>
 
 <style scoped>
@@ -269,6 +309,7 @@ onBeforeUnmount(removeListeners);
   color: var(--md-on-surface);
   box-shadow: 0 8px 32px color-mix(in oklab, var(--md-shadow-color-soft) 24%, transparent);
   transform-origin: right top;
+  opacity: 0;
   scrollbar-width: thin;
 }
 
@@ -316,26 +357,13 @@ onBeforeUnmount(removeListeners);
   background: color-mix(in oklab, var(--md-surface-highest) 88%, var(--md-on-surface) 12%);
 }
 
-.settings-menu-enter-active,
-.settings-menu-leave-active {
-  transition: opacity 160ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.settings-menu-leave-active {
+.settings-select-menu.is-closing {
   pointer-events: none;
-}
-
-.settings-menu-enter-from,
-.settings-menu-leave-to {
-  opacity: 0;
-  transform: translateY(-4px) scale(0.96);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .settings-select-control,
-  .settings-select-option,
-  .settings-menu-enter-active,
-  .settings-menu-leave-active {
+  .settings-select-option {
     transition: none;
   }
 }
