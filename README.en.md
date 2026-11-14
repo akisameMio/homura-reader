@@ -1,4 +1,4 @@
-**English** | [简体中文](README.md)
+**English** | [简体中文](README.md)STAR MEOW STAR MEOW!!!
 <div align="center">
   <img src="https://github.com/user-attachments/assets/818e7aba-f12a-49e1-8640-8852cb852b8b" width="180" alt="HOMURA" />
   <h1>HOMURA</h1>
