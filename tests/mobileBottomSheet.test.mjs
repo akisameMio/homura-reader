@@ -154,6 +154,29 @@ test('软键盘改变可视视口时调整面板可用高度，关闭后移除�
   } finally { app.unmount(); }
 });
 
+test('键盘锚定模式保持打开时的面板位置，不随软键盘上移', async () => {
+  const { app, state } = mount({ keyboardAnchored: true });
+  try {
+    await flush();
+    const dialog = document.querySelector('dialog');
+    assert.equal(dialog.classList.contains('is-keyboard-anchored'), true);
+    assert.equal(dialog.style.height, '844px');
+    assert.equal(dialog.style.top, '0px');
+    assert.equal(dialog.style.getPropertyValue('--md-sheet-anchored-layout-height'), '844px');
+    assert.equal(dialog.style.getPropertyValue('--md-sheet-anchored-height'), '658px');
+    viewport.height = 420;
+    viewport.offsetTop = 20;
+    viewport.dispatchEvent(new window.Event('resize'));
+    assert.equal(dialog.style.height, '844px');
+    assert.equal(dialog.style.top, '0px');
+    assert.equal(dialog.style.getPropertyValue('--md-sheet-anchored-height'), '658px');
+    state.open = false;
+    await flush();
+    await advance();
+    assert.equal(document.querySelector('dialog').open, false);
+  } finally { app.unmount(); }
+});
+
 test('同一轮快速打开再关闭不会留下滚动锁或原生模态层', async () => {
   const { app, state } = mount({ open: false });
   try {

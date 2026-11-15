@@ -8,6 +8,7 @@ use tauri::{Manager, WindowEvent};
 
 mod cover_thumb;
 mod desktop_archive;
+mod log_export;
 mod metadata_store;
 mod mobi_parser;
 mod native_import;
@@ -127,6 +128,7 @@ pub fn run() {
             metadata_store::metadata_save_progress,
             metadata_store::metadata_clear_progress,
             metadata_store::metadata_clear_all,
+            log_export::export_runtime_logs,
             storage_stats::storage_stats,
             desktop_archive::open,
             desktop_archive::open_document,

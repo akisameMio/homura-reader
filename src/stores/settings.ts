@@ -9,6 +9,7 @@ import { defineStore } from 'pinia';
 import { computed, reactive, ref } from 'vue';
 import { isWindows } from '../services/platform.ts';
 import { resolveFontValue } from '../services/readerLayout.ts';
+import { configureRuntimeLogs, RUNTIME_LOG_LEVELS, type RuntimeLogLevel } from '../services/runtimeLogs.ts';
 import { TRANSITION_OPTIONS, useThemeStore } from './theme.ts';
 
 const READER_DEFAULTS_KEY = 'homura_reader_defaults';
@@ -16,10 +17,13 @@ const DEBUG_FORCE_FULLSCREEN_KEY = 'homura_debug_force_fullscreen';
 const DEBUG_AUTO_UPDATE_CHECK_KEY = 'homura_debug_auto_update_check';
 const IMPORT_COLLECTION_PROMPT_KEY = 'homura_import_collection_prompt';
 const VOLUME_KEYS_TURN_PAGE_KEY = 'homura_volume_keys_turn_page';
+const RUNTIME_LOG_LEVEL_KEY = 'homura_runtime_log_level';
+const RUNTIME_LOG_CAPTURE_KEY = 'homura_runtime_log_capture';
 const DIRECTIONS = ['ltr', 'rtl', 'vertical'];
 const WEBTOON_FITS = ['screen', 'medium', 'wide'];
 const LINE_HEIGHTS = ['tight', 'normal', 'loose'];
 const PAGE_MARGINS = ['narrow', 'normal', 'wide'];
+const DEFAULT_RUNTIME_LOG_LEVEL: RuntimeLogLevel = 'error';
 
 export const DEFAULT_READER_SETTINGS = Object.freeze({
   direction: 'ltr',
@@ -116,6 +120,26 @@ function readVolumeKeysTurnPage() {
   }
 }
 
+function readRuntimeLogLevel(): RuntimeLogLevel {
+  try {
+    const value = localStorage.getItem(RUNTIME_LOG_LEVEL_KEY);
+    return RUNTIME_LOG_LEVELS.includes(value as RuntimeLogLevel)
+      ? value as RuntimeLogLevel
+      : DEFAULT_RUNTIME_LOG_LEVEL;
+  } catch (err) {
+    return DEFAULT_RUNTIME_LOG_LEVEL;
+  }
+}
+
+function readRuntimeLogCapture() {
+  try {
+    // 默认开启，只有用户明确关闭过才返回 false。
+    return localStorage.getItem(RUNTIME_LOG_CAPTURE_KEY) !== '0';
+  } catch (err) {
+    return true;
+  }
+}
+
 export const useSettingsStore = defineStore('settings', () => {
   const theme = useThemeStore();
   const readerDefaults = reactive(readReaderDefaults());
@@ -125,7 +149,11 @@ export const useSettingsStore = defineStore('settings', () => {
   const importCollectionPrompt = ref(readImportCollectionPrompt());
   // 默认关闭：不主动劫持 Android 硬件音量键，用户手动打开后才交给阅读器翻页
   const volumeKeysTurnPage = ref(readVolumeKeysTurnPage());
+  const runtimeLogLevel = ref<RuntimeLogLevel>(readRuntimeLogLevel());
+  const runtimeLogCapture = ref(readRuntimeLogCapture());
   const showFullscreenButton = computed(() => isWindows || debugForceFullscreen.value);
+
+  configureRuntimeLogs({ level: runtimeLogLevel.value, capture: runtimeLogCapture.value });
 
   function persistReaderDefaults() {
     writeReaderDefaults(readerDefaults);
@@ -192,6 +220,27 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  function setRuntimeLogLevel(value: unknown) {
+    if (!RUNTIME_LOG_LEVELS.includes(value as RuntimeLogLevel)) return;
+    runtimeLogLevel.value = value as RuntimeLogLevel;
+    configureRuntimeLogs({ level: runtimeLogLevel.value, capture: runtimeLogCapture.value });
+    try {
+      localStorage.setItem(RUNTIME_LOG_LEVEL_KEY, runtimeLogLevel.value);
+    } catch (err) {
+      console.warn('[HOMURA] 日志等级保存失败', err);
+    }
+  }
+
+  function setRuntimeLogCapture(value: unknown) {
+    runtimeLogCapture.value = !!value;
+    configureRuntimeLogs({ level: runtimeLogLevel.value, capture: runtimeLogCapture.value });
+    try {
+      localStorage.setItem(RUNTIME_LOG_CAPTURE_KEY, runtimeLogCapture.value ? '1' : '0');
+    } catch (err) {
+      console.warn('[HOMURA] 日志捕获开关保存失败', err);
+    }
+  }
+
   return {
     readerDefaults,
     transitionStyle,
@@ -199,6 +248,8 @@ export const useSettingsStore = defineStore('settings', () => {
     debugAutoUpdateCheck,
     importCollectionPrompt,
     volumeKeysTurnPage,
+    runtimeLogLevel,
+    runtimeLogCapture,
     showFullscreenButton,
     setReaderDefault,
     setTransitionStyle,
@@ -206,6 +257,8 @@ export const useSettingsStore = defineStore('settings', () => {
     setDebugForceFullscreen,
     setDebugAutoUpdateCheck,
     setImportCollectionPrompt,
-    setVolumeKeysTurnPage
+    setVolumeKeysTurnPage,
+    setRuntimeLogLevel,
+    setRuntimeLogCapture
   };
 });

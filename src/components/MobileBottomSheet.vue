@@ -3,6 +3,7 @@
     <dialog
       ref="dialogRef"
       class="md-mobile-sheet-dialog"
+      :class="{ 'is-keyboard-anchored': keyboardAnchored }"
       :aria-labelledby="titleId"
       :aria-describedby="descriptionId || undefined"
       :aria-busy="busy || undefined"
@@ -62,7 +63,8 @@ const props = defineProps({
   closeLabel: { type: String, default: '关闭面板' },
   backdropDismissible: { type: Boolean, default: true },
   draggable: { type: Boolean, default: true },
-  busy: { type: Boolean, default: false }
+  busy: { type: Boolean, default: false },
+  keyboardAnchored: { type: Boolean, default: false }
 });
 const emit = defineEmits(['close', 'cancel', 'opened', 'closed']);
 const dialogRef = shallowRef<HTMLDialogElement | null>(null);
@@ -82,6 +84,7 @@ let disposed = false;
 let unlockScroll: (() => void) | null = null;
 let trigger: HTMLElement | null = null;
 let entered = false;
+let anchoredViewportHeight = 0;
 
 function onBeforeEnter(element: Element) {
   entered = true;
@@ -119,6 +122,7 @@ function onAfterLeave() {
   unlockScroll = null;
   if (trigger?.isConnected && !document.querySelector('dialog[open]')) trigger.focus({ preventScroll: true });
   trigger = null;
+  anchoredViewportHeight = 0;
   window.visualViewport?.removeEventListener('resize', syncViewport);
   window.visualViewport?.removeEventListener('scroll', syncViewport);
   emit('closed');
@@ -127,7 +131,18 @@ function onAfterLeave() {
 function syncViewport() {
   const dialog = dialogRef.value;
   const viewport = window.visualViewport;
-  if (!dialog || !viewport) return;
+  if (!dialog) return;
+  if (props.keyboardAnchored) {
+    if (!anchoredViewportHeight) {
+      anchoredViewportHeight = Math.round(viewport?.height || window.innerHeight);
+      dialog.style.height = `${anchoredViewportHeight}px`;
+      dialog.style.top = `${Math.round(viewport?.offsetTop || 0)}px`;
+      dialog.style.setProperty('--md-sheet-anchored-layout-height', `${anchoredViewportHeight}px`);
+      dialog.style.setProperty('--md-sheet-anchored-height', `${Math.round(anchoredViewportHeight * 0.78)}px`);
+    }
+    return;
+  }
+  if (!viewport) return;
   dialog.style.height = `${viewport.height}px`;
   dialog.style.top = `${viewport.offsetTop}px`;
   dialog.style.setProperty('--md-sheet-viewport-height', `${viewport.height}px`);
@@ -149,10 +164,13 @@ watch(isOpen, async open => {
     trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     // 与设置选择菜单共用计数锁，连续打开下一张面板时不会提前恢复背景滚动。
     unlockScroll = lockBackgroundScroll(trigger || document.body, () => sheetRef.value);
+    anchoredViewportHeight = 0;
     dialog.showModal();
     syncViewport();
-    window.visualViewport?.addEventListener('resize', syncViewport);
-    window.visualViewport?.addEventListener('scroll', syncViewport);
+    if (!props.keyboardAnchored) {
+      window.visualViewport?.addEventListener('resize', syncViewport);
+      window.visualViewport?.addEventListener('scroll', syncViewport);
+    }
   }
   visible.value = true;
   await nextTick();

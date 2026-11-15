@@ -9,7 +9,7 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 
 - 当前版本 `2.2.8`
 - 技术栈：Vue 3 + Pinia + Vite 6 + Tauri 2（Rust）
-- **TypeScript**：`src/services/`（51 个）、`src/stores/`（8 个）、`src/composables/`（13 个）三层的逻辑代码已全部迁移为 `.ts`；`components/`（47 个 `.vue`）的 `<script setup>` 已全部升级为 `lang="ts"`（保留原有运行时 `defineProps({...})` / `defineEmits([...])` 写法，未改写成泛型语法）；入口 `src/main.ts` 亦已迁移。`tsconfig.json` 开 `allowJs: true` 允许 JS/TS 混存，`strict: true`，且 `noImplicitAny` / `noUnusedLocals` / `noUnusedParameters` 均已开启。`npm run typecheck`（`vue-tsc --noEmit`）已清零 0 报错，可作为门槛使用。没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
+- **TypeScript**：`src/services/`（53 个）、`src/stores/`（9 个）、`src/composables/`（13 个）三层的逻辑代码已全部迁移为 `.ts`；`components/`（47 个 `.vue`）的 `<script setup>` 已全部升级为 `lang="ts"`（保留原有运行时 `defineProps({...})` / `defineEmits([...])` 写法，未改写成泛型语法）；入口 `src/main.ts` 亦已迁移。`tsconfig.json` 开 `allowJs: true` 允许 JS/TS 混存，`strict: true`，且 `noImplicitAny` / `noUnusedLocals` / `noUnusedParameters` 均已开启。`npm run typecheck`（`vue-tsc --noEmit`）已清零 0 报错，可作为门槛使用。没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
 - 新增 / 迁移文件时，指向已迁移 `.ts` 文件（services / stores / composables）的 import 必须写 `.ts` 后缀（Node `--experimental-strip-types` 不会把 `./x.js` 解析到 `x.ts`，只有 Vite / tsc 会）
 - 数据存本机 IndexedDB（`homura_shelf`，v3，4 个 store：`books` / `sources` / `progress` / `collections`）；WebDAV 同步的工作状态单独存 `homura_sync`；Tauri 环境额外把书目 / 书库 / 进度镜像到 `$APPDATA/homura-metadata/homura.sqlite3`；原文件按平台写 `$APPDATA/homura-native-sources`、OPFS（`homura-sources`）或 IndexedDB Blob；主题与设置偏好写 localStorage
 
@@ -31,7 +31,7 @@ CBZ / ZIP 与 EPUB 共用原生 ZIP 通道：漫画压缩包只把图片条目�
 | 命令 | 作用 |
 | --- | --- |
 | `npm install` | 安装前端依赖；Tauri 命令找不到时先跑这个 |
-| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 56 个测试文件、385 条用例全绿，约 4 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
+| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 57 个测试文件、388 条用例全绿，约 4 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
 | `npm run typecheck` | `vue-tsc --noEmit`，类型检查 |
 | `npm run dev:vite` | 只起 Vite 开发服务器，固定端口 **5173**（strictPort），带 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`（最常用的快速验证） |
@@ -75,15 +75,15 @@ src/
       legacy.css           历史遗留组件样式（.uiverse-btn 等）
       theme-picker.css     主题色板
       content.css          阅读内容排版（小说正文 / 章节 / Markdown）
-  stores/                  8 个 setup store：theme / shelf / reader / ui / settings / importProgress / updates / sync
-  services/                51 个：解析、存储、平台、原生桥接、更新、i18n、WebDAV 同步（不依赖 Vue / Pinia）
+  stores/                  9 个 setup store：theme / shelf / reader / ui / settings / importProgress / updates / sync / runtimeLogs
+  services/                53 个：解析、存储、平台、原生桥接、更新、i18n、WebDAV 同步（不依赖 Vue / Pinia）
   composables/             13 个：useImporter / useViewport / useShortcuts / useSheetDrag / useSheetSpring / useShelfDialogs / useI18n /
                            useScrollBounce / useDuplicateImport / useReaderBackDismiss / useAndroidBackExit /
                            useSettingsTransition /
                            useVolumeKeys
   locales/                 界面文案目录：messages / en / ja（中文原文作 key）
   components/              47 个 SFC（视图与交互）
-tests/                     56 个 .test.mjs（node:test + assert/strict + jsdom）
+tests/                     57 个 .test.mjs（node:test + assert/strict + jsdom）
 scripts/                   5 个：check-dark-glow / generate-icons / release-notes / sync-android-icons /
                            patch-android-manifest
 references/                6 份规范：md3-component-guide / tokens / ui-component-spec / desktop-island / bottom-sheet-spec / sync-protocol
@@ -92,7 +92,7 @@ public/vendor/             开发环境运行时 Tailwind；生产构建转静�
 public/pdfjs/              pdf.js 运行时资源，由 vite 插件生成，已 gitignore
 src-tauri/src/             lib.rs 命令注册 + desktop_archive / native_import / metadata_store /
                            mobi_parser / text_decoder / cover_thumb / update_downloader /
-                           window_state / storage_stats / sync_webdav
+                           window_state / storage_stats / sync_webdav / log_export
 src-tauri/plugins/         6 个本地 Android 插件：android-archive / android-installer /
                            android-predictive-back / android-system-bars / android-toast /
                            android-volume-keys
@@ -100,13 +100,14 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 .github/workflows/         三平台 + Android 自动打包
 ```
 
-`src/services/` 的关键分工（51 个文件，别只看名字猜）：
+`src/services/` 的关键分工（53 个文件，别只看名字猜）：
 
 - **解析**：`parsers.ts`（总入口与调度）、`epubParser.ts`、`cbzParser.ts`（CBZ / ZIP 漫画）、`epubType.ts`（漫画/小说判定）、`pdf.ts`、`mobi.ts`、`markdown.ts`、`pagination.ts`（小说智能分页、章节/图片页构建）、`readerLayout.ts`（页宽 / 行高 / 页边距度量）、`textEncoding.ts`
 - **存储**：`storage.ts`（IndexedDB 完整存档 + SQLite 镜像）、`nativeMetadata.ts`、`nativeStorage.ts`、`opfs.ts`、`restore.ts`、`progress.ts`、`mutationQueue.ts`（串行写队列）
 - **原生桥**：`nativeRuntime.ts`（错误码与能力探测）、`nativeArchive.ts`（桌面 EPUB 会话）、`nativeImport.ts`、`coverThumb.ts`、`androidSystemBars.ts`、`updateDownload.ts`
 - **书库/书架**：`collections.ts`（书库归属与目录建库规划）、`collectionReading.ts`（书库内连读顺序）、`bookTitles.ts`（拼音排序）、`shelfSections.ts`（小说/漫画/其他分段）、`bookCover.ts`
 - **同步**：`syncModel.ts`（文档校验与逻辑版本合并）、`syncIdentity.ts`（内容指纹）、`syncSnapshot.ts`（可同步投影）、`syncEngine.ts`（离线基线 / 冲突重试）、`syncPersistence.ts`（`homura_sync` 工作状态）、`webdav.ts`（强 ETag 条件读写）
+- **运行日志**：`runtimeLogs.ts`（环形缓冲与 console / 全局错误捕获）、`runtimeLogExport.ts`（桌面原生保存 / 浏览器下载 / Android 剪贴板）
 - **其它**：`platform.ts`、`archiveAccess.ts`（JSZip 与原生统一的压缩包适配层）、`sanitize.ts`、`readerGestures.ts`、`updates.ts`、`external.ts`、`demo.ts`、`utils.ts`
 
 注意：README 的「项目结构」段落仍列着 `AppHeader / DropZone / ReaderToolbar` 等旧组件名，**已过时**，实际以 `src/` 为准。
@@ -119,7 +120,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
   - `stores/` 只放状态与动作，不直接写复杂 DOM。
   - `composables/` 放可复用的组合逻辑。
   - `components/` 只负责视图与交互。
-- Pinia 使用 **setup 写法**（`defineStore('x', () => {...})`），动作就是普通函数。现有 store id：`theme`、`shelf`、`reader`、`ui`、`settings`、`importProgress`、`updates`、`sync`。
+- Pinia 使用 **setup 写法**（`defineStore('x', () => {...})`），动作就是普通函数。现有 store id：`theme`、`shelf`、`reader`、`ui`、`settings`、`importProgress`、`updates`、`sync`、`runtimeLogs`。
 - **重对象必须 `shallowRef`**：`zipContent`、`File`、`Animation`、timer、DOM 引用一律不要被 Vue 深度代理，否则会拖慢动画，甚至让 `Animation.cancel()` 异常。
 - 翻页引擎 `PaginatedView.vue` / `WebtoonView.vue` **直接操作 ref DOM + Web Animations API**，不走响应式重渲染。不要为了“优雅”改写成 `v-for` + 响应式布局。
 - Tauri 通过 `window.__TAURI__` 全局对象与 `@tauri-apps/plugin-*` 调用，项目不直接依赖 `@tauri-apps/api`。新增原生能力时必须同步 Rust 插件注册与 `src-tauri/capabilities/default.json` 的 permissions。

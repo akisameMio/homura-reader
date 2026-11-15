@@ -31,6 +31,10 @@
   color: var(--md-on-surface);
   box-shadow: 0 -12px 50px -28px var(--md-shadow-color-soft);
 }
+.md-mobile-sheet-dialog.is-keyboard-anchored .md-mobile-sheet {
+  height: var(--md-sheet-anchored-height, 78dvh);
+  max-height: calc(var(--md-sheet-anchored-layout-height, 100dvh) - env(safe-area-inset-top, 0px) - 8px);
+}
 .md-mobile-sheet .md-drawer-header { padding-inline: 18px; }
 .md-mobile-sheet .md-drawer-heading { flex: 1; }
 .md-mobile-sheet .md-drawer-header > .md-icon-button:disabled { opacity: 0.45; }

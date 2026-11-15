@@ -1,5 +1,6 @@
 <template>
   <MobileBottomSheet :open="!!pendingShelfDialog" :title="displayRequest?.title || t('书库管理')" title-id="mobile-shelf-dialog-title"
+    :keyboard-anchored="displayRequest?.kind === 'name'"
     @close="resolveShelfDialog()" @cancel="resolveShelfDialog()" @opened="contentRef?.focusInitial()" @closed="clearDisplay">
     <ShelfDialogContent ref="contentRef" mobile-sheet :request="displayRequest" @resolve="resolveShelfDialog" />
     <template #footer>
