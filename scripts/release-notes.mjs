@@ -35,7 +35,13 @@ const SECTION_OF = {
 const SUBJECT_ALIASES = new Map([
   ['Update README.md', 'docs(readme): 同步更新中文 README'],
   ['Update README.en.md', 'docs(readme): 同步更新英文 README'],
-  ['Update README.ja.md', 'docs(readme): 同步更新日文 README']
+  ['Update README.ja.md', 'docs(readme): 同步更新日文 README'],
+  ['Revise README for clarity and project details', 'docs(readme): 调整 README 结构与项目说明']
+]);
+
+const HIDDEN_SUBJECTS = new Set([
+  'Add CodeQL analysis workflow configuration',
+  'chore(ci): 移除 CodeQL 分析工作流'
 ]);
 
 function git(args) {
@@ -63,7 +69,9 @@ if (previousTag) {
   for (const line of lines) {
     const tab = line.indexOf('\t');
     const hash = line.slice(0, tab);
-    const subject = SUBJECT_ALIASES.get(line.slice(tab + 1)) || line.slice(tab + 1);
+    const rawSubject = line.slice(tab + 1);
+    if (HIDDEN_SUBJECTS.has(rawSubject)) continue;
+    const subject = SUBJECT_ALIASES.get(rawSubject) || rawSubject;
     // 发版提交本身不算更新内容
     if (/^chore\(release\)/i.test(subject)) continue;
     const match = subject.match(/^(\w+)(?:\(([^)]+)\))?!?:\s*(.+)$/);
