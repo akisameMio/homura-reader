@@ -18,6 +18,7 @@ const LEGACY_SURFACE_MODES: Record<string, string> = { warm: 'light' };
 type SurfaceMode = 'light' | 'dark' | 'auto';
 type EffectiveSurfaceMode = 'light' | 'dark';
 type ReaderSurfaceMode = 'parchment' | 'green' | 'settings';
+const READER_PAPER_TOKENS = { parchment: '--md-parchment-paper', green: '--md-reader-green-paper' };
 export const THEME_OPTIONS = Object.freeze([
   { name: 'green', title: '森系绿', tones: ['#BEF0A7', '#A3D48D', '#6F9D5C'] },
   { name: 'mint', title: '薄荷青', tones: ['#98F4D7', '#7BD7BC', '#42A087'] },
@@ -104,14 +105,13 @@ function resolveEffectiveSurfaceMode(mode: SurfaceMode): EffectiveSurfaceMode {
 }
 
 // 同步原生窗口与系统栏外观，避免夜间模式下标题栏、状态栏与内容底色不同步
-function applyNativeWindowChrome(modeName: EffectiveSurfaceMode, pureBlack: boolean) {
+function applyNativeWindowChrome(modeName: EffectiveSurfaceMode, canvas: string) {
   applyAndroidSystemBars(modeName === 'dark');
 
   const tauriWindow = window.__TAURI__ && window.__TAURI__.window;
   if (!tauriWindow || typeof tauriWindow.getCurrentWindow !== 'function') return;
   const win = tauriWindow.getCurrentWindow();
   const theme = modeName === 'dark' ? 'dark' : 'light';
-  const canvas = surfaceCanvas(modeName, pureBlack);
   if (win.setTheme) win.setTheme(theme).catch(() => {});
   if (win.setBackgroundColor) win.setBackgroundColor(canvas).catch(() => {});
 }
@@ -129,6 +129,32 @@ export const useThemeStore = defineStore('theme', () => {
   let surfaceModeToken = 0;
   let surfaceRevealFrame = 0;
   let surfaceRevealEl: HTMLDivElement | null = null;
+  // 加载页与阅读器会短暂重叠，分别登记可见性，避免其中一层退场时提前恢复书架配色。
+  let readerActive = false;
+  let readerLoadingActive = false;
+
+  function syncSurfaceChrome() {
+    const paper = (readerActive || readerLoadingActive) && readerSurfaceMode.value !== 'settings' ? readerSurfaceMode.value : null;
+    const mode = paper ? 'light' : effectiveSurfaceMode.value;
+    // 直接读取纸面 token，标题栏与画布共用颜色；浅色纸面始终使用深色标题和系统图标。
+    const canvas = paper
+      ? getComputedStyle(document.documentElement).getPropertyValue(READER_PAPER_TOKENS[paper]).trim() || SURFACE_CANVAS.light
+      : surfaceCanvas(mode, pureBlackMode.value);
+    document.getElementById('homuraThemeColor')?.setAttribute('content', canvas);
+    applyNativeWindowChrome(mode, canvas);
+  }
+
+  function setReaderActive(active: boolean) {
+    if (readerActive === active) return;
+    readerActive = active;
+    syncSurfaceChrome();
+  }
+
+  function setReaderLoadingActive(active: boolean) {
+    if (readerLoadingActive === active) return;
+    readerLoadingActive = active;
+    syncSurfaceChrome();
+  }
 
   function setThemeColor(colorName: string) {
     themeColor.value = colorName;
@@ -157,9 +183,8 @@ export const useThemeStore = defineStore('theme', () => {
       } else {
         html.classList.remove('dark');
       }
-      // 移动端浏览器地址栏 / 状态栏跟随阅读表面底色
-      const meta = document.getElementById('homuraThemeColor');
-      if (meta) meta.setAttribute('content', surfaceCanvas(effectiveMode, pureBlackMode.value));
+      // 系统标题栏、状态栏和地址栏在动画开始时同步到当前实际显示的表面。
+      syncSurfaceChrome();
       try { localStorage.setItem('homura_surface_mode', nextMode); } catch (e) {}
     };
 
@@ -179,7 +204,6 @@ export const useThemeStore = defineStore('theme', () => {
     // 启动恢复、自动模式跟随系统或目标颜色没变时，直接落色不做展开动画
     if (silent || (currentMode === effectiveMode && (effectiveMode !== 'dark' || currentBlack === nextBlack))) {
       applyMode();
-      applyNativeWindowChrome(effectiveMode, pureBlackMode.value);
       finishNextFrame();
       return;
     }
@@ -188,7 +212,6 @@ export const useThemeStore = defineStore('theme', () => {
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reducedMotion) {
       applyMode();
-      applyNativeWindowChrome(effectiveMode, pureBlackMode.value);
       finishNextFrame();
       return;
     }
@@ -221,8 +244,6 @@ export const useThemeStore = defineStore('theme', () => {
     renderCircle(0);
     document.body.appendChild(reveal);
     applyMode();
-    // 标题栏与窗口底色和内容区在同一帧切到新色
-    applyNativeWindowChrome(effectiveMode, pureBlackMode.value);
 
     const startedAt = performance.now();
     const animate = (now: number) => {
@@ -243,6 +264,7 @@ export const useThemeStore = defineStore('theme', () => {
     const nextMode = normalizeReaderSurfaceMode(modeName);
     readerSurfaceMode.value = nextMode;
     try { localStorage.setItem('homura_reader_surface_mode', nextMode); } catch (e) {}
+    if (readerActive || readerLoadingActive) syncSurfaceChrome();
   }
 
   function setPureBlackMode(enabled: boolean, origin: { x: number; y: number } | null = null) {
@@ -288,6 +310,8 @@ export const useThemeStore = defineStore('theme', () => {
     setThemeColor,
     setSurfaceMode,
     setReaderSurfaceMode,
+    setReaderActive,
+    setReaderLoadingActive,
     setPureBlackMode,
     setTransitionStyle,
     toggleTransitionStyle

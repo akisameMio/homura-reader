@@ -345,6 +345,8 @@ function onMobilePointerUp(e: PointerEvent) {
       const ratio = (e.clientX - navRect.left) / navRect.width;
       const idx = Math.max(0, Math.min(metrics.tabCenters.length - 1, Math.floor(ratio * metrics.tabCenters.length)));
       mobileSnapTo(idx, 'click');
+      // nav 捕获指针后 click 可能不再落到按钮，由抬手事件完成导航。
+      if (e.type === 'pointerup') select(navItems[idx].key);
     }
   } else {
     const projected = springs.x.pos + mobileDrag.vx * 105;

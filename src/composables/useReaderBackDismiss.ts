@@ -63,7 +63,7 @@ interface TauriCoreLike {
 export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
   let gesture: BackGesture | null = null;
   let settling = false;
-  let closing = false;
+  const readerDismissing = ref(false);
   let settleToken = 0;
   let frameId = 0;
   let pendingProgress = 0;
@@ -113,7 +113,7 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
 
   function playEnter() {
     if (!reader.currentBook) return;
-    closing = false;
+    readerDismissing.value = false;
     const token = ++settleToken;
     const reduceMotion = window.matchMedia
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -153,7 +153,7 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
   function settle(commit: boolean) {
     if (settling) return;
     settling = true;
-    closing = commit;
+    readerDismissing.value = commit;
     const token = ++settleToken;
     const reduceMotion = window.matchMedia
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -163,7 +163,7 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
         disableNativePredictiveBack();
         reader.closeReader();
       }
-      closing = false;
+      readerDismissing.value = false;
       settling = false;
       return;
     }
@@ -184,7 +184,7 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
       }
       if (token !== settleToken) return;
       resetVisuals();
-      closing = false;
+      readerDismissing.value = false;
       settling = false;
     }, SETTLE_DURATION);
   }
@@ -291,7 +291,7 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
 
     if (phase === 'started') {
       if (settling) {
-        if (closing) return;
+        if (readerDismissing.value) return;
         settleToken++;
         settling = false;
         document.documentElement.classList.remove('reader-back-settling');
@@ -323,7 +323,7 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
 
     if (phase === 'cancelled') {
       nativeMode = null;
-      closing = false;
+      readerDismissing.value = false;
       resetVisuals();
       return;
     }
@@ -417,7 +417,7 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
     (book, previousBook) => {
       settleToken++;
       gesture = null;
-      closing = false;
+      readerDismissing.value = false;
       settling = false;
       if (book && !previousBook) playEnter();
       else resetVisuals();
@@ -451,6 +451,7 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
     onPointerCancel,
     onPointerLostCapture,
     dismissWithPredictiveBack,
-    nativePredictiveBackSupported
+    nativePredictiveBackSupported,
+    readerDismissing
   };
 }

@@ -2,7 +2,7 @@
   <!-- Reader Fullscreen Modal · 沉浸式：工具栏浮在画布上，默认自动隐藏 -->
   <div
     v-show="!!reader.currentBook"
-    class="reader-dismiss-layer fixed inset-0 bg-[var(--md-reader-paper)] z-50 flex flex-col transition-colors duration-200"
+    class="reader-dismiss-layer reader-surface fixed inset-0 bg-[var(--md-reader-paper)] z-50 flex flex-col transition-colors duration-200"
     :data-reader-mode="theme.readerSurfaceMode"
   >
     <div
@@ -145,7 +145,8 @@ const {
   onPointerCancel: onBackPointerCancel,
   onPointerLostCapture: onBackPointerLostCapture,
   dismissWithPredictiveBack,
-  nativePredictiveBackSupported
+  nativePredictiveBackSupported,
+  readerDismissing
 } = useReaderBackDismiss(reader, ui);
 
 // 桌面：鼠标贴近上边缘唤出顶栏；顶栏可见时，移动鼠标会重新计时
@@ -235,9 +236,9 @@ function setReaderScrollLock(locked: boolean) {
   if (locked === isLocked) return;
 
   if (locked) {
-    let scrollbarWidth = 0;
-    if (pageScrollsVertically()) {
-      scrollbarWidth = measureScrollbarWidth();
+    const scrollbarWidth = measureScrollbarWidth();
+    // stable gutter 在书架不足一屏时也可能占宽，锁滚动前一并保留。
+    if (scrollbarWidth > 0 || pageScrollsVertically()) {
       html.style.setProperty(
         '--homura-reader-scrollbar-width',
         `${scrollbarWidth}px`
@@ -261,7 +262,13 @@ function setReaderScrollLock(locked: boolean) {
   html.style.removeProperty('--homura-reader-fab-offset');
 }
 
+// 确认退出时即恢复书架标题栏，与退场动画同帧开始；取消返回手势仍保留阅读配色。
+watch([() => !!reader.currentBook, readerDismissing], ([active, dismissing]) => {
+  theme.setReaderActive(active && !dismissing);
+}, { immediate: true, flush: 'sync' });
+
 // 阅读器是全屏遮罩，锁住底层书架页的滚动，避免右侧多出无用的长滚动条
+
 watch(() => reader.currentBook?.id, id => {
   cancelVerticalGesture();
   setReaderScrollLock(!!id);
@@ -271,6 +278,7 @@ watch(() => reader.currentBook?.id, id => {
 });
 
 onBeforeUnmount(() => {
+  theme.setReaderActive(false);
   setReaderScrollLock(false);
   document.documentElement.classList.remove('reader-active');
 });

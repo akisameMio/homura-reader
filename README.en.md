@@ -30,7 +30,7 @@
   <img src="https://github.com/user-attachments/assets/049e7a11-e0af-4a94-a77e-8f8c72cb50e7" width="160" alt="HOMURA animation" />
 </div>
 
-> This fish only loads books into your local shelf — don't even think about uploading to the cloud. 🐋
+> This fish keeps your books on your local shelf; sharing reading progress across devices is your choice. 🐋
 
 ## About
 
@@ -49,7 +49,8 @@ HOMURA is a **local-first** reader: import manga, light novels, PDFs and image g
 - **Local progress memory**: per-book page, direction, single/double page, font size, typeface, line spacing, page margins and webtoon size — resume automatically.
 - **Import & updates**: cancellable imports, per-book retry, duplicate-name prompts; in-app check, download and install of new versions.
 - **Material Design 3**: 10 theme colors, three surfaces (light / eye-care / dark), adapted for desktop and narrow screens.
-- **Offline library**: metadata, covers, original files and progress all stay local — no upload, no cloud sync.
+- **Offline library**: reading and storage stay local first; source files, book content and covers are never uploaded.
+- **Optional WebDAV sync**: off by default; syncs only progress, favorites and collections to your chosen server. Import the same source files on each device; layout settings stay local.
 
 ## Supported Formats
 
@@ -87,19 +88,21 @@ npm run dev        # tauri dev, runs the Vite pre-step automatically
 npm run build      # tauri build, builds the frontend then packages the installer
 ```
 
-Before committing, run `npm test` (304 unit tests), `npm run typecheck`, and `npm run build:vite`.
+Before committing, run `npm test` (unit tests), `npm run typecheck`, and `npm run build:vite`.
 
 ## Status & Limitations
 
 - Version `2.2.8`; both desktop (macOS / Windows / Linux) and Android (arm64 / armv7) are buildable, and the core reading flow is complete and usable.
 - Tags and bookmarks are not implemented yet; DRM, AZW3 / KF8 and encrypted PDF are unsupported, and PDFs cannot reflow.
-- 304 unit tests plus type checking, but no E2E and no ESLint — key flows still need manual regression.
+- WebDAV requires an existing HTTPS folder, strong ETags and conditional writes; passwords last only for the current session. The full sync flow on real NAS servers and Android devices remains untested.
+- Unit tests plus type checking, but no E2E and no ESLint — key flows still need manual regression.
 - The macOS installer is unsigned, so first launch needs manual approval.
 - Licensed under the **MIT License** — see [`LICENSE`](LICENSE).
 
 ## More Docs
 
 - Detailed feature docs (import & shelf, reader, local storage & privacy, project structure, commands, dev & release): [`docs/features.md`](docs/features.md) (Chinese)
+- WebDAV sync scope, protocol and server requirements: [`references/sync-protocol.md`](references/sync-protocol.md) (Chinese)
 - Dev and code constraints: [`AGENTS.md`](AGENTS.md)
 - Bugs & suggestions: [Issues](https://github.com/Leon-Ning-san/HomuraReader/issues)
 

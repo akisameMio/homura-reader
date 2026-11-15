@@ -9,9 +9,9 @@ HOMURA 是一个**本地优先**的 ACGN 阅读器：漫画、轻小说、图集
 
 - 当前版本 `2.2.8`
 - 技术栈：Vue 3 + Pinia + Vite 6 + Tauri 2（Rust）
-- **TypeScript**：`src/services/`（44 个）、`src/stores/`（7 个）、`src/composables/`（13 个）三层的逻辑代码已全部迁移为 `.ts`；`components/`（46 个 `.vue`）的 `<script setup>` 已全部升级为 `lang="ts"`（保留原有运行时 `defineProps({...})` / `defineEmits([...])` 写法，未改写成泛型语法）；入口 `src/main.ts` 亦已迁移。`tsconfig.json` 开 `allowJs: true` 允许 JS/TS 混存，`strict: true`，且 `noImplicitAny` / `noUnusedLocals` / `noUnusedParameters` 均已开启。`npm run typecheck`（`vue-tsc --noEmit`）已清零 0 报错，可作为门槛使用。没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
+- **TypeScript**：`src/services/`（51 个）、`src/stores/`（8 个）、`src/composables/`（13 个）三层的逻辑代码已全部迁移为 `.ts`；`components/`（47 个 `.vue`）的 `<script setup>` 已全部升级为 `lang="ts"`（保留原有运行时 `defineProps({...})` / `defineEmits([...])` 写法，未改写成泛型语法）；入口 `src/main.ts` 亦已迁移。`tsconfig.json` 开 `allowJs: true` 允许 JS/TS 混存，`strict: true`，且 `noImplicitAny` / `noUnusedLocals` / `noUnusedParameters` 均已开启。`npm run typecheck`（`vue-tsc --noEmit`）已清零 0 报错，可作为门槛使用。没有 ESLint；**有单元测试**（`node:test` + jsdom），没有 E2E
 - 新增 / 迁移文件时，指向已迁移 `.ts` 文件（services / stores / composables）的 import 必须写 `.ts` 后缀（Node `--experimental-strip-types` 不会把 `./x.js` 解析到 `x.ts`，只有 Vite / tsc 会）
-- 数据存本机 IndexedDB（`homura_shelf`，v3，4 个 store：`books` / `sources` / `progress` / `collections`）；Tauri 环境额外把书目 / 书库 / 进度镜像到 `$APPDATA/homura-metadata/homura.sqlite3`；原文件按平台写 `$APPDATA/homura-native-sources`、OPFS（`homura-sources`）或 IndexedDB Blob；主题与设置偏好写 localStorage
+- 数据存本机 IndexedDB（`homura_shelf`，v3，4 个 store：`books` / `sources` / `progress` / `collections`）；WebDAV 同步的工作状态单独存 `homura_sync`；Tauri 环境额外把书目 / 书库 / 进度镜像到 `$APPDATA/homura-metadata/homura.sqlite3`；原文件按平台写 `$APPDATA/homura-native-sources`、OPFS（`homura-sources`）或 IndexedDB Blob；主题与设置偏好写 localStorage
 
 支持的格式：
 
@@ -31,7 +31,7 @@ CBZ / ZIP 与 EPUB 共用原生 ZIP 通道：漫画压缩包只把图片条目�
 | 命令 | 作用 |
 | --- | --- |
 | `npm install` | 安装前端依赖；Tauri 命令找不到时先跑这个 |
-| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 44 个测试文件、304 条用例全绿，约 4 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
+| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，当前 56 个测试文件、385 条用例全绿，约 4 秒。`--experimental-strip-types` 让 Node 直接加载测试所引用的 `.ts` service |
 | `npm run typecheck` | `vue-tsc --noEmit`，类型检查 |
 | `npm run dev:vite` | 只起 Vite 开发服务器，固定端口 **5173**（strictPort），带 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`（最常用的快速验证） |
@@ -75,24 +75,24 @@ src/
       legacy.css           历史遗留组件样式（.uiverse-btn 等）
       theme-picker.css     主题色板
       content.css          阅读内容排版（小说正文 / 章节 / Markdown）
-  stores/                  7 个 setup store：theme / shelf / reader / ui / settings / importProgress / updates
-  services/                44 个：解析、存储、平台、原生桥接、更新、i18n（不依赖 Vue / Pinia）
+  stores/                  8 个 setup store：theme / shelf / reader / ui / settings / importProgress / updates / sync
+  services/                51 个：解析、存储、平台、原生桥接、更新、i18n、WebDAV 同步（不依赖 Vue / Pinia）
   composables/             13 个：useImporter / useViewport / useShortcuts / useSheetDrag / useSheetSpring / useShelfDialogs / useI18n /
                            useScrollBounce / useDuplicateImport / useReaderBackDismiss / useAndroidBackExit /
                            useSettingsTransition /
                            useVolumeKeys
   locales/                 界面文案目录：messages / en / ja（中文原文作 key）
-  components/              46 个 SFC（视图与交互）
-tests/                     44 个 .test.mjs（node:test + assert/strict + jsdom）
+  components/              47 个 SFC（视图与交互）
+tests/                     56 个 .test.mjs（node:test + assert/strict + jsdom）
 scripts/                   5 个：check-dark-glow / generate-icons / release-notes / sync-android-icons /
                            patch-android-manifest
-references/                4 份规范：md3-component-guide / tokens / ui-component-spec / desktop-island
+references/                6 份规范：md3-component-guide / tokens / ui-component-spec / desktop-island / bottom-sheet-spec / sync-protocol
 public/homura-boot.js      首帧前的同步引导脚本（CSP 禁止内联脚本，不能挪回 index.html）
 public/vendor/             开发环境运行时 Tailwind；生产构建转静态 CSS 并从 dist 删除
 public/pdfjs/              pdf.js 运行时资源，由 vite 插件生成，已 gitignore
 src-tauri/src/             lib.rs 命令注册 + desktop_archive / native_import / metadata_store /
                            mobi_parser / text_decoder / cover_thumb / update_downloader /
-                           window_state / storage_stats
+                           window_state / storage_stats / sync_webdav
 src-tauri/plugins/         6 个本地 Android 插件：android-archive / android-installer /
                            android-predictive-back / android-system-bars / android-toast /
                            android-volume-keys
@@ -100,12 +100,13 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 .github/workflows/         三平台 + Android 自动打包
 ```
 
-`src/services/` 的关键分工（44 个文件，别只看名字猜）：
+`src/services/` 的关键分工（51 个文件，别只看名字猜）：
 
 - **解析**：`parsers.ts`（总入口与调度）、`epubParser.ts`、`cbzParser.ts`（CBZ / ZIP 漫画）、`epubType.ts`（漫画/小说判定）、`pdf.ts`、`mobi.ts`、`markdown.ts`、`pagination.ts`（小说智能分页、章节/图片页构建）、`readerLayout.ts`（页宽 / 行高 / 页边距度量）、`textEncoding.ts`
 - **存储**：`storage.ts`（IndexedDB 完整存档 + SQLite 镜像）、`nativeMetadata.ts`、`nativeStorage.ts`、`opfs.ts`、`restore.ts`、`progress.ts`、`mutationQueue.ts`（串行写队列）
 - **原生桥**：`nativeRuntime.ts`（错误码与能力探测）、`nativeArchive.ts`（桌面 EPUB 会话）、`nativeImport.ts`、`coverThumb.ts`、`androidSystemBars.ts`、`updateDownload.ts`
 - **书库/书架**：`collections.ts`（书库归属与目录建库规划）、`collectionReading.ts`（书库内连读顺序）、`bookTitles.ts`（拼音排序）、`shelfSections.ts`（小说/漫画/其他分段）、`bookCover.ts`
+- **同步**：`syncModel.ts`（文档校验与逻辑版本合并）、`syncIdentity.ts`（内容指纹）、`syncSnapshot.ts`（可同步投影）、`syncEngine.ts`（离线基线 / 冲突重试）、`syncPersistence.ts`（`homura_sync` 工作状态）、`webdav.ts`（强 ETag 条件读写）
 - **其它**：`platform.ts`、`archiveAccess.ts`（JSZip 与原生统一的压缩包适配层）、`sanitize.ts`、`readerGestures.ts`、`updates.ts`、`external.ts`、`demo.ts`、`utils.ts`
 
 注意：README 的「项目结构」段落仍列着 `AppHeader / DropZone / ReaderToolbar` 等旧组件名，**已过时**，实际以 `src/` 为准。
@@ -118,7 +119,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
   - `stores/` 只放状态与动作，不直接写复杂 DOM。
   - `composables/` 放可复用的组合逻辑。
   - `components/` 只负责视图与交互。
-- Pinia 使用 **setup 写法**（`defineStore('x', () => {...})`），动作就是普通函数。现有 store id：`theme`、`shelf`、`reader`、`ui`、`settings`、`importProgress`、`updates`。
+- Pinia 使用 **setup 写法**（`defineStore('x', () => {...})`），动作就是普通函数。现有 store id：`theme`、`shelf`、`reader`、`ui`、`settings`、`importProgress`、`updates`、`sync`。
 - **重对象必须 `shallowRef`**：`zipContent`、`File`、`Animation`、timer、DOM 引用一律不要被 Vue 深度代理，否则会拖慢动画，甚至让 `Animation.cancel()` 异常。
 - 翻页引擎 `PaginatedView.vue` / `WebtoonView.vue` **直接操作 ref DOM + Web Animations API**，不走响应式重渲染。不要为了“优雅”改写成 `v-for` + 响应式布局。
 - Tauri 通过 `window.__TAURI__` 全局对象与 `@tauri-apps/plugin-*` 调用，项目不直接依赖 `@tauri-apps/api`。新增原生能力时必须同步 Rust 插件注册与 `src-tauri/capabilities/default.json` 的 permissions。
@@ -219,6 +220,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 19. **应用内更新只认官方仓库**：`updates.ts` 的 `REPOSITORY_URL` 与 `external.ts` 的白名单都锁死 `github.com/Leon-Ning-san/HomuraReader`；下载只校验字节数与 `expected_size` 一致，没有签名/哈希校验，不要对外宣称更强保证。
 20. **Android 预见式返回**：`useReaderBackDismiss` 直接写 `--homura-back-*` CSS 变量驱动动画，**不能**改成响应式状态，否则返回手势会掉帧。native 模式（API 34+）必须同时保留 `app.onBackButtonPress` 的 JS 兜底监听：框架在 `Checker` 校验不过时只打日志、静默丢弃原生回调，插件却照样 resolve，一旦撤掉 JS 监听，阅读器期间就没有任何返回消费者，返回会落到 Tauri `AppPlugin` 的 `activity.onBackPressed()` 直接 finish 并退回桌面。原生回调是 top 时 JS 收不到事件，两条通道不会重复触发，不要「优化」成单通道。
 21. **CSP 严格白名单**：`tauri.conf.json` 的 `app.security.csp` 已启用，`script-src` 不含 `'unsafe-inline'`，注入的 `<script>` 与 `on*` 事件处理器会被浏览器直接拦掉；`'unsafe-eval'` 是 vendor Tailwind 运行时与 pdf.js wasm 必需的，别删。漫画页走 asset 协议，`img-src` / `media-src` 必须保留 `asset:` 与 `http://asset.localhost`（Windows / Android 用 `http://asset.localhost`，macOS / Linux / iOS 用 `asset://localhost`），删掉会整本漫画白屏。新增站外请求域名要同步登记进 `connect-src`；启动引导只能放 `public/homura-boot.js`。
+22. **WebDAV 同步边界**：同步默认关闭，只发送阅读进度、收藏、书库与内容指纹，不上传原文件、正文、封面或本机路径；密码只保留在内存，不能写进 localStorage / `homura_sync`。远端只读写固定文件 `homura-sync-v1.json`，生产地址必须 HTTPS（仅 loopback 允许 HTTP），已有文件必须提供强 ETag，创建 / 更新分别使用 `If-None-Match: *` 与 `If-Match`，禁止退化成无条件覆盖。同步应用必须走 `HomuraStore.applySyncMetadata` 的快照核对，保留每台设备的排版设置与 SQLite dirty 重建顺序。
 
 ## 7. 常见坑
 
@@ -261,6 +263,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 - [ ] 改导入 / 解析：用真实样本验证对应格式；PDF 需覆盖中文文本与扫描件；Markdown 需测 `<script>` 与 `javascript:` 链接。
 - [ ] 改书库 / 收藏：建库改名删库、书本搬移、连读顺序、重启后恢复都正常。
 - [ ] 改更新链路：手动检查 `npm run build` 后下载与安装路径，不要只测检查更新。
+- [ ] 改 WebDAV 同步：`npm test` 覆盖 `sync*` / `webdav` 用例，并在 `src-tauri` 跑 `cargo test --lib sync_webdav`；真实服务器兼容性仍需单独验证。
 - [ ] 改 Tauri / 窗口：跑 `npm run dev`，确认启动不黑屏、标题栏随模式换色、全屏可进出。
 - [ ] 新代码里搜不到新增 hex / `rgb(`，没有引入图标库或组件库。
 - [ ] 新增投影使用 `--md-shadow-color-soft`、遮罩使用 `--md-shadow-color`，`npm run check:dark-glow` 通过。
@@ -270,6 +273,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 
 - `README.md` / `README.en.md` / `README.ja.md`：功能、快捷键、构建、已知限制，三份语言版本需同步更新（中文结构段落已过时，且「暂无自动化测试」已不成立）。
 - `references/`：MD3 组件写法、token 全表、系统布局说明、桌面灵动胶囊状态机——比 `.trae/` 里的旧笔记更可信。
+- `references/sync-protocol.md`：WebDAV 同步范围、文档格式、强 ETag / 冲突处理与真实环境验证边界。
 - `design-preview/`：设计原型与各主题截图，用于对照视觉效果（不是生产代码）。
 - `tests/`：解析、存储一致性、书库归属、排序、手势判定的可执行事实来源。
 - `.github/workflows/build.yml`：CI 与各平台打包参数。

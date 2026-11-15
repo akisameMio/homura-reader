@@ -6,6 +6,8 @@ import { createPinia, setActivePinia, disposePinia } from 'pinia';
 import { useThemeStore } from '../src/stores/theme.ts';
 
 const bootScript = readFileSync(new URL('../public/homura-boot.js', import.meta.url), 'utf8');
+const tokens = readFileSync(new URL('../src/assets/styles/tokens.css', import.meta.url), 'utf8');
+const paperColors = Object.fromEntries(['--md-parchment-paper', '--md-reader-green-paper'].map(token => [token, tokens.match(new RegExp(`${token}:\\s*([^;]+);`))[1]]));
 
 async function fixture(run, { saved = {}, dark = false, reduced = true } = {}) {
   const dom = new JSDOM('<!doctype html><html data-mode="light"><head><meta id="homuraThemeColor" content="#F8FAFC"></head><body></body></html>', { url: 'http://localhost/', runScripts: 'outside-only' });
@@ -24,6 +26,7 @@ async function fixture(run, { saved = {}, dark = false, reduced = true } = {}) {
     getComputedStyle: dom.window.getComputedStyle.bind(dom.window),
     requestAnimationFrame: () => ++frame, cancelAnimationFrame() {}
   });
+  for (const [token, color] of Object.entries(paperColors)) document.documentElement.style.setProperty(token, color);
   const chrome = [];
   window.__TAURI__ = { window: { getCurrentWindow: () => ({
     setTheme: async value => { chrome.push(['theme', value]); },
@@ -112,3 +115,51 @@ test('纯黑切换在圆形展开动画开始时同步原生底色，连续切�
   assert.equal(document.documentElement.dataset.black, 'standard');
   assert.deepEqual(chrome.at(-1), ['canvas', '#0F1115']);
 }, { reduced: false }));
+
+test('进入阅读时标题栏立即跟随羊皮纸和护眼绿，退出恢复原有纯黑外观', async () => {
+  for (const [paper, token] of [['parchment', '--md-parchment-paper'], ['green', '--md-reader-green-paper']]) {
+    await fixture(({ theme, chrome }) => {
+      theme.setSurfaceMode('dark', true);
+      theme.setPureBlackMode(true);
+      theme.setReaderSurfaceMode(paper);
+      assert.deepEqual(chrome.at(-1), ['canvas', '#000000']);
+      theme.setReaderActive(true);
+      assert.deepEqual(chrome.slice(-2), [['theme', 'light'], ['canvas', paperColors[token]]]);
+      assert.equal(document.getElementById('homuraThemeColor').content, paperColors[token]);
+      assert.equal(theme.surfaceMode, 'dark');
+      assert.equal(theme.pureBlackMode, true);
+      theme.setReaderActive(false);
+      assert.deepEqual(chrome.slice(-2), [['theme', 'dark'], ['canvas', '#000000']]);
+      assert.equal(document.getElementById('homuraThemeColor').content, '#000000');
+      assert.equal(localStorage.getItem('homura_reader_surface_mode'), paper);
+    });
+  }
+});
+
+test('阅读中切换纸面、全局表面或纯黑偏好，原生背景始终跟随当前可见纸面', () => fixture(({ theme, chrome }) => {
+  theme.setReaderActive(true);
+  theme.setReaderSurfaceMode('parchment');
+  theme.setSurfaceMode('dark');
+  assert.deepEqual(chrome.slice(-2), [['theme', 'light'], ['canvas', paperColors['--md-parchment-paper']]]);
+  theme.setPureBlackMode(true);
+  assert.deepEqual(chrome.at(-1), ['canvas', paperColors['--md-parchment-paper']]);
+  theme.setReaderSurfaceMode('green');
+  assert.deepEqual(chrome.at(-1), ['canvas', paperColors['--md-reader-green-paper']]);
+  theme.setReaderSurfaceMode('settings');
+  assert.deepEqual(chrome.slice(-2), [['theme', 'dark'], ['canvas', '#000000']]);
+  assert.equal(document.getElementById('homuraThemeColor').content, '#000000');
+  theme.setPureBlackMode(false);
+  assert.deepEqual(chrome.at(-1), ['canvas', '#0F1115']);
+}, { reduced: false }));
+
+test('恢复独立阅读纸面后系统深浅色变化不覆盖标题栏，退出再同步系统外观', () => fixture(({ theme, chrome, systemDark }) => {
+  theme.setSurfaceMode('auto', true);
+  theme.setReaderActive(true);
+  systemDark(true);
+  assert.equal(theme.effectiveSurfaceMode, 'dark');
+  assert.deepEqual(chrome.slice(-2), [['theme', 'light'], ['canvas', paperColors['--md-reader-green-paper']]]);
+  theme.setReaderActive(false);
+  assert.deepEqual(chrome.slice(-2), [['theme', 'dark'], ['canvas', '#0F1115']]);
+  systemDark(false);
+  assert.deepEqual(chrome.at(-1), ['canvas', '#F8FAFC']);
+}, { saved: { homura_reader_surface_mode: 'green' } }));

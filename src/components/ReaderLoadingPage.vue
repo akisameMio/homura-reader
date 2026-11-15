@@ -2,6 +2,8 @@
   <!-- 书架 → 阅读器 加载页：封面居中 + MD3 不定长进度 + 异常重试 -->
   <Transition
     appear
+    @before-enter="theme.setReaderLoadingActive(true)"
+    @after-leave="theme.setReaderLoadingActive(false)"
     enter-active-class="rlp-enter-active"
     leave-active-class="rlp-leave-active"
     enter-from-class="rlp-enter-from"
@@ -9,8 +11,9 @@
   >
     <div
       v-if="shown"
-      class="rlp-root fixed inset-0 z-[55] flex flex-col items-center justify-center px-8"
+      class="rlp-root reader-surface fixed inset-0 z-[55] flex flex-col items-center justify-center px-8"
       :class="{ 'is-leaving': leaving }"
+      :data-reader-mode="theme.readerSurfaceMode"
       role="status"
       :aria-busy="phase === 'loading'"
       aria-live="polite"
@@ -46,8 +49,10 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { PropType } from 'vue';
 import { makeAxis, runSpring, prefersReducedMotion } from '../services/spring.ts';
 import { useI18n } from '../composables/useI18n.ts';
+import { useThemeStore } from '../stores/theme.ts';
 
 const { t } = useI18n();
+const theme = useThemeStore();
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -82,6 +87,12 @@ const shown = ref(props.visible);
 const leaving = ref(false);
 const coverEl = ref<HTMLElement | null>(null);
 let cancelLeaveSpring: (() => void) | null = null;
+let leaveTimer: number | null = null;
+
+function cancelLeave() {
+  if (cancelLeaveSpring) { cancelLeaveSpring(); cancelLeaveSpring = null; }
+  if (leaveTimer !== null) { window.clearTimeout(leaveTimer); leaveTimer = null; }
+}
 
 // 离场弹簧：封面 scale 1 → 3.8、opacity 1 → 0（ζ=1 临界阻尼，无过冲），
 // 同时根背景随 is-leaving 类 CSS 淡出。弹簧收敛后再真正卸载组件。
@@ -89,6 +100,7 @@ function playLeaveSpring() {
   const el = coverEl.value;
   const reduce = prefersReducedMotion();
   const finish = () => {
+    leaveTimer = null;
     leaving.value = false;
     shown.value = false;
     if (el) el.style.cssText = '';
@@ -96,7 +108,7 @@ function playLeaveSpring() {
   if (!el || reduce || typeof window === 'undefined' || !window.requestAnimationFrame) {
     // 减少动效 / 无 DOM：直接淡出卸载
     leaving.value = true;
-    window.setTimeout(finish, reduce ? 0 : 200);
+    leaveTimer = window.setTimeout(finish, reduce ? 0 : 200);
     return;
   }
   leaving.value = true;
@@ -117,7 +129,7 @@ function playLeaveSpring() {
 watch(() => props.visible, (visible) => {
   if (visible) {
     // 入场：取消可能残留的离场弹簧，直接挂载
-    if (cancelLeaveSpring) { cancelLeaveSpring(); cancelLeaveSpring = null; }
+    cancelLeave();
     leaving.value = false;
     shown.value = true;
     if (coverEl.value) coverEl.value.style.cssText = '';
@@ -133,16 +145,15 @@ watch(() => [props.visible, props.phase] as const, ([visible, phase]) => {
 
 onBeforeUnmount(() => {
   stopTicker();
-  if (cancelLeaveSpring) { cancelLeaveSpring(); cancelLeaveSpring = null; }
+  cancelLeave();
+  theme.setReaderLoadingActive(false);
 });
-
-onBeforeUnmount(stopTicker);
 </script>
 
 <style scoped>
 .rlp-root {
   background: var(--md-reader-paper);
-  color: var(--md-on-surface);
+  color: var(--md-reader-ink);
   gap: 24px;
 }
 .rlp-cover {
@@ -201,14 +212,14 @@ onBeforeUnmount(stopTicker);
 }
 .rlp-status {
   font-size: 12px;
-  color: var(--md-on-surface-variant);
+  color: var(--md-reader-ink-soft);
   margin: 0;
 }
 .rlp-bar {
   width: 148px;
   height: 3px;
   border-radius: 999px;
-  background: var(--md-surface-highest);
+  background: var(--md-reader-rule);
   overflow: hidden;
   position: relative;
 }
@@ -229,7 +240,7 @@ onBeforeUnmount(stopTicker);
 }
 .rlp-hint {
   font-size: 11px;
-  color: var(--md-on-surface-variant);
+  color: var(--md-reader-ink-soft);
   opacity: 0.8;
   margin: 0;
 }
@@ -266,7 +277,7 @@ onBeforeUnmount(stopTicker);
 .rlp-back {
   border: 0;
   background: transparent;
-  color: var(--md-on-surface-variant);
+  color: var(--md-reader-ink-soft);
   font-size: 12px;
   cursor: pointer;
   padding: 6px 10px;

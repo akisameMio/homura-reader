@@ -225,6 +225,22 @@
         </template>
         <p class="settings-detail-hint">{{ t('管理本机数据') }}</p>
       </section>
+      <section class="settings-card settings-sync" aria-labelledby="settings-sync-title">
+        <button
+          type="button"
+          class="settings-card-open"
+          :aria-label="t('打开 WebDAV 同步')"
+          @click="openSection('sync', $event)"
+        >
+          <span class="settings-card-open-icon"><MdIcon name="chevron_right" /></span>
+        </button>
+        <div class="settings-card-head">
+          <h2 id="settings-sync-title"><MdIcon name="update" />{{ t('WebDAV 同步') }}</h2>
+        </div>
+        <p class="settings-sync-copy">{{ t('在不同设备间继续阅读') }}</p>
+        <p class="settings-note">{{ t('同步阅读进度、收藏与书库，原始文件不会上传。') }}</p>
+        <p class="settings-detail-hint">{{ t('配置同步连接') }}</p>
+      </section>
       <section class="settings-card settings-about" aria-labelledby="settings-about-title">
         <button
           type="button"
@@ -647,6 +663,7 @@
           <p v-if="actionNote" class="settings-detail-note" role="status">{{ actionNote }}</p>
         </section>
       </template>
+      <SyncSettings v-else-if="activeSection === 'sync'" />
       <template v-else-if="activeSection === 'about'">
         <div class="settings-detail-hero settings-about-hero">
           <img :src="logoUrl" :alt="t('HOMURA 应用图标')" />
@@ -656,7 +673,7 @@
           <p class="settings-note">
             {{ t('漫画、轻小说与图集都在设备内解析。') }}
             <br />
-            {{ t('作品与阅读记录不上传服务器。') }}
+            {{ t('原始文件不会上传，进度、收藏与书库可选同步。') }}
           </p>
         </div>
         <section class="settings-detail-group" aria-labelledby="settings-update-heading">
@@ -805,7 +822,7 @@
       </template>
     </div>
     <footer class="settings-footer">
-      <span>{{ t('阅读记录与作品，只保存在此设备。') }}</span>
+      <span>{{ t('作品保存在本机，同步由你选择。') }}</span>
       <span>HOMURA · ACGN GO</span>
     </footer>
     <MobileBottomSheet v-if="isCompact" :open="!!pendingAction" :title="t(dataDialogTitle)" title-id="mobile-settings-dialog-title"
@@ -911,6 +928,7 @@ import MdSwitch from './MdSwitch.vue';
 import ThemeSwatchGrid from './ThemeSwatchGrid.vue';
 import SettingsInterfacePreview from './SettingsInterfacePreview.vue';
 import SettingsSelectRow from './SettingsSelectRow.vue';
+import SyncSettings from './SyncSettings.vue';
 import { scrollAppToTop } from '../services/utils.ts';
 import { useI18n } from '../composables/useI18n.ts';
 
@@ -945,7 +963,7 @@ const webtoonOptions = [
 
 const emit = defineEmits(['detail-change']);
 const sectionTitles = {
-  appearance: '外观', reading: '阅读默认值', storage: '存储与数据',
+  appearance: '外观', reading: '阅读默认值', storage: '存储与数据', sync: 'WebDAV 同步',
   about: '关于 HOMURA', import: '导入偏好', debug: '调试'
 };
 type SettingsSection = keyof typeof sectionTitles;
@@ -1326,6 +1344,20 @@ onBeforeUnmount(() => {
   mask-image: linear-gradient(to bottom, var(--md-surface) 45%, transparent 100%);
 }
 
+/* Android 转场临时停用背景采样；副本只保留静态外观，避免控件动画重新起播。 */
+:global(html[data-platform="android"].settings-card-transition .settings-topbar::before) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:global(html[data-platform="android"] [data-settings-snapshot]),
+:global(html[data-platform="android"] [data-settings-snapshot] *),
+:global(html[data-platform="android"] [data-settings-snapshot] *::before),
+:global(html[data-platform="android"] [data-settings-snapshot] *::after) {
+  animation: none !important;
+  transition: none !important;
+}
+
 .settings-topbar-inner {
   width: 100%;
   max-width: 1480px;
@@ -1412,6 +1444,16 @@ onBeforeUnmount(() => {
   font-size: 11px;
   line-height: 1.7;
   color: var(--md-on-surface-variant);
+}
+
+.settings-sync {
+  position: relative;
+}
+
+.settings-sync-copy {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .settings-appearance {

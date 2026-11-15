@@ -147,6 +147,7 @@ let displayedIndex = 0;
 let pendingRender = 0;
 let previewGeneration = 0;
 let activePaperTurn: PageTurnController | null = null;
+let finishBufferFade: (() => void) | null = null;
 let bufferQueue: Promise<unknown> = Promise.resolve();
 let turnOriginY: number | null = null;
 // 翻页动画期间合并后续请求：只保留最后一次目标页，动画结束后补渲染
@@ -255,11 +256,39 @@ function showSlot(slot: number) {
 }
 
 function cancelBufferAnimations() {
+  // 先同步落到已提交的目标页，避免旧动画的异步 cancel 回调改写复用后的槽位。
+  finishBufferFade?.();
   reader.activeTransitionAnims.forEach(animation => { try { animation.cancel(); } catch {} });
   reader.activeTransitionAnims = [];
 }
 
+function fadeBuffer(outgoing: HTMLElement, incoming: HTMLElement, slot: number) {
+  // 两槽都有不透明纸色；旧页保持完整，新页覆盖淡入，整段转场不会露出空白底。
+  outgoing.style.opacity = '1';
+  const animation = incoming.animate([{ opacity: 0 }, { opacity: 1 }], {
+    duration: 200,
+    easing: 'cubic-bezier(0.4, 0, 0.2, 1)'
+  });
+  reader.activeTransitionAnims = [animation];
+  return new Promise<void>(resolve => {
+    const finish = () => {
+      if (finishBufferFade !== finish) return;
+      finishBufferFade = null;
+      animation.onfinish = null;
+      animation.oncancel = null;
+      showSlot(slot);
+      reader.activeTransitionAnims = [];
+      animation.cancel();
+      resolve();
+    };
+    finishBufferFade = finish;
+    animation.onfinish = finish;
+    animation.oncancel = finish;
+  });
+}
+
 function stopPaperTurn() {
+  cancelBufferAnimations();
   previewGeneration++;
   gesturePreview = null;
   activePaperTurn?.destroy();
@@ -292,7 +321,6 @@ async function renderReaderViewport(transitionDir = 'fade') {
   turnOriginY = null;
   pendingRender = myToken;
   cancelIdlePreload();
-  cancelBufferAnimations();
   if (!preview) {
     drag.active = false;
     drag.pointerId = null;
@@ -341,12 +369,9 @@ async function renderReaderViewport(transitionDir = 'fade') {
       finishPaperTurn(controller, nextSlot);
     } else {
       showSlot(nextSlot);
-      if (style !== 'none' && transitionDir !== 'none' && !prefersReducedMotion() && inEl.animate) {
-        const animation = inEl.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'cubic-bezier(0.2,0,0,1)' });
-        reader.activeTransitionAnims = [animation];
-        await new Promise<void>(resolve => { animation.onfinish = () => resolve(); animation.oncancel = () => resolve(); });
+      if (style !== 'none' && transitionDir !== 'none' && !prefersReducedMotion() && typeof inEl.animate === 'function') {
+        await fadeBuffer(outEl, inEl, nextSlot);
         if (!valid()) return;
-        reader.activeTransitionAnims = [];
       }
     }
     if (!drag.active) scheduleIdlePreload();
@@ -549,7 +574,6 @@ function onPointerDown(e: PointerEvent) {
   lastPointerType = e.pointerType;
   allowMouseClick = false;
   suppressMouseClick = false;
-  cancelBufferAnimations();
   stopPaperTurn();
   cancelIdlePreload();
   drag.active = true;

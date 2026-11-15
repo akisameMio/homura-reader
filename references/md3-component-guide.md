@@ -328,6 +328,7 @@
 
 - 页面使用 `surface-low`，卡片使用 `surface` / `on-surface`，书页示意衬底使用 `primary-container`。
 - 卡片圆角 34px，窄屏 28px；投影使用 `--md-shadow-color-soft`，不抬升卡片。
+- 卡片进入二级页统一走 `useSettingsTransition()`，原卡片弹出后连续展开，返回时反向收缩并弹入。Android 转场使用静态圆角裁切、暂时停止顶栏背景模糊和副本内动画；副本仅保留屏内分组，屏外定高占位。展开直接复用真实页面，结束、取消或卸载前必须归还原 DOM 位置及样式，避免交接时重复绘制整页；不要恢复逐帧修改 Android 外壳圆角。
 - 外观二级页复用 `ThemeSwatchGrid strip`：实心圆点、选中圆环与勾选；色板可用宽度达到 640px 时十列一行，不足时五列两行，不使用横向滚动。承载容器声明 `container: theme-palette / inline-size`。共享色板默认仍为五列两行，保持其他外观面板尺寸。
 - 1040px / 600px 容器断点只用于设置卡片排版，不替代全局 900px 主导航断点。
 - 书页示意仅作装饰，标记 `aria-hidden`；阅读默认值使用实际控件呈现，不将示意当作排版验证。

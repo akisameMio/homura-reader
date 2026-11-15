@@ -10,6 +10,8 @@
        退场动画期间先滚出视口再跳回来，看起来像组件闪没。 */
     html.reader-scroll-locked {
       overflow-y: hidden;
+      /* 书架宽度由 body 单独补偿，阅读器则占满窗口，避免右侧露出 gutter 底色。 */
+      scrollbar-gutter: auto;
     }
 
     /* 阅读器隐藏真实滚动条，但保留原来的可用宽度，避免退出时书架回流 */

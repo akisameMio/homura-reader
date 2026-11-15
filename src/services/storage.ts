@@ -30,6 +30,18 @@ import {
   upsertNativeBooks
 } from './nativeMetadata.ts';
 import type { Book, BookSource, Collection, ReadingProgress } from '../types.ts';
+import { localSnapshotSignature, replacePortableProgress, type SyncLocalSnapshot } from './syncSnapshot.ts';
+
+const metadataListeners = new Set<() => void>();
+export function subscribeMetadataChanges(listener: () => void) {
+  metadataListeners.add(listener);
+  return () => { metadataListeners.delete(listener); };
+}
+function notifyMetadataChanges() {
+  for (const listener of metadataListeners) {
+    try { listener(); } catch (error) { console.warn('[HOMURA] 同步状态刷新失败', error); }
+  }
+}
 
 const nowMs = typeof performance !== 'undefined' && typeof performance.now === 'function'
   ? () => performance.now()
@@ -424,6 +436,7 @@ export const HomuraStore = (() => {
     markNativeDirty();
     const idbStarted = timing ? nowMs() : 0;
     await idbSaveBook(meta, source);
+    notifyMetadataChanges();
     if (timing) timing.idbMs += nowMs() - idbStarted;
     upsertCachedBook(meta);
     const sqliteStarted = timing ? nowMs() : 0;
@@ -437,6 +450,7 @@ export const HomuraStore = (() => {
     markNativeDirty();
     const idbStarted = timing ? nowMs() : 0;
     await idbSaveBooks(entries);
+    notifyMetadataChanges();
     if (timing) timing.idbMs += nowMs() - idbStarted;
     entries.forEach(entry => upsertCachedBook(entry.meta));
     const sqliteStarted = timing ? nowMs() : 0;
@@ -479,6 +493,7 @@ export const HomuraStore = (() => {
   async function updateBookFavorite(id: string, favorite: boolean) {
     markNativeDirty();
     await idbUpdateBookFavorite(id, favorite);
+    notifyMetadataChanges();
     const meta = await idbGetBook(id);
     if (meta) {
       upsertCachedBook(meta);
@@ -493,6 +508,7 @@ export const HomuraStore = (() => {
   async function saveCollections(collections: Collection[]) {
     markNativeDirty();
     await idbSaveCollections(collections);
+    notifyMetadataChanges();
     replaceCachedCollections(collections);
     if (!canUseNativeMetadata()) return;
     const written = await queueNativeMirror(() => saveNativeCollections(collections));
@@ -503,6 +519,7 @@ export const HomuraStore = (() => {
   async function saveProgress(record: ReadingProgress) {
     markNativeDirty();
     await idbSaveProgress(record);
+    notifyMetadataChanges();
     upsertCachedProgress(record);
     if (!canUseNativeMetadata()) return;
     const written = await queueNativeMirror(() => saveNativeProgress(record));
@@ -522,6 +539,7 @@ export const HomuraStore = (() => {
   async function clearProgress() {
     markNativeDirty();
     await idbClearProgress();
+    notifyMetadataChanges();
     clearCachedProgress();
     if (!canUseNativeMetadata()) return;
     const written = await queueNativeMirror(clearNativeProgress);
@@ -544,6 +562,7 @@ export const HomuraStore = (() => {
       });
     }
     removeCachedBook(id);
+    notifyMetadataChanges();
     if (canUseNativeMetadata()) {
       const written = await queueNativeMirror(() => deleteNativeBook(id));
       if (written) removeCachedBook(id);
@@ -568,11 +587,69 @@ export const HomuraStore = (() => {
       });
     }
     nativeSnapshot = null;
+    notifyMetadataChanges();
     if (canUseNativeMetadata()) {
       const written = await queueNativeMirror(clearNativeMetadata);
       if (written) nativeSnapshot = null;
     }
     await Promise.allSettled([clearAll(), clearNativeSources()]);
+  }
+
+  // 同步快照始终读 IndexedDB，并在单个只读事务中取得一致版本。
+  async function readSyncSnapshot(): Promise<SyncLocalSnapshot> {
+    if (disabled) throw new Error('本地存储不可用，无法同步');
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE_BOOKS, STORE_PROGRESS, STORE_COLLECTIONS], 'readonly');
+      const books = tx.objectStore(STORE_BOOKS).getAll();
+      const progress = tx.objectStore(STORE_PROGRESS).getAll();
+      const collections = tx.objectStore(STORE_COLLECTIONS).getAll();
+      tx.oncomplete = () => resolve({ books: books.result, progress: progress.result, collections: collections.result });
+      tx.onerror = tx.onabort = () => reject(tx.error || new Error('本地存储不可用，无法同步'));
+    });
+  }
+
+  // 网络等待期间仍可阅读和编辑；提交前在事务内核对快照，变化时让同步引擎重试。
+  async function applySyncMetadata(expected: SyncLocalSnapshot, next: SyncLocalSnapshot) {
+    if (disabled) throw new Error('本地存储不可用，无法同步');
+    const db = await openDb();
+    markNativeDirty();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction([STORE_BOOKS, STORE_PROGRESS, STORE_COLLECTIONS], 'readwrite');
+      const books = tx.objectStore(STORE_BOOKS).getAll();
+      const progress = tx.objectStore(STORE_PROGRESS).getAll();
+      const collections = tx.objectStore(STORE_COLLECTIONS).getAll();
+      let conflict = false;
+      let ready = 0;
+      const apply = () => {
+        if (++ready !== 3) return;
+        const current = { books: books.result, progress: progress.result, collections: collections.result };
+        if (localSnapshotSignature(current) !== localSnapshotSignature(expected)) {
+          conflict = true;
+          tx.abort();
+          return;
+        }
+        const favorites = new Map(next.books.map(book => [book.id, !!book.favorite]));
+        for (const book of current.books as Book[]) {
+          if (favorites.has(book.id)) tx.objectStore(STORE_BOOKS).put({ ...book, favorite: favorites.get(book.id) });
+        }
+        const oldProgress = new Map((current.progress as ReadingProgress[]).map(record => [String(record.id), record]));
+        tx.objectStore(STORE_PROGRESS).clear();
+        for (const record of next.progress) {
+          // 远端只替换定位，保留每台设备自己的字体、方向与单双页设置。
+          tx.objectStore(STORE_PROGRESS).put({ ...replacePortableProgress(oldProgress.get(String(record.id)), record), id: record.id });
+        }
+        tx.objectStore(STORE_COLLECTIONS).clear();
+        for (const item of next.collections) tx.objectStore(STORE_COLLECTIONS).put(item);
+      };
+      books.onsuccess = progress.onsuccess = collections.onsuccess = apply;
+      tx.oncomplete = () => resolve();
+      tx.onerror = tx.onabort = () => reject(conflict ? new Error('SYNC_LOCAL_CHANGED') : tx.error || new Error('同步数据保存失败'));
+    });
+    nativeSnapshot = null;
+    if (canUseNativeMetadata()) {
+      await queueNativeMirror(async () => replaceNativeMetadata(await readSyncSnapshot()));
+    }
   }
 
   // 存储用量：usage/quota 来自浏览器估算，用于书架展示与配额预警
@@ -622,6 +699,8 @@ export const HomuraStore = (() => {
     clear,
     estimateStorage,
     requestPersistence,
+    readSyncSnapshot,
+    applySyncMetadata,
     get disabled() {
       return disabled;
     }

@@ -341,7 +341,7 @@
       --md-reader-ink-faint: color-mix(in oklab, var(--md-on-surface) 42%, var(--md-surface));
       --md-reader-rule: var(--md-outline-variant);
     }
-    .reader-dismiss-layer[data-reader-mode="parchment"] {
+    .reader-surface[data-reader-mode="parchment"] {
       --md-reader-paper: var(--md-parchment-paper);
       --md-reader-ink: var(--md-parchment-ink);
       --md-reader-ink-soft: var(--md-parchment-ink-soft);
@@ -349,7 +349,7 @@
       --md-reader-rule: var(--md-parchment-rule);
       --manga-filter: none;
     }
-    .reader-dismiss-layer[data-reader-mode="green"] {
+    .reader-surface[data-reader-mode="green"] {
       --md-reader-paper: var(--md-reader-green-paper);
       --md-reader-ink: var(--md-reader-green-ink);
       --md-reader-ink-soft: var(--md-reader-green-ink-soft);

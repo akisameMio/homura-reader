@@ -145,6 +145,7 @@ import { resolveBookFormat, scrollAppToTop } from './services/utils.ts';
 import { sortShelfBooks } from './services/bookTitles.ts';
 import { bookShelfCategory } from './services/shelfSections.ts';
 import { installProgressFlushHooks } from './services/progress.ts';
+import { useSyncStore } from './stores/sync.ts';
 import { useImporter } from './composables/useImporter.ts';
 import { useDuplicateImport } from './composables/useDuplicateImport.ts';
 import { useShelfDialogs } from './composables/useShelfDialogs.ts';
@@ -630,6 +631,7 @@ onMounted(async () => {
   } finally {
     await dismissStartupSplash();
   }
+  void useSyncStore().initialize().catch(() => {});
 });
 
 onBeforeUnmount(() => {

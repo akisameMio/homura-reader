@@ -336,6 +336,16 @@ export const useShelfStore = defineStore('shelf', () => {
     return restored.length > 0;
   }
 
+  async function refreshSyncedMetadata() {
+    await Promise.all([collectionQueue, favoriteQueue]);
+    const snapshot = await HomuraStore.readSyncSnapshot();
+    const favorites = new Map(snapshot.books.map(book => [book.id, !!book.favorite]));
+    library.value = library.value.map(book => favorites.has(book.id) ? { ...book, favorite: favorites.get(book.id) } : book);
+    progressMap.value = Object.fromEntries(snapshot.progress.map(record => [String(record.id), record]));
+    collections.value = restoreCollections(snapshot.collections, library.value);
+    if (!collections.value.some(item => item.id === activeCollectionId.value)) activeCollectionId.value = null;
+  }
+
   return {
     library,
     progressMap,
@@ -360,6 +370,7 @@ export const useShelfStore = defineStore('shelf', () => {
     setFavorite,
     setProgressRecord,
     progressInfoFor,
-    loadLibrary
+    loadLibrary,
+    refreshSyncedMetadata
   };
 });

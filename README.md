@@ -31,7 +31,7 @@
   <img src="https://github.com/user-attachments/assets/049e7a11-e0af-4a94-a77e-8f8c72cb50e7" width="160" alt="HOMURA 动图" />
 </div>
 
-> 本鱼只负责把书塞进你的本地书架；上传云端那种事，想都别想。🐋
+> 本鱼把书留在你的本地书架；阅读进度要不要跨设备，听你的。🐋
 
 ## 关于项目
 
@@ -50,7 +50,8 @@ HOMURA 是一个**本地优先**的阅读器：漫画、轻小说、PDF 和图�
 - **本地进度记忆**：按书保存页码、方向、单双页、字号、字体、行距、页边距与条漫尺寸，重开自动续读。
 - **导入与更新**：导入可取消、失败可重试、同名提示；应用内检查、下载并安装新版本。
 - **Material Design 3**：10 套主题色、白昼 / 护眼 / 夜间三种表面，桌面与窄屏分别适配。
-- **离线书库**：元数据、封面、原文件与进度全在本机，不上传也不云同步。
+- **离线书库**：阅读与存储以本机为主，原文件、正文与封面不会上传。
+- **可选 WebDAV 同步**：默认关闭，仅向你指定的服务器同步进度、收藏与书库；各设备需自行导入相同原文件，排版设置保留在本机。
 
 ## 支持格式
 
@@ -88,19 +89,21 @@ npm run dev        # tauri dev，自动执行 Vite 前置
 npm run build      # tauri build，先构建前端再打包安装包
 ```
 
-提交前建议运行 `npm test`（304 条单元测试）、`npm run typecheck`、`npm run build:vite`。
+提交前建议运行 `npm test`（单元测试）、`npm run typecheck`、`npm run build:vite`。
 
 ## 项目现状与限制
 
 - 版本 `2.2.8`，桌面（macOS / Windows / Linux）与 Android（arm64 / armv7）均可构建；核心阅读链路完整可用。
 - 标签与书签功能尚未实现；不支持 DRM、AZW3 / KF8、加密 PDF，PDF 不可重排。
-- 有 304 条单元测试与类型检查，但没有 E2E、没有 ESLint，关键流程仍需手动回归。
+- WebDAV 需已存在的 HTTPS 目录、强 ETag 与条件写入支持；密码仅用于当前会话。真实 NAS 与 Android 完整同步链路仍未实测。
+- 有单元测试与类型检查，但没有 E2E、没有 ESLint，关键流程仍需手动回归。
 - macOS 安装包尚未签名，首次启动需手动放行。
 - 本项目以 **MIT License** 授权，条款见 [`LICENSE`](LICENSE)。
 
 ## 更多文档
 
 - 功能细则（导入书架、阅读器、本地存储与隐私、项目结构、常用命令、开发发布等）：[`docs/features.md`](docs/features.md)
+- WebDAV 同步范围、协议与服务器要求：[`references/sync-protocol.md`](references/sync-protocol.md)
 - 开发与代码约束：[`AGENTS.md`](AGENTS.md)
 - Bug 与建议：[Issues](https://github.com/Leon-Ning-san/HomuraReader/issues)
 
