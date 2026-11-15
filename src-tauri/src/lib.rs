@@ -177,5 +177,7 @@ pub fn run() {
                     window_state::save_current(&window);
                 }
             }
+            #[cfg(not(desktop))]
+            let _ = (app, event);
         })
 }

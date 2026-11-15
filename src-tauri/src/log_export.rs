@@ -8,9 +8,9 @@ Android 的保存对话框只返回 content:// URI，Rust 无法直接写入；�
 改为复制到剪贴板。
 ============================================================================ */
 
-use tauri::AppHandle;
 #[cfg(desktop)]
 use std::fs;
+use tauri::AppHandle;
 #[cfg(desktop)]
 use tauri_plugin_dialog::DialogExt;
 
@@ -21,7 +21,9 @@ fn sanitize_file_name(value: &str) -> String {
     let mut name: String = value
         .trim()
         .chars()
-        .filter(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.'))
+        .filter(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
+        })
         .collect();
     if name.is_empty() {
         name.push_str("homura-logs.txt");
