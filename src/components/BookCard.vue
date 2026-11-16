@@ -23,20 +23,20 @@
 
       <!-- 类型徽标 -->
       <span
-        class="absolute top-2.5 left-2.5 px-2 py-[3px] rounded-full font-mono text-[10px] min-[900px]:text-[11px] font-semibold tracking-[0.04em] text-[var(--md-on-surface)]"
+        class="md-shape-morph md-shape-cookie absolute top-2.5 left-2.5 px-2 py-[3px] rounded-full font-mono text-[10px] min-[900px]:text-[11px] font-semibold tracking-[0.04em] text-[var(--md-on-surface)]"
         :style="{ background: 'color-mix(in oklab, var(--md-surface) 92%, transparent)' }"
       >{{ badgeText }}</span>
 
       <button
         v-if="!selecting"
         @click.stop="$emit('remove', book.id)"
-        class="card-remove-btn book-remove-button md-hit-target absolute z-20 top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+        class="md-shape-morph md-shape-clover card-remove-btn book-remove-button md-hit-target absolute z-20 top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
         :title="t(removeLabel)"
         :aria-label="t(removeLabel)"
       >
         <MdIcon name="close" class="w-3.5 h-3.5" />
       </button>
-      <span v-else class="md-select-badge" aria-hidden="true">
+      <span v-else class="md-select-badge md-shape-morph md-shape-boom" :class="{ 'is-selected': selected }" aria-hidden="true">
         <MdIcon :name="selected ? 'check' : 'radio_button_unchecked'" :size="16" />
       </span>
 

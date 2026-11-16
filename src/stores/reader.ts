@@ -25,6 +25,7 @@ import {
   resolveReaderMetrics
 } from '../services/readerLayout.ts';
 import { applyRestoredProgress, scheduleProgressSave, flushProgress } from '../services/progress.ts';
+import { logRuntimeOperation } from '../services/runtimeLogs.ts';
 import { collectionReadingOrder, adjacentCollectionBook, spreadBounds } from '../services/collectionReading.ts';
 import { hasArchiveSource } from '../services/archiveAccess.ts';
 import { ensureNativeArchiveSession, releaseNativeArchiveSession } from '../services/nativeArchive.ts';
@@ -758,6 +759,7 @@ export const useReaderStore = defineStore('reader', () => {
 
   function goNextPage() {
     if (!currentBook.value || openingBook.value) return;
+    logRuntimeOperation('阅读下一页', `${currentBook.value.title} · 第 ${currentIndex.value + 1}/${activePages.value.length} 页`);
     if (currentCollection.value && atLastPage.value) return openAdjacentCollectionBook(1);
     if (layoutConfig.direction === 'vertical') {
       if (webtoonScrollBy.value) webtoonScrollBy.value(1);
@@ -779,6 +781,7 @@ export const useReaderStore = defineStore('reader', () => {
 
   function goPrevPage() {
     if (!currentBook.value || openingBook.value) return;
+    logRuntimeOperation('阅读上一页', `${currentBook.value.title} · 第 ${currentIndex.value + 1}/${activePages.value.length} 页`);
     if (currentCollection.value && atFirstPage.value) return openAdjacentCollectionBook(-1);
     if (layoutConfig.direction === 'vertical') {
       if (webtoonScrollBy.value) webtoonScrollBy.value(-1);
@@ -823,6 +826,7 @@ export const useReaderStore = defineStore('reader', () => {
     const total = activePages.value.length;
     if (!total) return;
     const target = Math.max(0, Math.min(total - 1, parseInt(String(index), 10) || 0));
+    logRuntimeOperation('跳转阅读位置', `${currentBook.value.title} · 第 ${currentIndex.value + 1} 页 → 第 ${target + 1} 页`);
     const origin = captureLocation();
     onSliderInput(target);
     if (!origin) return;
@@ -844,6 +848,7 @@ export const useReaderStore = defineStore('reader', () => {
       if (resolved >= 0) index = resolved;
     }
     index = Math.max(0, Math.min(total - 1, index));
+    logRuntimeOperation('返回上次阅读位置', `${currentBook.value.title} · 第 ${currentIndex.value + 1} 页 → 第 ${index + 1} 页`);
     if (layoutConfig.direction === 'vertical') {
       currentIndex.value = index;
       if (webtoonScrollTo.value) webtoonScrollTo.value(index);

@@ -2,6 +2,15 @@
        1. MD3 Color Tokens · 10 套主题（默认 兰花紫 = seed #7B4E9E）
        ========================================================================== */
     :root { --md-favorite: color-mix(in oklab, var(--md-primary) 58%, var(--md-tertiary)); }
+    :root { --md-reading-progress: color-mix(in oklab, #087AFF 86%, var(--md-primary)); }
+    /* 书架只用少量莫奈粉彩形状，混入当前主题色避免与主题脱节。 */
+    :root {
+      --md-shelf-flower: color-mix(in oklab, #D9A4B5 80%, var(--md-tertiary-container));
+      --md-shelf-cloud: color-mix(in oklab, #B9B5E1 80%, var(--md-primary-container));
+      --md-shelf-pebble: color-mix(in oklab, #B5C5A9 80%, var(--md-secondary-container));
+      --md-shelf-decoration-opacity: .2;
+    }
+    [data-mode="dark"] { --md-shelf-decoration-opacity: .1; }
     :root,
     [data-theme="blue"] {
       --md-primary: #0061A4;

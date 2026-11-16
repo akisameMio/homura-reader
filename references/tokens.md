@@ -53,6 +53,14 @@
 | shadow-color-soft | shadow-color 52% + surface | shadow-color 52% + surface | 同 shadow-color（夜间不再变亮） |
 | manga-filter | none | sepia(.18) brightness(.97) contrast(.98) | brightness(.92) |
 
+### 书架装饰
+
+`--md-shelf-flower` / `--md-shelf-cloud` / `--md-shelf-pebble` 分别以莫奈粉 `#D9A4B5`、雾紫 `#B9B5E1`、鼠尾草绿 `#B5C5A9` 为 80% 基色，混入 20% 当前主题的 `tertiary-container` / `primary-container` / `secondary-container`。装饰色只用于少量形状填充，不承载文字或主行动。
+
+`--md-shelf-decoration-opacity` 在白昼 / 护眼为 `.2`，夜间（含纯黑）为 `.1`，用于页面背景装饰。桌面页面底缘只露出一块淡色形状，手机不加页面背景装饰。继续阅读特色卡采用左侧信息、右侧波浪色面布局，小封面保留共享元素转场锚点；色面使用 `primary-container` 与 `surface-low` 混色，花形入口使用 `primary` / `on-primary`。花形只在特色卡悬停或按压时响应，减少动态效果时无位移。
+
+继续阅读卡的波浪进度线使用 `--md-reading-progress`，以蓝色为主并少量混合当前主题主色；夜间会随主色自动调整。灰轨、波浪与末端圆点只负责装饰，准确进度仍由百分比和无障碍 `progressbar` 数值提供。
+
 ### 选择菜单
 
 选择菜单使用 `--md-select-menu-surface` / `--md-select-menu-selected` / `--md-select-menu-hover`。白昼按界面参考图分别为 `#FCF8FA` / `transparent` / `#F2EEEF`：选中项由勾选标识，悬浮项显示浅暖灰底。夜间沿用 `surface-high` / `surface-highest` 与原有状态混色。

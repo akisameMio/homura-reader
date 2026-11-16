@@ -475,6 +475,49 @@
       color: var(--md-on-secondary-container);
       pointer-events: none;
     }
+
+    /* 书架点缀容器按状态变形：安静状态用 squircle，交互时转为花瓣 / 曲奇轮廓。 */
+    .md-shape-morph {
+      transition:
+        border-radius 420ms var(--md-ease-spring),
+        clip-path 420ms var(--md-ease-spring),
+        transform 420ms var(--md-ease-spring),
+        background-color 200ms var(--md-ease-emphasized),
+        color 200ms var(--md-ease-emphasized);
+      will-change: border-radius, transform;
+    }
+    .md-shape-morph.md-shape-cookie { border-radius: 42% 36% 44% 38% / 38% 46% 36% 44%; }
+    .md-shape-morph.md-shape-clover { border-radius: 44% 44% 38% 38% / 40% 40% 48% 48%; }
+    .md-shape-boom {
+      clip-path: polygon(50% 0, 56% 12%, 68% 4%, 72% 17%, 86% 14%, 84% 28%, 98% 36%, 87% 47%, 100% 58%, 85% 65%, 90% 80%, 75% 79%, 68% 96%, 56% 86%, 45% 100%, 39% 85%, 24% 91%, 25% 75%, 8% 68%, 18% 55%, 2% 44%, 18% 36%, 10% 21%, 27% 23%, 33% 6%, 44% 16%);
+      border-radius: 0;
+    }
+    .md-shape-boom.is-selected {
+      clip-path: polygon(50% 0, 59% 15%, 72% 4%, 75% 22%, 94% 12%, 88% 31%, 100% 42%, 85% 51%, 98% 65%, 80% 69%, 87% 88%, 67% 82%, 59% 100%, 48% 84%, 34% 96%, 34% 77%, 15% 82%, 21% 64%, 0 56%, 17% 45%, 3% 29%, 23% 30%, 27% 10%, 42% 20%);
+      transform: rotate(12deg) scale(1.08, .94);
+    }
+    .md-shelf-card:active .md-shape-cookie,
+    .md-shelf-card:active .md-shape-clover {
+      border-radius: 34% 48% 36% 48% / 48% 36% 48% 34%;
+      transform: rotate(-8deg) scale(1.12, .9);
+    }
+    .md-book-selected .md-shape-cookie { border-radius: 48% 34% 48% 34% / 34% 48% 34% 48%; }
+    .md-book-selected .md-select-badge.is-selected { transform: rotate(0) scale(1); }
+    @media (hover: hover) and (pointer: fine) {
+      .md-shelf-card:hover .md-shape-cookie,
+      .md-shelf-card:hover .md-shape-clover {
+        border-radius: 38% 50% 38% 50% / 50% 38% 50% 38%;
+        transform: rotate(8deg) scale(1.06, .96);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .md-shape-morph { transition: none; will-change: auto; }
+      .md-shelf-card:active .md-shape-cookie,
+      .md-shelf-card:active .md-shape-clover,
+      .md-shelf-card:hover .md-shape-cookie,
+      .md-shelf-card:hover .md-shape-clover,
+      .md-shape-boom.is-selected { transform: none; }
+    }
     .md-book-selected,
     .md-collection-selected { outline: 3px solid var(--md-primary); outline-offset: 2px; }
 

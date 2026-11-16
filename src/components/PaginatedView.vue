@@ -80,6 +80,7 @@ import { isAndroid } from '../services/platform.ts';
 import { ensurePageUrlLoaded, decodePageImage, releaseDistantPageUrls, type MangaPageItem } from '../services/pagination.ts';
 import { resolveProseStyle, resolveReaderMetrics, resolveReaderFolios, type ReaderFolio } from '../services/readerLayout.ts';
 import { classifyReaderGesture } from '../services/readerGestures.ts';
+import { logRuntimeOperation } from '../services/runtimeLogs.ts';
 import { createPageTurn, type PageTurnController, type PaperTurnStyle } from '../services/pageTurn.ts';
 import { pageTurnTarget, type TurnSide } from '../services/pageTurnGeometry.ts';
 import { prefersReducedMotion } from '../services/spring.ts';
@@ -642,6 +643,7 @@ function onPointerUp(e: PointerEvent) {
       else reader.onRightButtonClick();
     } else {
       turnOriginY = null;
+      logRuntimeOperation('切换阅读工具栏');
       ui.toggleChrome();
     }
     return;
@@ -691,6 +693,7 @@ function onClick(e: MouseEvent) {
     else reader.onRightButtonClick();
   } else {
     turnOriginY = null;
+    logRuntimeOperation('切换阅读工具栏');
     ui.toggleChrome();
   }
 }

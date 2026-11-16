@@ -333,28 +333,18 @@
             <MdIcon name="history" />
             {{ t('运行日志') }}
           </h2>
-          <span v-if="runtimeLogs.errorCount" class="settings-logs-badge is-error">
-            <MdIcon name="error" />
-            {{ logErrorText }}
-          </span>
-          <span v-else class="settings-logs-badge">
-            {{ settings.runtimeLogCapture ? t('记录中') : t('已暂停') }}
-          </span>
         </div>
-        <p class="settings-logs-copy">{{ t('记录运行中的错误与警告') }}</p>
-        <div class="settings-log-facts">
-          <div>
-            <span>{{ t('日志等级') }}</span>
-            <b>{{ settings.runtimeLogLevel }}</b>
-          </div>
-          <div>
-            <span>{{ t('日志捕获') }}</span>
-            <b class="settings-logs-state" :class="{ 'is-on': settings.runtimeLogCapture }">
-              <i v-if="settings.runtimeLogCapture"></i>
-              {{ settings.runtimeLogCapture ? t('已开启') : t('已关闭') }}
-            </b>
-          </div>
-        </div>
+        <MdSwitch
+          class="settings-list-row"
+          :model-value="settings.runtimeLogCapture"
+          :title="t('记录应用运行期间的日志')"
+          @update:model-value="settings.setRuntimeLogCapture"
+        >
+          <span class="settings-value-copy">
+            <b>{{ t('日志捕获') }}</b>
+            <span>{{ t('记录用户操作、运行信息与异常') }}</span>
+          </span>
+        </MdSwitch>
         <p class="settings-note">{{ logTotalText }} · {{ t('最近 300 条留在本机') }}</p>
         <p class="settings-detail-hint">{{ t('查看运行日志') }}</p>
       </section>
@@ -753,8 +743,35 @@
       </template>
       <SyncSettings v-else-if="activeSection === 'sync'" />
       <template v-else-if="activeSection === 'logs'">
+        <div class="settings-detail-hero settings-logs-hero">
+          <div class="settings-logs-hero-top">
+            <span class="settings-logs-hero-icon" aria-hidden="true"><MdIcon name="history" /></span>
+            <div class="settings-logs-hero-copy">
+              <span class="settings-badge" :class="{ 'is-paused': !settings.runtimeLogCapture }">
+                {{ settings.runtimeLogCapture ? t('记录中') : t('已暂停') }}
+              </span>
+              <h2>{{ t('操作与运行记录') }}</h2>
+              <p>{{ t('记录用户操作、运行信息与异常') }}</p>
+            </div>
+          </div>
+          <div class="settings-logs-summary" role="group" :aria-label="logTotalText">
+            <div>
+              <b>{{ runtimeLogs.infoCount }}</b>
+              <span>{{ t('信息') }}</span>
+            </div>
+            <div>
+              <b class="is-warning">{{ runtimeLogs.warningCount }}</b>
+              <span>{{ t('警告') }}</span>
+            </div>
+            <div>
+              <b class="is-error">{{ runtimeLogs.errorCount }}</b>
+              <span>{{ t('错误') }}</span>
+            </div>
+          </div>
+          <p class="settings-logs-retention">{{ logTotalText }} · {{ t('最近 300 条留在本机') }}</p>
+        </div>
         <section class="settings-detail-group" aria-labelledby="settings-log-settings-heading">
-          <h2 id="settings-log-settings-heading">{{ t('日志设置') }}</h2>
+          <h2 id="settings-log-settings-heading">{{ t('记录偏好') }}</h2>
           <div class="settings-list">
             <SettingsSelectRow
               :label="t('日志等级')"
@@ -774,10 +791,13 @@
               </span>
             </MdSwitch>
           </div>
-          <p class="settings-detail-note">{{ t('调整等级只影响之后写入的记录；日志只保存在本机，不会随同步上传。') }}</p>
+          <p class="settings-detail-note">{{ t('启用捕获后，用户操作记录不受日志等级影响；等级控制控制台诊断信息。日志只保存在本机，不会随同步上传。') }}</p>
         </section>
         <section class="settings-detail-group" aria-labelledby="settings-recent-log-heading">
-          <h2 id="settings-recent-log-heading">{{ t('最近记录') }}</h2>
+          <div class="settings-log-section-heading">
+            <h2 id="settings-recent-log-heading">{{ t('最近记录') }}</h2>
+            <span class="settings-log-count">{{ t('{0} 条', { 0: filteredLogs.length }) }}</span>
+          </div>
           <div class="settings-log-filter">
             <MdSegmentedControl
               :model-value="logFilter"
@@ -785,24 +805,34 @@
               :aria-label="t('筛选日志等级')"
               @update:model-value="setLogFilter"
             />
-            <span class="settings-log-count">{{ t('{0} 条', { 0: filteredLogs.length }) }}</span>
           </div>
           <div v-if="filteredLogs.length" class="settings-log-list">
-            <article v-for="entry in filteredLogs" :key="entry.id" class="settings-log-entry">
-              <div class="settings-log-meta">
-                <time class="settings-log-time">{{ formatRuntimeLogTimestamp(entry.at) }}</time>
-                <span class="settings-log-level" :class="`is-${entry.level}`">{{ entry.level }}</span>
+            <article v-for="entry in filteredLogs" :key="entry.id" class="settings-log-entry" :class="`is-${entry.level}`">
+              <span class="settings-log-marker" aria-hidden="true">
+                <MdIcon :name="entry.level === 'error' ? 'error' : entry.level === 'warning' ? 'warning' : entry.source === 'operation' ? 'history' : 'info'" :size="17" />
+              </span>
+              <div class="settings-log-entry-body">
+                <div class="settings-log-meta">
+                  <span class="settings-log-level" :class="`is-${entry.level}`">{{ t(entry.level === 'info' ? '信息' : entry.level === 'warning' ? '警告' : '错误') }}</span>
+                  <time class="settings-log-time">{{ formatRuntimeLogTimestamp(entry.at) }}</time>
+                </div>
+                <p class="settings-log-message">{{ entry.message }}</p>
+                <div class="settings-log-entry-footer">
+                  <span class="settings-log-source">{{ entry.source === 'operation' ? t('用户操作') : formatRuntimeLogSource(entry.source) }}</span>
+                  <details v-if="entry.detail" class="settings-log-detail">
+                    <summary>{{ t('查看详情') }}</summary>
+                    <pre>{{ entry.detail }}</pre>
+                  </details>
+                </div>
               </div>
-              <p class="settings-log-message">{{ entry.message }}</p>
-              <span class="settings-log-source">{{ formatRuntimeLogSource(entry.source) }}</span>
             </article>
           </div>
           <div v-else class="settings-log-empty">
             <span class="settings-log-empty-icon"><MdIcon name="history" /></span>
             <b>{{ logSearchActive ? t('没有匹配的日志') : t('暂无日志') }}</b>
             <p v-if="logSearchActive">{{ t('换个关键词，或切换等级再试试。') }}</p>
-            <p v-else>{{ settings.runtimeLogCapture ? t('当前等级还没有新的日志。') : t('日志捕获已关闭。') }}</p>
-            <p v-if="!logSearchActive && settings.runtimeLogCapture" class="settings-log-empty-hint">{{ t('把日志等级调到「信息」可以记录更多运行信息。') }}</p>
+            <p v-else>{{ !settings.runtimeLogCapture ? t('日志捕获已关闭。') : logFilter === 'all' ? t('还没有运行记录。') : t('当前筛选条件下没有记录。') }}</p>
+            <p v-if="!logSearchActive && settings.runtimeLogCapture" class="settings-log-empty-hint">{{ t('用户操作和翻页会自动记录；提高日志等级可收集更多控制台信息。') }}</p>
           </div>
           <div class="settings-log-footer">
             <span>{{ t('最多保留 300 条，超出后自动删除最旧的记录。') }}</span>
@@ -1246,7 +1276,6 @@ const filteredLogs = computed(() => {
 });
 const logSearchActive = computed(() => logQuery.value.trim().length > 0);
 const logTotalText = computed(() => t('{0} 条记录', { 0: runtimeLogs.entries.length }));
-const logErrorText = computed(() => t('{0} 个错误', { 0: runtimeLogs.errorCount }));
 const storageNativeText = computed(() =>
   diskStats.value ? formatBytes(diskStats.value.appBytes) : '0 B'
 );
@@ -1757,91 +1786,8 @@ onBeforeUnmount(() => {
   min-height: 240px;
 }
 
-.settings-logs .settings-card-head {
-  margin-bottom: 16px;
-}
-
-.settings-logs-copy {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.settings-logs-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex: none;
-  height: 26px;
-  padding: 0 9px;
-  border-radius: 999px;
-  background: var(--md-surface-high);
-  color: var(--md-on-surface-variant);
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.settings-logs-badge svg {
-  width: 13px;
-  height: 13px;
-}
-
-.settings-logs-badge.is-error {
-  background: var(--md-error-container);
-  color: var(--md-on-error-container);
-}
-
-.settings-log-facts {
-  margin-top: 16px;
-  padding: 3px 16px;
-  border-radius: 18px;
-  background: var(--md-surface-low);
-}
-
-.settings-log-facts > div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 40px;
-  font-size: 11px;
-}
-
-.settings-log-facts > div + div {
-  border-top: 1px solid color-mix(in oklab, var(--md-outline-variant) 42%, transparent);
-}
-
-.settings-log-facts span {
-  color: var(--md-on-surface-variant);
-}
-
-.settings-log-facts b {
-  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, monospace;
-  font-size: 10.5px;
-  font-weight: 600;
-}
-
-.settings-logs-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-sans) !important;
-  font-size: 11px !important;
-}
-
-.settings-logs-state i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--md-outline);
-}
-
-.settings-logs-state.is-on i {
-  background: var(--md-primary);
-}
-
 .settings-logs > .settings-note {
-  margin-top: 12px;
+  margin-top: 18px;
 }
 
 .settings-logs > .settings-detail-hint {
@@ -2865,52 +2811,86 @@ button.settings-list-row {
   color: var(--md-on-surface-variant);
 }
 
-.settings-log-filter {
+.settings-log-section-heading {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 0 18px 16px;
+  justify-content: space-between;
+  margin-bottom: 12px;
 }
 
-.settings-log-filter :deep(.md-segmented) {
-  width: auto;
-  max-width: none;
-  background: var(--md-surface);
+.settings-log-section-heading > h2 {
+  margin: 0 18px;
+  color: var(--md-on-surface-variant);
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.settings-log-filter {
+  margin: 0 0 14px;
 }
 
 .settings-log-filter :deep(.md-segmented-option) {
-  min-height: 40px;
-  padding-inline: 17px;
-  font-size: 11px;
+  min-height: 44px;
 }
 
 .settings-log-count {
-  margin-left: auto;
+  flex: none;
+  margin-right: 18px;
   color: var(--md-on-surface-variant);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
 .settings-log-list {
-  display: grid;
-  gap: 14px;
+  position: relative;
+  overflow: hidden;
+  padding: 4px 20px;
+  border-radius: 26px;
+  background: var(--md-surface);
 }
 
 .settings-log-entry {
+  position: relative;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 14px;
   min-width: 0;
-  padding: 20px 24px 18px;
-  border-radius: 26px;
-  background: var(--md-surface);
-  box-shadow:
-    0 1px 2px color-mix(in oklab, var(--md-shadow-color-soft) 10%, transparent),
-    0 10px 24px -20px color-mix(in oklab, var(--md-shadow-color-soft) 28%, transparent);
+  padding: 17px 0;
+}
+
+.settings-log-entry + .settings-log-entry {
+  border-top: 1px solid var(--md-outline-variant);
+}
+
+.settings-log-marker {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 11px;
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+
+.settings-log-entry.is-warning .settings-log-marker {
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+}
+
+.settings-log-entry.is-error .settings-log-marker {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+
+.settings-log-entry-body {
+  min-width: 0;
 }
 
 .settings-log-meta {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 9px;
 }
 
 .settings-log-time {
@@ -2923,23 +2903,21 @@ button.settings-list-row {
 .settings-log-level {
   display: inline-flex;
   align-items: center;
-  height: 21px;
-  padding: 0 8px;
+  min-height: 22px;
+  padding: 2px 8px;
   border-radius: 999px;
-  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, monospace;
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: -0.01em;
 }
 
 .settings-log-level.is-info {
-  background: var(--md-surface-high);
-  color: var(--md-on-surface-variant);
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
 }
 
 .settings-log-level.is-warning {
-  background: color-mix(in oklab, #c98a20 18%, var(--md-surface));
-  color: color-mix(in oklab, #c98a20 68%, var(--md-on-surface));
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
 }
 
 .settings-log-level.is-error {
@@ -2948,21 +2926,57 @@ button.settings-list-row {
 }
 
 .settings-log-message {
-  margin: 14px 0 10px;
+  margin: 8px 0 5px;
   color: var(--md-on-surface);
-  font-size: 14.5px;
+  font-size: 13px;
   font-weight: 500;
-  line-height: 1.55;
-  letter-spacing: -0.005em;
+  line-height: 1.6;
   overflow-wrap: anywhere;
+}
+
+.settings-log-entry-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 12px;
 }
 
 .settings-log-source {
   color: var(--md-on-surface-variant);
+  font-size: 10.5px;
+}
+
+.settings-log-detail {
+  min-width: 0;
+  color: var(--md-primary);
+  font-size: 11px;
+}
+
+.settings-log-detail summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.settings-log-detail summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-log-detail pre {
+  max-height: 220px;
+  overflow: auto;
+  margin: 0 0 5px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--md-surface-high);
+  color: var(--md-on-surface-variant);
   font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, monospace;
-  font-size: 9.5px;
-  letter-spacing: 0.015em;
-  opacity: 0.78;
+  font-size: 10.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .settings-log-empty {
@@ -3160,6 +3174,108 @@ button.settings-list-row {
 .settings-storage-hero .storage-legend {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
+}
+
+.settings-logs-hero {
+  display: grid;
+  gap: 22px;
+  padding: 28px 32px 22px;
+  background: var(--md-surface);
+}
+
+.settings-logs-hero-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.settings-logs-hero-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+
+.settings-logs-hero-icon :deep(svg) {
+  width: 25px;
+  height: 25px;
+}
+
+.settings-logs-hero-copy {
+  min-width: 0;
+}
+
+.settings-logs-hero-copy .settings-badge {
+  padding: 6px 10px;
+}
+
+.settings-logs-hero-copy .settings-badge.is-paused {
+  background: var(--md-surface-high);
+  color: var(--md-on-surface-variant);
+}
+
+.settings-logs-hero-copy h2 {
+  margin: 12px 0 5px;
+  color: var(--md-on-surface);
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.settings-logs-hero-copy p,
+.settings-logs-retention {
+  margin: 0;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.settings-logs-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding-top: 17px;
+  border-top: 1px solid var(--md-outline-variant);
+}
+
+.settings-logs-summary > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.settings-logs-summary > div + div {
+  padding-left: 20px;
+  border-left: 1px solid var(--md-outline-variant);
+}
+
+.settings-logs-summary b {
+  color: var(--md-on-surface);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  line-height: 1.15;
+}
+
+.settings-logs-summary b.is-warning {
+  color: var(--md-tertiary);
+}
+
+.settings-logs-summary b.is-error {
+  color: var(--md-error);
+}
+
+.settings-logs-summary span {
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+}
+
+.settings-logs-retention {
+  margin-top: -13px;
+  font-size: 10.5px;
 }
 
 .settings-about-hero {
@@ -3433,26 +3549,63 @@ button.settings-list-row {
 }
 
 @container settings (max-width: 599px) {
+  .settings-logs-hero {
+    gap: 18px;
+    padding: 24px 20px 20px;
+    border-radius: 28px;
+  }
+
+  .settings-logs-hero-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 16px;
+  }
+
+  .settings-logs-hero-copy h2 {
+    margin-top: 10px;
+    font-size: 20px;
+  }
+
+  .settings-logs-summary > div + div {
+    padding-left: 12px;
+  }
+
   .settings-log-filter {
-    flex-wrap: wrap;
-    margin-inline: 0;
+    margin-bottom: 12px;
   }
 
   .settings-log-filter :deep(.md-segmented) {
     width: 100%;
   }
 
-  .settings-log-count {
+  .settings-log-section-heading > h2 {
     margin-left: 0;
   }
 
-  .settings-log-entry {
-    padding: 18px 20px 16px;
+  .settings-log-count {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .settings-log-list {
+    padding-inline: 14px;
     border-radius: 22px;
   }
 
+  .settings-log-entry {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 10px;
+    padding-block: 15px;
+  }
+
+  .settings-log-marker {
+    width: 27px;
+    height: 27px;
+    border-radius: 10px;
+  }
+
   .settings-log-message {
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .settings-log-footer {

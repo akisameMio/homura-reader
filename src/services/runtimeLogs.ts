@@ -171,6 +171,10 @@ export function logRuntime(
   detail?: string
 ) {
   if (!captureEnabled || LEVEL_PRIORITY[level] < LEVEL_PRIORITY[minimumLevel]) return;
+  appendRuntimeLog(level, message, source, detail);
+}
+
+function appendRuntimeLog(level: RuntimeLogLevel, message: string, source: string, detail?: string) {
   const text = typeof message === 'string' ? message.trim() : '';
   if (!text) return;
   entries.push({
@@ -184,6 +188,12 @@ export function logRuntime(
   if (entries.length > RUNTIME_LOG_LIMIT) entries.splice(0, entries.length - RUNTIME_LOG_LIMIT);
   schedulePersist();
   publish();
+}
+
+// 用户操作属于本机操作记录，不受诊断日志等级筛选影响；总开关关闭时仍停止记录。
+export function logRuntimeOperation(message: string, detail?: string) {
+  if (!captureEnabled) return;
+  appendRuntimeLog('info', `操作：${message}`, 'operation', detail);
 }
 
 function formatConsoleValue(value: unknown): string {
@@ -218,12 +228,110 @@ function reportUnhandledRejection(event: PromiseRejectionEvent) {
   logRuntime('error', `未处理的 Promise 拒绝：${formatConsoleValue(reason)}`, 'promise', reason instanceof Error ? reason.stack : undefined);
 }
 
+function runtimeActionLabel(element: Element) {
+  const ariaLabel = element.getAttribute('aria-label')?.trim();
+  const title = element.getAttribute('title')?.trim();
+  const labelledBy = element.getAttribute('aria-labelledby')
+    ?.split(/\s+/)
+    .map(id => document.getElementById(id)?.textContent?.trim())
+    .filter(Boolean)
+    .join(' ');
+  const labels = 'labels' in element
+    ? Array.from((element as HTMLInputElement).labels || [], label => label.textContent?.trim()).filter(Boolean).join(' ')
+    : '';
+  const field = element.getAttribute('placeholder') || element.getAttribute('name') || element.id;
+  // 用 textContent 兜底：innerText 会强制布局，点击监听里每帧读一次会拖慢书架滚动。
+  const text = element.textContent || '';
+  return truncate((ariaLabel || title || labelledBy || labels || field || text).replace(/\s+/g, ' ').trim(), 120);
+}
+
+function isEditableTarget(target: EventTarget | null) {
+  return target instanceof Element && !!target.closest('input, textarea, select, [contenteditable="true"]');
+}
+
+function reportUserClick(event: MouseEvent) {
+  if (!captureEnabled) return;
+  if (!(event.target instanceof Element)) return;
+  const action = event.target.closest(
+    'button, a[href], [role="button"], [role="menuitem"], [role="switch"], [role="tab"], [role="option"], summary, label, input[type="button"], input[type="submit"], input[type="reset"], input[type="checkbox"], input[type="radio"], input[type="file"]'
+  );
+  if (action) {
+    const label = runtimeActionLabel(action);
+    if (label) logRuntimeOperation(`点击「${label}」`);
+    return;
+  }
+  if (event.target.closest('.md-scrim, .reader-back-scrim, .fixed.inset-0')) {
+    logRuntimeOperation('点击遮罩关闭浮层');
+  }
+}
+
+function reportUserChange(event: Event) {
+  if (!captureEnabled) return;
+  if (!(event.target instanceof Element)) return;
+  const label = runtimeActionLabel(event.target);
+  if (label) logRuntimeOperation(`修改「${label}」`);
+}
+
+function reportUserSubmit(event: SubmitEvent) {
+  if (!captureEnabled) return;
+  const form = event.target;
+  if (!(form instanceof Element)) return;
+  const label = runtimeActionLabel(form);
+  logRuntimeOperation(label ? `提交「${label}」` : '提交表单');
+}
+
+function reportUserDrop(event: DragEvent) {
+  if (!captureEnabled) return;
+  const target = event.target instanceof Element ? event.target : null;
+  const readerShelf = !!target?.closest('.md-shelf-grid, [data-shelf-home], [data-collection-id]');
+  logRuntimeOperation(readerShelf ? '拖放书架项目' : '拖放文件');
+}
+
+function reportUserShortcut(event: KeyboardEvent) {
+  if (!captureEnabled) return;
+  if (event.repeat || isEditableTarget(event.target)) return;
+  if (['Control', 'Meta', 'Shift', 'Alt'].includes(event.key)) return;
+  const isShortcut = event.ctrlKey || event.metaKey || event.altKey || event.key === 'Escape' || event.key === 'F11';
+  if (!isShortcut) return;
+  logRuntimeOperation(`键盘操作「${event.key}」`);
+}
+
+function installUserOperationListeners() {
+  // jsdom 测试与纯 Node 环境可能只注入 window 而没有 document，不能假设两者同时存在。
+  if (typeof document === 'undefined') return;
+  document.addEventListener('click', reportUserClick, true);
+  document.addEventListener('change', reportUserChange, true);
+  document.addEventListener('submit', reportUserSubmit, true);
+  document.addEventListener('drop', reportUserDrop, true);
+  if (typeof window !== 'undefined') window.addEventListener('keydown', reportUserShortcut, true);
+}
+
+function removeUserOperationListeners() {
+  if (typeof document === 'undefined') return;
+  document.removeEventListener('click', reportUserClick, true);
+  document.removeEventListener('change', reportUserChange, true);
+  document.removeEventListener('submit', reportUserSubmit, true);
+  document.removeEventListener('drop', reportUserDrop, true);
+  if (typeof window !== 'undefined') window.removeEventListener('keydown', reportUserShortcut, true);
+}
+
 export function installRuntimeLogCapture() {
   if (captureInstalled) return () => {};
   captureInstalled = true;
+  const originalLog = console.log;
+  const originalInfo = console.info;
+  const originalDebug = console.debug;
   const originalWarn = console.warn;
   const originalError = console.error;
 
+  const captureInfo = (original: typeof console.log) => (...args: unknown[]) => {
+    original.apply(console, args);
+    logRuntime('info', formatConsoleArgs(args), 'console', errorDetail(args));
+  };
+
+  console.log = captureInfo(originalLog);
+  console.info = captureInfo(originalInfo);
+  console.debug = captureInfo(originalDebug);
   console.warn = (...args: unknown[]) => {
     originalWarn.apply(console, args);
     logRuntime('warning', formatConsoleArgs(args), 'console', errorDetail(args));
@@ -236,14 +344,19 @@ export function installRuntimeLogCapture() {
   if (typeof window !== 'undefined') {
     window.addEventListener('error', reportWindowError);
     window.addEventListener('unhandledrejection', reportUnhandledRejection);
+    installUserOperationListeners();
   }
 
   return () => {
+    console.log = originalLog;
+    console.info = originalInfo;
+    console.debug = originalDebug;
     console.warn = originalWarn;
     console.error = originalError;
     if (typeof window !== 'undefined') {
       window.removeEventListener('error', reportWindowError);
       window.removeEventListener('unhandledrejection', reportUnhandledRejection);
+      removeUserOperationListeners();
     }
     captureInstalled = false;
   };

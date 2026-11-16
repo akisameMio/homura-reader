@@ -72,6 +72,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useReaderStore } from '../stores/reader.ts';
 import { decodePageImage, releaseDistantPageUrls, type MangaPageItem } from '../services/pagination.ts';
 import { resolveProseStyle } from '../services/readerLayout.ts';
+import { logRuntimeOperation } from '../services/runtimeLogs.ts';
 import type { ReaderPage } from '../types.ts';
 import ReaderFooter from './ReaderFooter.vue';
 import { useI18n } from '../composables/useI18n.ts';
@@ -105,6 +106,8 @@ let webtoonScrollTimer = 0;
 let webtoonScrollSettleTimer = 0;
 let webtoonScrollTarget: number | null = null;
 let webtoonScrollLastAt = 0;
+let readingOperationTimer = 0;
+let readingOperationStartIndex: number | null = null;
 const WEBTOON_SCROLL_INTERVAL = 90;
 const WEBTOON_SCROLL_SETTLE = 400;
 const mountedBookId = reader.currentBook?.id;
@@ -351,6 +354,21 @@ function ensureMangaOffsets() {
   if (mangaPageOffsets.length !== reader.activePages.length) measureMangaOffsets();
 }
 
+function scheduleReadingOperationLog(previousIndex: number) {
+  if (readingOperationStartIndex === null) readingOperationStartIndex = previousIndex;
+  if (readingOperationTimer) window.clearTimeout(readingOperationTimer);
+  readingOperationTimer = window.setTimeout(() => {
+    readingOperationTimer = 0;
+    const startIndex = readingOperationStartIndex;
+    readingOperationStartIndex = null;
+    if (startIndex === null || startIndex === reader.currentIndex) return;
+    logRuntimeOperation(
+      '滚动阅读',
+      `${reader.currentBook?.title || '作品'} · 第 ${startIndex + 1} 页 → 第 ${reader.currentIndex + 1} 页`
+    );
+  }, 700);
+}
+
 function findMangaPageIndex(probe: number): number {
   let low = 0;
   let high = mangaPageOffsets.length - 1;
@@ -407,7 +425,9 @@ function syncMangaScrollPosition() {
   releaseFarMangaImages();
 
   if (nextIndex !== reader.currentIndex) {
+    const previousIndex = reader.currentIndex;
     reader.currentIndex = nextIndex;
+    scheduleReadingOperationLog(previousIndex);
     reader.pageIndicator = `${nextIndex + 1} / ${reader.activePages.length}`;
     reader.sliderValue = nextIndex;
     reader.touchProgress();
@@ -472,7 +492,9 @@ function syncNovelScrollPosition() {
   }
 
   if (nextIndex === reader.currentIndex) return;
+  const previousIndex = reader.currentIndex;
   reader.currentIndex = nextIndex;
+  scheduleReadingOperationLog(previousIndex);
   reader.pageIndicator = `${nextIndex + 1} / ${reader.activePages.length}`;
   reader.sliderValue = nextIndex;
   reader.touchProgress();
@@ -657,6 +679,7 @@ watch(
 
 onBeforeUnmount(() => {
   disposed = true;
+  if (readingOperationTimer) window.clearTimeout(readingOperationTimer);
   boundsObserver?.disconnect();
   novelContentObserver?.disconnect();
   if (scrollRoot.value) {

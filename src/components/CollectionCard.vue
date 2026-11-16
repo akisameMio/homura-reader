@@ -11,7 +11,7 @@
             <MdIcon v-else name="auto_stories" />
           </span>
         </span>
-        <span v-if="selecting" class="md-select-badge" aria-hidden="true">
+        <span v-if="selecting" class="md-select-badge md-shape-morph md-shape-boom" :class="{ 'is-selected': selected }" aria-hidden="true">
           <MdIcon :name="selected ? 'check' : 'radio_button_unchecked'" :size="16" />
         </span>
       </span>

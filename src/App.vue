@@ -9,7 +9,7 @@
     <SideNav v-if="!isCompact || !settingsDetailOpen" :active="activeNav" @nav="onRailNav" />
 
     <div
-      class="library-main-column flex-1 min-w-0 flex flex-col"
+      class="library-main-column relative isolate flex-1 min-w-0 flex flex-col"
       :class="[
         isCompact && activeNav === 'settings' ? ['is-settings', !settingsDetailOpen ? 'md-bottom-nav-space' : ''] : ''
       ]"
@@ -55,6 +55,7 @@
           <BookShelf v-if="favoritesOnly || shelf.library.length || shelf.collections.length" :books="visibleBooks" :favorites-only="favoritesOnly" :sort-key="sortKey" :query="query" :has-filter="!!query.trim() || typeFilter !== 'all'" :home-request="shelfHomeRequest" @open="openBookWithTransition" @browse="query = ''; typeFilter = 'all'" />
           <EmptyShelf v-else @pick-file="openFilePicker" @pick-folder="openFolderPicker" />
         </main>
+        <ShelfBackdrop v-if="activeNav === 'shelf'" />
       </template>
     </div>
   </div>
@@ -162,6 +163,7 @@ import DesktopIsland from './components/DesktopIsland.vue';
 import ImportStatusBar from './components/ImportStatusBar.vue';
 import AppearanceSheet from './components/AppearanceSheet.vue';
 import BookShelf from './components/BookShelf.vue';
+import ShelfBackdrop from './components/ShelfBackdrop.vue';
 import EmptyShelf from './components/EmptyShelf.vue';
 import SettingsView from './components/SettingsView.vue';
 import DragOverlay from './components/DragOverlay.vue';

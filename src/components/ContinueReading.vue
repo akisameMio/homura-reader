@@ -1,67 +1,65 @@
 <template>
-  <!-- 继续阅读 · 书封主导的 MD3 特色卡（桌面跨三列 / 手机整行） -->
+  <!-- 信息与行动分区：整卡可点击，小封面保留书架到阅读器的共享元素锚点。 -->
   <button
     v-if="featured"
     type="button"
-    class="md-card md-card--featured continue-card md-featured-cell"
+    class="md-card continue-card md-featured-cell"
     :title="started ? t('继续阅读：{0}', { 0: featured.book.title }) : t('开始阅读：{0}', { 0: featured.book.title })"
     :aria-label="started ? t('继续阅读：{0}', { 0: featured.book.title }) : t('开始阅读：{0}', { 0: featured.book.title })"
     @click="onOpen"
   >
-    <!-- 39% 封面：优先真实书封，缺失时使用主题色书封 -->
-    <span class="cover-shell" :data-book-cover-id="featured.book.id">
-      <img
-        v-if="featured.book.cover"
-        :src="featured.book.cover"
-        class="cover-image"
-        alt=""
-        loading="lazy"
-        decoding="async"
-        draggable="false"
-      />
-      <span v-else class="cover-fallback" aria-hidden="true">
-        <span class="cover-orbit cover-orbit-a"></span>
-        <span class="cover-orbit cover-orbit-b"></span>
-        <span class="cover-wordmark">HOMURA</span>
-        <span class="cover-fallback-copy">
-          <strong class="font-display">{{ featured.book.title }}</strong>
-          <small>{{ typeLabel }}</small>
-        </span>
-      </span>
-      <span class="cover-shade" aria-hidden="true"></span>
-      <span class="cover-spine" aria-hidden="true"></span>
-      <span class="cover-type">{{ typeLabel }}</span>
-    </span>
-
     <span class="content">
       <span class="eyebrow-row">
-        <span class="eyebrow">{{ started ? t('继续阅读') : t('开始阅读') }}</span>
-        <span class="last-read">{{ lastReadLabel }}</span>
+        <MdIcon name="auto_stories" class="section-icon" />
+        <span class="section-label">{{ t('阅读进度') }}</span>
+        <span class="reading-state"><span class="state-dot"></span>{{ started ? t('继续阅读') : t('开始阅读') }}</span>
       </span>
 
-      <span class="book-title">{{ featured.book.title }}</span>
-
-      <span class="meta">
-        <span class="position">
-          <template v-if="started">{{ t('第 {0} / {1} 页', { 0: (featured.progress?.index ?? 0) + 1, 1: totalPages }) }}</template>
-          <template v-else>{{ totalPages }} {{ countUnit }}</template>
+      <span class="book-summary">
+        <span class="cover-shell" :data-book-cover-id="featured.book.id">
+          <img v-if="featured.book.cover" :src="featured.book.cover" class="cover-image" alt="" loading="lazy" decoding="async" draggable="false" />
+          <span v-else class="cover-fallback" aria-hidden="true"><MdIcon name="auto_stories" /></span>
         </span>
-        <span class="status">{{ remainingText }}</span>
+        <span class="book-copy">
+          <span class="book-title">{{ featured.book.title }}</span>
+          <span class="book-chips">
+            <span class="format-chip">{{ typeLabel }}</span>
+            <span class="count-chip">{{ totalPages }} {{ started ? t('页') : countUnit }}</span>
+          </span>
+        </span>
       </span>
 
-      <span class="footer">
-        <span class="progress-wrap">
-          <span class="progress-label">
-            <span>{{ t('阅读进度') }}</span>
-            <b>{{ progressPercent }}%</b>
-          </span>
-          <span class="progress-track" aria-hidden="true">
-            <span class="progress-fill" :style="{ width: progressPercent + '%' }"></span>
+      <span class="reading-details">
+        <span class="detail-group">
+          <span class="detail-label">{{ t('阅读进度') }}</span>
+          <span class="detail-value">{{ progressPercent }}<small>%</small></span>
+        </span>
+        <span class="detail-group">
+          <span class="detail-label">{{ lastReadLabel }}</span>
+          <span class="detail-position">
+            <template v-if="started">{{ t('第 {0} / {1} 页', { 0: (featured.progress?.index ?? 0) + 1, 1: totalPages }) }}</template>
+            <template v-else>{{ remainingText }}</template>
           </span>
         </span>
-        <span class="play" aria-hidden="true">
-          <MdIcon name="play_arrow" filled />
+      </span>
+
+      <span class="progress-track" role="progressbar" :aria-label="t('阅读进度')" :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="progressPercent">
+        <svg class="progress-wave" viewBox="0 0 120 20" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M3 10C7 3 11 3 15 10S23 17 27 10 35 3 39 10 47 17 51 10 59 3 63 10 71 17 75 10 83 3 87 10 95 17 99 10 107 3 111 10 115 14 117 10" />
+        </svg>
+      </span>
+    </span>
+
+    <span class="action-panel" aria-hidden="true">
+      <svg class="action-surface" viewBox="0 0 240 400" preserveAspectRatio="none" focusable="false">
+        <path d="M43 0H240V400H99C65 386 85 360 53 344C12 324 52 292 26 264C-7 228 28 200 17 169C3 132 39 112 25 80C12 48 57 35 43 0Z" />
+      </svg>
+      <span class="action-content">
+        <span class="play">
+          <svg class="play-shape" viewBox="0 0 100 100" focusable="false"><path d="M50 3C57-1 61 8 67 9C74 8 80 12 81 20C89 21 94 27 92 35C99 41 99 49 94 55C97 63 93 71 85 73C84 82 78 87 70 85C64 93 56 96 50 91C43 97 35 93 32 86C23 88 16 82 16 74C6 72 3 65 7 58C0 52 1 43 8 38C4 29 10 23 17 22C18 13 24 9 32 11C36 3 43-1 50 3Z" /></svg>
+          <MdIcon name="play_arrow" filled class="play-icon" />
         </span>
+        <span class="action-label">{{ started ? t('继续阅读') : t('开始阅读') }}</span>
       </span>
     </span>
   </button>
@@ -172,311 +170,145 @@ const progressPercent = computed(() => {
 </script>
 
 <style scoped>
-  .continue-card {
-    width: 100%;
-    height: 100%;
-    min-width: 0;
-    min-height: 158px;
-    padding: 0;
-    overflow: hidden;
-    display: flex;
-    gap: 0;
-    border: 0;
-    text-align: left;
-  }
-
-  .cover-shell {
-    position: relative;
-    flex: 0 0 39%;
-    align-self: stretch;
-    min-height: 156px;
-    overflow: hidden;
-    border-radius: 12px 0 0 12px;
-    color: var(--md-on-primary);
-    background:
-      radial-gradient(circle at 82% 22%, color-mix(in oklab, var(--md-tertiary) 48%, transparent), transparent 36%),
-      linear-gradient(155deg, var(--md-primary), color-mix(in oklab, var(--md-primary) 42%, var(--md-tertiary)));
-    box-shadow: inset -1px 0 0 color-mix(in oklab, var(--md-on-primary-container) 16%, transparent);
-  }
-
-  .cover-image {
-    width: 100%;
-    height: 100%;
-    display: block;
-    object-fit: cover;
-  }
-
-  .cover-fallback {
-    position: absolute;
-    inset: 0;
-    display: block;
-    overflow: hidden;
-    color: var(--md-on-primary);
-  }
-
-  .cover-wordmark {
-    position: absolute;
-    top: 12px;
-    left: 14px;
-    z-index: 2;
-    font: 750 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-    letter-spacing: .16em;
-    opacity: .72;
-  }
-
-  .cover-orbit {
-    position: absolute;
-    display: block;
-    border: 1px solid color-mix(in oklab, var(--md-on-primary) 38%, transparent);
-    border-radius: 50%;
-  }
-
-  .cover-orbit-a {
-    width: 82%;
-    aspect-ratio: 1;
-    right: -24%;
-    top: 12%;
-  }
-
-  .cover-orbit-b {
-    width: 44%;
-    aspect-ratio: 1;
-    right: 14%;
-    top: 24%;
-    background: color-mix(in oklab, var(--md-on-primary) 15%, transparent);
-  }
-
-  .cover-fallback-copy {
-    position: absolute;
-    inset: auto 14px 16px;
-    z-index: 2;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .cover-fallback-copy strong {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    font-size: 18px;
-    line-height: 1.24;
-    letter-spacing: -.02em;
-    text-wrap: balance;
-  }
-
-  .cover-fallback-copy small {
-    font: 650 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-    letter-spacing: .12em;
-    opacity: .72;
-  }
-
-  .cover-shade {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background:
-      linear-gradient(180deg, transparent 54%, color-mix(in oklab, var(--md-primary-container) 58%, transparent)),
-      linear-gradient(90deg, color-mix(in oklab, var(--md-on-primary-container) 16%, transparent), transparent 18%);
-  }
-
-  .cover-spine {
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: 11px;
-    border-radius: 12px 0 0 12px;
-    pointer-events: none;
-    background: linear-gradient(90deg, color-mix(in oklab, var(--md-on-primary-container) 26%, transparent), transparent);
-  }
-
-  .cover-type {
-    position: absolute;
-    left: 10px;
-    bottom: 9px;
-    z-index: 2;
-    padding: 3px 7px;
-    border-radius: 999px;
-    color: var(--md-on-surface);
-    background: color-mix(in oklab, var(--md-surface) 78%, transparent);
-    font-size: 9px;
-    font-weight: 700;
-  }
-
-  .content {
-    min-width: 0;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding: 16px;
-  }
-
-  .eyebrow-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    color: var(--md-primary);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: .04em;
-  }
-
-  .eyebrow::before {
-    content: "";
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: currentColor;
-    box-shadow: 0 0 0 4px color-mix(in oklab, currentColor 12%, transparent);
-  }
-
-  .last-read {
-    margin-left: auto;
-    color: color-mix(in oklab, var(--md-on-primary-container) 62%, transparent);
-    font: 550 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-    white-space: nowrap;
-  }
-
-  .book-title {
-    display: -webkit-box;
-    margin: 8px 0 4px;
-    overflow: hidden;
-    font-size: 17px;
-    font-weight: 600;
-    line-height: 1.24;
-    letter-spacing: -.02em;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    white-space: normal;
-  }
-
-  .meta {
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 2px 12px;
-    color: color-mix(in oklab, var(--md-on-primary-container) 68%, transparent);
-    font-size: 11px;
-    font-weight: 520;
-  }
-
-  .position {
-    white-space: nowrap;
-  }
-
-  .status {
-    margin-left: auto;
-    white-space: nowrap;
-  }
-
-  .footer {
-    display: flex;
-    align-items: end;
-    gap: 12px;
-    margin-top: 12px;
-  }
-
-  .progress-wrap {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .progress-label {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-bottom: 8px;
-    color: color-mix(in oklab, var(--md-on-primary-container) 60%, transparent);
-    font-size: 10px;
-    font-weight: 600;
-  }
-
-  .progress-label b {
-    color: var(--md-on-primary-container);
-    font: 650 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  }
-
-  .progress-track {
-    display: block;
-    height: 4px;
-    overflow: hidden;
-    border-radius: 2px;
-    background: color-mix(in oklab, var(--md-on-primary-container) 16%, transparent);
-  }
-
-  .progress-fill {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: var(--md-primary);
-  }
-
-  .play {
-    position: relative;
-    width: 40px;
-    height: 40px;
-    flex: 0 0 40px;
-    display: grid;
-    place-items: center;
-    border: 0;
-    border-radius: 50%;
-    color: var(--md-on-primary);
-    background: var(--md-primary);
-    transition: background-color 200ms cubic-bezier(0.2, 0, 0, 1);
-  }
-
-  .play svg {
-    width: 18px;
-    height: 18px;
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .continue-card:hover .play {
-      background: color-mix(in oklab, var(--md-primary) 92%, var(--md-on-primary));
-    }
-  }
-
-  @media (max-width: 420px) {
-    .cover-shell {
-      flex-basis: 36%;
-    }
-
-    .content {
-      padding: 12px;
-    }
-
-    .last-read {
-      display: none;
-    }
-  }
-
-  @media (min-width: 900px) {
-    .book-title {
-      font-size: 22px;
-    }
-  }
-
-  @media (min-width: 900px) and (max-width: 1179px) {
-    .last-read {
-      display: none;
-    }
-
-    .content {
-      padding: 12px;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .play {
-      transition: none;
-    }
-  }
+.continue-card {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 292px;
+  padding: 0;
+  border: 0;
+  border-radius: 32px;
+  overflow: hidden;
+  text-align: left;
+  background: var(--md-surface-low);
+  color: var(--md-on-surface);
+  box-shadow: var(--md-elevation-card-soft);
+  transition: transform 280ms var(--md-ease-emphasized), box-shadow 280ms var(--md-ease-emphasized);
+}
+.content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 24px;
+  width: 69%;
+  min-width: 0;
+  padding: 28px 12px 28px 28px;
+}
+.eyebrow-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.section-icon { width: 20px; height: 20px; color: var(--md-on-surface-variant); }
+.section-label { font-size: 12px; font-weight: 600; color: var(--md-on-surface-variant); }
+.reading-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  font-size: 11px;
+  font-weight: 650;
+}
+.state-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.book-summary { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.cover-shell {
+  display: grid;
+  place-items: center;
+  flex: 0 0 56px;
+  width: 56px;
+  height: 76px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.cover-image { display: block; width: 100%; height: 100%; object-fit: cover; }
+.cover-fallback { display: grid; place-items: center; }
+.cover-fallback :deep(svg) { width: 30px; height: 30px; }
+.book-copy { display: flex; flex: 1; flex-direction: column; gap: 10px; min-width: 0; }
+.book-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -.025em;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+}
+.book-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.format-chip, .count-chip {
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--md-surface-container);
+  color: var(--md-on-surface-variant);
+  font-size: 10px;
+  font-weight: 600;
+}
+.reading-details { display: grid; grid-template-columns: 1fr 1.4fr; gap: 16px; align-items: end; }
+.detail-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.detail-label { color: var(--md-on-surface-variant); font-size: 11px; }
+.detail-value { font-size: 28px; font-weight: 750; line-height: 1; font-variant-numeric: tabular-nums; }
+.detail-value small { margin-left: 3px; font-size: 13px; font-weight: 600; }
+.detail-position { font-size: 13px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.progress-track { position: relative; display: block; height: 16px; color: var(--md-reading-progress); }
+.progress-track::before {
+  position: absolute;
+  top: 5px;
+  left: calc(34% + 8px);
+  right: 16px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--md-outline-variant);
+  content: '';
+}
+.progress-wave {
+  position: absolute; inset: 0 auto 0 0; width: 34%; height: 16px;
+  fill: none; stroke: currentColor; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round;
+}
+.progress-track::after { position: absolute; top: 4px; right: 0; width: 8px; height: 8px; border-radius: 50%; background: currentColor; content: ''; }
+.action-panel { position: absolute; inset: 0 0 0 auto; width: 34%; }
+.action-surface { position: absolute; inset: 0; width: 100%; height: 100%; fill: color-mix(in oklab, var(--md-primary-container) 54%, var(--md-surface-low)); }
+.action-content { position: absolute; inset: 0 0 0 20px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px; }
+.play { position: relative; display: grid; place-items: center; width: clamp(76px, 13vw, 124px); aspect-ratio: 1; color: var(--md-on-primary); }
+.play-shape { position: absolute; inset: 0; width: 100%; height: 100%; fill: var(--md-primary); filter: drop-shadow(0 5px 8px color-mix(in oklab, var(--md-shadow-color-soft) 18%, transparent)); transition: transform 420ms var(--md-ease-spring); }
+.play-icon { position: relative; width: 32px; height: 32px; transition: transform 420ms var(--md-ease-spring); }
+.action-label { color: var(--md-on-primary-container); font-size: 11px; font-weight: 650; }
+@media (hover: hover) and (pointer: fine) {
+  .continue-card:hover { transform: translateY(-2px); box-shadow: var(--md-elevation-card-soft), var(--md-elevation-hover); }
+  .continue-card:hover .play-shape { transform: rotate(12deg) scale(1.06); }
+  .continue-card:hover .play-icon { transform: translateX(2px); }
+}
+.continue-card:active { transform: scale(.99); }
+.continue-card:active .play-shape { transform: rotate(-8deg) scale(1.1, .92); }
+@media (max-width: 599px) {
+  .continue-card { min-height: 264px; border-radius: 28px; }
+  .content { gap: 20px; width: 74%; padding: 20px 12px 20px 20px; }
+  .section-label { display: none; }
+  .book-summary { gap: 10px; }
+  .cover-shell { flex-basis: 42px; width: 42px; height: 60px; border-radius: 10px; }
+  .book-title { font-size: 17px; }
+  .book-chips { gap: 4px; }
+  .format-chip, .count-chip { padding: 3px 7px; }
+  .reading-details { gap: 10px; grid-template-columns: 1fr 1.5fr; }
+  .detail-value { font-size: 24px; }
+  .detail-position { font-size: 12px; }
+  .action-panel { width: 29%; }
+  .action-content { left: 12px; gap: 10px; }
+  .play { width: 68px; }
+  .play-icon { width: 26px; height: 26px; }
+  .action-label { font-size: 10px; }
+}
+@media (min-width: 768px) and (max-width: 899px) {
+  .continue-card { grid-column: span 3; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .continue-card, .play-shape, .play-icon { transition: none; }
+  .continue-card:is(:hover, :active), .continue-card:is(:hover, :active) .play-shape, .continue-card:is(:hover, :active) .play-icon { transform: none; }
+}
 </style>
