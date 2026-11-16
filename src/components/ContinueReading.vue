@@ -19,6 +19,7 @@
         <span class="cover-shell" :data-book-cover-id="featured.book.id">
           <img v-if="featured.book.cover" :src="featured.book.cover" class="cover-image" alt="" loading="lazy" decoding="async" draggable="false" />
           <span v-else class="cover-fallback" aria-hidden="true"><MdIcon name="auto_stories" /></span>
+          <span v-if="featured.book.remote" class="cover-cloud-tag">{{ t('云端') }}</span>
         </span>
         <span class="book-copy">
           <span class="book-title">{{ featured.book.title }}</span>
@@ -43,10 +44,13 @@
         </span>
       </span>
 
-      <span class="progress-track" role="progressbar" :aria-label="t('阅读进度')" :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="progressPercent">
-        <svg class="progress-wave" viewBox="0 0 120 20" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M3 10C7 3 11 3 15 10S23 17 27 10 35 3 39 10 47 17 51 10 59 3 63 10 71 17 75 10 83 3 87 10 95 17 99 10 107 3 111 10 115 14 117 10" />
-        </svg>
+      <span class="progress-track" :class="{ 'is-complete': progressPercent === 100 }" :style="{ '--reading-progress': progressPercent + '%', '--reading-progress-gap': progressPercent > 0 ? '8px' : '0px' }" role="progressbar" :aria-label="t('阅读进度')" :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="progressPercent">
+        <span class="progress-rail" aria-hidden="true">
+          <span class="progress-rest"></span>
+          <span v-if="progressPercent > 0" class="progress-active"><span class="progress-wave"></span></span>
+          <span v-if="progressPercent > 0" class="progress-cap progress-cap-start"></span>
+          <span v-if="progressPercent > 0" class="progress-cap"></span>
+        </span>
       </span>
     </span>
 
@@ -56,7 +60,7 @@
       </svg>
       <span class="action-content">
         <span class="play">
-          <svg class="play-shape" viewBox="0 0 100 100" focusable="false"><path d="M50 3C57-1 61 8 67 9C74 8 80 12 81 20C89 21 94 27 92 35C99 41 99 49 94 55C97 63 93 71 85 73C84 82 78 87 70 85C64 93 56 96 50 91C43 97 35 93 32 86C23 88 16 82 16 74C6 72 3 65 7 58C0 52 1 43 8 38C4 29 10 23 17 22C18 13 24 9 32 11C36 3 43-1 50 3Z" /></svg>
+          <svg class="play-shape" viewBox="0 0 100 100" focusable="false"><path d="M50.00 3.00 C51.49 3.00 53.10 3.72 54.46 4.68 C55.83 5.65 57.08 7.39 58.19 8.81 C59.31 10.23 60.17 12.02 61.17 13.19 C62.16 14.36 63.00 15.34 64.16 15.82 C65.32 16.30 66.60 16.20 68.13 16.08 C69.66 15.95 71.54 15.29 73.33 15.08 C75.13 14.87 77.24 14.52 78.89 14.80 C80.54 15.08 82.18 15.71 83.23 16.77 C84.29 17.82 84.92 19.46 85.20 21.11 C85.48 22.76 85.13 24.87 84.92 26.67 C84.71 28.46 84.05 30.34 83.92 31.87 C83.80 33.40 83.70 34.68 84.18 35.84 C84.66 37.00 85.64 37.84 86.81 38.83 C87.98 39.83 89.77 40.69 91.19 41.81 C92.61 42.92 94.35 44.17 95.32 45.54 C96.28 46.90 97.00 48.51 97.00 50.00 C97.00 51.49 96.28 53.10 95.32 54.46 C94.35 55.83 92.61 57.08 91.19 58.19 C89.77 59.31 87.98 60.17 86.81 61.17 C85.64 62.16 84.66 63.00 84.18 64.16 C83.70 65.32 83.80 66.60 83.92 68.13 C84.05 69.66 84.71 71.54 84.92 73.33 C85.13 75.13 85.48 77.24 85.20 78.89 C84.92 80.54 84.29 82.18 83.23 83.23 C82.18 84.29 80.54 84.92 78.89 85.20 C77.24 85.48 75.13 85.13 73.33 84.92 C71.54 84.71 69.66 84.05 68.13 83.92 C66.60 83.80 65.32 83.70 64.16 84.18 C63.00 84.66 62.16 85.64 61.17 86.81 C60.17 87.98 59.31 89.77 58.19 91.19 C57.08 92.61 55.83 94.35 54.46 95.32 C53.10 96.28 51.49 97.00 50.00 97.00 C48.51 97.00 46.90 96.28 45.54 95.32 C44.17 94.35 42.92 92.61 41.81 91.19 C40.69 89.77 39.83 87.98 38.83 86.81 C37.84 85.64 37.00 84.66 35.84 84.18 C34.68 83.70 33.40 83.80 31.87 83.92 C30.34 84.05 28.46 84.71 26.67 84.92 C24.87 85.13 22.76 85.48 21.11 85.20 C19.46 84.92 17.82 84.29 16.77 83.23 C15.71 82.18 15.08 80.54 14.80 78.89 C14.52 77.24 14.87 75.13 15.08 73.33 C15.29 71.54 15.95 69.66 16.08 68.13 C16.20 66.60 16.30 65.32 15.82 64.16 C15.34 63.00 14.36 62.16 13.19 61.17 C12.02 60.17 10.23 59.31 8.81 58.19 C7.39 57.08 5.65 55.83 4.68 54.46 C3.72 53.10 3.00 51.49 3.00 50.00 C3.00 48.51 3.72 46.90 4.68 45.54 C5.65 44.17 7.39 42.92 8.81 41.81 C10.23 40.69 12.02 39.83 13.19 38.83 C14.36 37.84 15.34 37.00 15.82 35.84 C16.30 34.68 16.20 33.40 16.08 31.87 C15.95 30.34 15.29 28.46 15.08 26.67 C14.87 24.87 14.52 22.76 14.80 21.11 C15.08 19.46 15.71 17.82 16.77 16.77 C17.82 15.71 19.46 15.08 21.11 14.80 C22.76 14.52 24.87 14.87 26.67 15.08 C28.46 15.29 30.34 15.95 31.87 16.08 C33.40 16.20 34.68 16.30 35.84 15.82 C37.00 15.34 37.84 14.36 38.83 13.19 C39.83 12.02 40.69 10.23 41.81 8.81 C42.92 7.39 44.17 5.65 45.54 4.68 C46.90 3.72 48.51 3.00 50.00 3.00Z" /></svg>
           <MdIcon name="play_arrow" filled class="play-icon" />
         </span>
         <span class="action-label">{{ started ? t('继续阅读') : t('开始阅读') }}</span>
@@ -170,6 +174,7 @@ const progressPercent = computed(() => {
 </script>
 
 <style scoped>
+.cover-cloud-tag { position: absolute; bottom: 6px; left: 6px; padding: 3px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; background: var(--md-primary-container); color: var(--md-on-primary-container); }
 .continue-card {
   position: relative;
   display: flex;
@@ -214,13 +219,14 @@ const progressPercent = computed(() => {
   font-weight: 650;
 }
 .state-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.book-summary { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.book-summary { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .cover-shell {
+  position: relative;
   display: grid;
   place-items: center;
-  flex: 0 0 56px;
-  width: 56px;
-  height: 76px;
+  flex: 0 0 84px;
+  width: 84px;
+  height: 112px;
   overflow: hidden;
   border-radius: 12px;
   background: var(--md-secondary-container);
@@ -228,7 +234,7 @@ const progressPercent = computed(() => {
 }
 .cover-image { display: block; width: 100%; height: 100%; object-fit: cover; }
 .cover-fallback { display: grid; place-items: center; }
-.cover-fallback :deep(svg) { width: 30px; height: 30px; }
+.cover-fallback :deep(svg) { width: 40px; height: 40px; }
 .book-copy { display: flex; flex: 1; flex-direction: column; gap: 10px; min-width: 0; }
 .book-title {
   display: -webkit-box;
@@ -256,22 +262,30 @@ const progressPercent = computed(() => {
 .detail-value { font-size: 28px; font-weight: 750; line-height: 1; font-variant-numeric: tabular-nums; }
 .detail-value small { margin-left: 3px; font-size: 13px; font-weight: 600; }
 .detail-position { font-size: 13px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
-.progress-track { position: relative; display: block; height: 16px; color: var(--md-reading-progress); }
-.progress-track::before {
+.progress-track { position: relative; display: block; height: 20px; color: var(--md-reading-progress); }
+.progress-rail { position: absolute; inset: 0 16px 0 0; }
+.progress-rest {
   position: absolute;
-  top: 5px;
-  left: calc(34% + 8px);
-  right: 16px;
+  top: 7px;
+  left: min(100%, calc(var(--reading-progress) + var(--reading-progress-gap)));
+  right: 0;
   height: 6px;
   border-radius: 999px;
   background: var(--md-outline-variant);
-  content: '';
 }
+.progress-active { position: absolute; inset: 0 auto 0 0; width: var(--reading-progress); overflow: hidden; }
 .progress-wave {
-  position: absolute; inset: 0 auto 0 0; width: 34%; height: 16px;
-  fill: none; stroke: currentColor; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round;
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(100% + 20px);
+  height: 20px;
+  background: currentColor;
+  -webkit-mask: url('../assets/shapes/progress-wave.svg') left center / 20px 20px repeat-x;
+  mask: url('../assets/shapes/progress-wave.svg') left center / 20px 20px repeat-x;
 }
-.progress-track::after { position: absolute; top: 4px; right: 0; width: 8px; height: 8px; border-radius: 50%; background: currentColor; content: ''; }
+.progress-cap { position: absolute; z-index: 1; top: 7.25px; left: var(--reading-progress); width: 5.5px; height: 5.5px; border-radius: 50%; background: currentColor; transform: translateX(-50%); }
+.progress-cap-start { left: 0; transform: translateX(0); }
+.progress-track::after { position: absolute; top: 6px; right: 0; width: 8px; height: 8px; border-radius: 50%; background: currentColor; content: ''; }
 .action-panel { position: absolute; inset: 0 0 0 auto; width: 34%; }
 .action-surface { position: absolute; inset: 0; width: 100%; height: 100%; fill: color-mix(in oklab, var(--md-primary-container) 54%, var(--md-surface-low)); }
 .action-content { position: absolute; inset: 0 0 0 20px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px; }
@@ -291,7 +305,8 @@ const progressPercent = computed(() => {
   .content { gap: 20px; width: 74%; padding: 20px 12px 20px 20px; }
   .section-label { display: none; }
   .book-summary { gap: 10px; }
-  .cover-shell { flex-basis: 42px; width: 42px; height: 60px; border-radius: 10px; }
+  .cover-shell { flex-basis: 60px; width: 60px; height: 80px; border-radius: 10px; }
+  .cover-fallback :deep(svg) { width: 32px; height: 32px; }
   .book-title { font-size: 17px; }
   .book-chips { gap: 4px; }
   .format-chip, .count-chip { padding: 3px 7px; }

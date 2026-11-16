@@ -197,3 +197,15 @@ test('损坏或含不允许字段的远端文档不会应用到本地，待发�
   assert.ok((await a.engine.capture()).pendingCount > 0);
   assert.equal(a.state.lastSyncAt, null);
 });
+
+test('云端引用不参与本地文件指纹匹配，元数据同步保留云端书的本机收藏与书库归属', async () => {
+  const cloud = { id: 'webdav_test', remote: true, favorite: true };
+  const device = client('device-cloud', { books: [cloud], progress: [{ id: cloud.id, index: 2, total: 10 }], collections: [{ id: 'cloud-shelf', title: '在线书库', createdAt: 1, bookIds: [cloud.id] }] });
+  const remote = server();
+  const stats = await device.engine.sync(remote.transport);
+  assert.equal(stats.matchedCount, 0);
+  assert.equal(stats.unmatchedCount, 0);
+  assert.equal(device.local.books[0].favorite, true);
+  assert.deepEqual(device.local.collections[0].bookIds, [cloud.id]);
+  assert.ok(!device.state.document.records.some(record => record.kind !== 'collection'));
+});

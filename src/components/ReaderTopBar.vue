@@ -79,7 +79,7 @@
         :title="isFavorite ? t('取消收藏') : t('收藏本书')"
         :aria-label="isFavorite ? t('取消收藏') : t('收藏本书')"
         :aria-pressed="isFavorite"
-        :disabled="favoriteBusy"
+        :disabled="favoriteBusy || (!!reader.currentBook?.remote && !reader.currentBook?.remoteShelf)"
         @click="toggleFavorite"
       >
         <MdIcon name="star" :filled="isFavorite" />
@@ -130,7 +130,7 @@ const emit = defineEmits(['back']);
 
 const favoriteBusy = ref(false);
 const favoriteError = ref('');
-const isFavorite = computed(() => !!((shelf.library).find(book => book.id === reader.currentBook?.id))?.isFavorite);
+const isFavorite = computed(() => !!((shelf.library).find(book => book.id === reader.currentBook?.id))?.favorite);
 // 漫画与 PDF 的页面是位图，没有字体 / 行距可调
 const isReflowable = computed(() => reader.currentBook?.type !== 'manga');
 const bookTitle = computed(() => reader.currentBook?.title || '');

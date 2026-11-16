@@ -17,6 +17,7 @@ import { loadProgressMap } from '../services/progress.ts';
 import { createDemoManga, createDemoNovel } from '../services/demo.ts';
 import { prepareBookCover } from '../services/bookCover.ts';
 import { createCoverThumbnail } from '../services/coverThumb.ts';
+import { normalizeRemoteBookSource, remoteBookId } from '../services/remoteBookSource.ts';
 import { runShelfMutation } from '../services/mutationQueue.ts';
 import type { Book, BookSource, Collection, ImportEntry, ReadingProgress } from '../types.ts';
 
@@ -103,6 +104,24 @@ export const useShelfStore = defineStore('shelf', () => {
       console.error('[HOMURA] 本地存档写入失败', err);
       throw err;
     }
+  }
+
+  function addRemoteBook(book: Book, source: BookSource, isCurrent = () => true) {
+    return runShelfMutation(async () => {
+      if (!isCurrent()) {
+        if (book.cover?.startsWith('blob:')) URL.revokeObjectURL(book.cover);
+        return null;
+      }
+      const reference = normalizeRemoteBookSource(source);
+      if (!book.remote || book.id !== await remoteBookId(reference)) throw new Error('云端书籍引用无效');
+      const existing = library.value.find(item => item.id === book.id);
+      if (existing) {
+        if (book.cover?.startsWith('blob:')) URL.revokeObjectURL(book.cover);
+        return existing;
+      }
+      await addBook(book, reference, { coverThumb: book.coverBlob || null });
+      return book;
+    });
   }
 
   // 批量导入：整批落盘成功后只替换一次 library，避免每加一本就重排整架。
@@ -359,6 +378,7 @@ export const useShelfStore = defineStore('shelf', () => {
     deleteCollection,
     moveBooks,
     addBook,
+    addRemoteBook,
     addBooks,
     unshiftBook,
     removeBook,

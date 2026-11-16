@@ -14,6 +14,7 @@ mod mobi_parser;
 mod native_import;
 mod storage_stats;
 mod sync_webdav;
+mod webdav_books;
 mod text_decoder;
 mod update_downloader;
 #[cfg(desktop)]
@@ -108,6 +109,7 @@ pub fn run() {
         .plugin(tauri_plugin_android_system_bars::init())
         .plugin(tauri_plugin_android_volume_keys::init())
         .invoke_handler(tauri::generate_handler![
+            webdav_books::webdav_read,
             sync_webdav::sync_webdav_request,
             sync_webdav::sync_fingerprint_source,
             update_downloader::download_update_asset,

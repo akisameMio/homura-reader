@@ -70,6 +70,9 @@ const emptyBaseline = (): Baseline => ({
   favorites: dictionary(), progress: dictionary(), memberships: dictionary(), collections: dictionary()
 });
 
+const isCloudBook = (book: SyncLocalSnapshot['books'][number]) => book.remote === true || book.id.startsWith('webdav_');
+const syncableBooks = (snapshot: SyncLocalSnapshot) => snapshot.books.filter(book => !isCloudBook(book));
+
 function project(snapshot: SyncLocalSnapshot): Baseline {
   const baseline = emptyBaseline();
   const memberships = new Map<string, string>();
@@ -78,7 +81,7 @@ function project(snapshot: SyncLocalSnapshot): Baseline {
     for (const id of item.bookIds) if (!memberships.has(id)) memberships.set(id, item.id);
   }
   const progress = new Map(snapshot.progress.map(item => [String(item.id), item]));
-  for (const book of snapshot.books) {
+  for (const book of syncableBooks(snapshot)) {
     baseline.favorites[book.id] = !!book.favorite;
     baseline.progress[book.id] = portableProgress(progress.get(book.id));
     baseline.memberships[book.id] = memberships.get(book.id) || null;
@@ -87,7 +90,7 @@ function project(snapshot: SyncLocalSnapshot): Baseline {
 }
 
 function stats(state: SyncEngineState, snapshot: SyncLocalSnapshot, unavailable: ReadonlySet<string>): SyncStats {
-  const currentIds = new Set(snapshot.books.map(book => book.id));
+  const currentIds = new Set(syncableBooks(snapshot).map(book => book.id));
   const fingerprints = new Set(Object.entries(state.identities).filter(([id]) => currentIds.has(id) && !unavailable.has(id)).map(([, key]) => key));
   const remoteKeys = new Set(state.document.records.filter(record => record.kind !== 'collection' && !record.deleted).map(record => record.key));
   let uploaded: SyncDocument;
@@ -96,8 +99,8 @@ function stats(state: SyncEngineState, snapshot: SyncLocalSnapshot, unavailable:
   return {
     pendingCount: state.document.records.filter(record => !equal(prior.get(syncRecordKey(record)), record)).length
       + Object.values(state.unmatchedEdits || {}).reduce((sum, edits) => sum + Object.keys(edits).length, 0),
-    matchedCount: snapshot.books.filter(book => !!state.identities[book.id] && !unavailable.has(book.id)).length,
-    unmatchedCount: snapshot.books.filter(book => !state.identities[book.id] || unavailable.has(book.id)).length,
+    matchedCount: syncableBooks(snapshot).filter(book => !!state.identities[book.id] && !unavailable.has(book.id)).length,
+    unmatchedCount: syncableBooks(snapshot).filter(book => !state.identities[book.id] || unavailable.has(book.id)).length,
     remoteOnlyCount: [...remoteKeys].filter(key => !fingerprints.has(key)).length,
     lastSyncAt: state.lastSyncAt
   };
@@ -132,7 +135,7 @@ export function createSyncEngine(deps: SyncEngineDependencies) {
     const baseline = project(snapshot);
     const unmatchedEdits = state.unmatchedEdits ||= dictionary();
     const signatures = state.identitySignatures ||= dictionary();
-    const currentIds = new Set(snapshot.books.map(book => book.id));
+    const currentIds = new Set(syncableBooks(snapshot).map(book => book.id));
     for (const id of Object.keys(unmatchedEdits)) {
       if (!currentIds.has(id)) delete unmatchedEdits[id];
     }
@@ -144,7 +147,7 @@ export function createSyncEngine(deps: SyncEngineDependencies) {
     }
     unavailable.clear();
     const changedIdentities = new Set<string>();
-    for (const book of snapshot.books) {
+    for (const book of syncableBooks(snapshot)) {
       const oldKey = state.identities[book.id];
       if (oldKey && !deps.prepareIdentity) continue;
       try {
@@ -179,7 +182,7 @@ export function createSyncEngine(deps: SyncEngineDependencies) {
     for (const id of Object.keys(previous.collections)) {
       if (!baseline.collections[id]) put('collection', id, null, true);
     }
-    for (const book of snapshot.books) {
+    for (const book of syncableBooks(snapshot)) {
       const key = identityFor(state, book.id);
       const firstSeen = !(book.id in previous.favorites);
       const initial = firstSeen || changedIdentities.has(book.id);
@@ -229,7 +232,9 @@ export function createSyncEngine(deps: SyncEngineDependencies) {
     }
     for (const book of books) {
       const record = records.get(`membership:${identityFor(state, book.id)}`);
-      const target = record ? (!record.deleted ? record.value : null) : state.baseline.memberships[book.id];
+      const target = isCloudBook(book)
+        ? snapshot.collections.find(item => item.bookIds.includes(book.id))?.id
+        : record ? (!record.deleted ? record.value : null) : state.baseline.memberships[book.id];
       if (typeof target === 'string') collections.get(target)?.bookIds.push(book.id);
     }
     for (const item of collections.values()) {

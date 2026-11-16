@@ -5,7 +5,7 @@
       <div>
         <h2 id="sync-intro-title">{{ t('在不同设备间继续阅读') }}</h2>
         <p>{{ t('同步阅读进度、收藏与书库，原始文件不会上传。') }}</p>
-        <p>{{ t('请在各设备导入相同的原文件，HOMURA 会按文件内容匹配作品。') }}</p>
+        <p>{{ t('可浏览 WebDAV 上的书籍并在线阅读，无需先下载到本机。') }}</p>
       </div>
     </section>
 
@@ -13,8 +13,8 @@
       <section class="sync-group" aria-labelledby="sync-connection-title">
         <h2 id="sync-connection-title">{{ t('WebDAV 连接') }}</h2>
         <div class="sync-card sync-fields">
-          <label class="sync-field" for="sync-url">
-            <span>{{ t('WebDAV 文件夹地址') }}</span>
+          <div class="sync-field">
+            <label for="sync-url">{{ t('WebDAV 文件夹地址') }}</label>
             <input
               id="sync-url"
               v-model="draft.url"
@@ -31,10 +31,11 @@
               @input="edit"
               @focus="revealField"
             />
-            <small id="sync-url-hint">{{ t('填写已存在的 HTTPS 文件夹地址，不包含用户名或密码。') }}</small>
-          </label>
-          <label class="sync-field" for="sync-username">
-            <span>{{ t('用户名') }}</span>
+            <span class="sync-field-state">{{ draft.enabled ? t('必填') : t('可选') }}</span>
+            <small id="sync-url-hint" class="sync-field-hint">{{ t('填写已存在的 HTTPS 文件夹地址，不包含用户名或密码。') }}</small>
+          </div>
+          <div class="sync-field">
+            <label for="sync-username">{{ t('用户名') }}</label>
             <input
               id="sync-username"
               v-model="draft.username"
@@ -47,13 +48,14 @@
               @input="edit"
               @focus="revealField"
             />
-          </label>
-          <label class="sync-field" for="sync-password">
-            <span>{{ t('密码或应用专用密码') }}</span>
+            <span class="sync-field-state">{{ t('可选') }}</span>
+          </div>
+          <div class="sync-field">
+            <label for="sync-password">{{ t('密码或应用专用密码') }}</label>
             <input
               id="sync-password"
               v-model="draft.password"
-              type="password"
+              :type="passwordVisible ? 'text' : 'password'"
               autocomplete="current-password"
               maxlength="4096"
               :disabled="busy"
@@ -61,8 +63,19 @@
               @input="edit"
               @focus="revealField"
             />
-            <small id="sync-password-hint">{{ t('密码仅用于本次会话，重新启动后需要再次填写。') }}</small>
-          </label>
+            <span class="sync-field-end">
+              <span class="sync-field-state">{{ t('可选') }}</span>
+              <button
+                type="button"
+                class="sync-password-toggle md-hit-target"
+                :aria-label="passwordVisible ? t('隐藏密码') : t('显示密码')"
+                :aria-pressed="passwordVisible"
+                :disabled="busy"
+                @click="passwordVisible = !passwordVisible"
+              ><MdIcon :name="passwordVisible ? 'visibility_off' : 'visibility'" /></button>
+            </span>
+            <small id="sync-password-hint" class="sync-field-hint">{{ t('密码仅用于本次会话，重新启动后需要再次填写。') }}</small>
+          </div>
         </div>
       </section>
 
@@ -88,6 +101,8 @@
         </div>
       </section>
     </form>
+
+    <WebDavBrowser :url="sync.config.url" :username="sync.config.username" :password="sync.password" :disabled="dirty || saving || performing || sync.status === 'syncing' || sync.status === 'testing'" @busy="browserBusy = $event" />
 
     <section class="sync-group" aria-labelledby="sync-status-title">
       <h2 id="sync-status-title">{{ t('同步状态') }}</h2>
@@ -128,16 +143,19 @@ import { useSyncStore } from '../stores/sync.ts';
 import { useI18n } from '../composables/useI18n.ts';
 import MdIcon from './MdIcon.vue';
 import MdSwitch from './MdSwitch.vue';
+import WebDavBrowser from './WebDavBrowser.vue';
 
 const sync = useSyncStore();
 const { t, locale } = useI18n();
 const draft = reactive({ url: '', username: '', password: '', enabled: false, autoSync: false });
+const passwordVisible = ref(false);
 const edited = ref(false);
+const browserBusy = ref(false);
 const saving = ref(false);
 const performing = ref(false);
 const notice = ref('');
 const localError = ref('');
-const busy = computed(() => saving.value || performing.value || sync.status === 'testing' || sync.status === 'syncing');
+const busy = computed(() => browserBusy.value || saving.value || performing.value || sync.status === 'testing' || sync.status === 'syncing');
 const displayError = computed(() => localError.value || sync.error);
 const dirty = computed(() => draft.url !== sync.config.url || draft.username !== sync.config.username
   || draft.password !== sync.password || draft.enabled !== sync.enabled || draft.autoSync !== sync.autoSync);
@@ -228,13 +246,24 @@ async function disconnect() {
 .sync-group { min-width: 0; margin-bottom: 28px; }
 .sync-group > h2 { margin: 0 16px 12px; color: var(--md-on-surface-variant); font-size: 13px; font-weight: 600; }
 .sync-card { min-width: 0; border-radius: 28px; background: var(--md-surface); color: var(--md-on-surface); }
-.sync-fields { display: grid; gap: 24px; padding: 24px; }
-.sync-field { display: grid; min-width: 0; gap: 8px; font-size: 13px; font-weight: 600; }
-.sync-field input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 48px; padding: 12px 16px; border: 1px solid var(--md-outline-variant); border-radius: 12px; outline: none; background: var(--md-surface-high); color: var(--md-on-surface); font: inherit; font-weight: 400; transition: border-color 200ms cubic-bezier(0.2, 0, 0, 1); }
-.sync-field input:focus-visible { border-color: var(--md-primary); outline: 2px solid var(--md-primary); outline-offset: 2px; }
+.sync-fields { overflow: hidden; padding: 0; }
+.sync-field { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.4fr) auto; grid-template-rows: auto auto; align-items: center; column-gap: 20px; min-width: 0; padding: 16px 30px; transition: background-color 200ms cubic-bezier(0.2, 0, 0, 1); }
+.sync-field + .sync-field { border-top: 1px solid var(--md-outline-variant); }
+.sync-field:focus-within { background: color-mix(in oklab, var(--md-primary-container) 10%, var(--md-surface)); }
+.sync-field > label { grid-column: 1; grid-row: 1; min-width: 0; font-size: 16px; font-weight: 550; }
+.sync-field input { box-sizing: border-box; grid-column: 2; grid-row: 1; width: 100%; min-width: 0; min-height: 44px; padding: 8px 0; border: 0; border-radius: 4px; outline: none; background: transparent; color: var(--md-on-surface); font: inherit; font-size: 15px; font-weight: 400; }
+.sync-field input:is(:focus, :focus-visible) { outline: none; box-shadow: none; }
 .sync-field input::placeholder { color: var(--md-on-surface-variant); opacity: 1; }
 .sync-field input:disabled { opacity: 0.38; }
-.sync-field small, .sync-note { margin: 0; color: var(--md-on-surface-variant); font-size: 12px; font-weight: 400; line-height: 1.7; overflow-wrap: anywhere; }
+.sync-field-state { color: var(--md-on-surface-variant); font-size: 15px; font-weight: 450; white-space: nowrap; }
+.sync-field-end { display: flex; grid-column: 3; grid-row: 1; align-items: center; gap: 12px; }
+.sync-field-hint { grid-column: 2 / 4; grid-row: 2; margin: 0; padding-top: 2px; color: var(--md-on-surface-variant); font-size: 12px; font-weight: 400; line-height: 1.6; overflow-wrap: anywhere; }
+.sync-password-toggle { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--md-on-surface-variant); cursor: pointer; }
+.sync-password-toggle:hover { background: color-mix(in oklab, var(--md-on-surface) 8%, transparent); }
+.sync-password-toggle:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 1px; }
+.sync-password-toggle:disabled { opacity: .38; cursor: default; }
+.sync-password-toggle :deep(svg) { width: 22px; height: 22px; }
+.sync-note { margin: 0; color: var(--md-on-surface-variant); font-size: 12px; font-weight: 400; line-height: 1.7; overflow-wrap: anywhere; }
 .sync-options > :deep(.md-switch-row) { padding: 20px 24px; }
 .sync-options > :deep(.md-switch-row + .md-switch-row) { border-top: 1px solid var(--md-outline-variant); }
 .sync-switch-copy { display: grid; gap: 6px; }
@@ -261,12 +290,18 @@ async function disconnect() {
 @container settings (max-width: 599px) {
   .sync-intro { gap: 12px; padding: 24px 20px; }
   .sync-intro > svg { width: 24px; height: 24px; }
-  .sync-fields, .sync-status { padding: 20px; }
+  .sync-field { grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 0; padding: 8px 20px; }
+  .sync-field > label { grid-column: 1; grid-row: 1; font-size: 15px; }
+  .sync-field input { grid-column: 1 / 3; grid-row: 2; }
+  .sync-field-state { font-size: 13px; }
+  .sync-field-end { grid-column: 2; grid-row: 1; gap: 8px; }
+  .sync-field-hint { grid-column: 1 / 3; grid-row: 3; }
+  .sync-status { padding: 20px; }
   .sync-options > :deep(.md-switch-row) { padding: 20px; }
   .sync-stats { gap: 12px; }
   .sync-actions > button { flex: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .sync-field input { transition: none; }
+  .sync-field, .sync-field input { transition: none; }
 }
 </style>

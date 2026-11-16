@@ -1101,6 +1101,7 @@ import {
 } from '../services/runtimeLogs.ts';
 import { deliverRuntimeLogExport, formatRuntimeLogEntries, runtimeLogExportFileName } from '../services/runtimeLogExport.ts';
 import { useShelfStore } from '../stores/shelf.ts';
+import { useReaderStore } from '../stores/reader.ts';
 import { useSettingsStore } from '../stores/settings.ts';
 import { useRuntimeLogStore } from '../stores/runtimeLogs.ts';
 import {
@@ -1137,6 +1138,7 @@ const runtimeLogs = useRuntimeLogStore();
 const { hasNewRelease, hasPendingInstall } = storeToRefs(updates);
 const appVersion = packageInfo.version;
 const { isCompact } = useViewport();
+const reader = useReaderStore();
 const readerDefaults = settings.readerDefaults;
 const aboutLinkError = ref('');
 const debugNote = ref('');
@@ -1543,6 +1545,7 @@ async function confirmDataAction() {
 }
 
 function onDialogKeydown(event: KeyboardEvent) {
+  if (reader.currentBook) return;
   if (!pendingAction.value) {
     if (event.key === 'Escape' && sectionTransition.dismissBounce()) {
       event.preventDefault();

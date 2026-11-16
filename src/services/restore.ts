@@ -4,6 +4,8 @@
    把导入来源写进 IndexedDB，并在重新打开应用时取回原始文件、重新解析书籍。
    ========================================================================== */
 
+import { normalizeRemoteBookSource, resolveRemoteBookConfig, resetRemoteBookRuntime } from './remoteBookSource.ts';
+import { WebDavBooksClient } from './webdavBooks.ts';
 import { HomuraStore } from './storage.ts';
 import type { Book, BookSource, SourceFileHandle } from '../types.ts';
 import { canUseOPFS, isAndroid } from './platform.ts';
@@ -162,6 +164,7 @@ async function stageBlob(path: unknown, blob: Blob) {
 // Tauri 平台优先落原生 AppData，容量只受磁盘限制；桌面句柄仍是零拷贝引用。
 // EPUB / CBZ 已在导入前预存到 AppData，上面会直接复用，不重复复制。
 async function stageSource(bookId: string, source: StoredSource) {
+  if (source.kind === 'webdav') return normalizeRemoteBookSource(source);
   // 桌面端句柄是零拷贝引用，跨重启可用；Android 的 content:// 句柄不可靠。
   if (source.preStaged && source.nativePath) {
     const { preStaged, ...staged } = source;
@@ -277,6 +280,7 @@ async function stageSource(bookId: string, source: StoredSource) {
 function createBookMeta(book: BookLike): Book {
   return {
     id: book.id,
+    ...(book.remote ? { remote: true } : {}),
     type: book.type,
     format: book.format || null,
     title: book.title,
@@ -394,17 +398,25 @@ export async function restoreLibrary() {
     return null;
   }
   metas.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
-  return metas.map(meta => ({
-    id: meta.id,
-    type: meta.type,
-    format: meta.format || null,
-    title: meta.title,
-    favorite: !!meta.favorite,
-    pageCount: meta.pageCount,
-    cover: (meta.customCoverBlob || meta.coverBlob) ? URL.createObjectURL((meta.customCoverBlob || meta.coverBlob) as Blob) : null,
-    coverBlob: meta.coverBlob || null,
-    customCoverBlob: meta.customCoverBlob || null,
-    restored: true
+  return Promise.all(metas.map(async meta => {
+    // SQLite 镜像不保存来源字段，从 IndexedDB 的云端引用恢复标记。
+    let remote = meta.remote === true;
+    if (!remote && meta.id.startsWith('webdav_')) {
+      try { remote = ((await HomuraStore.getSource(meta.id)) as BookSource | null)?.kind === 'webdav'; } catch { remote = true; }
+    }
+    return {
+      id: meta.id,
+      ...(remote ? { remote: true, remoteShelf: true } : {}),
+      type: meta.type,
+      format: meta.format || null,
+      title: meta.title,
+      favorite: !!meta.favorite,
+      pageCount: meta.pageCount,
+      cover: (meta.customCoverBlob || meta.coverBlob) ? URL.createObjectURL((meta.customCoverBlob || meta.coverBlob) as Blob) : null,
+      coverBlob: meta.coverBlob || null,
+      customCoverBlob: meta.customCoverBlob || null,
+      restored: true
+    };
   }));
 }
 
@@ -622,6 +634,28 @@ export async function hydrateBook(book: BookLike) {
   if (!source) {
     console.warn('[HOMURA] 本地存档已丢失', book.id);
     return false;
+  }
+
+  if (source.kind === 'webdav') {
+    const remote = normalizeRemoteBookSource(source);
+    const config = await resolveRemoteBookConfig(remote);
+    const { openRemoteBook } = await import('./remoteBooks.ts');
+    const parsed = await openRemoteBook(new WebDavBooksClient(config), {
+      href: remote.href, name: remote.name, directory: false, size: remote.size ?? null, etag: null
+    }, remote.username, message => {
+      if (typeof book.remoteReadError === 'function') book.remoteReadError(message);
+    });
+    if (parsed.id !== book.id) {
+      if (typeof parsed.remoteDispose === 'function') parsed.remoteDispose();
+      throw new Error('云端书籍引用无效');
+    }
+    const preserved = { cover: book.cover, coverBlob: book.coverBlob, customCoverBlob: book.customCoverBlob, favorite: book.favorite };
+    Object.assign(book, parsed, preserved, { remote: true, remoteShelf: true, restored: false });
+    book.remoteDispose = () => {
+      if (typeof parsed.remoteDispose === 'function') parsed.remoteDispose();
+      resetRemoteBookRuntime(book);
+    };
+    return true;
   }
 
   let parsed: Book | null = null;

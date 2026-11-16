@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-webdav-read"
+description = "允许在配置的 WebDAV 目录内列出文件与按需读取书籍"
+commands.allow = ["webdav_read"]

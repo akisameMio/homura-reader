@@ -11,6 +11,7 @@ import { createSyncEngine, type SyncStats } from '../services/syncEngine.ts';
 import { loadSyncState, saveSyncState } from '../services/syncPersistence.ts';
 import { fingerprintSource, prepareSourceIdentity } from '../services/syncIdentity.ts';
 import { HomuraStore, subscribeMetadataChanges } from '../services/storage.ts';
+import { setRemoteBookCredentialsProvider } from '../services/remoteBookSource.ts';
 import { WebDavClient, normalizeWebDavUrl } from '../services/webdav.ts';
 import { runShelfMutation } from '../services/mutationQueue.ts';
 import { useShelfStore } from './shelf.ts';
@@ -48,6 +49,13 @@ export const useSyncStore = defineStore('sync', () => {
   let captureTimer: ReturnType<typeof setTimeout> | null = null;
   let networkTimer: ReturnType<typeof setTimeout> | null = null;
   let lastAttempt = 0;
+
+  setRemoteBookCredentialsProvider(async () => {
+    await initialize();
+    if (!config.value.url) throw new Error('请在 WebDAV 设置中连接此云端书籍的服务器');
+    if (config.value.username && !sessionReady) throw new Error('请在 WebDAV 设置中重新填写并保存本次会话密码');
+    return { ...config.value, password: password.value };
+  });
 
   function applyStats(stats: SyncStats) {
     pendingCount.value = stats.pendingCount;

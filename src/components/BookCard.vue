@@ -21,6 +21,8 @@
         <span class="text-[10px] min-[900px]:text-[11px] opacity-80 font-mono">{{ subInfo }}</span>
       </div>
 
+      <span v-if="book.remote" class="book-cloud-tag absolute bottom-2.5 left-2.5 rounded-full px-2 py-[3px] text-[10px] min-[900px]:text-[11px] font-semibold">{{ t('云端') }}</span>
+
       <!-- 类型徽标 -->
       <span
         class="md-shape-morph md-shape-cookie absolute top-2.5 left-2.5 px-2 py-[3px] rounded-full font-mono text-[10px] min-[900px]:text-[11px] font-semibold tracking-[0.04em] text-[var(--md-on-surface)]"
@@ -109,6 +111,7 @@ const subInfo = computed(() =>
 </script>
 
 <style scoped>
+.book-cloud-tag { background: var(--md-primary-container); color: var(--md-on-primary-container); }
 .book-remove-button {
   background: var(--md-surface-container);
   color: var(--md-on-surface);

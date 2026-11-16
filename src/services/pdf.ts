@@ -101,6 +101,29 @@ export async function openPdfDocument(file: { arrayBuffer(): Promise<ArrayBuffer
   } as Parameters<typeof pdfjs.getDocument>[0]).promise as Promise<PdfDocLike>;
 }
 
+// Range 传输由 WebDAV 客户端提供；禁用自动取全书和后台连续下载。
+export async function openRemotePdfDocument(source: import('./webdavBooks.ts').RangeSource) {
+  const pdfjs = await loadPdfjs();
+  const assetBase = new URL('pdfjs/', document.baseURI).href;
+  let task: ReturnType<typeof pdfjs.getDocument>;
+  class RemoteTransport extends pdfjs.PDFDataRangeTransport {
+    requestDataRange(begin: number, end: number) {
+      void source.read(begin, end).then(bytes => this.onDataRange(begin, bytes)).catch(() => { void task.destroy(); });
+    }
+  }
+  const transport = new RemoteTransport(source.size, new Uint8Array(), false);
+  task = pdfjs.getDocument({
+    range: transport, rangeChunkSize: 128 * 1024,
+    disableAutoFetch: true, disableStream: true, isEvalSupported: false,
+    cMapUrl: assetBase + 'cmaps/', cMapPacked: true,
+    standardFontDataUrl: assetBase + 'standard_fonts/', wasmUrl: assetBase + 'wasm/', iccUrl: assetBase + 'iccs/'
+  } as Parameters<typeof pdfjs.getDocument>[0]);
+  try {
+    const doc = await task.promise;
+    return { document: doc as unknown as PdfDocLike & { numPages: number }, destroy: () => task.destroy() };
+  } catch (error) { await task.destroy(); throw error; }
+}
+
 // 生成漫画管道可用的 pageItems：每项自带 render()，首次显示时才真正渲染
 export function createPdfPageItems(pdfDoc: PdfDocLike, pageCount: number): PdfPageItem[] {
   const items: PdfPageItem[] = [];

@@ -26,9 +26,9 @@ const METADATA_MIN_SAMPLE = 8;
 const METADATA_COVER_SCAN_PAGES = 4;
 
 /** EPUB 存档适配层：JSZip 与原生 ZIP 同构 */
-interface EpubArchive {
-  kind: 'jszip' | 'native';
-  zipContent?: JSZip;
+export interface EpubArchive {
+  kind: 'jszip' | 'native' | 'remote';
+  zipContent?: Pick<JSZip, 'file'> | import('./remoteZip.ts').RemoteZip;
   archiveId?: string;
   nativeArchivePath?: string;
   entryIndexByPath?: Map<string, number>;

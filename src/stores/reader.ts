@@ -15,6 +15,7 @@ import { ref, shallowRef, reactive, computed, nextTick } from 'vue';
 import { useShelfStore } from './shelf.ts';
 import { useSettingsStore } from './settings.ts';
 import { TRANSITION_OPTIONS, useThemeStore } from './theme.ts';
+import { resetRemoteBookRuntime } from '../services/remoteBookSource.ts';
 import { hydrateBook } from '../services/restore.ts';
 import { buildActivePages, createNovelPaginator, getNovelPaginationKey, ensureBookImagesResolved, releaseBookPageUrls } from '../services/pagination.ts';
 import {
@@ -447,14 +448,29 @@ export const useReaderStore = defineStore('reader', () => {
     scheduleNovelPagination();
   }
 
-  async function openBook(id: string, options: { preserveCollectionOrder?: boolean; position?: 'start' | 'end' | string; finishCurrent?: boolean; [key: string]: unknown } = {}) {
-    const book = shelf.library.find((b: Book) => b.id === id);
+  function releaseRemoteBook(book: Book) {
+    const dispose = book.remoteDispose;
+    if (typeof dispose !== 'function') return;
+    dispose();
+    resetRemoteBookRuntime(book);
+    const saved = shelf.library.find(item => item.id === book.id);
+    if (saved && saved !== book && saved.remoteDispose === dispose) {
+      resetRemoteBookRuntime(saved);
+      shelf.touchBook(saved);
+    }
+  }
+
+  async function openBook(id: string, options: { preserveCollectionOrder?: boolean; position?: 'start' | 'end' | string; finishCurrent?: boolean; [key: string]: unknown } = {}, remoteBook?: Book) {
+    const book = remoteBook || shelf.library.find((b: Book) => b.id === id);
     if (!book) return false;
     const previousBook = currentBook.value;
     const token = ++openRequestToken;
     openingBook.value = true;
     openError.value = '';
     try {
+      if (book.remote) book.remoteReadError = (message: string) => {
+        if (currentBook.value?.id === book.id) openError.value = t(message);
+      };
       if (book.restored) {
         if (!(await hydrateBook(book))) throw new Error(t('本地存档无法读取，请重新导入'));
         if (token !== openRequestToken) return false;
@@ -523,7 +539,10 @@ export const useReaderStore = defineStore('reader', () => {
       // 先让旧翻页组件卸载、新组件接管渲染入口，再绘制目标书，避免旧缓冲串页。
       await nextTick();
       if (token !== openRequestToken) return false;
-      if (previousBook && previousBook.id !== id) releaseBookPageUrls(previousBook);
+      if (previousBook && previousBook !== book) {
+        releaseBookPageUrls(previousBook);
+        releaseRemoteBook(previousBook);
+      }
       requestRender('none');
       return true;
     } catch (err: unknown) {
@@ -533,6 +552,7 @@ export const useReaderStore = defineStore('reader', () => {
       }
       return false;
     } finally {
+      if (book.remote && currentBook.value !== book) releaseRemoteBook(book);
       if (token === openRequestToken) openingBook.value = false;
     }
   }
@@ -573,7 +593,10 @@ export const useReaderStore = defineStore('reader', () => {
     fontPaginationTimer = 0;
     const closedBook = currentBook.value;
     currentBook.value = null;
-    if (closedBook) releaseBookPageUrls(closedBook);
+    if (closedBook) {
+      releaseBookPageUrls(closedBook);
+      releaseRemoteBook(closedBook);
+    }
     void releaseNativeArchiveSession(closedBook as unknown as { nativeArchiveId?: string | null; nativeArchivePath?: string | null; pageItems?: { nativeArchiveId?: string; nativeArchivePath?: string }[] | null });
     // 进度已通过 progressMap 响应式流回书架卡片，无需手动重绘书架
   }
@@ -916,6 +939,7 @@ export const useReaderStore = defineStore('reader', () => {
     requestRender,
     touchProgress,
     openBook,
+    openRemoteBook: (book: Book) => openBook(book.id, {}, book),
     closeReader,
     recalculateNovelPaginationAndRender,
     handleViewportChange,

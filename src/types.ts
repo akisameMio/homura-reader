@@ -60,6 +60,10 @@ export interface Book {
   chapters?: ChapterItem[] | null;
   pdfDoc?: unknown;
   pdfRange?: unknown;
+  remote?: boolean;
+  remoteShelf?: boolean;
+  remoteDispose?: (() => void) | null;
+  remoteReadError?: ((message: string) => void) | null;
   nativePath?: string;
   nativeArchiveId?: string;
   nativeArchivePath?: string | null;

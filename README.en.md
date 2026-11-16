@@ -50,7 +50,7 @@ HOMURA is a **local-first** reader: import manga, light novels, PDFs and image g
 - **Import & updates**: cancellable imports, per-book retry, duplicate-name prompts; in-app check, download and install of new versions.
 - **Material Design 3**: 10 theme colors, three surfaces (light / eye-care / dark), adapted for desktop and narrow screens.
 - **Offline library**: reading and storage stay local first; source files, book content and covers are never uploaded.
-- **Optional WebDAV sync**: off by default; syncs only progress, favorites and collections to your chosen server. Import the same source files on each device; layout settings stay local.
+- **Optional WebDAV sync**: off by default; syncs only progress, favorites and collections to your chosen server. Import the same source files on each device for metadata matching; layout settings stay local. Browse WebDAV folders and read EPUB / CBZ / ZIP / PDF / TXT / Markdown online without first saving the source files; add remote books to your shelf with a Cloud label on the cover.
 
 ## Supported Formats
 

@@ -4,6 +4,7 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "allow-webdav-read",
     "core:app:allow-exit",
     "android-toast:default",
     "android-predictive-back:default",

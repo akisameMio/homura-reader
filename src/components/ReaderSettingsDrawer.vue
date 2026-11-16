@@ -170,8 +170,8 @@
             <h3>{{ reader.currentBook?.title }}</h3>
             <p class="reader-settings-hint">{{ t('为这本书换一张喜欢的封面') }}</p>
             <input ref="coverInput" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.avif,.bmp" class="hidden" :aria-label="t('选择自定义封面图片')" @change="onCoverSelected" />
-            <button type="button" class="md-tonal-button reader-settings-upload" :disabled="coverBusy" @click="coverInput?.click()"><MdIcon name="upload_file" :size="18" />{{ coverBusy ? t('正在保存…') : t('选择封面图片') }}</button>
-            <button v-if="hasCustomCover" type="button" class="md-text-button reader-settings-restore-cover" :disabled="coverBusy" @click="saveCover(null)">{{ t('恢复原封面') }}</button>
+            <button type="button" class="md-tonal-button reader-settings-upload" :disabled="coverBusy || (!!reader.currentBook?.remote && !reader.currentBook?.remoteShelf)" @click="coverInput?.click()"><MdIcon name="upload_file" :size="18" />{{ coverBusy ? t('正在保存…') : t('选择封面图片') }}</button>
+            <button v-if="hasCustomCover" type="button" class="md-text-button reader-settings-restore-cover" :disabled="coverBusy || (!!reader.currentBook?.remote && !reader.currentBook?.remoteShelf)" @click="saveCover(null)">{{ t('恢复原封面') }}</button>
             <p v-if="reader.currentBook?.id.startsWith('demo_')" class="reader-settings-hint">{{ t('示例书封面仅在本次打开期间保留。') }}</p>
             <p v-if="coverError" role="alert" class="reader-settings-cover-error">{{ coverError }}</p>
           </section>

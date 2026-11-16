@@ -52,6 +52,28 @@ fn strong_etag(value: &str) -> bool {
             .all(|byte| *byte == 0x21 || (0x23..=0x7e).contains(byte) || *byte >= 0x80)
 }
 
+pub(crate) fn http_client() -> Result<Client, String> {
+    let builder = Client::builder()
+        .connect_timeout(Duration::from_secs(15))
+        .timeout(Duration::from_secs(30))
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent(concat!("HOMURA/", env!("CARGO_PKG_VERSION")));
+    // 与更新下载器一样，Android 使用随包根证书，避免未初始化 JNI 校验器。
+    #[cfg(target_os = "android")]
+    let builder = builder.tls_certs_only(
+        TLS_SERVER_ROOT_CERTS
+            .iter()
+            .map(|certificate| reqwest::Certificate::from_der(certificate.as_ref()))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| "WebDAV TLS 初始化失败".to_string())?,
+    );
+    #[cfg(test)]
+    let builder = builder.no_proxy();
+    builder
+        .build()
+        .map_err(|_| "WebDAV 网络初始化失败".to_string())
+}
+
 async fn request(
     raw_url: String,
     username: String,
@@ -76,25 +98,7 @@ async fn request(
         "OPTIONS" if body.is_none() => Method::OPTIONS,
         _ => return Err("WebDAV 请求方法无效".into()),
     };
-    let builder = Client::builder()
-        .connect_timeout(Duration::from_secs(15))
-        .timeout(Duration::from_secs(30))
-        .redirect(reqwest::redirect::Policy::none())
-        .user_agent(concat!("HOMURA/", env!("CARGO_PKG_VERSION")));
-    // 与更新下载器一样，Android 使用随包根证书，避免未初始化 JNI 校验器。
-    #[cfg(target_os = "android")]
-    let builder = builder.tls_certs_only(
-        TLS_SERVER_ROOT_CERTS
-            .iter()
-            .map(|certificate| reqwest::Certificate::from_der(certificate.as_ref()))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|_| "WebDAV TLS 初始化失败".to_string())?,
-    );
-    #[cfg(test)]
-    let builder = builder.no_proxy();
-    let client = builder
-        .build()
-        .map_err(|_| "WebDAV 网络初始化失败".to_string())?;
+    let client = http_client()?;
     let mut request = client
         .request(method.clone(), url)
         .header(header::ACCEPT, "application/json");
