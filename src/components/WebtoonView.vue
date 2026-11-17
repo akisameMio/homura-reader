@@ -68,7 +68,7 @@
    进出视口通知；小说整卷直出。滚动位置实时回写 currentIndex 并防抖存进度。
    ========================================================================== */
 
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import { shallowRef, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useReaderStore } from '../stores/reader.ts';
 import { decodePageImage, releaseDistantPageUrls, type MangaPageItem } from '../services/pagination.ts';
 import { resolveProseStyle } from '../services/readerLayout.ts';
@@ -94,8 +94,8 @@ function onContentLink(event: MouseEvent) {
   reader.followEpubLink(link.getAttribute('href') || '', chapterIndex);
 }
 
-const scrollRoot = ref<HTMLElement | null>(null);
-const novelContent = ref<HTMLElement | null>(null);
+const scrollRoot = shallowRef<HTMLElement | null>(null);
+const novelContent = shallowRef<HTMLElement | null>(null);
 let scrollFrame = 0;
 let novelOffsetFrame = 0;
 let mangaOffsetFrame = 0;
@@ -665,21 +665,18 @@ onMounted(() => {
     if (!restoringMangaProgress) syncMangaScrollPosition();
   }
 
-  // 恢复上次阅读位置
+  // 挂载后的 DOM 已可测量，必须在首次绘制前恢复位置；延时恢复会先露出卷首再跳动。
   if (initialMangaIndex > 0 || (!isManga.value && reader.currentIndex > 0)) {
-    setTimeout(() => {
-      if (disposed) return;
-      if (!isManga.value) measureNovelOffsets();
-      scrollToSection(isManga.value ? initialMangaIndex : reader.currentIndex, 'auto');
-      if (isManga.value) {
-        restoringMangaProgress = false;
-        measureMangaOffsets();
-        syncMangaScrollPosition();
-      } else {
-        syncNovelScrollPosition();
-      }
-      syncScrollBounds();
-    }, 50);
+    if (!isManga.value) measureNovelOffsets();
+    scrollToSection(isManga.value ? initialMangaIndex : reader.currentIndex, 'instant');
+    if (isManga.value) {
+      restoringMangaProgress = false;
+      measureMangaOffsets();
+      syncMangaScrollPosition();
+    } else {
+      syncNovelScrollPosition();
+    }
+    syncScrollBounds();
   } else {
     if (!isManga.value) scheduleNovelOffsetMeasure();
     syncNovelScrollPosition();
