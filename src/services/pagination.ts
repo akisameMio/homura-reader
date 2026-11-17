@@ -441,7 +441,15 @@ export function splitLongParagraph(html: string, measurer: HTMLElement, maxHeigh
 
   if (source.children.length === 0) {
     const plainParts = splitPlainTextParagraph(source.textContent, measurer, maxHeight);
-    if (plainParts) return plainParts;
+    if (plainParts) {
+      if (source.id) {
+        const first = document.createElement('div');
+        first.innerHTML = plainParts[0];
+        first.firstElementChild?.setAttribute('id', source.id);
+        plainParts[0] = first.innerHTML;
+      }
+      return plainParts;
+    }
   }
 
   // <br> 没有文本，但换行本身占高度；把它当作一个虚拟字符参与 Range 定位。
@@ -501,13 +509,16 @@ export function splitLongParagraph(html: string, measurer: HTMLElement, maxHeigh
     const range = document.createRange();
     const from = locate(start);
     const to = locate(end);
-    if (from.type === 'text') range.setStart(from.node, from.offset as number);
+    if (start === 0) range.setStart(source!, 0);
+    else if (from.type === 'text') range.setStart(from.node, from.offset as number);
     else if (from.type === 'before') range.setStartBefore(from.node);
     else range.setStartAfter(from.node);
-    if (to.type === 'text') range.setEnd(to.node, to.offset as number);
+    if (end === length) range.setEnd(source!, source!.childNodes.length);
+    else if (to.type === 'text') range.setEnd(to.node, to.offset as number);
     else if (to.type === 'before') range.setEndBefore(to.node);
     else range.setEndAfter(to.node);
     const paragraph = source!.cloneNode(false) as Element;
+    if (start > 0) paragraph.removeAttribute('id');
     paragraph.append(range.cloneContents());
     return paragraph.outerHTML;
   }
@@ -591,7 +602,16 @@ export function collectNovelBlocks(html: string) {
     const element = node as Element;
     const tag = element.tagName.toLowerCase();
     if (NOVEL_CONTAINER_TAGS.has(tag) && element.children.length > 0 && !hasDirectText(node)) {
+      const start = blocks.length;
       Array.from(node.childNodes).forEach(pushNode);
+      if (element.id && blocks[start]) {
+        const first = document.createElement('div');
+        first.innerHTML = blocks[start].html;
+        const marker = document.createElement('span');
+        marker.id = element.id;
+        first.firstElementChild?.prepend(marker);
+        blocks[start].html = first.innerHTML;
+      }
       return;
     }
 

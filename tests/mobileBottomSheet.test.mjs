@@ -261,6 +261,36 @@ test('桌面侧栏入场使用临界阻尼，不在静止位右侧回弹', async
   }
 });
 
+test('桌面侧栏落位后才聚焦，避免 WebKit 为屏外按钮滚动模态容器', async () => {
+  window.innerWidth = 1280;
+  const { app, state } = mount({ desktopSide: true });
+  try {
+    await flush();
+    const button = document.querySelector('.md-drawer-header button');
+    assert.notEqual(document.activeElement, button, '入场途中不能聚焦屏外按钮');
+    await advance();
+    assert.equal(document.activeElement, button, '落位后恢复键盘关闭入口');
+    state.open = false;
+    await flush();
+    await advance();
+    assert.equal(document.activeElement.id, 'trigger');
+  } finally {
+    app.unmount();
+    window.innerWidth = 390;
+  }
+});
+
+test('入场时用户已经聚焦输入框，落位后不抢回焦点', async () => {
+  const { app } = mount();
+  try {
+    await flush();
+    const input = document.querySelector('.md-mobile-sheet input');
+    input.focus();
+    await advance();
+    assert.equal(document.activeElement, input);
+  } finally { app.unmount(); }
+});
+
 test('原生 Esc 提前关闭模态层时重新撑住，离场结束后再释放滚动锁', async () => {
   const { app, state, events } = mount();
   try {

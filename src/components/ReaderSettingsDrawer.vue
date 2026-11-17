@@ -107,12 +107,16 @@
                 <MdSegmentedControl v-if="allowSpreadChoice" class="reader-settings-segment" :model-value="config.spread" :options="spreadOptions" :aria-label="t('翻页布局')" @update:model-value="value => reader.setSpreadCount(Number(value))" />
                 <p v-else class="reader-settings-hint">{{ t('当前屏幕按单页显示，窗口变宽后可选择双页。') }}</p>
               </div>
-              <div v-if="!isManga && !isVertical" class="reader-settings-row reader-settings-switch">
-                <MdSwitch :model-value="config.verticalText" :title="t('文字从上往下，各列从右往左排列')" @update:model-value="reader.setVerticalText">{{ t('竖排文字') }}</MdSwitch>
-              </div>
-              <div v-if="!isVertical && allowSpreadChoice && config.spread === 2" class="reader-settings-row reader-settings-switch">
-                <MdSwitch :model-value="config.coverOffset" :title="t('双页模式下首页单独显示，确保后续跨页大图对齐')" @update:model-value="reader.toggleCoverOffset()">{{ t('首页单排') }}</MdSwitch>
-              </div>
+              <Transition v-bind="expandMotion">
+                <div v-if="!isManga && !isVertical" class="reader-settings-row reader-settings-switch">
+                  <MdSwitch :model-value="config.verticalText" :title="t('文字从上往下，各列从右往左排列')" @update:model-value="reader.setVerticalText">{{ t('竖排文字') }}</MdSwitch>
+                </div>
+              </Transition>
+              <Transition v-bind="expandMotion">
+                <div v-if="!isVertical && allowSpreadChoice && config.spread === 2" class="reader-settings-row reader-settings-switch">
+                  <MdSwitch :model-value="config.coverOffset" :title="t('双页模式下首页单独显示，确保后续跨页大图对齐')" @update:model-value="reader.toggleCoverOffset()">{{ t('首页单排') }}</MdSwitch>
+                </div>
+              </Transition>
               <div v-if="isVertical && isManga" class="reader-settings-row">
                 <MdSegmentedControl class="reader-settings-segment" :model-value="config.webtoonFit" :options="webtoonFits" :aria-label="t('滚动尺寸')" @update:model-value="reader.setWebtoonFit" />
               </div>
@@ -151,7 +155,7 @@
             <div class="reader-settings-row">
               <MdSegmentedControl class="reader-settings-segment" :model-value="reader.transitionStyle" :options="transitionOptions" :aria-label="t('翻页方式')" @update:model-value="reader.setTransitionStyle" />
             </div>
-            <Transition name="reader-settings-expand">
+            <Transition v-bind="expandMotion">
               <div v-if="reader.transitionStyle === 'scroll'" class="reader-settings-scroll-fit">
                 <SettingsSelectRow :label="t('滚动宽度')" :model-value="config.webtoonFit" :options="webtoonFits" @update:model-value="value => reader.setWebtoonFit(String(value))" />
               </div>
@@ -209,6 +213,7 @@ import { useUiStore } from '../stores/ui.ts';
 import { useViewport } from '../composables/useViewport.ts';
 import { useSheetDrag } from '../composables/useSheetDrag.ts';
 import { useSheetSpring } from '../composables/useSheetSpring.ts';
+import { useSpringExpand } from '../composables/useSpringExpand.ts';
 import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
 import ReaderDrawerTabs from './ReaderDrawerTabs.vue';
 import MdRange from './MdRange.vue';
@@ -265,6 +270,17 @@ const previewTextStyle = computed(() => ({
 }));
 const settingsOpen = computed(() => ui.settingsOpen);
 const sheetSpring = useSheetSpring({ isCompact });
+const expand = useSpringExpand();
+// 条件行共用同一套物理弹簧：进出场直接写 DOM 高度，不引入外层包裹节点。
+const expandMotion = {
+  css: false,
+  onBeforeEnter: expand.onBeforeEnter,
+  onEnter: expand.onEnter,
+  onBeforeLeave: expand.onBeforeLeave,
+  onLeave: expand.onLeave,
+  onEnterCancelled: expand.onCancelled,
+  onLeaveCancelled: expand.onCancelled
+};
 const {
   onBeforeEnter: onSheetBeforeEnter,
   onEnter: onSheetEnter,
@@ -467,14 +483,6 @@ function onSheetKeydown(event: KeyboardEvent) {
 .reader-settings-scroll-fit :deep(.settings-select-label) { font-size: 13px; }
 .reader-settings-scroll-fit :deep(.settings-select-value) { font-size: 12px; }
 .reader-settings-scroll-fit :deep(.settings-select-row > svg) { width: 18px; height: 18px; }
-.reader-settings-expand-enter-active,
-.reader-settings-expand-leave-active { overflow: hidden; transition: opacity 200ms cubic-bezier(0.2, 0, 0, 1); }
-.reader-settings-expand-enter-from,
-.reader-settings-expand-leave-to { opacity: 0; }
-@media (prefers-reduced-motion: reduce) {
-  .reader-settings-expand-enter-active,
-  .reader-settings-expand-leave-active { transition: none; }
-}
 .reader-settings-control-label { font-size: 13px; font-weight: 600; }
 .reader-settings-segment { margin-top: 12px; --md-segmented-bg: var(--md-surface-low); }
 .reader-settings-segment :deep(.md-segmented-option) { min-height: 48px; padding-inline: 4px; font-size: 12px; }

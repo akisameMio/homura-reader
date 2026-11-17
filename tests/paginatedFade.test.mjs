@@ -169,3 +169,38 @@ test('减少动态效果与无动画跳读直接切页，卸载时收回进行�
   assert.equal(reader.activeTransitionAnims.length, 0);
   assert.equal(reader.renderFn, null);
 }));
+
+test('EPUB 链接在手势层接收鼠标与触摸点击，滑动不触发链接，键盘点击阻止页面导航', () => fixture(async ({ reader, slots }) => {
+  reader.currentBook = { id: 'epub-link-gesture', type: 'epub', format: 'epub' };
+  await flush();
+  const calls = [];
+  reader.followEpubLink = (...args) => calls.push(args);
+  const stage = slots[reader.activeBufferSlot];
+  stage.innerHTML = '<article><div class="epub-content" data-chapter-index="1"><a href="notes.xhtml#note">注释</a></div></article>';
+  const link = stage.querySelector('a');
+  link.getClientRects = () => [{ left: 20, right: 90, top: 20, bottom: 50 }];
+  const gesture = document.querySelector('.reader-gesture-layer');
+  gesture.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 600 });
+  const dispatch = (type, pointerType, x = 40, y = 30) => {
+    const event = new window.MouseEvent(type, { clientX: x, clientY: y, bubbles: true, cancelable: true, detail: 1 });
+    Object.defineProperties(event, { pointerType: { value: pointerType }, pointerId: { value: 1 }, isPrimary: { value: true } });
+    gesture.dispatchEvent(event);
+  };
+  dispatch('pointerdown', 'mouse');
+  dispatch('pointerup', 'mouse');
+  dispatch('click', 'mouse');
+  assert.deepEqual(calls, [['notes.xhtml#note', 1]]);
+  dispatch('pointerdown', 'touch');
+  dispatch('pointerup', 'touch');
+  dispatch('click', 'touch');
+  assert.equal(calls.length, 2);
+  const keyboardClick = new window.MouseEvent('click', { bubbles: true, cancelable: true, detail: 0 });
+  link.dispatchEvent(keyboardClick);
+  assert.equal(keyboardClick.defaultPrevented, true);
+  assert.equal(calls.length, 3);
+  reader.onRightButtonClick = () => {};
+  reader.onLeftButtonClick = () => {};
+  dispatch('pointerdown', 'touch');
+  dispatch('pointerup', 'touch', 250, 30);
+  assert.equal(calls.length, 3);
+}));

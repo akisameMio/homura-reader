@@ -15,7 +15,7 @@
       <Transition
         :css="false"
         @before-enter="onBeforeEnter"
-        @enter="spring.onEnter"
+        @enter="onEnter"
         @before-leave="spring.onBeforeLeave"
         @leave="spring.onLeave"
         @after-leave="onAfterLeave"
@@ -93,6 +93,17 @@ let anchoredViewportHeight = 0;
 function onBeforeEnter(element: Element) {
   entered = true;
   spring.onBeforeEnter(element);
+}
+
+function onEnter(element: Element, done: () => void) {
+  const current = revision;
+  spring.onEnter(element, () => {
+    done();
+    if (disposed || current !== revision || !props.open) return;
+    if (sheetRef.value?.contains(document.activeElement)) return;
+    // WebKit 会为屏外焦点滚动 dialog；等侧滑落位后再聚焦，避免先跳入再缩回。
+    sheetRef.value?.querySelector<HTMLButtonElement>('.md-drawer-header button')?.focus({ preventScroll: true });
+  });
 }
 
 function onCancel() {
@@ -185,7 +196,6 @@ watch(isOpen, async open => {
   visible.value = true;
   await nextTick();
   if (disposed || current !== revision || !props.open) return;
-  sheetRef.value?.querySelector<HTMLButtonElement>('.md-drawer-header button')?.focus({ preventScroll: true });
   emit('opened');
 }, { immediate: true });
 

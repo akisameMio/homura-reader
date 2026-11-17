@@ -15,7 +15,7 @@
       </nav>
       <p v-if="!entries.length" class="dav-note dav-empty">{{ t('此目录没有支持的书籍或子文件夹。') }}</p>
       <ul v-else class="dav-list">
-        <li v-for="entry in entries.slice(0, visibleCount)" :key="entry.href">
+        <li v-for="entry in visibleEntries" :key="entry.href">
           <MdIcon :name="entry.directory ? 'folder_open' : 'auto_stories'" aria-hidden="true" />
           <div class="dav-entry-copy">
             <strong>{{ entry.name }}</strong>
@@ -27,7 +27,11 @@
           </div>
         </li>
       </ul>
-      <button v-if="entries.length > visibleCount" type="button" class="md-text-button" @click="visibleCount += 100">{{ t('显示更多') }}</button>
+      <nav v-if="entries.length > PAGE_SIZE" class="dav-pagination" :aria-label="t('远程书籍分页')">
+        <button type="button" class="md-text-button" :disabled="busy || disabled || page <= 1" @click="page--">{{ t('上一页') }}</button>
+        <span aria-live="polite">{{ t('共 {0} 项，第 {1} / {2} 页', { 0: entries.length, 1: page, 2: pageCount }) }}</span>
+        <button type="button" class="md-text-button" :disabled="busy || disabled || page >= pageCount" @click="page++">{{ t('下一页') }}</button>
+      </nav>
     </div>
     <div v-if="busy" class="dav-loading" role="status">
       <span>{{ openingName ? t(adding ? '正在添加到书架：{0}' : '正在打开：{0}', { 0: openingName }) : t('正在读取目录…') }}</span>
@@ -63,7 +67,10 @@ const loaded = ref(false);
 const busy = ref(false);
 const error = ref('');
 const openingName = ref('');
-const visibleCount = ref(100);
+const PAGE_SIZE = 10;
+const page = ref(1);
+const pageCount = computed(() => Math.max(1, Math.ceil(entries.value.length / PAGE_SIZE)));
+const visibleEntries = computed(() => entries.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE));
 const adding = ref(false);
 const saving = ref(false);
 const entryIds = shallowRef(new Map<string, string>());
@@ -82,17 +89,17 @@ function cancel() {
   client?.close(); client = null;
   setBusy(false); openingName.value = ''; adding.value = false;
 }
-function reset() { cancel(); entries.value = []; directory.value = ''; loaded.value = false; error.value = ''; }
+function reset() { cancel(); page.value = 1; entries.value = []; directory.value = ''; loaded.value = false; error.value = ''; }
 watch(() => [props.url, props.username, props.password], reset);
 onBeforeUnmount(cancel);
-watch(() => entries.value.slice(0, visibleCount.value), async visible => {
+watch(visibleEntries, async visible => {
   const currentEntries = entries.value;
   const currentRoot = props.url;
   const pairs = await Promise.all(visible.filter(entry => canReadRemote(entry)).map(async entry => {
     const source = makeRemoteBookSource({ url: props.url, username: props.username, password: '' }, entry);
     return [entry.href, await remoteBookId(source)] as const;
   }));
-  if (entries.value === currentEntries && props.url === currentRoot) entryIds.value = new Map(pairs);
+  if (visibleEntries.value === visible && entries.value === currentEntries && props.url === currentRoot) entryIds.value = new Map(pairs);
 });
 function createClient() {
   return new WebDavBooksClient({ url: props.url, username: props.username, password: props.password });
@@ -106,7 +113,7 @@ async function browse(href: string) {
     const next = await active.list(href);
     if (generation !== token) return;
     entries.value = next; directory.value = new URL(href, active.root).href;
-    visibleCount.value = 100; loaded.value = true;
+    page.value = 1; loaded.value = true;
   } catch (failure) {
     if (generation === token) error.value = failure instanceof Error ? failure.message : '无法读取远程目录';
   } finally {
@@ -173,6 +180,8 @@ async function read(entry: DavEntry) {
 .dav-note { margin: 8px 0; color: var(--md-on-surface-variant); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
 .dav-path { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 16px 0 8px; }
 .dav-path span { min-width: 0; overflow-wrap: anywhere; font-size: 12px; color: var(--md-on-surface-variant); }
+.dav-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.dav-pagination span { font-size: 12px; color: var(--md-on-surface-variant); }
 .dav-list { margin: 0; padding: 0; list-style: none; }
 .dav-list li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; min-width: 0; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--md-outline-variant); }
 .dav-list li > svg { flex: none; width: 24px; height: 24px; color: var(--md-on-surface-variant); }

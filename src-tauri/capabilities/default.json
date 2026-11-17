@@ -20,6 +20,8 @@
     {
       "identifier": "opener:allow-open-url",
       "allow": [
+        { "url": "https://*" },
+        { "url": "http://*" },
         {
           "url": "https://github.com/Leon-Ning-san/HomuraReader"
         },

@@ -26,6 +26,8 @@ import {
   resolveReaderMetrics
 } from '../services/readerLayout.ts';
 import { applyRestoredProgress, scheduleProgressSave, flushProgress } from '../services/progress.ts';
+import { resolveEpubLink, findEpubLinkPage } from '../services/epubLinks.ts';
+import { openReadingUrl } from '../services/external.ts';
 import { logRuntimeOperation } from '../services/runtimeLogs.ts';
 import { collectionReadingOrder, adjacentCollectionBook, spreadBounds } from '../services/collectionReading.ts';
 import { hasArchiveSource } from '../services/archiveAccess.ts';
@@ -114,7 +116,7 @@ export const useReaderStore = defineStore('reader', () => {
   // 组件挂载时注册的渲染 / 滚动入口（PaginatedView / WebtoonView）
   const renderFn = shallowRef<((transitionDir: string) => void) | null>(null);
   const webtoonScrollBy = shallowRef<((direction: number) => void) | null>(null);
-  const webtoonScrollTo = shallowRef<((index: number) => void) | null>(null);
+  const webtoonScrollTo = shallowRef<((index: number, fragment?: string) => void) | null>(null);
 
   // 底栏页码与滑条位置由渲染函数回写，BottomBar 响应式读取
   const pageIndicator = ref('1 / 1');
@@ -844,18 +846,44 @@ export const useReaderStore = defineStore('reader', () => {
   }
 
   // 目录 / 页码跳读：先记住起点，跳完若仍在同一屏就不显示返回按钮
-  function jumpToPage(index: number) {
+  function jumpToPage(index: number, fragment?: string) {
     if (!currentBook.value) return;
     const total = activePages.value.length;
     if (!total) return;
     const target = Math.max(0, Math.min(total - 1, parseInt(String(index), 10) || 0));
     logRuntimeOperation('跳转阅读位置', `${currentBook.value.title} · 第 ${currentIndex.value + 1} 页 → 第 ${target + 1} 页`);
     const origin = captureLocation();
-    onSliderInput(target);
+    onSliderInput(target, fragment);
     if (!origin) return;
     const from = spreadBounds(origin.index, total, effectiveDouble.value, layoutConfig.coverOffset).start;
     const now = spreadBounds(currentIndex.value, total, effectiveDouble.value, layoutConfig.coverOffset).start;
     previousLocation.value = from !== now ? origin : null;
+  }
+
+  function followEpubLink(href: string, sourceChapterIndex: number) {
+    const book = currentBook.value;
+    if (!book || book.format !== 'epub' || openingBook.value) return;
+    if (/^https?:\/\//i.test(href.trim())) {
+      void openReadingUrl(href).catch(error => console.warn('[HOMURA] 正文外链打开失败', error));
+      return;
+    }
+    const chapters = book.chapters || [];
+    const source = chapters[sourceChapterIndex];
+    if (!source) return;
+    const target = resolveEpubLink(href, source, chapters);
+    if (!target) return;
+    // 长篇尚在后台分页时先同步完成目标章，不能跳到整章占位的错误页码。
+    const job = novelPaginationJob;
+    if (job && job.bookId === book.id) {
+      job.paginator.paginateChapter(target.chapterIndex);
+      applyNovelPaginationBatch(job.paginator.buildPages({ provisional: true }) as ReaderPage[], false);
+    }
+    const index = findEpubLinkPage(activePages.value, target.chapterIndex, target.fragment);
+    if (index < 0) {
+      console.warn('[HOMURA] EPUB 链接目标不存在', href);
+      return;
+    }
+    jumpToPage(index, target.fragment);
   }
 
   // 回到跳读前的那一屏：优先按锚点还原，排版变化后也不会漂到别的章节
@@ -887,10 +915,10 @@ export const useReaderStore = defineStore('reader', () => {
     touchProgress();
   }
 
-  function onSliderInput(val: string | number) {
+  function onSliderInput(val: string | number, fragment?: string) {
     currentIndex.value = parseInt(String(val), 10) || 0;
     if (layoutConfig.direction === 'vertical') {
-      if (webtoonScrollTo.value) webtoonScrollTo.value(currentIndex.value);
+      if (webtoonScrollTo.value) webtoonScrollTo.value(currentIndex.value, fragment);
       pageIndicator.value = `${currentIndex.value + 1} / ${activePages.value.length}`;
       sliderValue.value = currentIndex.value;
       touchProgress();
@@ -964,6 +992,7 @@ export const useReaderStore = defineStore('reader', () => {
     previousLocation,
     canReturnToPreviousLocation,
     jumpToPage,
+    followEpubLink,
     returnToPreviousLocation
   };
 });

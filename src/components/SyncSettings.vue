@@ -6,7 +6,7 @@
         <MdIcon name="local_library" />
         <div class="connection-copy">
           <strong>{{ sync.config.url ? (sync.config.username || 'WebDAV') : t('暂无信息') }}</strong>
-          <span v-if="sync.config.url">{{ t('连通性') }}：<span class="connection-dot" :class="{ 'is-connected': connected === true, 'is-failed': connected === false }"></span>{{ t(connected === true ? '已连接' : connected === false ? '连接失败' : '未检测') }}</span>
+          <span v-if="sync.config.url">{{ t('连通性') }}：<span class="connection-dot" :class="{ 'is-connected': connected === true, 'is-failed': connected === false }"></span>{{ t(checkingConnection ? '正在检测…' : connected === true ? '已连接' : connected === false ? '连接失败' : '未检测') }}</span>
           <span v-else>{{ t('请绑定 WebDAV') }}</span>
         </div>
         <button type="button" class="md-tonal-button" :disabled="busy" @click="openEditor">{{ t(sync.config.url ? '编辑' : '绑定') }}</button>
@@ -149,6 +149,9 @@ import WebDavBrowser from './WebDavBrowser.vue';
 const sync = useSyncStore();
 const editorOpen = ref(false);
 const connected = ref<boolean | null>(null);
+const checkingConnection = ref(false);
+let connectionCheckId = 0;
+let connectionClient: WebDavBooksClient | null = null;
 const { t, locale } = useI18n();
 const draft = reactive({ url: '', username: '', password: '', enabled: false, autoSync: false });
 const passwordVisible = ref(false);
@@ -187,7 +190,18 @@ function finishEditor() { hydrate(); edited.value = false; passwordVisible.value
 function savePreferences() {
   return perform(() => sync.saveConfig({ ...sync.config, password: sync.password, enabled: draft.enabled, autoSync: draft.autoSync }), '同步设置已保存。');
 }
-watch(() => [sync.config.url, sync.config.username, sync.password], () => { connected.value = null; });
+function cancelConnectionCheck() {
+  connectionCheckId++;
+  connectionClient?.close();
+  connectionClient = null;
+  checkingConnection.value = false;
+}
+watch(() => [sync.config.url, sync.config.username, sync.password], (_config, _previous, onCleanup) => {
+  cancelConnectionCheck();
+  connected.value = null;
+  onCleanup(cancelConnectionCheck);
+  if (sync.config.url) void checkConnection(false);
+}, { immediate: true });
 function edit() {
   edited.value = true;
   notice.value = '';
@@ -228,12 +242,34 @@ async function save() {
   saving.value = false;
 }
 
-function testConnection() {
-  return perform(async () => {
-    const client = new WebDavBooksClient({ ...sync.config, password: sync.password });
-    try { await client.list(); connected.value = true; } catch (error) { connected.value = false; throw error; } finally { client.close(); }
-  }, '连接测试通过，写入权限将在同步时验证。');
+async function checkConnection(manual: boolean) {
+  cancelConnectionCheck();
+  const id = connectionCheckId;
+  checkingConnection.value = true;
+  let client: WebDavBooksClient | null = null;
+  try {
+    client = new WebDavBooksClient({ ...sync.config, password: sync.password });
+    connectionClient = client;
+    await client.list();
+    if (id !== connectionCheckId) return;
+    connected.value = true;
+    if (manual) {
+      localError.value = '';
+      notice.value = '连接测试通过，写入权限将在同步时验证。';
+    }
+  } catch (failure) {
+    if (id !== connectionCheckId) return;
+    connected.value = false;
+    if (manual) localError.value = failure instanceof Error ? failure.message : '同步操作失败，请重试。';
+  } finally {
+    client?.close();
+    if (id === connectionCheckId) {
+      checkingConnection.value = false;
+      connectionClient = null;
+    }
+  }
 }
+function testConnection() { return checkConnection(true); }
 
 function synchronize() {
   return perform(() => sync.syncNow(), '同步完成。');

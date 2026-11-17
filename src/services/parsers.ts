@@ -8,7 +8,7 @@
 import type { Book } from '../types.ts';
 import { escapeHtml } from './utils.ts';
 import { decodeTxtBytesAsync } from './textEncoding.ts';
-import { renderMarkdown } from './markdown.ts';
+import { splitMarkdownChapters } from './markdown.ts';
 import { parseMobiFileData } from './mobi.ts';
 import { openPdfDocument, createPdfPageItems, renderPdfCoverBlob } from './pdf.ts';
 import { parseEpubFile } from './epubParser.ts';
@@ -128,51 +128,6 @@ export async function parseTxtFile(txtFile: File) {
 }
 
 // ---- Markdown：按一/二级标题切章，正文交给 marked 转 HTML ----
-
-function stripMarkdownTitle(line: string) {
-  return line.replace(/[*_`]/g, '').trim();
-}
-
-function splitMarkdownChapters(text: string, fallbackTitle: string) {
-  const chapters: { title: string; htmlContent: string }[] = [];
-  let buffer: string[] = [];
-  let fence = '';
-  let currentTitle: string | null = null;
-
-  const flush = (title: string | null) => {
-    const html = renderMarkdown(buffer.join('\n')).trim();
-    buffer = [];
-    if (!html) return;
-    chapters.push({
-      title: title || '开始',
-      htmlContent: html
-    });
-  };
-
-  for (const line of text.split('\n')) {
-    // 代码块里的 # 不算标题
-    const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/);
-    if (fenceMatch) {
-      if (!fence) fence = fenceMatch[1][0];
-      else if (fenceMatch[1][0] === fence) fence = '';
-    }
-    if (!fence) {
-      const heading = line.match(/^(#{1,2})\s+(.+?)\s*#*\s*$/);
-      if (heading) {
-        flush(currentTitle);
-        currentTitle = stripMarkdownTitle(heading[2]) || currentTitle;
-        continue;
-      }
-    }
-    buffer.push(line);
-  }
-  flush(currentTitle);
-
-  if (chapters.length === 0) {
-    chapters.push({ title: fallbackTitle, htmlContent: '<p>（空文件）</p>' });
-  }
-  return chapters;
-}
 
 export function parseMarkdownFile(mdFile: File) {
   return new Promise<unknown>((resolve) => {

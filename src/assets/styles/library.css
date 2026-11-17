@@ -452,8 +452,7 @@
     .md-collection-title { overflow: hidden; font-size: 12px; font-weight: 700; line-height: 1.375; text-overflow: ellipsis; white-space: nowrap; }
     .md-collection-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; min-width: 0; color: var(--md-on-surface-variant); font-size: 10px; line-height: normal; font-variant-numeric: tabular-nums; }
     .md-collection-count { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .md-collection-action, .md-collection-drop { color: var(--md-primary); font-weight: 600; white-space: nowrap; }
-    .md-collection-action { flex: none; }
+    .md-collection-drop { color: var(--md-primary); font-weight: 600; white-space: nowrap; }
     @media (min-width: 768px) {
       .md-collection-info { padding: var(--md-space-100) var(--md-space-150) var(--md-space-150); }
       .md-collection-title { font-size: 13px; }

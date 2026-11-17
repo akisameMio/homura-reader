@@ -53,7 +53,7 @@
       <div class="flex items-baseline justify-between gap-1.5 min-w-0">
         <span class="font-mono text-[10px] min-[768px]:text-[11px] text-[var(--md-on-surface-variant)] truncate">{{ subInfo }}</span>
         <b class="font-mono text-[10px] min-[768px]:text-[11px] font-semibold text-[var(--md-primary)] shrink-0">
-          {{ progress ? `${progress.percent}%` : t('阅读 →') }}
+          {{ progress ? `${progress.percent}%` : t('开始阅读') }}
         </b>
       </div>
     </div>

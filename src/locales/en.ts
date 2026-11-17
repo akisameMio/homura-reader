@@ -17,7 +17,6 @@ export default {
   '{0} 章': '{0} chapters',
   '选择书本：{0}': 'Select book: {0}',
   '阅读：{0}': 'Read: {0}',
-  '阅读 →': 'Read →',
   '已选 {0} 项': '{0} selected',
   '已选 {0} 本': '{0} books selected',
   '{0} 本': '{0} books',
@@ -72,7 +71,6 @@ export default {
   '打开书库：{0}，{1} 本': 'Open collection: {0}, {1} books',
   '松开移入书库': 'Release to move here',
   '本作品': 'books',
-  '打开 →': 'Open →',
   '轻小说': 'Light novels',
   '页': 'pages',
   '章': 'chapters',
@@ -872,4 +870,7 @@ export default {
   "账号": "Account",
   "密码": "Password",
   "删除连接": "Delete connection",
+  '正在检测…': 'Checking…',
+  "远程书籍分页": "Remote book pagination",
+  "共 {0} 项，第 {1} / {2} 页": "{0} items, page {1} / {2}",
 } satisfies Readonly<Record<string, string>>;

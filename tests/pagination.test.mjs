@@ -574,3 +574,16 @@ test('同一压缩包页并发取 URL 只创建一次 Blob URL', async () => {
     URL.revokeObjectURL = originalRevoke;
   }
 });
+
+test('章节容器锚点与长段落锚点跨页后仍能定位', () => {
+  const blocks = collectNovelBlocks('<section id="chapter"><div id="part"><p id="para">' + '正文'.repeat(100) + '</p></div></section>');
+  assert.equal(blocks.length, 1);
+  const measurer = document.createElement('div');
+  Object.defineProperty(measurer, 'scrollHeight', { get() { return this.textContent.length * 10; } });
+  const parts = splitLongParagraph(blocks[0].html, measurer, 100);
+  assert.ok(parts.length > 1);
+  for (const id of ['chapter', 'part', 'para']) {
+    assert.ok(parts[0].includes(`id="${id}"`));
+    assert.equal(parts.slice(1).some(part => part.includes(`id="${id}"`)), false);
+  }
+});

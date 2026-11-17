@@ -593,11 +593,17 @@ async function parseEpubMetadata(archive: EpubArchive, pkg: EpubPackage, id: str
 }
 
 async function parseEpubFull(archive: EpubArchive, pkg: EpubPackage, id: string) {
-  const { parser, spine } = pkg;
+  const { parser } = pkg;
+  const spine = [...pkg.spine];
+  const includedPaths = new Set(spine.map(item => item.path));
+  const linkedDocuments = new Set(Object.values(pkg.manifest)
+    .filter(item => /(?:xhtml|html)/i.test(item.mediaType || ''))
+    .map(item => manifestPath(archive, pkg.opfDir, item))
+    .filter((path): path is string => !!path));
   const rawHtmls = await archive.readTexts(spine.map((item) => item.path));
   const lazyMangaPaths: string[] = [];
   const seenGlobalPaths = new Set<string>();
-  const chapters: Array<{ title: string; htmlContent: string }> = [];
+  const chapters: Array<{ title: string; htmlContent: string; sourcePath: string }> = [];
   let imageHeavyCount = 0;
   let textChapterCount = 0;
 
@@ -613,6 +619,23 @@ async function parseEpubFull(archive: EpubArchive, pkg: EpubPackage, id: string)
       item.path,
       { markZipPaths: true }
     );
+    // 一些 EPUB 将脚注放在 spine 之外；只补读正文实际引用的清单文档。
+    const references: string[] = [];
+    htmlDoc.body?.querySelectorAll('a[href]').forEach(link => {
+      const href = link.getAttribute('href') || '';
+      if (!href || href.startsWith('#') || /^[a-z][a-z\d+.-]*:|^\/\//i.test(href)) return;
+      const path = archive.resolvePath([resolveRelativePath(item.path, safeDecodePath(href.split(/[?#]/)[0]))]);
+      if (!path || !linkedDocuments.has(path) || includedPaths.has(path)) return;
+      includedPaths.add(path);
+      references.push(path);
+    });
+    if (references.length) {
+      const texts = await archive.readTexts(references);
+      references.forEach((path, index) => {
+        spine.push({ id: null, href: path, path });
+        rawHtmls.push(texts[index]);
+      });
+    }
     if (plainText.length >= TEXT_CHAPTER_MIN_LENGTH) textChapterCount++;
     if (foundPathsInPage.length > 0 && plainText.length < TEXT_CHAPTER_MIN_LENGTH) {
       imageHeavyCount++;
@@ -626,10 +649,19 @@ async function parseEpubFull(archive: EpubArchive, pkg: EpubPackage, id: string)
     const chapterHeading = htmlDoc.body?.querySelector('h1, h2, h3')?.textContent?.trim()
       || htmlDoc.querySelector('title')?.textContent?.trim()
       || (item.href as string).split('/').pop()!.replace(/\.[^.]+$/, '');
+    htmlDoc.body?.querySelectorAll('a[name]').forEach(anchor => {
+      if (!anchor.id) anchor.id = anchor.getAttribute('name') || '';
+    });
+    if (htmlDoc.body?.id) {
+      const marker = htmlDoc.createElement('span');
+      marker.id = htmlDoc.body.id;
+      htmlDoc.body.prepend(marker);
+    }
     const bodyHtml = sanitizeEpubHtml(htmlDoc.body ? htmlDoc.body.innerHTML : rawHtml);
     if (bodyHtml.length > 0) {
       chapters.push({
         title: chapterHeading,
+        sourcePath: item.path,
         htmlContent: bodyHtml
       });
     }

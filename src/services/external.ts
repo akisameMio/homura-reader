@@ -33,3 +33,18 @@ export async function openGitHubUrl(value: string) {
   link.rel = 'noopener noreferrer';
   link.click();
 }
+
+// 正文外链与更新仓库白名单分开校验，只允许用户点击打开网页。
+export async function openReadingUrl(value: string) {
+  const url = new URL(value);
+  if (!['https:', 'http:'].includes(url.protocol)) throw new Error('拒绝打开非网页链接');
+  if (typeof window !== 'undefined' && window.__TAURI__) {
+    await openUrl(url.href);
+    return;
+  }
+  const link = document.createElement('a');
+  link.href = url.href;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.click();
+}

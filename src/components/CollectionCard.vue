@@ -21,7 +21,6 @@
           <span v-if="highlighted" class="md-collection-drop">{{ t('松开移入书库') }}</span>
           <template v-else>
             <span class="md-collection-count">{{ t('{0} 本作品', { 0: books.length }) }}</span>
-            <span class="md-collection-action">{{ t('打开 →') }}</span>
           </template>
         </span>
       </span>

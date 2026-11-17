@@ -36,6 +36,7 @@ export interface PdfPageItem {
 
 /** 一章（EPUB / 小说）或一个漫画页条目 */
 export interface ChapterItem {
+  sourcePath?: string;
   title?: string;
   html?: string;
   htmlContent?: string;

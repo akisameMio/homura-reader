@@ -978,3 +978,30 @@ test('懒导入后的全量解析会补齐章节与页数', async () => {
     releaseBookUrls(fullBook);
   }
 });
+
+test('EPUB 章节保留书内地址、旧式 name 与 body 锚点，危险链接仍被移除', async () => {
+  const epub = await buildEpub({ items: [
+    xhtmlItem('c1', 'Text/one.xhtml', 'OEBPS/Text/one.xhtml', '<h1>正文</h1><p><a href="two.xhtml#note">注释</a><a name="back"></a><a href="javascript:alert(1)">危险</a></p>'),
+    xhtmlItem('c2', 'Text/two.xhtml', 'OEBPS/Text/two.xhtml', '<h2>注释</h2><p id="note">脚注正文</p>')
+  ] });
+  const book = await parseEpubArchive(await createJsZipEpubArchive(epub.bytes), { id: 'links' });
+  try {
+    assert.equal(book.chapters[0].sourcePath, 'OEBPS/Text/one.xhtml');
+    assert.match(book.chapters[0].htmlContent, /href="two.xhtml#note"/);
+    assert.match(book.chapters[0].htmlContent, /id="back"/);
+    assert.doesNotMatch(book.chapters[0].htmlContent, /javascript:/);
+  } finally { releaseBookUrls(book); }
+});
+
+test('补读正文引用的非 spine 脚注文档，并避免循环链接重复读取', async () => {
+  const epub = await buildEpub({ items: [
+    xhtmlItem('c1', 'Text/one.xhtml', 'OEBPS/Text/one.xhtml', '<h1>正文</h1><p><a href="../Notes/note.xhtml#note">脚注</a></p>'),
+    xhtmlItem('notes', 'Notes/note.xhtml', 'OEBPS/Notes/note.xhtml', '<h2>注释</h2><p id="note"><a href="../Text/one.xhtml">返回</a>注释正文</p>', false)
+  ] });
+  const archive = await createJsZipEpubArchive(epub.bytes);
+  const book = await parseEpubArchive(archive, { id: 'non-spine-notes' });
+  try {
+    assert.equal(book.chapters.length, 2);
+    assert.equal(book.chapters[1].sourcePath, 'OEBPS/Notes/note.xhtml');
+  } finally { releaseBookUrls(book); }
+});

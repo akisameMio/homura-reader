@@ -14,7 +14,7 @@
   ></div>
 
   <!-- Hardware-Accelerated Double-Buffer Stage -->
-  <div ref="pageStage" data-reader-stage class="relative w-full h-full overflow-hidden">
+  <div ref="pageStage" data-reader-stage @click="onContentLink" class="relative w-full h-full overflow-hidden">
     <div
       v-for="slot in [0, 1]"
       :key="slot"
@@ -79,6 +79,7 @@ import { useViewport } from '../composables/useViewport.ts';
 import { isAndroid } from '../services/platform.ts';
 import { ensurePageUrlLoaded, decodePageImage, releaseDistantPageUrls, type MangaPageItem } from '../services/pagination.ts';
 import { resolveProseStyle, resolveReaderMetrics, resolveReaderFolios, type ReaderFolio } from '../services/readerLayout.ts';
+import { epubLinkAtPoint } from '../services/epubLinks.ts';
 import { classifyReaderGesture } from '../services/readerGestures.ts';
 import { logRuntimeOperation } from '../services/runtimeLogs.ts';
 import { createPageTurn, type PageTurnController, type PaperTurnStyle } from '../services/pageTurn.ts';
@@ -546,6 +547,7 @@ const drag: {
   axis: null,
   maxDistance: 0
 };
+let pressedLink: HTMLAnchorElement | null = null;
 let lastPointerType: string | null = null;
 let allowMouseClick = false;
 let suppressMouseClick = false;
@@ -576,6 +578,7 @@ function onPointerDown(e: PointerEvent) {
   allowMouseClick = false;
   suppressMouseClick = false;
   stopPaperTurn();
+  pressedLink = reader.currentBook?.format === 'epub' ? epubLinkAtPoint(activeStageEl(), e.clientX, e.clientY) : null;
   cancelIdlePreload();
   drag.active = true;
   drag.pointerId = e.pointerId;
@@ -637,6 +640,7 @@ function onPointerUp(e: PointerEvent) {
       return;
     }
     if (e.pointerType === 'mouse') suppressMouseClick = true;
+    if (result.type === 'tap' && activateLink(e.clientX, e.clientY)) return;
     if (result.zone === 'left' || result.zone === 'right') {
       turnOriginY = drag.startY - bounds.top;
       if (result.zone === 'left') reader.onLeftButtonClick();
@@ -674,6 +678,25 @@ function onPointerUp(e: PointerEvent) {
   }
 }
 
+function onContentLink(event: MouseEvent) {
+  const link = (event.target as Element)?.closest<HTMLAnchorElement>('a[href]');
+  if (!link) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (reader.currentBook?.format !== 'epub') return;
+  const chapterIndex = Number(link.closest('[data-chapter-index]')?.getAttribute('data-chapter-index'));
+  reader.followEpubLink(link.getAttribute('href') || '', chapterIndex);
+}
+
+function activateLink(x: number, y: number) {
+  const link = pressedLink;
+  pressedLink = null;
+  if (!link || link !== epubLinkAtPoint(activeStageEl(), x, y)) return false;
+  const chapterIndex = Number(link.closest('[data-chapter-index]')?.getAttribute('data-chapter-index'));
+  reader.followEpubLink(link.getAttribute('href') || '', chapterIndex);
+  return true;
+}
+
 function onClick(e: MouseEvent) {
   if (suppressMouseClick) {
     suppressMouseClick = false;
@@ -684,6 +707,7 @@ function onClick(e: MouseEvent) {
   if (lastPointerType !== 'mouse' || !allowMouseClick || e.detail === 0 || !reader.currentBook || reader.openingBook || ui.readerDrawerOpen) return;
   allowMouseClick = false;
   lastPointerType = null;
+  if (activateLink(e.clientX, e.clientY)) return;
   const bounds = gestureEl.value?.getBoundingClientRect();
   if (!bounds || bounds.width <= 0) return;
   const zone = classifyReaderGesture({ dx: 0, dy: 0, duration: 0, width: bounds.width, x: e.clientX - bounds.left }).zone;

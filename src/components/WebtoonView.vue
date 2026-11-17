@@ -50,7 +50,7 @@
             <i class="block w-[0.5px] h-3 shrink-0 bg-current opacity-30"></i>
             <span class="shrink-0">{{ t('第 {0} 章', { 0: p.pageNumber }) }}</span>
           </div>
-          <div class="epub-content md-reader-prose" v-html="p.html"></div>
+          <div class="epub-content md-reader-prose" :data-chapter-index="p.chapterIndex" @click="onContentLink" v-html="p.html"></div>
         </section>
       </div>
       <div class="shrink-0" style="height: calc(4.5rem + env(safe-area-inset-bottom));" aria-hidden="true"></div>
@@ -84,6 +84,16 @@ const MANGA_VISIBLE_MARGIN = 2;
 const MANGA_QUEUE_WINDOW = 18;
 
 const reader = useReaderStore();
+function onContentLink(event: MouseEvent) {
+  const link = (event.target as Element)?.closest<HTMLAnchorElement>('a[href]');
+  if (!link) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (reader.currentBook?.format !== 'epub') return;
+  const chapterIndex = Number(link.closest('[data-chapter-index]')?.getAttribute('data-chapter-index'));
+  reader.followEpubLink(link.getAttribute('href') || '', chapterIndex);
+}
+
 const scrollRoot = ref<HTMLElement | null>(null);
 const novelContent = ref<HTMLElement | null>(null);
 let scrollFrame = 0;
@@ -623,7 +633,15 @@ onMounted(() => {
 
   // 注册滚动入口：store 的翻页 / 滑条动作在条漫模式下转成滚动
   reader.webtoonScrollBy = queueWebtoonScroll;
-  reader.webtoonScrollTo = (idx: number) => scrollToSection(idx, 'smooth');
+  reader.webtoonScrollTo = (idx: number, fragment?: string) => {
+    const section = scrollRoot.value?.querySelector(`#webtoon-page-${idx}`);
+    const anchor = fragment && Array.from(section?.querySelectorAll<HTMLElement>('[id]') || []).find(element => element.id === fragment);
+    const root = scrollRoot.value;
+    if (anchor && root) {
+      const padding = parseFloat(getComputedStyle(root).scrollPaddingTop) || 0;
+      root.scrollTo({ top: Math.max(0, root.scrollTop + anchor.getBoundingClientRect().top - root.getBoundingClientRect().top - padding), behavior: 'auto' });
+    } else scrollToSection(idx, 'smooth');
+  };
 
   if (isManga.value) {
     // 条漫恢复进度时先把容器滚到目标页，再建立观察器，避免启动时抢解第一页。

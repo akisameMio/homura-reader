@@ -212,3 +212,23 @@ test('小说实际单双页与分页测量共用断点，899px 不会把两页�
     assert.equal(reader.effectiveDouble, double, `宽度 ${width}`);
   }
 }));
+
+test('EPUB 跨章脚注跳转可返回，滚动模式接收精确锚点，坏链接不改页码', () => fixture(async ({ reader, shelf }) => {
+  shelf.library = [{ id: 'epub-links', type: 'epub', format: 'epub', chapters: [
+    { sourcePath: 'OPS/Text/one.xhtml', title: '正文', htmlContent: '<p id="ref">正文与脚注引用。</p>' },
+    { sourcePath: 'OPS/Notes/two.xhtml', title: '注释', htmlContent: '<p>开头</p><p id="note">脚注内容。</p>' }
+  ] }];
+  assert.equal(await reader.openBook('epub-links'), true);
+  reader.followEpubLink('../Notes/two.xhtml#note', 0);
+  assert.equal(reader.activePages[reader.currentIndex].chapterIndex, 1);
+  assert.ok(reader.canReturnToPreviousLocation);
+  reader.returnToPreviousLocation();
+  assert.equal(reader.activePages[reader.currentIndex].chapterIndex, 0);
+  reader.followEpubLink('../Notes/two.xhtml#missing', 0);
+  assert.equal(reader.activePages[reader.currentIndex].chapterIndex, 0);
+  reader.setTransitionStyle('scroll');
+  const calls = [];
+  reader.webtoonScrollTo = (...args) => calls.push(args);
+  reader.followEpubLink('../Notes/two.xhtml#note', 0);
+  assert.deepEqual(calls.at(-1), [1, 'note']);
+}));
