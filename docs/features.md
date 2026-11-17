@@ -8,7 +8,7 @@
 
 | 项目 | 当前状态 |
 | --- | --- |
-| 发布版本 | `2.2.9`，`package.json`、`Cargo.toml`、`tauri.conf.json` 三处版本一致 |
+| 发布版本 | `2.3.0`，`package.json`、`Cargo.toml`、`tauri.conf.json` 三处版本一致 |
 | 桌面平台 | macOS / Windows / Linux |
 | 移动平台 | Android arm64-v8a / armeabi-v7a APK |
 | 核心链路 | 导入、本地存档、恢复、分页/滚动阅读、目录跳转、进度记忆、一级书库、收藏、自定义封面、导入进度与失败重试、应用内更新、运行日志查看与导出均可用 |
