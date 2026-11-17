@@ -17,6 +17,10 @@ window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventL
 window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
 window.HTMLDialogElement.prototype.close = function () { this.open = false; };
 Object.defineProperty(window.HTMLElement.prototype, 'offsetHeight', { get: () => 660 });
+Object.defineProperty(window.HTMLElement.prototype, 'offsetWidth', {
+  configurable: true,
+  get: () => (window.innerWidth < 900 ? 390 : 372)
+});
 window.HTMLElement.prototype.getBoundingClientRect = function () {
   return { top: 184, bottom: 844, left: 0, right: 390, width: 390, height: 660 };
 };
@@ -38,7 +42,7 @@ compiled = compiled.replace("import ReaderDrawerHeader from './ReaderDrawerHeade
   emits: ['close'], setup(_, { emit }) { return () => h('header', { class: 'md-drawer-header' }, [h('button', { onClick: () => emit('close') }, '关闭')]); }
 };`);
 compiled = "import { h } from '" + pathToFileURL(require.resolve('vue')).href + "';\n" + compiled;
-for (const file of ['composables/useSheetDrag.ts', 'composables/useSheetSpring.ts', 'services/settingsSelectScrollLock.ts']) {
+for (const file of ['composables/useViewport.ts', 'composables/useSheetDrag.ts', 'composables/useSheetSpring.ts', 'services/settingsSelectScrollLock.ts']) {
   compiled = compiled.replaceAll(`'../${file}'`, `'${new URL(`../src/${file}`, import.meta.url).href}'`);
 }
 compiled = compiled.replaceAll("'../composables/useI18n.ts'", `'${new URL('../src/composables/useI18n.ts', import.meta.url).href}'`);
@@ -134,6 +138,25 @@ test('忙碌时所有关闭入口都受保护，下载时可单独禁止遮罩�
   } finally { app.unmount(); }
 });
 
+test('忙碌态下点遮罩仅在 scrimCloseable 时发出收起，不触发关闭按钮/拖拽通道', async () => {
+  const { app, state, events } = mount({ busy: true, scrimCloseable: true });
+  try {
+    await flush();
+    const dialog = document.querySelector('dialog');
+    dialog.click();
+    assert.deepEqual(events, ['close']);
+  } finally { app.unmount(); }
+});
+
+test('忙碌态且未开启 scrimCloseable 时点遮罩不关闭', async () => {
+  const { app, events } = mount({ busy: true });
+  try {
+    await flush();
+    document.querySelector('dialog').click();
+    assert.deepEqual(events, []);
+  } finally { app.unmount(); }
+});
+
 test('软键盘改变可视视口时调整面板可用高度，关闭后移除监听', async () => {
   const { app, state } = mount();
   try {
@@ -205,6 +228,36 @@ test('减少动态效果时直接落位，关闭同步释放模态层', async ()
   } finally {
     app.unmount();
     window.matchMedia = original;
+  }
+});
+
+test('桌面侧栏入场使用临界阻尼，不在静止位右侧回弹', async () => {
+  window.innerWidth = 1280;
+  const { app, state } = mount({ desktopSide: true });
+  try {
+    await flush();
+    const sheet = document.querySelector('.md-mobile-sheet');
+    const positions = [];
+    for (let elapsed = 0; elapsed < 700; elapsed += 1000 / 120) {
+      now += 1000 / 120;
+      const callbacks = [...frames.values()];
+      frames.clear();
+      callbacks.forEach(cb => cb(now));
+      await flush();
+      const transform = sheet.style.transform;
+      if (transform.startsWith('translate3d(')) {
+        positions.push(Number.parseFloat(transform.slice('translate3d('.length)));
+      }
+    }
+    assert.ok(positions.some(position => position > 0));
+    assert.ok(positions.every(position => position >= 0), `桌面入场出现横向过冲：${positions.filter(position => position < 0)}`);
+    state.open = false;
+    await flush();
+    await advance();
+    assert.equal(document.querySelector('dialog').open, false);
+  } finally {
+    app.unmount();
+    window.innerWidth = 390;
   }
 });
 

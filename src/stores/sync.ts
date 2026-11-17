@@ -1,7 +1,7 @@
 /* ============================================================================
    HOMURA · 可选 WebDAV 元数据同步
    ----------------------------------------------------------------------------
-   配置只保存地址、账号与开关，密码仅保留当前会话。同步失败不阻断本地操作；
+   配置保存地址、账号、密码与开关；移除连接时一起清除。同步失败不阻断本地操作；
    自动同步限流，重新联网、回到前台和退出阅读后再次尝试。
    ========================================================================== */
 
@@ -22,6 +22,7 @@ const AUTO_SYNC_DELAY = 15_000;
 const REFRESH_INTERVAL = 60_000;
 
 interface SavedConfig {
+  password?: string;
   url: string;
   username: string;
   enabled: boolean;
@@ -157,7 +158,8 @@ export const useSyncStore = defineStore('sync', () => {
           config.value = { url: normalizeWebDavUrl(saved.url), username: typeof saved.username === 'string' ? saved.username : '' };
           enabled.value = saved.enabled === true;
           autoSync.value = saved.autoSync !== false;
-          sessionReady = !config.value.username;
+          password.value = typeof saved.password === 'string' ? saved.password : '';
+          sessionReady = typeof saved.password === 'string' || !config.value.username;
         }
       }
     } catch {
@@ -195,7 +197,7 @@ export const useSyncStore = defineStore('sync', () => {
       const url = next.url.trim() ? normalizeWebDavUrl(next.url) : '';
       if (next.enabled && !url) throw new Error('请输入完整的 WebDAV 文件夹地址');
       if (url) new WebDavClient({ url, username: next.username, password: next.password });
-      const saved = { url, username: next.username, enabled: next.enabled, autoSync: next.autoSync };
+      const saved = { url, username: next.username, password: next.password, enabled: next.enabled, autoSync: next.autoSync };
       localStorage.setItem(CONFIG_KEY, JSON.stringify(saved));
       resetTimers();
       config.value = { url, username: next.username };

@@ -16,7 +16,7 @@
 
 | 场景 | 必须使用 | 典型组件 |
 | --- | --- | --- |
-| 页面级、全局流程、确认 / 导入 / 更新 / 设置弹层 | `MobileBottomSheet.vue` | `ImportMenuSheet.vue`、`UpdateDialog.vue`、`ShelfDialog.vue` |
+| 页面级、全局流程、确认 / 导入 / 更新 / 设置弹层 | `MobileBottomSheet.vue` | `ImportMenuSheet.vue`、`ImportProgressSheet.vue`、`UpdateDialog.vue`、`ShelfDialogSheet.vue`、`DuplicateImportSheet.vue` |
 | 阅读器内部、需要和阅读状态互斥的抽屉 | `.md-drawer` + `ReaderDrawerHeader.vue` | `ReaderSettingsDrawer.vue`、`ReaderFontDrawer.vue`、`ReaderTocDrawer.vue` |
 
 判断规则：
@@ -179,7 +179,8 @@
    `onAfterLeave`、`onLeaveCancelled`。
 2. `useSheetSpring({ isCompact })`：手机从底部 `translate3d(0, 100%, 0)` 进入，桌面 side sheet
    从右侧 `translate3d(100%, 0, 0)` 进入。
-3. 入场使用 `stiffness 380 / damping 0.86`，允许最多 2px 过冲后收束。
+3. 手机入场使用 `stiffness 380 / damping 0.86`，允许最多 2px 过冲后收束；
+   桌面 side sheet 使用 `stiffness 760 / damping 1` 单向收束，不允许横向越过静止位。
 4. 退场使用 `stiffness 760 / damping 1`，加速滑出；拖拽关闭已经把卡片移出屏幕时跳过二次离场。
 5. 阅读器遮罩单独使用 `.md-fade-*` 淡入淡出；自定义整体容器可按现有实现传 `fadeRoot: true`。
    通用外壳的 `dialog::backdrop` 当前保持固定 32% 遮罩，随原生模态框开启 / 关闭，不执行独立淡入淡出。
@@ -329,9 +330,13 @@ function close() {
 - 保持外壳挂载，通过 `open=false` 触发退场；禁止 `<MobileBottomSheet v-if="open">`，
   否则会直接卸载并跳过退场。按布局使用 `v-if="isCompact"` 可以。
 - 关闭请求只切换打开状态；依赖业务 payload 的标题、列表和结果应保留到 `closed`，
-  避免离场时变成空壳。可缓存最后一个非空 payload，参考 `ShelfDialog.vue` / `DuplicateImportDialog.vue`。
+  避免离场时变成空壳。可缓存最后一个非空 payload，参考 `ShelfDialogSheet.vue` / `DuplicateImportSheet.vue`。
 - 导入结果清空等会改变整张卡片的动作放到 `closed`，参考 `ImportProgressSheet.vue`。
 - 快速重开、关闭后马上打开下一张、组件卸载均需正确收尾；不通过额外延时模拟 `closed`。
+#### 忙碌态与遮罩关闭
+
+- `busy` 会锁住拖拽、滑动关闭、`Escape` 和头部关闭按钮；需要「忙碌时仍可点遮罩收起、让任务在后台继续」的场景（如导入进行中），给 `MobileBottomSheet` 传 `scrim-closeable`，此时点遮罩等同于发出一次 `close`。
+- 手机端与桌面灵动胶囊共享同一批内容组件：导入菜单、导入进度 / 结果、同名确认、书库确认各有一层独立的 `*Sheet.vue` 外壳，桌面只替换外壳（`host-primary-action`），不要把这些卡片塞进一个大 sheet 或私造外壳。
 
 ### 7.2 阅读器抽屉
 

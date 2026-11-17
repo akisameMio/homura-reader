@@ -4,7 +4,7 @@
 >
 > 适用范围：桌面端（`>= 900px`）右下角的导入 / 更新 / 书库确认胶囊。
 >
-> 不适用：手机端（`< 900px`）的 `ImportStatusBar`、`ShelfDialog` 与 `UpdateDialog`。
+> 不适用：手机端（`< 900px`）的 `ImportStatusBar` 与四个独立 sheet 组件 `ShelfDialogSheet` / `DuplicateImportSheet` / `ImportMenuSheet` / `ImportProgressSheet` / `UpdateDialog`。
 
 本文记录灵动胶囊的**当前实现**，用于以后改布局、补状态或调整动效时快速定位。
 如果与代码冲突，以当前 `src/` 为准，并同步修正本文。
@@ -16,8 +16,10 @@
 - [DuplicateImportContent.vue](../src/components/DuplicateImportContent.vue)：同名导入确认，桌面与手机共用内容。
 - [ShelfDialogContent.vue](../src/components/ShelfDialogContent.vue)：删除 / 建库 / 命名 / 移动书库的内容层。
 - [UpdateIslandPanel.vue](../src/components/UpdateIslandPanel.vue)：检查更新、下载、完成、失败等更新状态。
-- [ImportMenuSheet.vue](../src/components/ImportMenuSheet.vue)：手机导入菜单 bottom sheet。
-- [ImportProgressSheet.vue](../src/components/ImportProgressSheet.vue)：手机导入进行中 / 完成 bottom sheet。
+- [ImportMenuSheet.vue](../src/components/ImportMenuSheet.vue)：手机导入菜单独立 bottom sheet。
+- [ImportProgressSheet.vue](../src/components/ImportProgressSheet.vue)：手机导入进行中 / 完成独立 bottom sheet。
+- [DuplicateImportSheet.vue](../src/components/DuplicateImportSheet.vue)：手机同名确认独立 bottom sheet 外壳。
+- [ShelfDialogSheet.vue](../src/components/ShelfDialogSheet.vue)：手机书库确认独立 bottom sheet 外壳。
 - [useShelfDialogs.js](../src/composables/useShelfDialogs.js)：书库确认的 Promise 队列。
 - [importProgress.js](../src/stores/importProgress.js)：导入任务、取消、失败重试、自动收起。
 - [updates.js](../src/stores/updates.js)：更新版本、下载、安装与更新面板开关。
@@ -52,8 +54,8 @@
 />
 
 <UpdateDialog v-if="isCompact" ... />
-<DuplicateImportDialog v-if="isCompact" />
-<ShelfDialog v-if="isCompact" />
+<DuplicateImportSheet v-if="isCompact" />
+<ShelfDialogSheet v-if="isCompact" />
 ```
 
 规则：
@@ -440,7 +442,7 @@ surface 离开：
 ### 6.3 同名确认 / 书库确认 / 建库 / 命名
 
 桌面使用 `DuplicateImportContent` 与 `ShelfDialogContent`；手机分别使用
-`DuplicateImportDialog` 与 `ShelfDialog` 的 bottom sheet 外壳。两边共享内容与 Promise 队列：
+`DuplicateImportSheet` 与 `ShelfDialogSheet` 的独立 bottom sheet 外壳。两边共享内容与 Promise 队列：
 
 ```js
 const duplicateSession = createDuplicateSession();

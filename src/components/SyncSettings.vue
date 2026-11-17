@@ -1,20 +1,25 @@
 <template>
   <div class="sync-settings" :aria-busy="busy">
-    <section class="sync-intro" aria-labelledby="sync-intro-title">
-      <MdIcon name="update" />
-      <div>
-        <h2 id="sync-intro-title">{{ t('在不同设备间继续阅读') }}</h2>
-        <p>{{ t('同步阅读进度、收藏与书库，原始文件不会上传。') }}</p>
-        <p>{{ t('可浏览 WebDAV 上的书籍并在线阅读，无需先下载到本机。') }}</p>
+    <section class="sync-group">
+      <h2>{{ t('远程') }}</h2>
+      <div class="sync-card connection-card">
+        <MdIcon name="local_library" />
+        <div class="connection-copy">
+          <strong>{{ sync.config.url ? (sync.config.username || 'WebDAV') : t('暂无信息') }}</strong>
+          <span v-if="sync.config.url">{{ t('连通性') }}：<span class="connection-dot" :class="{ 'is-connected': connected === true, 'is-failed': connected === false }"></span>{{ t(connected === true ? '已连接' : connected === false ? '连接失败' : '未检测') }}</span>
+          <span v-else>{{ t('请绑定 WebDAV') }}</span>
+        </div>
+        <button type="button" class="md-tonal-button" :disabled="busy" @click="openEditor">{{ t(sync.config.url ? '编辑' : '绑定') }}</button>
       </div>
     </section>
-
-    <form class="sync-form" @submit.prevent="save">
+    <MobileBottomSheet :open="editorOpen" desktop-side :title="t('WebDAV 配置')" title-id="webdav-config-title" :busy="busy" @close="editorOpen = false" @cancel="editorOpen = false" @closed="finishEditor">
+      <template #status><button type="submit" form="webdav-connection-form" class="md-icon-button connection-confirm" :disabled="busy || !draft.url.trim()" :aria-label="t('保存设置')"><MdIcon name="check" /></button></template>
+    <form id="webdav-connection-form" class="sync-form" @submit.prevent="save">
       <section class="sync-group" aria-labelledby="sync-connection-title">
         <h2 id="sync-connection-title">{{ t('WebDAV 连接') }}</h2>
         <div class="sync-card sync-fields">
           <div class="sync-field">
-            <label for="sync-url">{{ t('WebDAV 文件夹地址') }}</label>
+            <label for="sync-url">{{ t('地址') }}</label>
             <input
               id="sync-url"
               v-model="draft.url"
@@ -23,19 +28,17 @@
               autocomplete="url"
               autocapitalize="off"
               spellcheck="false"
-              placeholder="https://example.com/dav/HOMURA/"
+              :placeholder="t('必填')"
               maxlength="2048"
-              :required="draft.enabled"
+              required
               :disabled="busy"
-              aria-describedby="sync-url-hint"
               @input="edit"
               @focus="revealField"
             />
             <span class="sync-field-state">{{ draft.enabled ? t('必填') : t('可选') }}</span>
-            <small id="sync-url-hint" class="sync-field-hint">{{ t('填写已存在的 HTTPS 文件夹地址，不包含用户名或密码。') }}</small>
           </div>
           <div class="sync-field">
-            <label for="sync-username">{{ t('用户名') }}</label>
+            <label for="sync-username">{{ t('账号') }}</label>
             <input
               id="sync-username"
               v-model="draft.username"
@@ -51,7 +54,7 @@
             <span class="sync-field-state">{{ t('可选') }}</span>
           </div>
           <div class="sync-field">
-            <label for="sync-password">{{ t('密码或应用专用密码') }}</label>
+            <label for="sync-password">{{ t('密码') }}</label>
             <input
               id="sync-password"
               v-model="draft.password"
@@ -59,7 +62,6 @@
               autocomplete="current-password"
               maxlength="4096"
               :disabled="busy"
-              aria-describedby="sync-password-hint"
               @input="edit"
               @focus="revealField"
             />
@@ -74,35 +76,32 @@
                 @click="passwordVisible = !passwordVisible"
               ><MdIcon :name="passwordVisible ? 'visibility_off' : 'visibility'" /></button>
             </span>
-            <small id="sync-password-hint" class="sync-field-hint">{{ t('密码仅用于本次会话，重新启动后需要再次填写。') }}</small>
           </div>
         </div>
       </section>
 
+    </form>
+      <p v-if="displayError" class="sync-feedback is-error" role="alert">{{ t(displayError) }}</p>
+      <button v-if="sync.config.url" type="button" class="connection-delete md-mobile-sheet-card md-mobile-sheet-danger" :disabled="busy" @click="disconnect">{{ t('删除连接') }}</button>
+    </MobileBottomSheet>
       <section class="sync-group" aria-labelledby="sync-options-title">
         <h2 id="sync-options-title">{{ t('同步偏好') }}</h2>
         <div class="sync-card sync-options">
-          <MdSwitch v-model="draft.enabled" :disabled="busy" @update:model-value="edit">
+          <MdSwitch v-model="draft.enabled" :disabled="busy || !sync.config.url" @update:model-value="savePreferences">
             <span class="sync-switch-copy">
               <b>{{ t('启用 WebDAV 同步') }}</b>
               <span>{{ t('开启后，允许向此服务器发送进度、收藏与书库信息。') }}</span>
             </span>
           </MdSwitch>
-          <MdSwitch v-model="draft.autoSync" :disabled="busy || !draft.enabled" @update:model-value="edit">
+          <MdSwitch v-model="draft.autoSync" :disabled="busy || !draft.enabled" @update:model-value="savePreferences">
             <span class="sync-switch-copy">
               <b>{{ t('自动同步') }}</b>
               <span>{{ t('应用运行且网络可用时，自动同步已保存的更改。') }}</span>
             </span>
           </MdSwitch>
         </div>
-        <div class="sync-save-actions">
-          <button type="submit" class="md-tonal-button" :disabled="busy || !dirty">{{ t('保存设置') }}</button>
-          <p v-if="dirty" class="sync-note">{{ t('有未保存的更改，请先保存再测试或同步。') }}</p>
-        </div>
       </section>
-    </form>
-
-    <WebDavBrowser :url="sync.config.url" :username="sync.config.username" :password="sync.password" :disabled="dirty || saving || performing || sync.status === 'syncing' || sync.status === 'testing'" @busy="browserBusy = $event" />
+    <WebDavBrowser v-if="sync.config.url" :url="sync.config.url" :username="sync.config.username" :password="sync.password" :disabled="dirty || saving || performing || sync.status === 'syncing' || sync.status === 'testing'" @busy="browserBusy = $event" />
 
     <section class="sync-group" aria-labelledby="sync-status-title">
       <h2 id="sync-status-title">{{ t('同步状态') }}</h2>
@@ -131,7 +130,7 @@
           </button>
         </div>
       </div>
-      <button v-if="sync.config.url" type="button" class="md-text-button sync-disconnect" :disabled="busy" @click="disconnect">{{ t('移除此设备的连接') }}</button>
+
       <p class="sync-note sync-disconnect-note">{{ t('移除连接不会删除本机作品或服务器上的同步记录。') }}</p>
     </section>
   </div>
@@ -143,9 +142,13 @@ import { useSyncStore } from '../stores/sync.ts';
 import { useI18n } from '../composables/useI18n.ts';
 import MdIcon from './MdIcon.vue';
 import MdSwitch from './MdSwitch.vue';
+import MobileBottomSheet from './MobileBottomSheet.vue';
+import { WebDavBooksClient } from '../services/webdavBooks.ts';
 import WebDavBrowser from './WebDavBrowser.vue';
 
 const sync = useSyncStore();
+const editorOpen = ref(false);
+const connected = ref<boolean | null>(null);
 const { t, locale } = useI18n();
 const draft = reactive({ url: '', username: '', password: '', enabled: false, autoSync: false });
 const passwordVisible = ref(false);
@@ -177,6 +180,14 @@ watch(() => [sync.config.url, sync.config.username, sync.password, sync.enabled,
   if (!edited.value) hydrate();
 }, { immediate: true });
 
+function openEditor() {
+  hydrate(); edited.value = false; localError.value = ''; passwordVisible.value = false; editorOpen.value = true;
+}
+function finishEditor() { hydrate(); edited.value = false; passwordVisible.value = false; }
+function savePreferences() {
+  return perform(() => sync.saveConfig({ ...sync.config, password: sync.password, enabled: draft.enabled, autoSync: draft.autoSync }), '同步设置已保存。');
+}
+watch(() => [sync.config.url, sync.config.username, sync.password], () => { connected.value = null; });
 function edit() {
   edited.value = true;
   notice.value = '';
@@ -211,13 +222,17 @@ async function save() {
     if (!sync.error) {
       edited.value = false;
       hydrate();
+      editorOpen.value = false;
     }
   }, '同步设置已保存。');
   saving.value = false;
 }
 
 function testConnection() {
-  return perform(() => sync.testConnection(), '连接测试通过，写入权限将在同步时验证。');
+  return perform(async () => {
+    const client = new WebDavBooksClient({ ...sync.config, password: sync.password });
+    try { await client.list(); connected.value = true; } catch (error) { connected.value = false; throw error; } finally { client.close(); }
+  }, '连接测试通过，写入权限将在同步时验证。');
 }
 
 function synchronize() {
@@ -232,12 +247,29 @@ async function disconnect() {
       edited.value = false;
       hydrate();
     }
+    editorOpen.value = false;
   }, '已移除此设备的连接。');
   saving.value = false;
 }
 </script>
 
 <style scoped>
+.connection-card { display: flex; align-items: center; gap: 18px; padding: 22px 24px; }
+.connection-card > svg { width: 28px; height: 28px; color: var(--md-on-surface-variant); }
+.connection-copy { display: grid; gap: 8px; flex: 1; min-width: 0; }
+.connection-copy strong { font-size: 17px; overflow-wrap: anywhere; }
+.connection-copy > span { font-size: 13px; color: var(--md-on-surface-variant); }
+.connection-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--md-outline); margin-right: 6px; }
+.connection-dot.is-connected { background: var(--md-primary); }
+.connection-dot.is-failed { background: var(--md-error); }
+.connection-delete { background: var(--md-surface); color: var(--md-error); border: 0; display: block; width: 100%; padding: 20px; text-align: left; margin-top: 24px; }
+.connection-confirm { background: var(--md-surface); }
+.sync-form .sync-group > h2 { display: none; }
+.sync-form .sync-field { grid-template-columns: 62px minmax(0, 1fr) auto; gap: 8px; padding: 14px 18px; }
+.sync-form .sync-field input { text-align: right; font-size: 16px; }
+.sync-form .sync-field > label { font-size: 13px; }
+.sync-form .sync-field-state { display: none; }
+
 .sync-settings { min-width: 0; }
 .sync-intro { display: flex; align-items: flex-start; gap: 20px; margin-bottom: 28px; padding: 28px; border-radius: 28px; background: var(--md-primary-container); color: var(--md-on-primary-container); }
 .sync-intro > svg { flex: none; width: 28px; height: 28px; }
@@ -257,7 +289,6 @@ async function disconnect() {
 .sync-field input:disabled { opacity: 0.38; }
 .sync-field-state { color: var(--md-on-surface-variant); font-size: 15px; font-weight: 450; white-space: nowrap; }
 .sync-field-end { display: flex; grid-column: 3; grid-row: 1; align-items: center; gap: 12px; }
-.sync-field-hint { grid-column: 2 / 4; grid-row: 2; margin: 0; padding-top: 2px; color: var(--md-on-surface-variant); font-size: 12px; font-weight: 400; line-height: 1.6; overflow-wrap: anywhere; }
 .sync-password-toggle { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--md-on-surface-variant); cursor: pointer; }
 .sync-password-toggle:hover { background: color-mix(in oklab, var(--md-on-surface) 8%, transparent); }
 .sync-password-toggle:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 1px; }
@@ -295,7 +326,6 @@ async function disconnect() {
   .sync-field input { grid-column: 1 / 3; grid-row: 2; }
   .sync-field-state { font-size: 13px; }
   .sync-field-end { grid-column: 2; grid-row: 1; gap: 8px; }
-  .sync-field-hint { grid-column: 1 / 3; grid-row: 3; }
   .sync-status { padding: 20px; }
   .sync-options > :deep(.md-switch-row) { padding: 20px; }
   .sync-stats { gap: 12px; }
@@ -304,4 +334,10 @@ async function disconnect() {
 @media (prefers-reduced-motion: reduce) {
   .sync-field, .sync-field input { transition: none; }
 }
+</style>
+
+<style scoped>
+.sync-form .sync-field input { grid-column: 2; grid-row: 1; }
+.sync-form .sync-field > label { grid-column: 1; grid-row: 1; }
+.sync-form .sync-field-end { grid-column: 3; grid-row: 1; }
 </style>

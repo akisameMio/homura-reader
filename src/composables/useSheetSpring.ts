@@ -10,6 +10,8 @@ import { onBeforeUnmount } from 'vue';
 import { makeAxis, prefersReducedMotion, runSpring } from '../services/spring.ts';
 
 const ENTER_SPRING = { stiffness: 380, damping: 0.86, posEpsilon: 0.4, velEpsilon: 14 };
+// 桌面侧栏只做单向收束；高刷新率下也不允许越过静止位，避免整卡横向回弹。
+const ENTER_SPRING_DESKTOP = { stiffness: 760, damping: 1, posEpsilon: 0.4, velEpsilon: 14 };
 const LEAVE_SPRING = { stiffness: 760, damping: 1, posEpsilon: 0.4, velEpsilon: 14 };
 // 弹簧末端允许越过静止位 2px，保留一点回弹手感，又不至于在底边 / 右侧露缝
 const MAX_OVERSHOOT = 2;
@@ -84,17 +86,20 @@ export function useSheetSpring({ isCompact, panel, fadeRoot = false }: SheetSpri
       done();
       return;
     }
-    const direction = axis();
+    const compact = isCompact.value;
+    const direction = compact ? 'y' : 'x';
     const distance = direction === 'x' ? panelEl.offsetWidth : panelEl.offsetHeight;
     if (prefersReducedMotion() || !distance) {
       settleEnter();
       return;
     }
-    const spring = makeAxis(distance, ENTER_SPRING.stiffness);
+    const enterSpring = compact ? ENTER_SPRING : ENTER_SPRING_DESKTOP;
+    const overshoot = compact ? MAX_OVERSHOOT : 0;
+    const spring = makeAxis(distance, enterSpring.stiffness);
     spring.target = 0;
     const apply = () => {
       currentPos = Math.max(0, spring.pos);
-      applyTransform(panelEl!, direction, Math.max(-MAX_OVERSHOOT, spring.pos));
+      applyTransform(panelEl!, direction, Math.max(-overshoot, spring.pos));
       applyFade(spring.pos / distance);
     };
     apply();
@@ -103,7 +108,7 @@ export function useSheetSpring({ isCompact, panel, fadeRoot = false }: SheetSpri
       enterDone = null;
       clearMotion();
       done();
-    }, ENTER_SPRING);
+    }, enterSpring);
   }
 
   function onBeforeLeave(el: Element) {

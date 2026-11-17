@@ -516,12 +516,13 @@ export function useSheetDrag({ isCompact, isOpen, onClose, onDragBegin }: {
 
   watch([isOpen, isCompact], ([open, compact], previous) => {
     const compactChanged = !!previous && previous[1] !== compact;
-    if (open && compact) {
+    if (open) {
       closeAfterDrag = false;
-      if (compactChanged) resetMotion();
+      // 桌面侧栏的入场位移由 useSheetSpring 接管，打开阶段不能在这里清空 transform。
+      if (compact && compactChanged) resetMotion();
       return;
     }
-    if (!open && closeAfterDrag) closeAfterDrag = false;
+    if (closeAfterDrag) closeAfterDrag = false;
     // 关闭时保留当前高度，让离场弹簧从展开后的尺寸滑出
     else resetMotion(!open && !compactChanged);
   });

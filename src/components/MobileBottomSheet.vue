@@ -3,7 +3,7 @@
     <dialog
       ref="dialogRef"
       class="md-mobile-sheet-dialog"
-      :class="{ 'is-keyboard-anchored': keyboardAnchored }"
+      :class="{ 'is-keyboard-anchored': keyboardAnchored && compact, 'is-desktop-side': desktopSide && !compact }"
       :aria-labelledby="titleId"
       :aria-describedby="descriptionId || undefined"
       :aria-busy="busy || undefined"
@@ -23,7 +23,7 @@
       >
         <section v-if="visible" ref="sheetRef" class="md-mobile-sheet">
           <ReaderDrawerHeader
-            :is-compact="draggable && !busy"
+            :is-compact="compact && draggable && !busy"
             prominent
             :title="title"
             :title-id="titleId"
@@ -47,6 +47,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
+import { useViewport } from '../composables/useViewport.ts';
 import { useSheetDrag } from '../composables/useSheetDrag.ts';
 import { useSheetSpring } from '../composables/useSheetSpring.ts';
 import { lockSettingsSelectScroll as lockBackgroundScroll } from '../services/settingsSelectScrollLock.ts';
@@ -62,15 +63,18 @@ const props = defineProps({
   descriptionId: { type: String, default: '' },
   closeLabel: { type: String, default: '关闭面板' },
   backdropDismissible: { type: Boolean, default: true },
+  scrimCloseable: { type: Boolean, default: false },
   draggable: { type: Boolean, default: true },
   busy: { type: Boolean, default: false },
+  desktopSide: { type: Boolean, default: false },
   keyboardAnchored: { type: Boolean, default: false }
 });
 const emit = defineEmits(['close', 'cancel', 'opened', 'closed']);
 const dialogRef = shallowRef<HTMLDialogElement | null>(null);
 const visible = ref(false);
-const compact = computed(() => true);
-const dragEnabled = computed(() => props.draggable && !props.busy);
+const viewport = useViewport();
+const compact = computed(() => !props.desktopSide || viewport.isCompact.value);
+const dragEnabled = computed(() => compact.value && props.draggable && !props.busy);
 const isOpen = computed(() => props.open);
 const spring = useSheetSpring({ isCompact: compact });
 const { sheetRef, onDragStart, onDragMove, onDragEnd, onDragCancel } = useSheetDrag({
@@ -110,7 +114,13 @@ function requestClose() {
 }
 
 function onBackdropClick(event: MouseEvent) {
-  if (event.target === dialogRef.value && props.backdropDismissible) requestClose();
+  if (event.target !== dialogRef.value) return;
+  // 忙碌（如导入进行中）时点遮罩仍需能收起面板「继续在后台跑」，但拖拽 / Esc / 关闭按钮保持锁定。
+  if (props.busy) {
+    if (props.scrimCloseable) emit('close');
+    return;
+  }
+  if (props.backdropDismissible) requestClose();
 }
 
 function onAfterLeave() {

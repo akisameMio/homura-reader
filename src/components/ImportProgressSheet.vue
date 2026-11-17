@@ -1,6 +1,7 @@
 <template>
   <MobileBottomSheet :open="open" :title="store.status === 'running' ? t('导入进度') : store.status === 'cancelled' ? t('导入已停止') : t('导入结果')"
-    title-id="mobile-import-progress-title" @close="closeSheet" @cancel="closeSheet" @closed="finishClose">
+    title-id="mobile-import-progress-title" :busy="store.status === 'running'" scrim-closeable
+    @close="closeSheet" @cancel="closeSheet" @closed="finishClose">
     <ImportProgressPanel ref="panelRef" mobile-sheet @retry="$emit('retry')" @close="closeSheet" />
     <template #footer>
       <button v-if="primaryAction" type="button" :class="primaryAction.variant === 'primary' ? 'md-filled-button' : 'md-tonal-button'"
@@ -27,11 +28,13 @@ const open = computed(() => store.status !== 'idle' && store.expanded);
 const primaryAction = computed(() => panelRef.value?.primaryAction);
 let dismissOnClosed = false;
 function closeSheet() {
+  // 关闭只是一种「收起」：进度仍在后台继续。仅当不在运行且不再可重试时，收起动画结束才清理结果。
   dismissOnClosed = store.status !== 'running';
   store.toggleExpanded(false);
 }
 function finishClose() {
-  if (dismissOnClosed && store.status !== 'running' && !store.expanded) store.dismiss();
+  const shouldDismiss = dismissOnClosed;
   dismissOnClosed = false;
+  if (shouldDismiss && store.status !== 'running' && !store.expanded) store.dismiss();
 }
 </script>

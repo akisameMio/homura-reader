@@ -148,3 +148,12 @@ test('旧连接请求失败时不把错误写入另一标签已更新的配置',
   await newCheck;
   assert.equal(store.status, 'idle');
 }));
+
+
+test('连接密码随配置恢复，移除连接清除已保存密码', () => fixture(async ({ store, externalConfig }) => {
+  externalConfig({ ...config('https://saved.example/dav/', 'reader'), password: 'saved-test-password' });
+  assert.equal(store.password, 'saved-test-password');
+  await store.clearConfig();
+  assert.equal(store.password, '');
+  assert.equal(localStorage.getItem(CONFIG_KEY), null);
+}));

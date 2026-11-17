@@ -151,6 +151,11 @@
             <div class="reader-settings-row">
               <MdSegmentedControl class="reader-settings-segment" :model-value="reader.transitionStyle" :options="transitionOptions" :aria-label="t('翻页方式')" @update:model-value="reader.setTransitionStyle" />
             </div>
+            <Transition name="reader-settings-expand">
+              <div v-if="reader.transitionStyle === 'scroll'" class="reader-settings-scroll-fit">
+                <SettingsSelectRow :label="t('滚动宽度')" :model-value="config.webtoonFit" :options="webtoonFits" @update:model-value="value => reader.setWebtoonFit(String(value))" />
+              </div>
+            </Transition>
           </section>
         </div>
 
@@ -317,10 +322,10 @@ function resetDefaults() {
 }
 
 type SettingsTab = 'layout' | 'appearance' | 'cover';
-const activeTab = ref<SettingsTab>('layout');
+const activeTab = ref<SettingsTab>('appearance');
 const tabs: { value: SettingsTab; label: string }[] = [
-  { value: 'layout', label: '排版' },
   { value: 'appearance', label: '外观' },
+  { value: 'layout', label: '排版' },
   { value: 'cover', label: '封面' }
 ];
 const fontOptions = READER_FONT_OPTIONS;
@@ -330,7 +335,7 @@ let settingsTrigger: HTMLElement | null = null;
 watch(settingsOpen, async open => {
   if (open) {
     settingsTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    activeTab.value = 'layout';
+    activeTab.value = 'appearance';
     await nextTick();
     settingsSheetRef.value?.querySelector<HTMLButtonElement>('.md-drawer-header .md-icon-button')?.focus({ preventScroll: true });
   } else {
@@ -448,6 +453,28 @@ function onSheetKeydown(event: KeyboardEvent) {
 .reader-settings-group-label { margin: 22px 14px 10px; color: var(--md-on-surface-variant); font-size: 12px; font-weight: 600; }
 .reader-settings-group-label:first-child { margin-top: 2px; }
 .reader-settings-row { position: relative; padding: 16px 18px; }
+.reader-settings-scroll-fit { position: relative; }
+.reader-settings-scroll-fit :deep(.settings-select-row) { min-height: 60px; padding: 16px 18px; gap: 8px; }
+.reader-settings-scroll-fit::before {
+  position: absolute;
+  top: 0;
+  right: 18px;
+  left: 18px;
+  height: 1px;
+  background: color-mix(in oklab, var(--md-outline-variant) 55%, transparent);
+  content: '';
+}
+.reader-settings-scroll-fit :deep(.settings-select-label) { font-size: 13px; }
+.reader-settings-scroll-fit :deep(.settings-select-value) { font-size: 12px; }
+.reader-settings-scroll-fit :deep(.settings-select-row > svg) { width: 18px; height: 18px; }
+.reader-settings-expand-enter-active,
+.reader-settings-expand-leave-active { overflow: hidden; transition: opacity 200ms cubic-bezier(0.2, 0, 0, 1); }
+.reader-settings-expand-enter-from,
+.reader-settings-expand-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .reader-settings-expand-enter-active,
+  .reader-settings-expand-leave-active { transition: none; }
+}
 .reader-settings-control-label { font-size: 13px; font-weight: 600; }
 .reader-settings-segment { margin-top: 12px; --md-segmented-bg: var(--md-surface-low); }
 .reader-settings-segment :deep(.md-segmented-option) { min-height: 48px; padding-inline: 4px; font-size: 12px; }

@@ -95,7 +95,7 @@ npm run build      # tauri build，先构建前端再打包安装包
 
 - 版本 `2.2.9`，桌面（macOS / Windows / Linux）与 Android（arm64 / armv7）均可构建；核心阅读链路完整可用。
 - 标签与书签功能尚未实现；不支持 DRM、AZW3 / KF8、加密 PDF，PDF 不可重排。
-- WebDAV 需已存在的 HTTPS 目录、强 ETag 与条件写入支持；密码仅用于当前会话。真实 NAS 与 Android 完整同步链路仍未实测。
+- WebDAV 需已存在的 HTTPS 目录、强 ETag 与条件写入支持；密码随连接保存在本机，移除连接时清除。真实 NAS 与 Android 完整同步链路仍未实测。
 - 有单元测试与类型检查，但没有 E2E、没有 ESLint，关键流程仍需手动回归。
 - macOS 安装包尚未签名，首次启动需手动放行。
 - 本项目以 **MIT License** 授权，条款见 [`LICENSE`](LICENSE)。

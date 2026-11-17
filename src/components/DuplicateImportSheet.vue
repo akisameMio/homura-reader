@@ -1,6 +1,6 @@
 <template>
   <MobileBottomSheet :open="!!pendingDuplicate" :title="t('发现同名书本')" title-id="mobile-duplicate-import-title" :busy="!!displayPending?.busy"
-    @close="resolveImport()" @cancel="resolveImport()" @opened="skipButtonRef?.focus()" @closed="clearDisplay">
+    @close="resolveImport()" @cancel="resolveImport()" @opened="skipButtonRefFocus()" @closed="clearDisplay">
     <DuplicateImportContent mobile-sheet :pending="displayPending" @resolve="resolveImport" />
     <template #footer>
       <button type="button" class="md-filled-button" :disabled="displayPending?.busy" @click="resolveImport(true)"><MdIcon name="upload_file" />{{ t('仍然导入') }}</button>
@@ -29,6 +29,9 @@ const skipButtonRef = shallowRef<HTMLButtonElement | null>(null);
 watch(pendingDuplicate, pending => {
   if (pending) displayPending.value = pending;
 }, { immediate: true });
+function skipButtonRefFocus() {
+  skipButtonRef.value?.focus({ preventScroll: true });
+}
 function clearDisplay() {
   if (!pendingDuplicate.value) displayPending.value = null;
 }

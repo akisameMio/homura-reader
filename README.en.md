@@ -94,7 +94,7 @@ Before committing, run `npm test` (unit tests), `npm run typecheck`, and `npm ru
 
 - Version `2.2.9`; both desktop (macOS / Windows / Linux) and Android (arm64 / armv7) are buildable, and the core reading flow is complete and usable.
 - Tags and bookmarks are not implemented yet; DRM, AZW3 / KF8 and encrypted PDF are unsupported, and PDFs cannot reflow.
-- WebDAV requires an existing HTTPS folder, strong ETags and conditional writes; passwords last only for the current session. The full sync flow on real NAS servers and Android devices remains untested.
+- WebDAV requires an existing HTTPS folder, strong ETags and conditional writes; passwords are saved locally with the connection and cleared when it is removed. The full sync flow on real NAS servers and Android devices remains untested.
 - Unit tests plus type checking, but no E2E and no ESLint — key flows still need manual regression.
 - The macOS installer is unsigned, so first launch needs manual approval.
 - Licensed under the **MIT License** — see [`LICENSE`](LICENSE).

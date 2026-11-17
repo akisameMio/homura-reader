@@ -179,3 +179,13 @@
 .mobile-update-notes { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.85; }
 .mobile-update-notes li + li { margin-top: 8px; }
 .md-mobile-sheet .update-progress-meta { margin: 0 0 16px; }
+
+/* 可选桌面侧栏沿用同一 dialog 的焦点、滚动锁和关闭生命周期。 */
+.md-mobile-sheet-dialog.is-desktop-side .md-mobile-sheet {
+  inset: 0 0 0 auto;
+  width: 372px;
+  max-width: 92%;
+  height: 100%;
+  max-height: 100%;
+  border-radius: 28px 0 0 28px;
+}

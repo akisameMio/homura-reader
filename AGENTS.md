@@ -37,6 +37,7 @@ CBZ / ZIP 与 EPUB 共用原生 ZIP 通道：漫画压缩包只把图片条目�
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`（最常用的快速验证） |
 | `npm run check:dark-glow` | 扫描夜间白色泛光；`build:vite` 会自动执行 |
 | `npm run dev` | `tauri dev`；Vite 由 `beforeDevCommand` 自动拉起，不要手拼两条命令 |
+| `npm run dev:clean` | 结束占用 5173 的残留 Vite（上次 `tauri dev` 未退干净时报 `Port 5173 is already in use` 时用） |
 | `npm run build` | `tauri build`，产物在 `src-tauri/target/release/bundle/` |
 | `npm run icons:generate` | 从源图生成全平台应用图标 |
 | `npm run android:init` | `tauri android init` + `android:sync-icons` |
@@ -221,7 +222,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 19. **应用内更新只认官方仓库**：`updates.ts` 的 `REPOSITORY_URL` 与 `external.ts` 的白名单都锁死 `github.com/Leon-Ning-san/HomuraReader`；下载只校验字节数与 `expected_size` 一致，没有签名/哈希校验，不要对外宣称更强保证。
 20. **Android 预见式返回**：`useReaderBackDismiss` 直接写 `--homura-back-*` CSS 变量驱动动画，**不能**改成响应式状态，否则返回手势会掉帧。native 模式（API 34+）必须同时保留 `app.onBackButtonPress` 的 JS 兜底监听：框架在 `Checker` 校验不过时只打日志、静默丢弃原生回调，插件却照样 resolve，一旦撤掉 JS 监听，阅读器期间就没有任何返回消费者，返回会落到 Tauri `AppPlugin` 的 `activity.onBackPressed()` 直接 finish 并退回桌面。原生回调是 top 时 JS 收不到事件，两条通道不会重复触发，不要「优化」成单通道。
 21. **CSP 严格白名单**：`tauri.conf.json` 的 `app.security.csp` 已启用，`script-src` 不含 `'unsafe-inline'`，注入的 `<script>` 与 `on*` 事件处理器会被浏览器直接拦掉；`'unsafe-eval'` 是 vendor Tailwind 运行时与 pdf.js wasm 必需的，别删。漫画页走 asset 协议，`img-src` / `media-src` 必须保留 `asset:` 与 `http://asset.localhost`（Windows / Android 用 `http://asset.localhost`，macOS / Linux / iOS 用 `asset://localhost`），删掉会整本漫画白屏。新增站外请求域名要同步登记进 `connect-src`；启动引导只能放 `public/homura-boot.js`。
-22. **WebDAV 同步边界**：同步默认关闭，只发送阅读进度、收藏、书库与内容指纹，不上传原文件、正文、封面或本机路径；密码只保留在内存，不能写进 localStorage / `homura_sync`。元数据同步只读写固定文件 `homura-sync-v1.json`；远程书籍另用只读 PROPFIND 与有界 Range GET 浏览和在线阅读，不落盘原文件，生产地址必须 HTTPS（仅 loopback 允许 HTTP），已有文件必须提供强 ETag，创建 / 更新分别使用 `If-None-Match: *` 与 `If-Match`，禁止退化成无条件覆盖。同步应用必须走 `HomuraStore.applySyncMetadata` 的快照核对，保留每台设备的排版设置与 SQLite dirty 重建顺序。
+22. **WebDAV 同步边界**：同步默认关闭，只发送阅读进度、收藏、书库与内容指纹，不上传原文件、正文、封面或本机路径；密码按用户要求随连接保存在本机，移除连接时清除，不写入 `homura_sync` 或远端同步文档。元数据同步只读写固定文件 `homura-sync-v1.json`；远程书籍另用只读 PROPFIND 与有界 Range GET 浏览和在线阅读，不落盘原文件，生产地址必须 HTTPS（仅 loopback 允许 HTTP），已有文件必须提供强 ETag，创建 / 更新分别使用 `If-None-Match: *` 与 `If-Match`，禁止退化成无条件覆盖。同步应用必须走 `HomuraStore.applySyncMetadata` 的快照核对，保留每台设备的排版设置与 SQLite dirty 重建顺序。
 
 ## 7. 常见坑
 

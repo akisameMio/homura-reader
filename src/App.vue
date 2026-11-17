@@ -120,8 +120,8 @@
     @close="updates.closeChangelog"
     @retry="updates.loadChangelog(true)"
   />
-  <DuplicateImportDialog v-if="isCompact" />
-  <ShelfDialog v-if="isCompact" />
+  <DuplicateImportSheet v-if="isCompact" />
+  <ShelfDialogSheet v-if="isCompact" />
 
   <!-- Offscreen Measurer for Smart Novel Screen-Fit Pagination -->
   <div ref="measurerRef" id="novelPaginationMeasurer" class="fixed -left-[9999px] top-0 pointer-events-none invisible z-[-1] epub-content md-reader-prose"></div>
@@ -171,8 +171,8 @@ import ReaderModal from './components/ReaderModal.vue';
 import ReaderLoadingPage from './components/ReaderLoadingPage.vue';
 import UpdateDialog from './components/UpdateDialog.vue';
 import ChangelogSheet from './components/ChangelogSheet.vue';
-import DuplicateImportDialog from './components/DuplicateImportDialog.vue';
-import ShelfDialog from './components/ShelfDialog.vue';
+import DuplicateImportSheet from './components/DuplicateImportSheet.vue';
+import ShelfDialogSheet from './components/ShelfDialogSheet.vue';
 import { useI18n } from './composables/useI18n.ts';
 
 const { t } = useI18n();
