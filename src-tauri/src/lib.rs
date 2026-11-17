@@ -14,9 +14,9 @@ mod mobi_parser;
 mod native_import;
 mod storage_stats;
 mod sync_webdav;
-mod webdav_books;
 mod text_decoder;
 mod update_downloader;
+mod webdav_books;
 #[cfg(desktop)]
 mod window_state;
 
