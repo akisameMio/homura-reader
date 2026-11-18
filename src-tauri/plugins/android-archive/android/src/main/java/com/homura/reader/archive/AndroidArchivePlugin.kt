@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
 import android.provider.OpenableColumns
@@ -133,6 +134,7 @@ private data class ImportUriMetadata(
 
 @TauriPlugin
 class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
+  private var lastImportFolderUri: Uri? = null
   private val sessions = HashMap<String, ArchiveSession>()
   private val extractCounters = ConcurrentHashMap<String, Int>()
   private val prefetchGenerations = ConcurrentHashMap<String, Int>()
@@ -383,8 +385,17 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun pickImportFolder(invoke: Invoke) {
     try {
-      val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
-        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+          // 文件选择器可能记住内置存储或 Download 根目录，两处都不能授予目录权限。
+          val initialUri = lastImportFolderUri ?: DocumentsContract.buildDocumentUri(
+            "com.android.externalstorage.documents",
+            "primary:${Environment.DIRECTORY_DOCUMENTS}"
+          )
+          putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUri)
+        }
+      }
       startActivityForResult(invoke, intent, "importFolderResult")
     } catch (error: Exception) {
       invoke.reject("NATIVE_UNAVAILABLE: 无法打开系统文件夹选择器")
@@ -403,6 +414,9 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
       invoke.reject("NATIVE_INVALID_DATA: 系统文件夹选择器没有返回有效目录")
       return
     }
+    lastImportFolderUri = DocumentsContract.buildDocumentUriUsingTree(
+      treeUri, DocumentsContract.getTreeDocumentId(treeUri)
+    )
     runAsync(invoke) {
       try {
         scanImportTree(treeUri)

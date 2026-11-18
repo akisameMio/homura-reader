@@ -102,6 +102,7 @@ export default {
   '添加内容': 'Add content',
   '导入文件': 'Import files',
   '导入文件夹': 'Import folder',
+  '进入书籍所在的子文件夹，再点「使用此文件夹」。按钮灰色时，可用「导入文件」多选。': 'Open the subfolder with your books and tap “Use this folder”. If the button is disabled, use “Import files” to select multiple books.',
   '图片目录会合并成一本漫画': 'Image folders are combined into one manga book',
   '新建书库': 'New collection',
   '先建一个书库，再放入作品': 'Create a collection, then add books',

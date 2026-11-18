@@ -8,6 +8,7 @@
     :aria-label="started ? t('继续阅读：{0}', { 0: featured.book.title }) : t('开始阅读：{0}', { 0: featured.book.title })"
     @click="onOpen"
   >
+    <span class="height-anchor" aria-hidden="true"></span>
     <span class="content">
       <span class="eyebrow-row">
         <MdIcon name="auto_stories" class="section-icon" />
@@ -192,6 +193,7 @@ const progressPercent = computed(() => {
   box-shadow: var(--md-elevation-card-soft);
   transition: transform 280ms var(--md-ease-emphasized), box-shadow 280ms var(--md-ease-emphasized);
 }
+.height-anchor { display: none; }
 .content {
   position: relative;
   z-index: 1;
@@ -318,6 +320,39 @@ const progressPercent = computed(() => {
   .play { width: 68px; }
   .play-icon { width: 26px; height: 26px; }
   .action-label { font-size: 10px; }
+}
+@media (min-width: 900px) {
+  .continue-card { min-height: 0; }
+  /* 特色卡跨三列：用一根不可见的单列卡占位，把整行锁到普通书卡 / 书库卡的自然高度 */
+  .height-anchor {
+    display: block;
+    flex: none;
+    width: calc((100% - 2 * var(--md-shelf-gap, var(--md-space-200))) / 3);
+    aspect-ratio: 3 / 4;
+    /* 单本书卡信息栏约 58.4px，向上取整避免亚像素压缩 */
+    margin-bottom: 59px;
+  }
+  .content {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 69%;
+    gap: 12px;
+    padding: 12px 8px 12px 16px;
+  }
+}
+@media (min-width: 900px) and (max-width: 1179px) {
+  .content { gap: 8px; padding: 10px 8px 10px 16px; }
+  .cover-shell { flex-basis: 66px; width: 66px; height: 88px; }
+  .book-title { font-size: 18px; }
+  .detail-value { font-size: 24px; }
+}
+@media (min-width: 1600px) {
+  .content {
+    gap: 10px;
+    padding: 10px 8px 10px 14px;
+  }
+  .cover-shell { flex-basis: 76px; width: 76px; height: 101px; }
+  .detail-value { font-size: 24px; }
 }
 @media (min-width: 768px) and (max-width: 899px) {
   .continue-card { grid-column: span 3; }

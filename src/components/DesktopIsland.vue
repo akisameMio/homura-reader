@@ -57,6 +57,7 @@
                 <MdIcon name="chevron_right" :size="20" />
               </button>
             </div>
+            <p v-if="isAndroid && canPickFolder" class="md-mobile-sheet-hint px-3">{{ t('进入书籍所在的子文件夹，再点「使用此文件夹」。按钮灰色时，可用「导入文件」多选。') }}</p>
             <p class="md-mobile-sheet-label">{{ t('整理书架') }}</p>
             <div class="md-mobile-sheet-card">
               <button type="button" class="md-mobile-sheet-row island-menu-item" @click="choose('create-collection')">
@@ -259,7 +260,7 @@ import {
   watch
 } from 'vue';
 import type { ComponentPublicInstance } from 'vue';
-import { canPickFolder } from '../services/platform.ts';
+import { canPickFolder, isAndroid } from '../services/platform.ts';
 import { useImportProgressStore } from '../stores/importProgress.ts';
 import { useUpdateStore } from '../stores/updates.ts';
 import { useShelfDialogs } from '../composables/useShelfDialogs.ts';

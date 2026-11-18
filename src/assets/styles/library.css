@@ -130,23 +130,24 @@
 
     /* 书架网格：手机 3 列；桌面随可用宽度提升密度，避免窄桌面把书卡压成条 */
     .md-shelf-grid {
+      --md-shelf-gap: var(--md-space-150);
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: var(--md-space-150);
+      gap: var(--md-shelf-gap);
       padding: var(--md-space-200) var(--md-space-200) 0;
     }
     /* 768–899 仍使用底部导航，但信息密度要接近桌面，避免三列巨卡 */
     @media (min-width: 768px) and (max-width: 899px) {
       .md-shelf-grid {
+        --md-shelf-gap: var(--md-space-200);
         grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: var(--md-space-200);
         padding-inline: var(--md-space-250);
       }
     }
     @media (min-width: 900px) {
       .md-shelf-grid {
+        --md-shelf-gap: var(--md-space-200);
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: var(--md-space-200);
         padding: var(--md-space-200) 28px 0;
       }
     }
@@ -163,8 +164,8 @@
     /* 超大屏加密度，避免书卡被拉成相框 */
     @media (min-width: 1600px) {
       .md-shelf-grid {
+        --md-shelf-gap: var(--md-space-300);
         grid-template-columns: repeat(8, minmax(0, 1fr));
-        gap: var(--md-space-300);
         padding-inline: 36px;
       }
     }
