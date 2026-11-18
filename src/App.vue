@@ -70,7 +70,7 @@
   />
 
   <input ref="fileInput" type="file" multiple :accept="fileAccept" class="hidden" @change="onFileChange" />
-  <input v-if="canPickFolder" ref="folderInput" type="file" webkitdirectory directory multiple class="hidden" @change="onFileChange" />
+  <input v-if="canPickFolder && !isAndroid" ref="folderInput" type="file" webkitdirectory directory multiple class="hidden" @change="onFileChange" />
 
   <AppearanceSheet v-model:open="appearanceOpen" />
   <ImportMenuSheet
@@ -136,7 +136,7 @@ import { useSettingsStore } from './stores/settings.ts';
 import { useUiStore } from './stores/ui.ts';
 import { useUpdateStore } from './stores/updates.ts';
 import { useImportProgressStore } from './stores/importProgress.ts';
-import { fileAccept, canPickFolder, hasFileSystemAccess } from './services/platform.ts';
+import { fileAccept, canPickFolder, hasFileSystemAccess, isAndroid } from './services/platform.ts';
 import {
   canUseNativeImport,
   isNativeImportCancelled,
@@ -474,9 +474,13 @@ const visibleBooks = computed(() => {
   return sortShelfBooks(list, sortKey.value, shelf.progressMap);
 });
 
+// Tauri 的 Activity 结果回调只有一个槽位，文件与文件夹选择不能同时启动。
+let nativeImportPending = false;
+
 async function openFilePicker() {
-  if (importProgress.isRunning) return;
+  if (importProgress.isRunning || nativeImportPending) return;
   if (canUseNativeImport()) {
+    nativeImportPending = true;
     try {
       await importer.pickNativeFiles({ offerCollection: isCompact.value });
       return;
@@ -490,6 +494,8 @@ async function openFilePicker() {
         return;
       }
       console.warn('[HOMURA] 原生文件选择不可用，回退浏览器选择器', err);
+    } finally {
+      nativeImportPending = false;
     }
   }
   if (hasFileSystemAccess) {
@@ -500,19 +506,22 @@ async function openFilePicker() {
 }
 
 async function openFolderPicker() {
-  if (importProgress.isRunning) return;
-  if (!canPickFolder) return;
+  if (importProgress.isRunning || nativeImportPending || !canPickFolder) return;
   if (canUseNativeImport()) {
+    nativeImportPending = true;
     try {
       await importer.pickNativeFolder();
       return;
     } catch (err) {
-      if (!shouldFallbackNativeImport(err)) {
-        console.warn('[HOMURA] 桌面原生文件夹选择失败', err);
+      if (isNativeImportCancelled(err)) return;
+      if (isAndroid || !shouldFallbackNativeImport(err)) {
+        console.warn('[HOMURA] 原生文件夹导入失败', err);
         shelf.error = t('读取所选文件夹失败，请重新选择');
         return;
       }
       console.warn('[HOMURA] 桌面原生文件夹选择不可用，回退浏览器选择器', err);
+    } finally {
+      nativeImportPending = false;
     }
   }
   if (window.showDirectoryPicker) {

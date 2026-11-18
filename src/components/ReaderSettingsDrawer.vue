@@ -157,7 +157,7 @@
             </div>
             <Transition v-bind="expandMotion">
               <div v-if="reader.transitionStyle === 'scroll'" class="reader-settings-scroll-fit">
-                <SettingsSelectRow :label="t('滚动宽度')" :model-value="config.webtoonFit" :options="webtoonFits" @update:model-value="value => reader.setWebtoonFit(String(value))" />
+                <SettingsSelectRow :label="t('滚动宽度')" :model-value="config.webtoonFit" :options="isManga ? webtoonFits : novelScrollWidths" @update:model-value="value => reader.setWebtoonFit(String(value))" />
               </div>
             </Transition>
           </section>
@@ -322,6 +322,12 @@ const webtoonFits = [
   { value: 'screen', label: WEBTOON_FIT_LABELS.screen },
   { value: 'medium', label: WEBTOON_FIT_LABELS.medium },
   { value: 'wide', label: WEBTOON_FIT_LABELS.wide }
+];
+
+const novelScrollWidths = [
+  { value: 'screen', label: '窄' },
+  { value: 'medium', label: '标准' },
+  { value: 'wide', label: '宽' }
 ];
 
 // 恢复默认：全部走 store 已有的公开动作，不改动 store API

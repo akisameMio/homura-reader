@@ -37,7 +37,7 @@
       class="no-scrollbar w-full h-full overflow-y-auto overscroll-contain touch-pan-y py-4 px-3 sm:px-2"
       style="scroll-padding-top: calc(3.5rem + env(safe-area-inset-top)); scroll-padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));"
     >
-      <div ref="novelContent" :style="novelProseStyle" class="max-w-[660px] mx-auto bg-[var(--md-reader-paper)] border-[0.5px] border-[var(--md-reader-rule)] rounded-[16px] p-5 sm:p-12 space-y-8">
+      <div ref="novelContent" :style="novelContentStyle" class="mx-auto bg-[var(--md-reader-paper)] border-[0.5px] border-[var(--md-reader-rule)] rounded-[16px] p-5 sm:p-12 space-y-8">
         <section
           v-for="p in reader.activePages"
           :key="p.pageNumber"
@@ -82,6 +82,12 @@ const { t } = useI18n();
 const MANGA_DECODE_CONCURRENCY = 2;
 const MANGA_VISIBLE_MARGIN = 2;
 const MANGA_QUEUE_WINDOW = 18;
+// 窄屏也保留档位差异，避免三个宽度都被视口截成同一值。
+const NOVEL_SCROLL_WIDTHS: Record<string, string> = {
+  screen: 'min(90%, 660px)',
+  medium: 'min(95%, 720px)',
+  wide: 'min(100%, 1024px)'
+};
 
 const reader = useReaderStore();
 function onContentLink(event: MouseEvent) {
@@ -130,7 +136,10 @@ let novelContentObserver: ResizeObserver | null = null;
 let lastMangaImage: HTMLImageElement | null = null;
 const mangaHasStableLayout = !!(mountedBook?.pageItems || []).every(hasPageSize);
 
-const novelProseStyle = computed(() => resolveProseStyle(reader.layoutConfig));
+const novelContentStyle = computed(() => ({
+  ...resolveProseStyle(reader.layoutConfig),
+  maxWidth: NOVEL_SCROLL_WIDTHS[reader.layoutConfig.webtoonFit] ?? NOVEL_SCROLL_WIDTHS.screen
+}));
 const isManga = computed(() => reader.currentBook && reader.currentBook.type === 'manga');
 
 function hasPageSize(page: ReaderPage | null | undefined) {
@@ -627,7 +636,10 @@ onMounted(() => {
   });
   boundsObserver.observe(scrollRoot.value!);
   if (!isManga.value && novelContent.value) {
-    novelContentObserver = new ResizeObserver(scheduleNovelOffsetMeasure);
+    novelContentObserver = new ResizeObserver(() => {
+      syncScrollBounds();
+      scheduleNovelOffsetMeasure();
+    });
     novelContentObserver.observe(novelContent.value);
   }
 

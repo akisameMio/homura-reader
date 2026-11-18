@@ -235,7 +235,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 - Tailwind 对 CSS 变量加透明度修饰会失效，改用 `color-mix`。
 - 夜间出现白色泛光时，优先检查 `--md-on-surface` / `--md-on-surface-variant` 是否被当作阴影或遮罩色；投影统一改用 `--md-shadow-color-soft`（遮罩仍用 `--md-shadow-color`），并运行 `npm run check:dark-glow`。
 - 触屏上不要依赖 `:hover` 显示操作按钮；触屏常显，鼠标设备才 hover。
-- iOS Safari 不支持文件夹选择与 File System Access API；Android WebView 可能暴露 `showOpenFilePicker`，但 `content://` 句柄跨重启会失去权限，`platform.ts` 已强制 Android 关闭 FSA。Android 系统选择器也选不到目录，不要绕开这些降级。
+- iOS Safari 不支持文件夹选择与 File System Access API；Android WebView 可能暴露 `showOpenFilePicker`，但 `content://` 句柄跨重启会失去权限，`platform.ts` 已强制 Android 关闭 FSA。Android 版通过 `android-archive` 的 `pickImportFolder` 调用系统目录选择器，使用目录树 URI 读取和暂存文件。
 - 本地与 `origin` 分叉时直接 push 会被拒；先 `git pull --rebase`，别强推。
 - `.trae/` 是本地 agent 配置，已被 gitignore；不要把其中的 skill / 文档当作仓库内容。
 - `.trae-html-share-packages/` 与历史遗留的 `homura-ultra.html.zip` 已在 `b5284af` 清理，不要再提交同类产物。

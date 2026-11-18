@@ -2,7 +2,7 @@
   <MobileBottomSheet :open="open" :title="store.status === 'running' ? t('导入进度') : store.status === 'cancelled' ? t('导入已停止') : t('导入结果')"
     title-id="mobile-import-progress-title" :busy="store.status === 'running'" scrim-closeable
     @close="closeSheet" @cancel="closeSheet" @closed="finishClose">
-    <ImportProgressPanel ref="panelRef" mobile-sheet @retry="$emit('retry')" @close="closeSheet" />
+    <ImportProgressPanel ref="panelRef" @retry="$emit('retry')" @close="closeSheet" />
     <template #footer>
       <button v-if="primaryAction" type="button" :class="primaryAction.variant === 'primary' ? 'md-filled-button' : 'md-tonal-button'"
         :disabled="primaryAction.disabled" @click="panelRef?.runPrimaryAction()"><MdIcon :name="primaryAction.icon" />{{ primaryAction.label }}</button>

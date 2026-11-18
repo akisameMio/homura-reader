@@ -43,11 +43,28 @@ const { HomuraStore } = await import('../src/services/storage.ts');
 function stubStore(t) {
   const originals = {
     requestPersistence: HomuraStore.requestPersistence,
-    saveBook: HomuraStore.saveBook
+    saveBook: HomuraStore.saveBook,
+    saveBooks: HomuraStore.saveBooks
   };
+  const entries = [];
   HomuraStore.requestPersistence = async () => ({ supported: true, persisted: true });
-  HomuraStore.saveBook = async () => {};
+  HomuraStore.saveBook = async (meta, source) => { entries.push({ meta, source }); };
+  HomuraStore.saveBooks = async batch => { entries.push(...batch); };
   t.after(() => Object.assign(HomuraStore, originals));
+  return entries;
+}
+
+function stubFileRead(t, content) {
+  const bytes = new TextEncoder().encode(content);
+  window.__TAURI_INTERNALS__ = {
+    invoke: async (command, args) => {
+      calls.push({ command, args });
+      if (command === 'plugin:fs|read_file') return bytes;
+      throw new Error(`未模拟原生命令：${command}`);
+    }
+  };
+  t.after(() => { delete window.__TAURI_INTERNALS__; });
+  return bytes.byteLength;
 }
 
 function silenceLogs(t) {
@@ -137,4 +154,48 @@ test('导入成功时 handleFiles 返回本批入架的书籍 id', async t => {
   assert.equal(ids.length, 1);
   assert.equal(ids[0], shelf.library[0].id, '返回的 id 应指向刚入架的书');
   assert.equal(shelf.library.length, 1);
+});
+
+test('桌面原生 TXT 从暂存快照解析，保存只提交原生路径', async t => {
+  silenceLogs(t);
+  calls.length = 0;
+  setActivePinia(createPinia());
+  const entries = stubStore(t);
+  const size = stubFileRead(t, '第一章\n正文内容');
+  const file = { name: 'sample.txt', size, type: 'text/plain', nativePath: '/Users/demo/sample.txt' };
+  stageHandler = async (_command, { bookId }) => ({
+    nativePath: `homura-native-sources/${bookId}/source/${file.name}`,
+    size
+  });
+
+  const [id] = await useImporter().handleFiles([file]);
+  const path = `homura-native-sources/${id}/source/${file.name}`;
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].meta.id, id);
+  assert.equal(entries[0].source.nativePath, path);
+  assert.equal(entries[0].source.blob, undefined);
+  assert.deepEqual(calls.filter(call => call.command.startsWith('plugin:fs|')).map(call => (
+    [call.command, call.args.path]
+  )), [['plugin:fs|read_file', path]], '解析只读取暂存文件，保存不再次写入文件字节');
+});
+
+test('桌面原生普通暂存失败时回退原文件，安全限额错误终止导入', async t => {
+  silenceLogs(t);
+  calls.length = 0;
+  setActivePinia(createPinia());
+  const entries = stubStore(t);
+  const size = stubFileRead(t, '回退内容');
+  const file = { name: 'sample.txt', size, type: 'text/plain', nativePath: '/Users/demo/sample.txt' };
+  const importer = useImporter();
+
+  stageHandler = async () => { throw new Error('NATIVE_LIMIT_EXCEEDED: 文件超出原生解析限额'); };
+  assert.deepEqual(await importer.handleFiles([file]), []);
+  assert.ok(!calls.some(call => call.command === 'plugin:fs|read_file'));
+  assert.equal(entries.length, 0);
+
+  stageHandler = async () => { throw new Error('NATIVE_COMMAND_FAILED: 暂存目录暂不可用'); };
+  const [id] = await importer.handleFiles([file]);
+  assert.equal(entries[0].meta.id, id);
+  assert.equal(await entries[0].source.blob.text(), '回退内容');
+  assert.ok(calls.some(call => call.command === 'plugin:fs|read_file' && call.args.path === file.nativePath));
 });

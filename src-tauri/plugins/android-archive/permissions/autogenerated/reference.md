@@ -13,6 +13,7 @@ Allows HOMURA to read CBZ/ZIP pages and EPUB document entries through the Androi
 - `allow-clearAll`
 - `allow-inspectImportUris`
 - `allow-pickImportUris`
+- `allow-pickImportFolder`
 - `allow-stageImportUri`
 
 ## Permission Table
@@ -202,6 +203,32 @@ Enables the openDocument command without any pre-configured scope.
 <td>
 
 Denies the openDocument command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-archive:allow-pickImportFolder`
+
+</td>
+<td>
+
+Enables the pickImportFolder command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-archive:deny-pickImportFolder`
+
+</td>
+<td>
+
+Denies the pickImportFolder command without any pre-configured scope.
 
 </td>
 </tr>

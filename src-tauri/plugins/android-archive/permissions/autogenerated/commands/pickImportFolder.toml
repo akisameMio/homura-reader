@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-pickImportFolder"
+description = "Enables the pickImportFolder command without any pre-configured scope."
+commands.allow = ["pickImportFolder"]
+
+[[permission]]
+identifier = "deny-pickImportFolder"
+description = "Denies the pickImportFolder command without any pre-configured scope."
+commands.deny = ["pickImportFolder"]

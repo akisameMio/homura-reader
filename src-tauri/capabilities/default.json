@@ -5,6 +5,7 @@
   "permissions": [
     "core:default",
     "allow-webdav-read",
+    "allow-native-commands",
     "core:app:allow-exit",
     "android-toast:default",
     "android-predictive-back:default",

@@ -121,34 +121,34 @@ z-index: 40;
 
 | surface | 宽度 | 内容 |
 | --- | --- | --- |
-| 导入菜单 | `348px` | 文件 / 文件夹 / 新建书库 |
-| 导入进度 / 完成 | `348px` | `ImportProgressPanel`，完成态沿用导入菜单的行式摘要 |
-| 同名确认 | `432px` | `DuplicateImportContent` |
-| 删除 / 建库 / 命名 / 移动 | `432px` | `ShelfDialogContent` |
-| 更新 | `448px` | `UpdateIslandPanel` |
+| 导入菜单 | `384px` | 文件 / 文件夹 / 新建书库 |
+| 导入进度 / 完成 | `384px` | `ImportProgressPanel`，完成态沿用导入菜单的行式摘要 |
+| 同名确认 | `416px` | `DuplicateImportContent` |
+| 删除 / 建库 / 命名 / 移动 | `416px` | `ShelfDialogContent` |
+| 更新 | `416px` | `UpdateIslandPanel` |
 
 统一规则：
 
 - `border-radius: 28px`
-- 背景：`surface-container`
+- 背景：与 bottom sheet 共用的 `surface-container`（65%）和 `surface-low` 混合表面
 - 文字：`on-surface`
 - 阴影只使用 `var(--md-shadow-color-soft)` 派生，不直接使用 `on-surface` / `on-surface-variant`
 - 最大高度：
-  - 普通 surface：`calc(100dvh - 112px)`
-  - 更新 surface：`min(680px, calc(100dvh - 112px))`
-- 更新 surface 自己滚动，`overscroll-behavior: contain`
-- 书库 surface 在移动目标很多时自己滚动，不能裁掉后段选项
+  - 普通 surface：`calc(100dvh - 52px)`
+  - 更新 surface：`min(680px, calc(100dvh - 52px))`
+- 顶部复用 `ReaderDrawerHeader prominent`，使用 22px 标题和左侧圆形关闭按钮
+- 正文独立滚动，`overscroll-behavior: contain`，标题和底部操作始终可见
+- 正文沿用底部抽屉的分组列表，桌面卡片圆角为 22px
 - 内容层右下角只让出主行动位置，不再渲染第二颗主按钮；实际操作按钮就是导入胶囊本体
 - 同一颗按钮在关闭时是导入胶囊 / 进度圆环，展开后移动到卡片右下角并切换为当前动作：
   高度 `56px`、圆角 `28px`、图标 `20px`、`gap: 7px`、水平 padding `13px`；
-  四字文案约 `106 × 56px`，与 `104 × 56px` 的导入胶囊几乎同宽
+  四字文案约 `110 × 56px`，与 `104 × 56px` 的导入胶囊几乎同宽
 - 卡片动作不投影，保持平面；回到导入胶囊时再恢复悬浮阴影。不要用克隆层补按钮
 - 动作色调：`primary` 用 `primary-container / on-primary-container`，`tonal` 用
   `secondary-container / on-secondary-container`，`danger` 用
   `error-container / on-error-container`；不要在卡片里再放实心 `primary` 大按钮
-- 共享内容组件通过 `host-primary-action` 在桌面端隐藏内部主按钮，并暴露
-  `primaryAction` / `runPrimaryAction()`；手机 bottom sheet 不传该属性，继续渲染原按钮
-- 桌面 surface 不显示右上角关闭图标；点外部、`Escape` 或底部取消 / 关闭动作退出
+- 共享内容组件提供 `primaryAction` / `runPrimaryAction()`，桌面由胶囊承载主操作，手机由 bottom sheet 的页脚承载
+- 关闭按钮与 `Escape` 使用相同的关闭语义：导入进行中只收起面板，更新下载中会取消下载
 
 surface 宽度由 `surfaceWidth` 决定，并写入 CSS 变量：
 
@@ -178,7 +178,7 @@ surface 的缩放原点固定为 `100% 100%`，按钮宽度变化和更新圆钮
 从按钮的真实矩形长出来。
 
 surface 自身的 `border-radius` 始终是 `28px`。不要把它过渡到 `999px`：`104 × 56` 与
-`56 × 56` 的种子在 `28px` 圆角下本来就是胶囊 / 圆形，而把整张 `432 × 400` 的卡片
+`56 × 56` 的种子在 `28px` 圆角下本来就是胶囊 / 圆形，而把整张 `416 × 400` 的卡片
 动画到 `999px` 会先变成一颗大白球，正是之前“卡片收缩出现巨大白块”的原因。
 
 新增 surface 时先在这里补宽度，不要给内容组件单独写一个会破坏锚点的 `position: fixed`。
@@ -250,7 +250,7 @@ import
   surface 打开时 spacer 收成零宽，真实按钮是 `position: absolute`，不会推动 surface。
 - 打开任意 surface 时，真实按钮不隐藏、不 `inert`、不复制；它直接移动到卡片右下角，
   切换成当前 surface 的 `primaryAction`，并承担卡片主行动。
-- 内容组件在桌面端通过 `host-primary-action` 隐藏自己的主按钮，只保留其他辅助 text button。
+- 桌面页脚提供次要操作，同时为胶囊按钮保留右下角位置。
 - surface 退出后，同一颗按钮回到导入胶囊位置并恢复焦点。
 
 ### 4.5 更新待处理与分裂
@@ -431,7 +431,7 @@ surface 离开：
 - 有失败：保留面板，展示失败汇总与“重试失败项”。
 - 用户停止：保留“已停止”状态。
 - 面板打开时不自动收起用户正在操作的 surface。
-- 桌面完成态以“导入作品”卡片为模板：同样的 `348px` 宽度、简介文字、图标行与
+- 桌面完成态以“导入作品”卡片为模板：同样的 `384px` 宽度、分组图标行与
   底部悬浮行动位；不要再给完成态单独放大宽度，否则状态切换会横向跳动。
 - 完成后卡片收起时回到 `104 × 56` 的“完成 / 有失败”胶囊，再次点击从这颗胶囊
   展开结果；不要让它收进 `56 × 56` 进度环，否则展开 / 收起会和导入菜单卡不同。
@@ -564,17 +564,17 @@ const isTextEntry = active && (
 
 1. 在 `DesktopIsland.vue` 的 `surface` computed 中加入状态来源。
 2. 明确它相对现有五级的优先级。
-3. 在 `surfaceKey`、`surfaceWidth`、`surfaceClass` 补分支。
-4. 新建内容组件，至少暴露 `focusInitial()`、`primaryAction` 与 `runPrimaryAction()`。
-5. 内容组件接受 `hostPrimaryAction`；桌面端隐藏内部主按钮，手机端保持默认按钮。
-6. 在模板中挂到 `.desktop-island-surface` 内并传 `host-primary-action`，不要 `Teleport` 到 body。
+3. 在 `surfaceKey`、`surfaceWidth` 和 `surfaceTitle` 中补充对应状态。
+4. 内容组件暴露 `primaryAction` 与 `runPrimaryAction()`，按需提供初始焦点。
+5. 桌面卡片页脚渲染次要按钮，主按钮由胶囊承载。
+6. 在 `.island-body` 中挂载内容组件，并在 `closeSurface` 中接入关闭按钮。
 7. 在 `onKeydown` / `onDocumentPointerDown` 决定 Escape 与点外部行为。
 8. 在 `prefers-reduced-motion` 下关闭新动效。
 9. 手机端是否同步？确认后优先复用同一个内容组件，只替换成 bottom sheet 外壳。
 
 ### 10.2 新增一个更新状态
 
-1. 改 `UpdateIslandPanel.vue` 的模板分支与标题。
+1. 改 `UpdateIslandPanel.vue` 的模板分支，并检查 `DesktopIsland.vue` 和 `UpdateDialog.vue` 的标题。
 2. 如果状态变化需要重播 surface 动画，加入 `surfaceKey`；不需要则不要加。
 3. 动作用 `updates` store 方法，不在组件里复制业务。
 4. 检查 `updatePending` 是否需要包含新状态，避免待处理圆钮提前消失。

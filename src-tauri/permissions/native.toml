@@ -1,0 +1,36 @@
+# 定义应用权限后，Tauri 会对所有应用命令进行权限检查。
+# 命令名以 invoke 使用的名称为准，包括 Rust 命令的 rename 别名。
+[[permission]]
+identifier = "allow-native-commands"
+description = "允许本地主窗口调用 HOMURA 原生功能"
+commands.allow = [
+  "stageImportPath",
+  "scanImportPaths",
+  "open",
+  "openDocument",
+  "extract",
+  "readTextBatch",
+  "close",
+  "clearBook",
+  "clearAll",
+  "decode_text_bytes",
+  "parse_mobi_container",
+  "create_cover_thumbnail",
+  "create_cover_thumbnail_from_archive",
+  "metadata_load",
+  "metadata_replace_all",
+  "metadata_upsert_book",
+  "metadata_upsert_books",
+  "metadata_delete_book",
+  "metadata_save_collections",
+  "metadata_save_progress",
+  "metadata_clear_progress",
+  "metadata_clear_all",
+  "sync_webdav_request",
+  "sync_fingerprint_source",
+  "download_update_asset",
+  "cancel_update_download",
+  "open_update_file",
+  "export_runtime_logs",
+  "storage_stats",
+]

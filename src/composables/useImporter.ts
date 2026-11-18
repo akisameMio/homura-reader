@@ -31,6 +31,7 @@ import {
   materializeNativeImportFile,
   materializeStagedNativeImportFile,
   pickNativeImportPaths,
+  pickNativeUriImportFolder,
   pickNativeUriImportFiles,
   scanNativeImportPaths,
   shouldFallbackNativeImport
@@ -687,30 +688,33 @@ export function useImporter() {
     importProgress.setPhase('read');
     try {
       if (isNativeImportFile(file)) {
-        if (isAndroidContentUri(file.nativePath)) {
-          stagedBookId = makeEpubId();
-          const stageStarted = now();
+        const viaAndroidUri = isAndroidContentUri(file.nativePath);
+        stagedBookId = viaAndroidUri ? makeEpubId() : `${task.kind}_${crypto.randomUUID()}`;
+        const stageStarted = now();
+        let readStarted = stageStarted;
+        try {
+          // 解析和入库复用同一份快照，避免保存时从 WebView 经 IPC 写回整本书。
           try {
             stagedSource = await stageNativePathSource(stagedBookId, file);
-          } catch (err: unknown) {
-            if (shouldFallbackNativeImport(err)) (err as { nativeImportFallback?: boolean }).nativeImportFallback = true;
+          } finally {
+            readStarted = now();
+            metrics.nativeStageMs += readStarted - stageStarted;
+            metrics.stageMs += readStarted - stageStarted;
+          }
+          file = await materializeStagedNativeImportFile(file, stagedSource.nativePath as string);
+        } catch (err: unknown) {
+          if (!shouldFallbackNativeImport(err)) throw err;
+          if (viaAndroidUri) {
+            if (!stagedSource) (err as { nativeImportFallback?: boolean }).nativeImportFallback = true;
             throw err;
-          } finally {
-            metrics.stageMs += now() - stageStarted;
           }
-          const readStarted = now();
-          try {
-            file = await materializeStagedNativeImportFile(file, stagedSource.nativePath as string);
-          } finally {
-            metrics.readMs += now() - readStarted;
-          }
-        } else {
-          const readStarted = now();
-          try {
-            file = await materializeNativeImportFile(file);
-          } finally {
-            metrics.readMs += now() - readStarted;
-          }
+          console.warn('[HOMURA] 原生暂存不可用，尝试读取所选文件', err);
+          await removeNativeBookDir(stagedBookId).catch(() => {});
+          stagedBookId = '';
+          stagedSource = null;
+          file = await materializeNativeImportFile(file);
+        } finally {
+          metrics.readMs += now() - readStarted;
         }
       }
       importProgress.setPhase('parse');
@@ -1216,6 +1220,17 @@ export function useImporter() {
   }
 
   async function pickNativeFolder() {
+    if (isAndroid) {
+      const files = await pickNativeUriImportFolder();
+      if (!files) return false;
+      if (files.length === 0) {
+        shelf.error = t('该文件夹内没有可导入的文件');
+        return true;
+      }
+      shelf.error = '';
+      await handleFiles(files);
+      return true;
+    }
     const paths = await pickNativeImportPaths({ directory: true, multiple: false, title: t('导入文件夹') });
     if (!paths || paths.length === 0) return false;
     const entries = await scanNativeImportPaths(paths);

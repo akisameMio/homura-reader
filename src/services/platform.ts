@@ -4,11 +4,13 @@
    导入与本地存档依赖若干浏览器能力，桌面与移动端差异很大：
    - File System Access API：桌面 Chromium / Tauri(WebView2) 可用，iOS Safari、
      Android Chrome 均不可用。
-   - 文件夹选择：桌面 Chromium 走 showDirectoryPicker；Android Chrome 仅支持
-     <input webkitdirectory>；iOS Safari 两者都不支持。
+   - 文件夹选择：桌面 Chromium 走 showDirectoryPicker 或目录输入框，
+     Android Tauri 走系统目录选择器。
    - 拖拽导入：只有精确指针（鼠标/触控板）才有意义，触屏设备忽略。
    - OPFS：大文件原样落盘，避免 IndexedDB Blob 爆配额。
    ========================================================================== */
+
+import { canUseNativeBridge } from './nativeRuntime.ts';
 
 const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
 
@@ -34,10 +36,10 @@ export const hasDirectoryPicker = typeof window !== 'undefined'
 export const supportsDirectoryInput = typeof document !== 'undefined'
   && 'webkitdirectory' in document.createElement('input');
 
-// 能否选择整个文件夹：桌面走 FSA / 目录 input。
-// Android 的系统文件选择器只接受文件，WebView 里即使原型上有 webkitdirectory 也选不到目录，
-// 因此安卓直接不提供文件夹入口，改用多选文件导入。
-export const canPickFolder = !isAndroid && (hasDirectoryPicker || supportsDirectoryInput);
+// Android WebView 的目录 input 无法选目录，由 Tauri 插件启动系统目录选择器。
+export const canPickFolder = isAndroid
+  ? canUseNativeBridge()
+  : hasDirectoryPicker || supportsDirectoryInput;
 
 // 拖拽只在精确指针设备上开启，触屏下拉文件没有实际入口
 export const canDragImport = typeof window !== 'undefined' && typeof window.matchMedia === 'function'

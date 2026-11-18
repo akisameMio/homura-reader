@@ -18,7 +18,7 @@ globalThis.window = {
     core: {
       invoke: async (command, args) => {
         calls.push({ command, args });
-        if (command === 'plugin:android-archive|pickImportUris') {
+        if (command === 'plugin:android-archive|pickImportUris' || command === 'plugin:android-archive|pickImportFolder') {
           if (pickerError) throw pickerError;
           return pickerResult;
         }
@@ -34,10 +34,39 @@ globalThis.window = {
 };
 
 const {
+  pickNativeUriImportFolder,
   pickNativeUriImportFiles,
   shouldFallbackNativeImport,
   stageNativeImportUri
 } = await import('../src/services/nativeImport.ts');
+
+test('Android 文件夹选择保留子目录路径，并使用树 URI 暂存文件', async () => {
+  calls.length = 0;
+  const uri = 'content://com.android.externalstorage.documents/tree/primary%3A书籍/document/primary%3A书籍%2F漫画%2F1.jpg';
+  pickerResult = { files: [{ uri, name: '1.jpg', relativePath: '书籍/漫画/1.jpg', size: 128, modifiedMs: 10 }] };
+
+  const [file] = await pickNativeUriImportFolder();
+
+  assert.deepEqual(calls, [{ command: 'plugin:android-archive|pickImportFolder', args: {} }]);
+  assert.equal(file.nativePath, uri);
+  assert.equal(file.customRelativePath, '书籍/漫画/1.jpg');
+  assert.equal(file.type, 'image/jpeg');
+  assert.equal(file.size, 128);
+  assert.equal(file.lastModified, 10);
+});
+
+test('Android 文件夹选择区分空目录、取消与读取失败', async () => {
+  pickerResult = { files: [] };
+  assert.deepEqual(await pickNativeUriImportFolder(), []);
+  try {
+    pickerError = new Error('NATIVE_CANCELLED: 用户取消选择');
+    assert.equal(await pickNativeUriImportFolder(), null);
+    pickerError = new Error('NATIVE_SECURITY_LIMIT: 没有读取权限');
+    await assert.rejects(pickNativeUriImportFolder(), error => error.code === 'NATIVE_SECURITY_LIMIT');
+  } finally {
+    pickerError = null;
+  }
+});
 
 test('Android URI 选择器返回 MOBI/EPUB，并把 inspect 结果变成轻量文件', async () => {
   calls.length = 0;

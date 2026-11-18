@@ -1,7 +1,7 @@
 <template>
   <MobileBottomSheet :open="!!pendingDuplicate" :title="t('发现同名书本')" title-id="mobile-duplicate-import-title" :busy="!!displayPending?.busy"
     @close="resolveImport()" @cancel="resolveImport()" @opened="skipButtonRefFocus()" @closed="clearDisplay">
-    <DuplicateImportContent mobile-sheet :pending="displayPending" @resolve="resolveImport" />
+    <DuplicateImportContent :pending="displayPending" @resolve="resolveImport" />
     <template #footer>
       <button type="button" class="md-filled-button" :disabled="displayPending?.busy" @click="resolveImport(true)"><MdIcon name="upload_file" />{{ t('仍然导入') }}</button>
       <div class="md-mobile-sheet-actions">

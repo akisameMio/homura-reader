@@ -706,8 +706,7 @@ export const useReaderStore = defineStore('reader', () => {
   function setWebtoonFit(fit: string) {
     if (!WEBTOON_FITS.includes(fit) || layoutConfig.webtoonFit === fit) return;
     layoutConfig.webtoonFit = fit;
-    // 条漫模式下 WebtoonView 通过 :class 绑定响应尺寸变化，无需重渲染
-    requestRender('none');
+    touchProgress();
   }
 
   function setFontSize(value: number) {

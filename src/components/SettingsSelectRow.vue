@@ -291,7 +291,7 @@ onBeforeUnmount(() => {
   padding: 6px 10px;
   border-radius: 999px;
   background: transparent;
-  transition: background-color 200ms cubic-bezier(0.2, 0, 0, 1);
+  transition: background-color 50ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 .settings-select-arrows {
@@ -310,6 +310,7 @@ onBeforeUnmount(() => {
 .settings-select-row.is-open .settings-select-control,
 .settings-select-row:focus-visible .settings-select-control {
   background: var(--md-surface-high);
+  transition-duration: 200ms;
 }
 
 .settings-select-row:focus-visible {
@@ -377,6 +378,7 @@ onBeforeUnmount(() => {
 @media (hover: hover) {
   .settings-select-row:hover:not(:disabled) .settings-select-control {
     background: var(--md-surface-high);
+    transition-duration: 200ms;
   }
 
   .settings-select-option:hover {

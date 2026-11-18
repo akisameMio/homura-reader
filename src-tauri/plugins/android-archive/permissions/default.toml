@@ -10,5 +10,6 @@ permissions = [
   "allow-clearAll",
   "allow-inspectImportUris",
   "allow-pickImportUris",
+  "allow-pickImportFolder",
   "allow-stageImportUri"
 ]

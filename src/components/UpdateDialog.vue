@@ -2,7 +2,7 @@
   <MobileBottomSheet :open="open" :title="sheetTitle" title-id="mobile-update-title"
     :backdrop-dismissible="status !== 'downloading'" :draggable="status !== 'downloading'"
     :close-label="status === 'downloading' ? t('取消下载') : t('关闭软件更新')" @close="onCancel" @cancel="onCancel">
-    <UpdateIslandPanel ref="panelRef" mobile-sheet :status="status" :release="release" :current-version="currentVersion"
+    <UpdateIslandPanel ref="panelRef" :status="status" :release="release" :current-version="currentVersion"
       :package-info="packageInfo" :error="error" :download="download" :download-error="downloadError"
       @close="$emit('close')" @retry="$emit('retry')" @changelog="$emit('changelog')" @download="$emit('download')"
       @cancel-download="$emit('cancel-download')" @install="$emit('install')" />

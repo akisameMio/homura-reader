@@ -8,6 +8,7 @@ const COMMANDS: &[&str] = &[
   "clearAll",
   "inspectImportUris",
   "pickImportUris",
+    "pickImportFolder",
   "stageImportUri",
 ];
 

@@ -15,99 +15,131 @@
         :key="surfaceKey"
         :ref="setSurfaceRef"
         class="desktop-island-surface"
-        :class="surfaceClass"
+        :class="{ 'is-update': surface === 'update' }"
+        tabindex="-1"
         :style="{
           '--island-width': `${surfaceWidth}px`,
           '--trigger-width': `${triggerWidth}px`,
+          '--island-action-width': `${buttonWidth}px`,
           '--enter-seed-width': `${enterSeed.width}px`,
           '--enter-seed-right': `${enterSeed.right}px`,
           '--enter-seed-bottom': `${enterSeed.bottom}px`
         }"
-        :role="surface === 'shelf'
-          ? (shelfDialogDisplay?.kind === 'confirm' ? 'alertdialog' : 'dialog')
-          : ['duplicate', 'import', 'update'].includes(surface as string) ? 'dialog' : undefined"
+        :role="surface === 'shelf' && shelfDialogDisplay?.kind === 'confirm' ? 'alertdialog' : 'dialog'"
         :aria-modal="surface === 'shelf' || surface === 'duplicate' ? 'true' : undefined"
-        :aria-labelledby="surface === 'shelf'
-          ? 'shelf-dialog-title'
-          : surface === 'duplicate'
-            ? 'duplicate-import-title'
-            : surface === 'import'
-              ? 'import-progress-title'
-              : surface === 'update' ? 'update-island-title' : undefined"
+        :aria-labelledby="`desktop-island-title-${surfaceKey}`"
         :aria-owns="surfaceKey ? 'homura-island-action' : undefined"
       >
-        <div v-if="surface === 'menu'" class="island-menu" role="menu" :aria-label="t('导入与书库')">
-          <header class="island-card-head">
-            <p class="md-surface-kicker">{{ t('导入作品') }}</p>
-            <h2 class="md-surface-title">{{ t('添加内容') }}</h2>
-          </header>
-          <div class="island-menu-list">
-            <button type="button" role="menuitem" class="island-menu-item is-selected" @click="choose('pick-files')">
-              <span class="island-menu-icon"><MdIcon name="upload_file" /></span>
-              <span class="island-menu-copy"><b>{{ t('导入文件') }}</b><small>EPUB / PDF / MOBI / TXT</small></span>
-              <span class="island-menu-check" aria-hidden="true"><MdIcon name="check" /></span>
-            </button>
-            <button v-if="canPickFolder" type="button" role="menuitem" class="island-menu-item" @click="choose('pick-folder')">
-              <span class="island-menu-icon"><MdIcon name="folder_open" /></span>
-              <span class="island-menu-copy"><b>{{ t('导入文件夹') }}</b><small>{{ t('图片目录会合并成一本漫画') }}</small></span>
-              <span class="island-menu-check is-empty" aria-hidden="true"></span>
-            </button>
-            <div class="island-menu-divider" aria-hidden="true"></div>
-            <button type="button" role="menuitem" class="island-menu-item" @click="choose('create-collection')">
-              <span class="island-menu-icon is-plain"><MdIcon name="create_new_folder" /></span>
-              <span class="island-menu-copy"><b>{{ t('新建书库') }}</b><small>{{ t('先建一个书库，再放入作品') }}</small></span>
-              <span class="island-menu-check is-empty" aria-hidden="true"></span>
-            </button>
-          </div>
-          <div class="md-surface-actionbar">
-            <div class="md-surface-aux">
-              <button type="button" class="md-surface-text-button" @click="menuOpen = false">{{ t('取消') }}</button>
+        <ReaderDrawerHeader
+          prominent
+          :title="surfaceTitle"
+          :title-id="`desktop-island-title-${surfaceKey}`"
+          :subtitle="surface === 'update' ? t('当前版本 v{0}', { 0: updates.appVersion }) : ''"
+          :close-label="surface === 'import' && importProgress.status === 'running'
+            ? t('收起，继续导入')
+            : surface === 'update' && updates.updateStatus === 'downloading' ? t('取消下载') : t('关闭')"
+          :close-disabled="surface === 'duplicate' && !!pendingDuplicate?.busy"
+          @close="closeSurface"
+        />
+
+        <div class="island-body">
+          <template v-if="surface === 'menu'">
+            <p class="md-mobile-sheet-label">{{ t('导入作品') }}</p>
+            <div class="md-mobile-sheet-card">
+              <button type="button" class="md-mobile-sheet-row island-menu-item" @click="choose('pick-files')">
+                <span class="md-mobile-sheet-icon is-accent"><MdIcon name="upload_file" /></span>
+                <span class="md-mobile-sheet-copy"><b>{{ t('导入文件') }}</b><small>EPUB, CBZ, ZIP, PDF, MOBI, TXT, MD</small></span>
+                <MdIcon name="chevron_right" :size="20" />
+              </button>
+              <button v-if="canPickFolder" type="button" class="md-mobile-sheet-row island-menu-item" @click="choose('pick-folder')">
+                <span class="md-mobile-sheet-icon"><MdIcon name="folder_open" /></span>
+                <span class="md-mobile-sheet-copy"><b>{{ t('导入文件夹') }}</b><small>{{ t('图片目录会合并成一本漫画') }}</small></span>
+                <MdIcon name="chevron_right" :size="20" />
+              </button>
             </div>
-          </div>
+            <p class="md-mobile-sheet-label">{{ t('整理书架') }}</p>
+            <div class="md-mobile-sheet-card">
+              <button type="button" class="md-mobile-sheet-row island-menu-item" @click="choose('create-collection')">
+                <span class="md-mobile-sheet-icon"><MdIcon name="create_new_folder" /></span>
+                <span class="md-mobile-sheet-copy"><b>{{ t('新建书库') }}</b><small>{{ t('先建一个书库，再放入作品') }}</small></span>
+                <MdIcon name="chevron_right" :size="20" />
+              </button>
+            </div>
+          </template>
+
+          <ImportProgressPanel
+            v-else-if="surface === 'import'"
+            ref="importPanelRef"
+            desktop
+            @retry="$emit('retry-failed')"
+            @close="closeImport"
+          />
+
+          <DuplicateImportContent
+            v-else-if="surface === 'duplicate'"
+            ref="duplicateContentRef"
+            desktop
+            :pending="pendingDuplicate"
+            @resolve="resolveImport"
+          />
+
+          <ShelfDialogContent
+            v-else-if="surface === 'shelf'"
+            ref="shelfContentRef"
+            desktop
+            :request="shelfDialogDisplay"
+            @resolve="resolveShelfDialog"
+          />
+
+          <UpdateIslandPanel
+            v-else-if="surface === 'update'"
+            ref="updatePanelRef"
+            desktop
+            :status="updates.updateStatus"
+            :release="updates.latestRelease"
+            :current-version="updates.appVersion"
+            :package-info="updates.updatePackage"
+            :error="updateErrorForDisplay"
+            :download="updates.downloadState"
+            :download-error="downloadErrorForDisplay"
+            @close="updates.closeUpdateDialog"
+            @retry="updates.checkForUpdates"
+            @changelog="updates.openChangelog"
+            @download="updates.startUpdateDownload"
+            @cancel-download="updates.cancelCurrentDownload"
+            @install="updates.installDownloadedUpdate"
+          />
         </div>
 
-        <ImportProgressPanel
-          v-else-if="surface === 'import'"
-          ref="importPanelRef"
-          host-primary-action
-          @retry="$emit('retry-failed')"
-          @close="closeImport"
-        />
-
-        <DuplicateImportContent
-          v-else-if="surface === 'duplicate'"
-          ref="duplicateContentRef"
-          host-primary-action
-          :pending="pendingDuplicate"
-          @resolve="resolveImport"
-        />
-
-        <ShelfDialogContent
-          v-else-if="surface === 'shelf'"
-          ref="shelfContentRef"
-          host-primary-action
-          :request="shelfDialogDisplay"
-          @resolve="resolveShelfDialog"
-        />
-
-        <UpdateIslandPanel
-          v-else-if="surface === 'update'"
-          ref="updatePanelRef"
-          host-primary-action
-          :status="updates.updateStatus"
-          :release="updates.latestRelease"
-          :current-version="updates.appVersion"
-          :package-info="updates.updatePackage"
-          :error="updateErrorForDisplay"
-          :download="updates.downloadState"
-          :download-error="downloadErrorForDisplay"
-          @close="updates.closeUpdateDialog"
-          @retry="updates.checkForUpdates"
-          @changelog="updates.openChangelog"
-          @download="updates.startUpdateDownload"
-          @cancel-download="updates.cancelCurrentDownload"
-          @install="updates.installDownloadedUpdate"
-        />
+        <footer class="island-footer">
+          <template v-if="surface === 'duplicate'">
+            <button type="button" class="md-surface-text-button island-skip-duplicate" :disabled="pendingDuplicate?.busy" @click="resolveImport()">
+              {{ pendingDuplicate?.batch ? t('跳过这批') : t('跳过此书') }}
+            </button>
+            <button type="button" class="md-surface-text-button" :disabled="pendingDuplicate?.busy" @click="resolveImport(DUPLICATE_SKIP_ALL)">
+              {{ t('全部跳过') }}
+            </button>
+          </template>
+          <template v-else-if="surface === 'shelf'">
+            <button v-if="shelfDialogDisplay?.kind === 'confirm'" type="button" class="md-surface-text-button island-cancel-confirm" @click="resolveShelfDialog()">
+              {{ t('取消') }}
+            </button>
+            <button v-if="shelfDialogDisplay?.kind === 'folder'" type="button" class="md-surface-text-button" @click="resolveShelfDialog(false)">
+              {{ t('直接导入') }}
+            </button>
+          </template>
+          <template v-else-if="surface === 'update'">
+            <button v-if="updates.updateStatus === 'available'" type="button" class="md-surface-text-button" @click="updates.closeUpdateDialog()">
+              {{ t('稍后提醒') }}
+            </button>
+            <button v-if="updates.updateStatus === 'available'" type="button" class="md-surface-text-button" @click="updatePanelRef?.openDetails()">
+              {{ t('查看详情') }}
+            </button>
+            <button v-if="updates.updateStatus === 'downloaded'" type="button" class="md-surface-text-button" @click="updates.closeUpdateDialog()">
+              {{ t('稍后安装') }}
+            </button>
+          </template>
+        </footer>
       </div>
     </Transition>
 
@@ -231,12 +263,13 @@ import { canPickFolder } from '../services/platform.ts';
 import { useImportProgressStore } from '../stores/importProgress.ts';
 import { useUpdateStore } from '../stores/updates.ts';
 import { useShelfDialogs } from '../composables/useShelfDialogs.ts';
-import { useDuplicateImport } from '../composables/useDuplicateImport.ts';
+import { DUPLICATE_SKIP_ALL, useDuplicateImport } from '../composables/useDuplicateImport.ts';
 import DuplicateImportContent from './DuplicateImportContent.vue';
 import ShelfDialogContent from './ShelfDialogContent.vue';
 import ImportProgressPanel from './ImportProgressPanel.vue';
 import UpdateIslandPanel from './UpdateIslandPanel.vue';
 import MdIcon from './MdIcon.vue';
+import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
 import { useI18n } from '../composables/useI18n.ts';
 
 const { t } = useI18n();
@@ -309,23 +342,23 @@ const surfaceKey = computed(() => {
   if (surface.value === 'update') return `update-${updates.updateStatus}`;
   return surface.value;
 });
-const surfaceWidth = computed(() => {
-  if (surface.value === 'menu') return 348;
-  if (surface.value === 'import') return 348;
-  if (surface.value === 'duplicate') return 432;
-  if (surface.value === 'shelf') {
-    return 432;
+const surfaceWidth = computed(() => (
+  surface.value === 'menu' || surface.value === 'import' ? 384 : 416
+));
+const surfaceTitle = computed(() => {
+  if (surface.value === 'menu') return t('添加内容');
+  if (surface.value === 'shelf') return shelfDialogDisplay.value?.title || t('书库管理');
+  if (surface.value === 'duplicate') return t('发现同名书本');
+  if (surface.value === 'import') {
+    if (importProgress.status === 'running') return t('正在导入');
+    if (importProgress.status === 'cancelled') return t('导入已停止');
+    return t('导入结果');
   }
-  if (surface.value === 'update') return 448;
-  return 0;
+  if (updates.updateStatus === 'downloading') return t('正在下载更新');
+  if (updates.updateStatus === 'downloaded') return t('下载完成');
+  if (updates.updateStatus === 'loading') return t('检查更新');
+  return t('软件更新');
 });
-const surfaceClass = computed(() => ({
-  'is-menu': surface.value === 'menu',
-  'is-import': surface.value === 'import',
-  'is-duplicate': surface.value === 'duplicate',
-  'is-shelf': surface.value === 'shelf',
-  'is-update': surface.value === 'update'
-}));
 const showProgressRing = computed(() => (
   importProgress.status === 'running' || importProgress.status === 'cancelled'
 ));
@@ -382,7 +415,8 @@ const buttonWidth = computed(() => {
   const labelLength = [...String(heldAction.value.label || '')].length;
   const iconWidth = heldAction.value.icon ? 20 : 0;
   const iconGap = heldAction.value.icon ? 7 : 0;
-  return Math.max(104, Math.ceil(26 + iconWidth + iconGap + labelLength * 13.2));
+  const actionWidth = Math.ceil(30 + iconWidth + iconGap + labelLength * 13.2);
+  return Math.min(Math.floor(surfaceWidth.value * 0.58), Math.max(104, actionWidth));
 });
 const buttonTitle = computed(() => (
   actionFaceShown.value ? heldAction.value?.label || t('处理中') : importButtonTitle.value
@@ -392,7 +426,7 @@ const buttonLabel = computed(() => (
 ));
 const buttonHasPopup = computed(() => {
   if (actionFaceShown.value) return undefined;
-  return importProgress.status === 'idle' ? 'menu' : 'dialog';
+  return 'dialog';
 });
 const buttonExpanded = computed(() => {
   if (actionFaceShown.value) return undefined;
@@ -439,6 +473,14 @@ function runActiveAction() {
   }
   if (activeAction.value?.disabled) return;
   activeContent.value?.runPrimaryAction?.();
+}
+
+function closeSurface() {
+  if (surface.value === 'menu') menuOpen.value = false;
+  else if (surface.value === 'duplicate') resolveImport();
+  else if (surface.value === 'shelf') resolveShelfDialog();
+  else if (surface.value === 'import') importProgress.toggleExpanded(false);
+  else if (surface.value === 'update') void updates.closeUpdateDialog();
 }
 
 function closeImport() {
@@ -557,11 +599,15 @@ async function focusSurface(key: string | null) {
 
   await nextTick();
   if (surface.value === 'duplicate') {
-    duplicateContentRef.value?.focusInitial();
+    surfaceRef.value?.querySelector<HTMLElement>('.island-skip-duplicate:not(:disabled)')?.focus();
     return;
   }
   if (surface.value === 'shelf') {
-    shelfContentRef.value?.focusInitial();
+    const cancel = surfaceRef.value?.querySelector<HTMLElement>('.island-cancel-confirm');
+    if (cancel) cancel.focus();
+    else if (!await shelfContentRef.value?.focusInitial()) {
+      surfaceRef.value?.querySelector<HTMLElement>('.md-drawer-header button')?.focus();
+    }
     return;
   }
   if (surface.value === 'update') {
@@ -575,7 +621,7 @@ async function focusSurface(key: string | null) {
       importButtonRef.value?.focus();
       return;
     }
-    updatePanelRef.value?.focusInitial();
+    surfaceRef.value?.focus({ preventScroll: true });
     return;
   }
   if (surface.value === 'import') {
@@ -583,7 +629,7 @@ async function focusSurface(key: string | null) {
       importButtonRef.value?.focus();
       return;
     }
-    importPanelRef.value?.focusInitial();
+    surfaceRef.value?.focus({ preventScroll: true });
     return;
   }
   if (surface.value === 'menu') {
@@ -594,7 +640,7 @@ async function focusSurface(key: string | null) {
 function focusableElements(): HTMLElement[] {
   if (!surfaceRef.value) return [];
   const elements = Array.from(surfaceRef.value.querySelectorAll(
-    'button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])'
+    'button:not(:disabled):not([hidden]), input:not(:disabled), [tabindex]:not([tabindex="-1"])'
   )) as HTMLElement[];
   if (
     surface.value
@@ -681,7 +727,7 @@ watch(
     }
     if (pending && surface.value === 'duplicate') {
       nextTick(() => {
-        if (pending === pendingDuplicate.value) duplicateContentRef.value?.focusInitial();
+        if (pending === pendingDuplicate.value) surfaceRef.value?.querySelector<HTMLElement>('.island-skip-duplicate:not(:disabled)')?.focus();
       });
     }
   },
@@ -697,7 +743,7 @@ watch(
     }
     if (pending && surface.value === 'shelf') {
       nextTick(() => {
-        if (pending === pendingShelfDialog.value) shelfContentRef.value?.focusInitial();
+        if (pending === pendingShelfDialog.value) void focusSurface(surfaceKey.value);
       });
     }
   },
@@ -964,7 +1010,7 @@ onBeforeUnmount(() => {
   opacity: 0;
   font-size: 13px;
   font-weight: 650;
-  white-space: nowrap;
+  line-height: 1.25;
   pointer-events: none;
   transform: scale(0.9);
   transition:
@@ -975,6 +1021,12 @@ onBeforeUnmount(() => {
 .island-action-face.is-visible {
   opacity: 1;
   transform: none;
+}
+
+.island-action-face > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 .island-action-face :deep(svg) {
@@ -1067,154 +1119,91 @@ onBeforeUnmount(() => {
   right: 0;
   bottom: 0;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
   width: var(--island-width);
-  max-height: calc(100dvh - 112px);
+  max-height: calc(100dvh - 52px);
   overflow: hidden;
+  outline: none;
   clip-path: inset(-80px -80px -80px -80px round 28px);
   border-radius: 28px;
-  background: var(--md-surface-container);
+  background: color-mix(in oklab, var(--md-surface-container) 65%, var(--md-surface-low));
   color: var(--md-on-surface);
   box-shadow:
     0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color-soft) 28%, transparent),
-    0 18px 48px -18px color-mix(in oklab, var(--md-shadow-color-soft) 48%, transparent);
+    0 16px 42px -16px color-mix(in oklab, var(--md-shadow-color-soft) 45%, transparent);
   transform-origin: 100% 100%;
 }
 
 .desktop-island-surface.is-update {
-  max-height: min(680px, calc(100dvh - 112px));
+  max-height: min(680px, calc(100dvh - 52px));
+}
+
+:global([data-mode="dark"] .desktop-island-surface) {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--md-outline-variant) 60%, transparent),
+    0 14px 38px -12px var(--md-shadow-color-soft);
+}
+
+.desktop-island-surface :deep(.md-drawer-header.is-prominent) {
+  min-height: 76px;
+  padding: 16px 20px 12px;
+}
+
+.desktop-island-surface :deep(.md-drawer-title) { overflow-wrap: anywhere; }
+.island-body {
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  padding: 0 20px 4px;
+  scrollbar-width: thin;
 }
 
-.desktop-island-surface.is-shelf {
-  overflow-y: auto;
-  overscroll-behavior: contain;
+.island-body :deep(.md-mobile-sheet-card) {
+  margin-bottom: 10px;
+  border-radius: 22px;
 }
 
-.desktop-island-surface.is-duplicate {
-  overflow: hidden;
+.island-body :deep(.md-mobile-sheet-card:last-child) { margin-bottom: 0; }
+.island-body :deep(.md-mobile-sheet-label) { margin: 14px 14px 7px; }
+.island-body :deep(.md-mobile-sheet-label:first-child) { margin-top: 3px; }
+.island-body :deep(.md-mobile-sheet-row) {
+  min-height: 62px;
+  gap: 11px;
+  padding: 10px 14px;
+}
+.island-body :deep(.md-mobile-sheet-row + .md-mobile-sheet-row::before) { inset-inline: 63px 14px; }
+.island-body :deep(.md-mobile-sheet-icon) {
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
+  border-radius: 13px;
+}
+.island-body :deep(.md-mobile-sheet-field) {
+  height: 46px;
+  border-radius: 13px;
+  font-size: 14px;
+}
+.island-body :deep(button.md-mobile-sheet-row:focus-visible) {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -3px;
 }
 
-.desktop-island-surface :deep(.md-surface-actionbar) {
-  min-height: 56px;
-}
-
-.island-menu {
+.island-footer {
   display: flex;
-  min-height: 372px;
-  flex-direction: column;
-  padding: 20px 20px 92px;
-}
-
-.island-card-head {
   flex: none;
-}
-
-.island-menu-list {
-  display: grid;
-  gap: 4px;
-  margin-top: 18px;
-}
-
-.island-menu-item {
-  display: flex;
-  width: 100%;
-  min-height: 68px;
+  flex-wrap: wrap;
+  align-content: center;
   align-items: center;
-  gap: 12px;
-  padding: 8px 8px 8px 10px;
-  border-radius: 18px;
-  color: var(--md-on-surface);
-  text-align: left;
-  transition:
-    background-color var(--md-duration-short) var(--md-ease-emphasized),
-    transform var(--md-duration-short) var(--md-ease-emphasized);
+  min-height: 88px;
+  padding: 12px calc(28px + var(--island-action-width)) 20px 20px;
 }
 
-.island-menu-item.is-selected {
-  background: color-mix(in oklab, var(--md-primary-container) 48%, var(--md-surface-low));
-}
-
-.island-menu-icon {
-  display: grid;
-  width: 40px;
-  height: 40px;
-  flex: none;
-  place-items: center;
-  border-radius: 14px;
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-}
-
-.island-menu-icon.is-plain {
-  background: var(--md-surface-high);
-  color: var(--md-on-surface);
-}
-
-.island-menu-icon :deep(svg) {
-  width: 21px;
-  height: 21px;
-}
-
-.island-menu-copy {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.island-menu-copy b {
-  overflow: hidden;
-  font-size: 13px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.island-menu-copy small {
-  overflow: hidden;
-  color: var(--md-on-surface-variant);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.island-menu-check {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  flex: none;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--md-primary);
-  color: var(--md-on-primary);
-}
-
-.island-menu-check.is-empty {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--md-outline) 48%, transparent);
-}
-
-.island-menu-check :deep(svg) {
-  width: 14px;
-  height: 14px;
-}
-
-.island-menu-divider {
-  height: 0.5px;
-  margin: 7px 12px;
-  background: color-mix(in oklab, var(--md-outline-variant) 75%, transparent);
-}
-
-.island-menu > .md-surface-actionbar {
-  position: absolute;
-  right: 20px;
-  bottom: 20px;
-  left: 20px;
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
+.island-footer .md-surface-text-button {
+  min-height: 44px;
+  padding-inline: 9px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .island-surface-enter-active {

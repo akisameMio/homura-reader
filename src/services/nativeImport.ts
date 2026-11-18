@@ -244,6 +244,20 @@ export async function pickNativeUriImportFiles({ multiple = true } = {}) {
   return entries.map(makeNativeImportFile);
 }
 
+export async function pickNativeUriImportFolder() {
+  try {
+    const result = await invokeNativeCommand('android-archive', 'pickImportFolder', {}, {
+      feature: 'native-import-folder'
+    });
+    return (Array.isArray(result?.files) ? result.files : []).map((entry: NativeImportEntry) =>
+      makeNativeImportFile({ ...entry, path: entry.uri })
+    );
+  } catch (error) {
+    if (isNativeImportCancelled(error)) return null;
+    throw error;
+  }
+}
+
 export async function scanNativeImportPaths(paths: unknown[]) {
   if (!Array.isArray(paths) || paths.length === 0) return [];
   const result = await invokeNativeCommand(null, 'scanImportPaths', { paths }, {

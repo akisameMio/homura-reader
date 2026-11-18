@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.provider.DocumentsContract
+import android.provider.DocumentsContract.Document
 import android.provider.OpenableColumns
 import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.result.ActivityResult
@@ -51,6 +52,8 @@ private const val MAX_TEXT_TOTAL_BYTES = 32L * 1024 * 1024
 private const val MAX_IMPORT_FILE_BYTES = 4L * 1024 * 1024 * 1024
 private const val MAX_IMPORT_ARCHIVE_BYTES = 16L * 1024 * 1024 * 1024
 private const val MAX_IMPORT_NAME_CHARS = 180
+private const val MAX_IMPORT_TREE_ENTRIES = 20_000
+private const val MAX_IMPORT_TREE_DEPTH = 64
 private const val IMPORT_PART_PREFIX = ".homura-import-"
 
 private val IMAGE_NAME = Regex(""".*\.(jpg|jpeg|png|webp|gif|avif|bmp)$""", RegexOption.IGNORE_CASE)
@@ -375,6 +378,94 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
       Activity.RESULT_CANCELED -> invoke.reject("NATIVE_CANCELLED: 用户取消选择")
       else -> invoke.reject("NATIVE_COMMAND_FAILED: 系统文件选择器返回异常")
     }
+  }
+
+  @Command
+  fun pickImportFolder(invoke: Invoke) {
+    try {
+      val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      startActivityForResult(invoke, intent, "importFolderResult")
+    } catch (error: Exception) {
+      invoke.reject("NATIVE_UNAVAILABLE: 无法打开系统文件夹选择器")
+    }
+  }
+
+  @ActivityCallback
+  fun importFolderResult(invoke: Invoke, result: ActivityResult) {
+    if (result.resultCode == Activity.RESULT_CANCELED) {
+      invoke.reject("NATIVE_CANCELLED: 用户取消选择")
+      return
+    }
+    val treeUri = result.data?.data
+    if (result.resultCode != Activity.RESULT_OK || treeUri == null ||
+      treeUri.scheme != "content" || !DocumentsContract.isTreeUri(treeUri)) {
+      invoke.reject("NATIVE_INVALID_DATA: 系统文件夹选择器没有返回有效目录")
+      return
+    }
+    runAsync(invoke) {
+      try {
+        scanImportTree(treeUri)
+      } catch (error: Exception) {
+        throw nativeImportError(error)
+      }
+    }
+  }
+
+  private fun scanImportTree(treeUri: Uri): JSObject {
+    val rootId = DocumentsContract.getTreeDocumentId(treeUri)
+    val rootUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, rootId)
+    val rootName = inspectImportUri(rootUri.toString()).name
+    val files = JSArray()
+    val visitedDirectories = mutableSetOf(rootId)
+    val projection = arrayOf(
+      Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE,
+      Document.COLUMN_SIZE, Document.COLUMN_LAST_MODIFIED
+    )
+    var scannedEntries = 0
+
+    fun scanDirectory(parentId: String, parentPath: String, depth: Int) {
+      if (depth > MAX_IMPORT_TREE_DEPTH) {
+        throw NativeImportException("NATIVE_LIMIT_EXCEEDED", "文件夹层级过深")
+      }
+      val children = mutableListOf<Pair<String, String>>()
+      val childUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId)
+      val cursor = activity.contentResolver.query(childUri, projection, null, null, null)
+        ?: throw NativeImportException("NATIVE_COMMAND_FAILED", "无法读取所选目录")
+      cursor.use {
+        val idColumn = it.getColumnIndexOrThrow(Document.COLUMN_DOCUMENT_ID)
+        val nameColumn = it.getColumnIndexOrThrow(Document.COLUMN_DISPLAY_NAME)
+        val mimeColumn = it.getColumnIndexOrThrow(Document.COLUMN_MIME_TYPE)
+        val sizeColumn = it.getColumnIndex(Document.COLUMN_SIZE)
+        val modifiedColumn = it.getColumnIndex(Document.COLUMN_LAST_MODIFIED)
+        while (it.moveToNext()) {
+          if (++scannedEntries > MAX_IMPORT_TREE_ENTRIES) {
+            throw NativeImportException("NATIVE_LIMIT_EXCEEDED", "文件夹条目过多")
+          }
+          val id = it.getString(idColumn) ?: continue
+          val name = it.getString(nameColumn) ?: continue
+          if (name.isBlank() || name.startsWith(".") || name == "__MACOSX" ||
+            '/' in name || '\\' in name) continue
+          val relativePath = "$parentPath/$name"
+          if (it.getString(mimeColumn) == Document.MIME_TYPE_DIR) {
+            if (visitedDirectories.add(id)) children.add(id to relativePath)
+          } else if (isSupportedImportName(name)) {
+            files.put(JSObject().apply {
+              put("uri", DocumentsContract.buildDocumentUriUsingTree(treeUri, id).toString())
+              put("name", name)
+              put("relativePath", relativePath)
+              if (sizeColumn >= 0 && !it.isNull(sizeColumn)) put("size", it.getLong(sizeColumn).coerceAtLeast(0))
+              if (modifiedColumn >= 0 && !it.isNull(modifiedColumn)) put("modifiedMs", it.getLong(modifiedColumn))
+            })
+          }
+        }
+      }
+      // 先关闭父目录游标，避免深层目录同时占用多个 provider 游标。
+      for ((id, path) in children) scanDirectory(id, path, depth + 1)
+    }
+
+    scanDirectory(rootId, rootName.replace('/', '_').replace('\\', '_'), 0)
+    return JSObject().apply { put("files", files) }
   }
 
   @Command
