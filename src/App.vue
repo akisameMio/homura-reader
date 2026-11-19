@@ -598,7 +598,8 @@ async function dismissStartupSplash() {
     await new Promise(resolve => window.setTimeout(resolve, remaining));
   }
 
-  // 等一帧确认书架已经绘到遮罩后面，再开始淡出
+  // 先在不透明的遮罩下恢复滚动条占位，避免书架在淡出结束时突然变窄。
+  document.documentElement.classList.remove('homura-splashing');
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   splash.classList.add('is-leaving');
   splash.setAttribute('aria-hidden', 'true');
@@ -608,7 +609,6 @@ async function dismissStartupSplash() {
     if (removed) return;
     removed = true;
     splash.remove();
-    document.documentElement.classList.remove('homura-splashing');
   };
   splash.addEventListener('transitionend', event => {
     if (event.target === splash && event.propertyName === 'opacity') removeSplash();
