@@ -1,31 +1,28 @@
 <template>
-  <div class="md-card md-card--filled md-collection-card" :class="{ 'is-drop-target': highlighted, 'md-collection-selected': selected }" :data-collection-id="collection.id" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
-    <button class="md-collection-open" :aria-label="selecting ? t('选择书库：{0}', { 0: collection.title }) : t('打开书库：{0}，{1} 本', { 0: collection.title, 1: books.length })" :aria-pressed="selecting ? selected : undefined" @click="$emit(selecting ? 'toggle' : 'open', collection.id)">
-      <span class="md-collection-art" aria-hidden="true">
-        <span class="md-collection-board">
-          <span v-for="index in 4" :key="index" class="md-collection-tile" :class="{ 'is-empty': !covers[index - 1] }">
-            <template v-if="covers[index - 1]">
-              <img v-if="covers[index - 1].cover" :src="covers[index - 1].cover || undefined" alt="" loading="lazy" decoding="async" draggable="false" />
-              <span v-else class="md-collection-fallback">{{ covers[index - 1].title }}</span>
-            </template>
-            <MdIcon v-else name="auto_stories" />
+  <article class="md-shelf-card md-collection-card relative min-w-0 self-start" :class="{ 'is-drop-target': highlighted }" :data-collection-id="collection.id" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
+    <button type="button" class="md-shelf-open absolute inset-0 z-10" :aria-label="selecting ? t('选择书库：{0}', { 0: collection.title }) : t('打开书库：{0}，{1} 本', { 0: collection.title, 1: books.length })" :aria-pressed="selecting ? selected : undefined" @click="$emit(selecting ? 'toggle' : 'open', collection.id)"></button>
+    <div class="md-collection-stack">
+      <div class="md-shelf-cover" :class="{ 'is-selected': selected }">
+        <img v-if="leadBook?.cover" :src="leadBook.cover" class="md-shelf-cover-image" alt="" loading="lazy" decoding="async" draggable="false" />
+        <div v-else class="md-shelf-cover-fallback" aria-hidden="true">
+          <span v-if="leadBook" class="md-shelf-cover-title line-clamp-3">{{ leadBook.title }}</span>
+          <MdIcon v-else name="collections_bookmark" :size="36" />
+        </div>
+        <span class="md-collection-badges" aria-hidden="true">
+          <span class="md-collection-badge"><span class="md-collection-badge-label">{{ t('{0} 册', { 0: books.length }) }}</span></span>
+          <span v-if="!selecting" class="md-collection-badge">
+            <MdIcon name="collections_bookmark" :size="14" />
+            <span class="md-collection-badge-label">{{ t('系列') }}</span>
           </span>
         </span>
         <span v-if="selecting" class="md-select-badge md-shape-morph md-shape-boom" :class="{ 'is-selected': selected }" aria-hidden="true">
           <MdIcon :name="selected ? 'check' : 'radio_button_unchecked'" :size="16" />
         </span>
-      </span>
-      <span class="md-collection-info">
-        <span class="md-collection-title">{{ collection.title }}</span>
-        <span class="md-collection-meta">
-          <span v-if="highlighted" class="md-collection-drop">{{ t('松开移入书库') }}</span>
-          <template v-else>
-            <span class="md-collection-count">{{ t('{0} 本作品', { 0: books.length }) }}</span>
-          </template>
-        </span>
-      </span>
-    </button>
-  </div>
+        <span v-if="highlighted" class="md-collection-drop">{{ t('松开移入书库') }}</span>
+      </div>
+    </div>
+    <h4 class="md-shelf-caption line-clamp-2">{{ collection.title }}</h4>
+  </article>
 </template>
 
 <script setup lang="ts">
@@ -44,8 +41,9 @@ const emit = defineEmits(['open', 'toggle', 'move']);
 const hovering = ref(false);
 const shelf = useShelfStore();
 const highlighted = computed(() => hovering.value || props.touchOver);
-const covers = computed(() => {
-  return sortShelfBooks(props.books, props.sortKey, shelf.progressMap).slice(0, 4);
+const leadBook = computed(() => {
+  const orderedBooks = sortShelfBooks(props.books, props.sortKey, shelf.progressMap);
+  return orderedBooks.find(book => book.cover) ?? orderedBooks[0];
 });
 
 function onDragOver(event: DragEvent) {

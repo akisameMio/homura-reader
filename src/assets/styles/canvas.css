@@ -20,20 +20,6 @@
       padding-bottom: env(safe-area-inset-bottom);
     }
 
-    /* 触屏上没有 hover：书本卡片的移除按钮隐藏，删除走选择模式 */
-    .card-remove-btn {
-      opacity: 0;
-      transition: opacity 0.15s ease;
-    }
-    .group:hover .card-remove-btn {
-      opacity: 1;
-    }
-    @media (hover: none) {
-      .card-remove-btn {
-        display: none;
-      }
-    }
-
     /* 触屏阅读手势层：翻页模式无需滚动，全部手势交给 JS，避免纵向抖动触发 pointercancel */
     .reader-gesture-layer {
       touch-action: none;

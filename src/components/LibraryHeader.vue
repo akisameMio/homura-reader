@@ -1,7 +1,9 @@
 <template>
   <!-- 书架页头部：MD3 Top App Bar -->
   <div
-    class="library-header-bar z-20 bg-[var(--md-surface)]"
+    ref="headerRef"
+    class="library-header-bar z-20"
+    :class="{ 'is-scroll-hidden': scrollHidden }"
     :style="isCompact ? { paddingTop: 'env(safe-area-inset-top)' } : null"
   >
     <!-- Top App Bar: 桌面 64px / 手机 56px -->
@@ -10,6 +12,7 @@
       class="library-toolbar"
       :class="{ 'is-search-open': searchOpen }"
       :style="{ '--library-pill-button-count': 3 + Number(showFullscreen) + Number(!!$slots.actions) }"
+      :inert="scrollHidden"
     >
       <div class="library-toolbar-title" :inert="searchOpen && isCompact">
         <Transition name="library-title" mode="out-in" appear @enter="onTitleEnter">
@@ -27,7 +30,7 @@
           </button>
           <h1 v-else :key="title" class="text-[21px] min-[900px]:text-[22px] font-medium tracking-tight min-w-0 truncate">{{ title }}</h1>
         </Transition>
-        <span ref="countBadgeRef" class="hidden min-[360px]:inline-flex shrink-0 px-2.5 py-1 rounded-full bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)] font-mono text-[10px] min-[900px]:text-[12px] font-semibold">{{ t('{0} 部作品', { 0: count }) }}</span>
+        <span ref="countBadgeRef" class="hidden min-[360px]:inline-flex shrink-0 whitespace-nowrap text-[var(--md-on-surface-variant)] font-mono text-[10px] min-[900px]:text-[12px] font-semibold">{{ t('{0} 部作品', { 0: count }) }}</span>
       </div>
 
       <div ref="searchTrackRef" class="library-search-track">
@@ -181,7 +184,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch, shallowRef, onBeforeUnmount } from 'vue';
+import { computed, nextTick, ref, watch, shallowRef, onBeforeUnmount, type PropType } from 'vue';
 import { useSettingsStore } from '../stores/settings.ts';
 import { useUiStore } from '../stores/ui.ts';
 import { useViewport } from '../composables/useViewport.ts';
@@ -197,6 +200,7 @@ const { t } = useI18n();
 const props = defineProps({
   title: { type: String, default: '书架' },
   count: { type: Number, default: 0 },
+  scrollRoot: { type: Object as PropType<HTMLElement | null>, default: null },
   appearanceOpen: { type: Boolean, default: false },
   filterOpen: { type: Boolean, default: false },
   query: { type: String, default: '' },
@@ -213,14 +217,81 @@ const { isCompact } = useViewport();
 const showFullscreen = computed(() => !isCompact.value && settings.showFullscreenButton);
 
 const searchOpen = ref(false);
+const scrollHidden = ref(false);
+const headerRef = shallowRef<HTMLElement | null>(null);
 const toolbarRef = shallowRef<HTMLElement | null>(null);
 const searchTrackRef = shallowRef<HTMLElement | null>(null);
 const searchFieldRef = shallowRef<HTMLElement | null>(null);
 const searchInputRef = shallowRef<HTMLInputElement | null>(null);
 const searchButtonRef = shallowRef<HTMLButtonElement | null>(null);
+const headerSpring = makeAxis(0, 620);
 const searchSpring = makeAxis(0, 740);
 let cancelSearchSpring: (() => void) | null = null;
 let closeSpringDelay: ReturnType<typeof setTimeout> | undefined;
+
+watch([() => props.scrollRoot, isCompact, () => props.title], ([root, compact], _, onCleanup) => {
+  scrollHidden.value = false;
+  if (!root) return;
+
+  const scroller = compact ? root : document.scrollingElement ?? document.documentElement;
+  const eventTarget = compact ? root : window;
+  const scrollLimit = () => Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+  let limit = scrollLimit();
+  let turningPoint = Math.max(0, Math.min(limit, scroller.scrollTop));
+
+  function onShelfScroll() {
+    const nextLimit = scrollLimit();
+    const top = Math.max(0, Math.min(nextLimit, scroller.scrollTop));
+    // 手机顶栏收起会增加内容区高度。触底后的 scrollTop 钳制不算反向滚动。
+    const wasClamped = nextLimit < limit && top >= nextLimit - 1 && turningPoint >= nextLimit - 1;
+    limit = nextLimit;
+    if (top <= 1 || searchOpen.value || props.appearanceOpen || props.filterOpen
+      || toolbarRef.value?.querySelector(':focus-visible')) {
+      scrollHidden.value = false;
+      turningPoint = top;
+    } else if (wasClamped) {
+      turningPoint = top;
+    } else if (scrollHidden.value) {
+      turningPoint = Math.max(turningPoint, top);
+      if (turningPoint - top >= 8) {
+        scrollHidden.value = false;
+        turningPoint = top;
+      }
+    } else {
+      turningPoint = Math.min(turningPoint, top);
+      if (top - turningPoint >= 12) {
+        scrollHidden.value = true;
+        turningPoint = top;
+      }
+    }
+  }
+
+  eventTarget.addEventListener('scroll', onShelfScroll, { passive: true });
+  onCleanup(() => eventTarget.removeEventListener('scroll', onShelfScroll));
+}, { immediate: true, flush: 'post' });
+
+watch(scrollHidden, (hidden, _, onCleanup) => {
+  const header = headerRef.value;
+  if (!header) return;
+
+  headerSpring.target = hidden ? 1 : 0;
+  const property = '--library-header-spring-progress';
+  if (prefersReducedMotion()) {
+    snapAxes([headerSpring]);
+    header.style.removeProperty(property);
+    return;
+  }
+
+  const paint = () => {
+    const progress = Math.min(1, Math.max(0, headerSpring.pos));
+    header.style.setProperty(property, String(progress));
+  };
+  // 顶栏位移和手机内容区腾出的空间共用一个进度，反向时保留弹簧速度。
+  paint();
+  onCleanup(runSpring([headerSpring], paint, () => {
+    header.style.removeProperty(property);
+  }, { damping: 0.9 }));
+});
 
 watch(searchOpen, open => {
   const toolbar = toolbarRef.value;
@@ -374,8 +445,21 @@ const sortOptions = [
 
 <style scoped>
 .library-header-bar {
+  --library-toolbar-height: 64px;
+  --library-header-target: 0;
+  --library-header-progress: var(--library-header-target);
   position: sticky;
   top: 0;
+  pointer-events: none;
+  transform: translateY(calc(-100% * var(--library-header-progress)));
+}
+.library-header-bar.is-scroll-hidden {
+  --library-header-target: 1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .library-header-bar {
+    --library-header-progress: var(--library-header-spring-progress, var(--library-header-target));
+  }
 }
 
 .library-toolbar {
@@ -390,7 +474,7 @@ const sortOptions = [
   display: flex;
   align-items: center;
   gap: 12px;
-  height: 64px;
+  height: var(--library-toolbar-height);
   padding-inline-start: var(--library-toolbar-inset);
   padding-inline-end: calc(var(--library-toolbar-inset) + var(--library-pill-width) + 8px);
 }
@@ -407,6 +491,15 @@ const sortOptions = [
   align-items: center;
   gap: inherit;
   min-width: 0;
+  height: var(--library-action-size);
+  padding-inline: 14px;
+}
+.library-toolbar-title,
+.library-pill-surface {
+  border-radius: 9999px;
+  background: var(--md-surface-low);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--md-outline-variant) 38%, transparent),
+    var(--md-elevation-level1);
 }
 .library-tool {
   display: grid;
@@ -440,10 +533,6 @@ const sortOptions = [
   inset-block: 0;
   right: 0;
   width: calc(var(--library-pill-rest) + (100% - var(--library-pill-rest)) * var(--library-search-progress));
-  border-radius: 9999px;
-  background: var(--md-surface-low);
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--md-outline-variant) 38%, transparent),
-    var(--md-elevation-level1);
 }
 .library-pill-content {
   position: absolute;
@@ -462,6 +551,7 @@ const sortOptions = [
   width: var(--library-pill-rest);
   padding-inline: 4px;
 }
+.library-toolbar-title:not([inert]) > button,
 .library-pill-buttons:not([inert]),
 .library-search-field:not([inert]) {
   pointer-events: auto;
@@ -526,17 +616,19 @@ const sortOptions = [
 /* 手机书架顶栏留在滚动区外，搜索展开时占用原有顶栏宽度。 */
 @media (max-width: 899px) {
   .library-header-bar {
+    --library-toolbar-height: 56px;
     position: relative;
     flex: 0 0 auto;
+    margin-block-end: calc(-1 * var(--library-toolbar-height) * var(--library-header-progress));
   }
   .library-toolbar {
     --library-toolbar-inset: 16px;
     --library-search-width: calc(100% - var(--library-toolbar-inset) * 2);
-    height: 56px;
     gap: 6px;
     padding-inline-end: calc(var(--library-toolbar-inset) + var(--library-pill-rest) + 4px);
   }
   .library-toolbar-title {
+    padding-inline: 10px;
     opacity: calc(1 - var(--library-search-progress));
   }
   .library-search-input {

@@ -25,7 +25,7 @@
 - 是否属于阅读器、需要跟随阅读器顶栏 / 底栏 / 返回手势：用 `.md-drawer` 模板。
 - 阅读器桌面 `>=900px` 需要变成右侧 side sheet 时，使用 `.md-drawer` 响应式模板。
 - 通用流程在 compact 分支使用 `MobileBottomSheet`，桌面分支按场景提供对话框、菜单或 side sheet。
-- 桌面只是一个锚定在按钮旁的小浮层，不叫 bottom sheet；使用菜单或 `AppearanceSheet` 的桌面浮层写法。
+- `AppearanceSheet` 这类通用面板统一走共享外壳：手机 bottom sheet、桌面右侧 side sheet；轻量锚定菜单直接用 `.md-menu`。
 
 禁止：
 
@@ -111,7 +111,7 @@
 ### 3.2 桌面 `>=900px`
 
 - 阅读器抽屉在桌面变为右侧 side sheet：宽 372px、最大 92%、高度 100%、左侧 28px 圆角。
-- 通用 `MobileBottomSheet` 面向 compact 布局；新桌面流程应优先用对话框、菜单或 side sheet，不要强行把手机底栏搬到桌面。
+- 通用 `MobileBottomSheet` 支持 `desktop-side`：桌面渲染成右侧 372px side sheet，手机仍是底部 sheet；轻量流程优先用对话框或菜单。
 - 桌面打开阅读抽屉时，阅读正文要预留 372px，不能让 sheet 盖住仍可点击的正文。
 
 ### 3.3 层级

@@ -104,10 +104,12 @@ function selectMode(mode: string, event: MouseEvent) {
     return;
   }
   if (mode === theme.surfaceMode) return;
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  const button = event.currentTarget as HTMLElement;
+  const rect = button.getBoundingClientRect();
   theme.setSurfaceMode(mode, false, {
     x: rect.left + rect.width / 2,
-    y: rect.top + rect.height / 2
+    y: rect.top + rect.height / 2,
+    element: button
   });
 }
 </script>

@@ -62,7 +62,7 @@
   <section class="md-shelf-grid" :aria-label="favoritesOnly ? t('收藏内容') : currentCollection ? t('书库：{0}', { 0: currentCollection.title }) : t('书架内容')">
     <ContinueReading v-if="!favoritesOnly && !currentCollection && !selecting && featuredBooks.length" :books="featuredBooks" @open="$emit('open', $event)" />
     <CollectionCard v-for="collection in displayCollections" :key="collection.id" :collection="collection" :books="booksForCollection(collection)" :sort-key="sortKey" :touch-over="touchDrag.overId === collection.id" :selecting="selecting" :selected="selectedCollectionIds.includes(collection.id)" @open="openCollection" @toggle="toggleCollection" @move="moveDropped" />
-    <BookCard v-for="book in renderedBooks" :key="book.id" :book="book" :progress="shelf.progressInfoFor(book.id) ?? undefined" :selecting="selecting" :selected="selectedIds.includes(book.id)" :dragging="touchDrag.active && touchDrag.ids.includes(book.id)" :remove-label="favoritesOnly ? t('取消收藏') : t('从书架移除')" @open="openBook" @remove="removeBook" @drag="onBookDrag" @touchstart="onBookTouchStart($event, book.id)" />
+    <BookCard v-for="book in renderedBooks" :key="book.id" :book="book" :progress="shelf.progressInfoFor(book.id) ?? undefined" :selecting="selecting" :selected="selectedIds.includes(book.id)" :dragging="touchDrag.active && touchDrag.ids.includes(book.id)" @open="openBook" @drag="onBookDrag" @touchstart="onBookTouchStart($event, book.id)" />
     <div v-if="renderedBooks.length < orderedBooks.length" ref="loadMoreSentinel" class="col-span-full h-8" aria-hidden="true"></div>
     <p v-if="!displayBooks.length && !displayCollections.length" class="col-span-full py-16 text-center text-[13px] text-[var(--md-on-surface-variant)]">{{ emptyShelfHint }}</p>
   </section>
@@ -180,23 +180,6 @@ function selectAll() {
   selectedIds.value = displayBooks.value.map(book => book.id);
   selectedCollectionIds.value = displayCollections.value.map(collection => collection.id);
 }
-async function removeBook(id: string) {
-  if (!props.favoritesOnly) {
-    try {
-      await shelf.removeBook(id);
-    } catch (err) {
-      shelf.error = (err as Error).message || t('移除书本失败，请重试');
-      console.warn('[HOMURA] 移除书本失败', err);
-    }
-    return;
-  }
-  try {
-    await shelf.setFavorite(id, false);
-  } catch (err) {
-    shelf.error = (err as Error).message || t('取消收藏失败，请重试');
-    console.warn('[HOMURA] 取消收藏失败', err);
-  }
-}
 function openBook(id: string) {
   if (!selecting.value) return emit('open', id);
   selectedIds.value = selectedIds.value.includes(id) ? selectedIds.value.filter(item => item !== id) : [...selectedIds.value, id];
@@ -287,7 +270,6 @@ async function moveDropped(ids: string[], target: string | null) {
 
 function onBookTouchStart(event: TouchEvent, id: string) {
   if (!canTouchMoveBooks.value || touchDrag.active || event.touches.length !== 1) return;
-  if (event.target && (event.target as HTMLElement).closest('.card-remove-btn')) return;
 
   cancelTouchCandidate();
   const touch = event.touches[0];

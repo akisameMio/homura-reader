@@ -22,7 +22,7 @@
         @after-leave="onAfterLeave"
         @leave-cancelled="spring.onLeaveCancelled"
       >
-        <section v-if="visible" ref="sheetRef" class="md-mobile-sheet">
+        <section v-if="visible" ref="sheetRef" class="md-mobile-sheet" :tabindex="compact ? undefined : -1">
           <ReaderDrawerHeader
             :is-compact="compact && draggable && !busy"
             prominent
@@ -102,9 +102,11 @@ function onEnter(element: Element, done: () => void) {
   spring.onEnter(element, () => {
     done();
     if (disposed || current !== revision || !props.open) return;
-    if (sheetRef.value?.contains(document.activeElement)) return;
+    const sheet = sheetRef.value;
+    if (!sheet || sheet.contains(document.activeElement)) return;
     // WebKit 会为屏外焦点滚动 dialog；等侧滑落位后再聚焦，避免先跳入再缩回。
-    sheetRef.value?.querySelector<HTMLButtonElement>('.md-drawer-header button')?.focus({ preventScroll: true });
+    const initialFocus = compact.value ? sheet.querySelector<HTMLButtonElement>('.md-drawer-header button') : sheet;
+    initialFocus?.focus({ preventScroll: true });
   });
 }
 

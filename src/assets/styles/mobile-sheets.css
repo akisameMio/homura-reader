@@ -189,3 +189,6 @@
   max-height: 100%;
   border-radius: 28px 0 0 28px;
 }
+.md-mobile-sheet-dialog.is-desktop-side .md-mobile-sheet:focus-visible {
+  outline: none;
+}

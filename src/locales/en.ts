@@ -70,6 +70,8 @@ export default {
   '选择书库：{0}': 'Select collection: {0}',
   '打开书库：{0}，{1} 本': 'Open collection: {0}, {1} books',
   '松开移入书库': 'Release to move here',
+  '{0} 册': '{0} vols.',
+  '系列': 'Series',
   '本作品': 'books',
   '轻小说': 'Light novels',
   '页': 'pages',

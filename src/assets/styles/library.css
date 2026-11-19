@@ -218,19 +218,20 @@
     }
     /* 书架卡默认在屏外跳过布局与绘制；auto 会记住首屏实测高度，避免滚动时抖动 */
     .md-shelf-card {
+      --md-shelf-cover-ratio: 348 / 512;
+      --md-shelf-cover-radius: clamp(12px, 2.9vw, 16px);
       content-visibility: auto;
       contain-intrinsic-size: auto 208px;
-      /* 轻拟物悬浮：淡柔投影 + 负 spread 收窄，避免厚重黑边 */
-      box-shadow: var(--md-elevation-card-soft);
-      transition: box-shadow 280ms cubic-bezier(0.16, 1, 0.3, 1), transform 280ms cubic-bezier(0.16, 1, 0.3, 1);
+      color: var(--md-on-surface);
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1);
     }
     @media (hover: hover) and (pointer: fine) {
       .md-shelf-card:not(.is-touch-dragging):hover {
+        z-index: 1;
         transform: translateY(-2px);
-        box-shadow:
-          0 2px 4px -1px color-mix(in oklab, var(--md-shadow-color-soft) 20%, transparent),
-          0 8px 20px -6px color-mix(in oklab, var(--md-shadow-color-soft) 16%, transparent),
-          0 16px 40px -14px color-mix(in oklab, var(--md-shadow-color-soft) 12%, transparent);
       }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -247,6 +248,117 @@
       .md-shelf-card { contain-intrinsic-size: auto 312px; }
     }
     .md-shelf-card.is-touch-dragging { opacity: 0.38; transform: scale(0.96); }
+
+    .md-shelf-cover {
+      position: relative;
+      overflow: hidden;
+      aspect-ratio: var(--md-shelf-cover-ratio);
+      border-radius: var(--md-shelf-cover-radius);
+      background: var(--md-secondary-container);
+      color: var(--md-on-secondary-container);
+    }
+
+    .md-shelf-open:focus-visible {
+      outline: none;
+    }
+
+    .md-shelf-cover::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      border: 2px solid transparent;
+      border-radius: inherit;
+      pointer-events: none;
+    }
+
+    .md-shelf-card:has(> .md-shelf-open:focus-visible) .md-shelf-cover::after,
+    .md-shelf-cover.is-selected::after {
+      border-color: var(--md-primary);
+    }
+
+    .md-shelf-cover-image,
+    .md-shelf-cover-fallback {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .md-shelf-cover-image {
+      object-fit: cover;
+    }
+
+    .md-shelf-cover-fallback {
+      display: grid;
+      place-items: center;
+      padding: 12px;
+    }
+
+    .md-shelf-cover-title {
+      font-family: 'Songti SC', 'Noto Serif CJK SC', var(--font-display, serif);
+      font-size: clamp(13px, 3.2vw, 16px);
+      font-weight: 650;
+      line-height: 1.48;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      .md-shelf-card {
+        padding-bottom: 18px;
+        overflow-clip-margin: 16px;
+      }
+
+      .md-shelf-open {
+        cursor: pointer;
+      }
+
+      .md-shelf-card::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: var(--md-shelf-cover-radius);
+        background: color-mix(in oklab, var(--md-surface-container) 55%, var(--md-surface));
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .md-shelf-caption {
+        position: relative;
+        block-size: 2lh;
+      }
+
+      .md-shelf-card:not(.is-touch-dragging):hover::before {
+        opacity: 1;
+      }
+
+      .md-shelf-card:not(.is-touch-dragging):hover .md-shelf-cover {
+        box-shadow: 0 5px 14px color-mix(in oklab, var(--md-shadow-color-soft) 48%, transparent);
+      }
+    }
+
+    @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+      .md-shelf-card::before {
+        transition: opacity 200ms var(--md-ease-emphasized);
+      }
+
+      .md-shelf-cover {
+        transition: box-shadow 200ms var(--md-ease-emphasized);
+      }
+    }
+
+    .md-shelf-caption {
+      margin: 7px 2px 0;
+      font-size: clamp(11px, 2.6vw, 13px);
+      font-weight: 650;
+      line-height: 1.38;
+    }
+
+    .md-shelf-cover-title,
+    .md-shelf-caption {
+      text-align: center;
+      text-wrap: balance;
+      overflow-wrap: anywhere;
+    }
 
     .md-library-text-button, .md-library-tonal-button {
       min-height: 44px;
@@ -395,71 +507,70 @@
       }
     }
 
-    /* 书库卡与书本卡同构：封面固定 3:4，底部信息栏共用相同的内边距与字号。 */
-    .md-collection-card {
-      display: flex;
-      min-width: 0;
-    }
-    .md-collection-open { display: flex; flex: 1; flex-direction: column; width: 100%; padding: 0; text-align: left; color: var(--md-on-surface); }
-    .md-collection-art { display: block; position: relative; aspect-ratio: 3 / 4; background: var(--md-surface-high); }
-    .md-collection-board {
-      position: absolute;
-      inset: 5px;
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      grid-template-rows: repeat(2, minmax(0, 1fr));
-      gap: 4px;
-      padding: 4px;
-      border-radius: 8px;
-      background: var(--md-surface-container);
-    }
-    .md-collection-tile {
+    .md-collection-stack {
       position: relative;
-      display: grid;
-      min-width: 0;
-      overflow: hidden;
-      place-items: center;
-      border-radius: 4px;
-      background: var(--md-surface-high);
+      aspect-ratio: var(--md-shelf-cover-ratio);
     }
-    .md-collection-tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
-    .md-collection-tile.is-empty {
-      background: var(--md-surface-highest);
-      color: color-mix(in oklab, var(--md-on-surface-variant) 36%, transparent);
+    .md-collection-stack::before,
+    .md-collection-stack::after {
+      content: '';
+      position: absolute;
+      inset: 0 10% 10%;
+      border-radius: var(--md-shelf-cover-radius);
+      background: var(--md-secondary-container);
+      pointer-events: none;
     }
-    .md-collection-tile.is-empty svg { width: 16px; height: 16px; }
-    .md-collection-fallback {
-      display: -webkit-box;
-      overflow: hidden;
-      height: 100%;
-      padding: 5px;
-      font-family: var(--font-display, serif);
-      font-size: 8px;
+    .md-collection-stack::after {
+      inset: 1.5% 6% 6%;
+      background: color-mix(in oklab, var(--md-secondary-container) 84%, var(--md-on-secondary-container));
+    }
+    .md-collection-stack > .md-shelf-cover {
+      position: absolute;
+      inset: 3.2% 0 0;
+      z-index: 1;
+      aspect-ratio: auto;
+    }
+    .md-collection-badges {
+      position: absolute;
+      inset: 2.5% 3.2% auto;
+      display: flex;
+      justify-content: space-between;
+      gap: 4px;
+      font-size: clamp(10px, 2.3vw, 12px);
       font-weight: 650;
-      line-height: 1.15;
-      overflow-wrap: anywhere;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 3;
-      background: linear-gradient(145deg, var(--md-primary-container), var(--md-secondary-container));
+      line-height: 1.3;
+      pointer-events: none;
+    }
+    .md-collection-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      min-width: 0;
+      border-radius: clamp(5px, 1.4vw, 8px);
+      padding: 3px 5px;
+      background: color-mix(in oklab, var(--md-on-surface) 86%, transparent);
+      color: var(--md-surface);
+      white-space: nowrap;
+    }
+    .md-collection-badge svg { flex: none; }
+    .md-collection-badge-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .md-collection-drop {
+      position: absolute;
+      inset: auto 6px 7px;
+      border-radius: 8px;
+      padding: 5px;
+      background: var(--md-primary-container);
       color: var(--md-on-primary-container);
+      text-align: center;
+      font-size: 11px;
+      font-weight: 650;
     }
-    @media (min-width: 768px) {
-      .md-collection-board { inset: 8px; gap: 6px; padding: 7px; border-radius: 11px; }
-      .md-collection-tile { border-radius: 6px; }
-      .md-collection-tile.is-empty svg { width: 18px; height: 18px; }
-      .md-collection-fallback { padding: 6px; font-size: 9px; }
+    .md-collection-card.is-drop-target .md-shelf-cover::after {
+      border: 3px solid var(--md-primary);
     }
-    .md-collection-info { display: flex; flex: 1; flex-direction: column; gap: var(--md-space-50); min-width: 0; padding: var(--md-space-100); }
-    .md-collection-title { overflow: hidden; font-size: 12px; font-weight: 700; line-height: 1.375; text-overflow: ellipsis; white-space: nowrap; }
-    .md-collection-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; min-width: 0; color: var(--md-on-surface-variant); font-size: 10px; line-height: normal; font-variant-numeric: tabular-nums; }
-    .md-collection-count { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .md-collection-drop { color: var(--md-primary); font-weight: 600; white-space: nowrap; }
-    @media (min-width: 768px) {
-      .md-collection-info { padding: var(--md-space-100) var(--md-space-150) var(--md-space-150); }
-      .md-collection-title { font-size: 13px; }
-      .md-collection-meta { font-size: 11px; }
-    }
-    .md-collection-card.is-drop-target .md-collection-board { outline: 3px solid var(--md-primary); outline-offset: 2px; }
     .md-library-text-button.is-drop-target { background: var(--md-primary-container); color: var(--md-on-primary-container); }
     .md-select-badge {
       position: absolute;
@@ -476,7 +587,7 @@
       pointer-events: none;
     }
 
-    /* 书架点缀容器按状态变形：安静状态用 squircle，交互时转为花瓣 / 曲奇轮廓。 */
+    /* 书架选择徽标按选中状态变形。 */
     .md-shape-morph {
       transition:
         border-radius 420ms var(--md-ease-spring),
@@ -486,8 +597,6 @@
         color 200ms var(--md-ease-emphasized);
       will-change: border-radius, transform;
     }
-    .md-shape-morph.md-shape-cookie { border-radius: 42% 36% 44% 38% / 38% 46% 36% 44%; }
-    .md-shape-morph.md-shape-clover { border-radius: 44% 44% 38% 38% / 40% 40% 48% 48%; }
     .md-shape-boom {
       clip-path: polygon(50% 0, 56% 12%, 68% 4%, 72% 17%, 86% 14%, 84% 28%, 98% 36%, 87% 47%, 100% 58%, 85% 65%, 90% 80%, 75% 79%, 68% 96%, 56% 86%, 45% 100%, 39% 85%, 24% 91%, 25% 75%, 8% 68%, 18% 55%, 2% 44%, 18% 36%, 10% 21%, 27% 23%, 33% 6%, 44% 16%);
       border-radius: 0;
@@ -496,30 +605,11 @@
       clip-path: polygon(50% 0, 59% 15%, 72% 4%, 75% 22%, 94% 12%, 88% 31%, 100% 42%, 85% 51%, 98% 65%, 80% 69%, 87% 88%, 67% 82%, 59% 100%, 48% 84%, 34% 96%, 34% 77%, 15% 82%, 21% 64%, 0 56%, 17% 45%, 3% 29%, 23% 30%, 27% 10%, 42% 20%);
       transform: rotate(12deg) scale(1.08, .94);
     }
-    .md-shelf-card:active .md-shape-cookie,
-    .md-shelf-card:active .md-shape-clover {
-      border-radius: 34% 48% 36% 48% / 48% 36% 48% 34%;
-      transform: rotate(-8deg) scale(1.12, .9);
-    }
-    .md-book-selected .md-shape-cookie { border-radius: 48% 34% 48% 34% / 34% 48% 34% 48%; }
-    .md-book-selected .md-select-badge.is-selected { transform: rotate(0) scale(1); }
-    @media (hover: hover) and (pointer: fine) {
-      .md-shelf-card:hover .md-shape-cookie,
-      .md-shelf-card:hover .md-shape-clover {
-        border-radius: 38% 50% 38% 50% / 50% 38% 50% 38%;
-        transform: rotate(8deg) scale(1.06, .96);
-      }
-    }
+    .md-shelf-cover.is-selected .md-select-badge.is-selected { transform: rotate(0) scale(1); }
     @media (prefers-reduced-motion: reduce) {
       .md-shape-morph { transition: none; will-change: auto; }
-      .md-shelf-card:active .md-shape-cookie,
-      .md-shelf-card:active .md-shape-clover,
-      .md-shelf-card:hover .md-shape-cookie,
-      .md-shelf-card:hover .md-shape-clover,
       .md-shape-boom.is-selected { transform: none; }
     }
-    .md-book-selected,
-    .md-collection-selected { outline: 3px solid var(--md-primary); outline-offset: 2px; }
 
     /* 触摸长按拖动时保持拖动光标 */
     .md-touch-dragging { cursor: grabbing; }

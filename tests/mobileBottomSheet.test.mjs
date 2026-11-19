@@ -275,15 +275,15 @@ test('桌面侧栏入场使用临界阻尼，不在静止位右侧回弹', async
   }
 });
 
-test('桌面侧栏落位后才聚焦，避免 WebKit 为屏外按钮滚动模态容器', async () => {
+test('桌面侧栏落位后聚焦面板，收起后将焦点还给触发按钮', async () => {
   window.innerWidth = 1280;
   const { app, state } = mount({ desktopSide: true });
   try {
     await flush();
-    const button = document.querySelector('.md-drawer-header button');
-    assert.notEqual(document.activeElement, button, '入场途中不能聚焦屏外按钮');
+    const sheet = document.querySelector('.md-mobile-sheet');
+    assert.ok(!sheet.contains(document.activeElement), '入场途中不聚焦屏外面板');
     await advance();
-    assert.equal(document.activeElement, button, '落位后恢复键盘关闭入口');
+    assert.equal(document.activeElement, sheet, '落位后聚焦面板，关闭按钮等待键盘导航');
     state.open = false;
     await flush();
     await advance();

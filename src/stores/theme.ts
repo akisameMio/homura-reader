@@ -162,7 +162,7 @@ export const useThemeStore = defineStore('theme', () => {
     try { localStorage.setItem('homura_theme_color', colorName); } catch (e) {}
   }
 
-  function setSurfaceMode(modeName: string, silent = false, origin: { x: number; y: number } | null = null) {
+  function setSurfaceMode(modeName: string, silent = false, origin: { x: number; y: number; element?: HTMLElement } | null = null) {
     const nextMode = normalizeSurfaceMode(modeName);
     const effectiveMode = resolveEffectiveSurfaceMode(nextMode);
     surfaceMode.value = nextMode;
@@ -242,12 +242,17 @@ export const useThemeStore = defineStore('theme', () => {
     };
 
     renderCircle(0);
-    document.body.appendChild(reveal);
+    // 原生模态面板位于顶层，遮罩要进入同一层才能覆盖面板和书架。
+    const dialog = origin?.element?.closest<HTMLDialogElement>('dialog.md-mobile-sheet-dialog[open]');
+    (dialog ?? document.body).appendChild(reveal);
     applyMode();
 
     const startedAt = performance.now();
     const animate = (now: number) => {
       if (token !== surfaceModeToken) return;
+      if (dialog && (!dialog.open || !dialog.isConnected) && reveal.parentNode === dialog) {
+        document.body.appendChild(reveal);
+      }
       const progress = Math.min(1, (now - startedAt) / SURFACE_REVEAL_DURATION);
       const eased = 1 - Math.pow(1 - progress, 4);
       renderCircle(maxRadius * eased);

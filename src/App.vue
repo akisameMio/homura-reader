@@ -26,6 +26,7 @@
         <LibraryHeader
           :count="headerCount"
           :title="headerTitle"
+          :scroll-root="activeNav === 'shelf' ? libraryScrollRef : null"
           :appearance-open="appearanceOpen"
           :renamable="!!activeCollection"
           @toggle-appearance="appearanceOpen = !appearanceOpen"
@@ -191,7 +192,7 @@ const { pendingShelfDialog, askShelfDialog, resolveShelfDialog } = useShelfDialo
 const { isCompact } = useViewport();
 
 const measurerRef = ref(null);
-const libraryScrollRef = shallowRef(null);
+const libraryScrollRef = shallowRef<HTMLElement | null>(null);
 const fileInput = ref(null);
 const folderInput = ref(null);
 const importMenuOpen = ref(false);

@@ -155,7 +155,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 - 根节点靠 `data-theme`（green/mint/cyan/blue/violet/orchid/sakura/red/amber/olive）+ `data-mode`（light/warm/dark）切换。组件应统一调 `theme.setThemeColor()` / `theme.setSurfaceMode()` 切主题，不要自行改 `data-theme` / `data-mode`。
 - 新增主题必须同步：`styles/tokens.css` 的明色块与暗色块；`stores/theme.ts` 的 `THEME_OPTIONS`（名称与三阶 `tones` 预览色）。两处入口共用 `ThemeSwatchGrid.vue`，不要再复制色板数组。
 - 三种表面的画布底色是硬编码常量，改主题时要一起看：`{ light: '#F8FAFC', warm: '#FAF6EE', dark: '#0F1115' }`，同时出现在 `public/homura-boot.js` 与 `stores/theme.ts`。
-- 外观面板宽 **280px**，10 个主题色块固定为 **5 列 × 2 行**（`ThemeSwatchGrid` 的 `columns` 默认 5）；单个色块保持约 44px 的触控尺寸。
+- 外观面板复用 `MobileBottomSheet`：手机底部 sheet、桌面右侧 **372px** side sheet；10 个主题色块固定为 **5 列 × 2 行**（`ThemeSwatchGrid` 的 `columns` 默认 5），单个色块保持约 44px 的触控尺寸。
 
 ### 5.3 布局与断点
 
@@ -259,7 +259,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 - [ ] 动了 `services/` 的解析 / 存储 / 书库 / 手势逻辑时，`npm test` 全绿（必要时补用例，测试在 `tests/`）。
 - [ ] 浏览器 390px / 899px / 900px / 1440px 四档宽度下无横向溢出、底部导航和 FAB 不压内容。
 - [ ] 白昼 / 护眼 / 夜间三种表面逐屏检查，没有硬编码白字或暗底发灰。
-- [ ] 改 UI：10 套主题都能切，外观面板 280px 双行五列，sheet 可关闭，`prefers-reduced-motion` 不崩。
+- [ ] 改 UI：10 套主题都能切，外观面板双行五列，sheet 可关闭，`prefers-reduced-motion` 不崩。
 - [ ] 新增 / 重做 bottom sheet：通过 [专用验收清单](references/bottom-sheet-spec.md#8-验收清单)，复用共享外壳；关闭动画结束后才清理内容，焦点与滚动锁正确恢复。
 - [ ] 改阅读器：LTR / RTL / 竖排、单页 / 双页、翻页动画、进度恢复都正常。
 - [ ] 改导入 / 解析：用真实样本验证对应格式；PDF 需覆盖中文文本与扫描件；Markdown 需测 `<script>` 与 `javascript:` 链接。

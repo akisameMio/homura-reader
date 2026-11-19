@@ -189,7 +189,7 @@ HOMURA 是一个本地优先、内容优先的 ACGN 阅读器。界面首先服�
 | 阅读器页脚 | 手机约 55px / 桌面约 59px（另加安全区） |
 | 桌面设置 side sheet | 372px 宽 |
 | 目录 side sheet | 372px 宽，最大 92% |
-| 桌面外观浮层 | 280px 宽 |
+| 桌面外观 side sheet | 372px 宽，最大 92% |
 | 手机 bottom sheet | 默认 `78dvh`，可上拖到状态栏下方 |
 | Bottom sheet 拖拽条 | `32px × 4px` |
 
@@ -211,7 +211,7 @@ HOMURA 是一个本地优先、内容优先的 ACGN 阅读器。界面首先服�
 | 10px | 菜单条目 |
 | 12px | 书架卡、书库卡、特色卡、编辑式卡片、特殊插画卡 |
 | 16px | 手机 sheet 输入框 |
-| 20px | 分段控件、桌面外观浮层 |
+| 20px | 分段控件、抽屉列表项、排序条目 |
 | 26px | 新 bottom sheet 分组卡片 |
 | 28px | 桌面 side sheet 与手机 bottom sheet |
 | `999px` | 胶囊、圆形图标按钮、滑条拇指 |
@@ -665,15 +665,15 @@ Hover 规则：
 - 进出场使用 `useSheetSpring()`；拖动松手使用 200ms 吸附。减少动态效果时直接落位。
 - 通用外壳同时处理 `close` / `cancel`，以 `open=false` 触发退场，不能用 `v-if="open"` 直接卸载；内容与结果在 `closed` 后清理。
 
-### 9.4 桌面外观浮层
+### 9.4 外观 side sheet
 
 组件：`src/components/AppearanceSheet.vue`（由顶栏「外观设置」按钮开关）  
 内容：`src/components/AppearancePanel.vue`
 
-- 宽 280px，20px 圆角，16px 内边距。
-- 桌面端锚定顶栏右上角 `right: 28px`、`top: 68px`，向下展开；超出视口高度时内部滚动。
-- 背景 `surface-container`，z-50。
-- 包含「阅读模式」与「主题色」两组，必须复用共享组件。
+- 复用 `MobileBottomSheet`：手机从底部弹出，桌面 `desktop-side` 渲染为右侧 372px side sheet（最大 92%、高度 100%、左侧 28px 圆角）。
+- 头部沿用共享 prominent 样式（标题 22px + 左侧圆形关闭按钮）；手机底部保留「完成」按钮。
+- 背景 `surface-container`，位于 sheet 层级；不再使用顶栏下方的 280px 浮层。
+- 包含「阅读模式」与「主题色」两组，必须复用共享组件；在面板内切换表面时，展开遮罩要跟随 `dialog` 进入顶层。
 - 外观面板不是独立主页面，不应塞入阅读行为设置。
 
 ### 9.5 Sheet 通用结构
