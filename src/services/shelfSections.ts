@@ -1,6 +1,15 @@
 import { resolveBookFormat } from './utils.ts';
 import type { Book } from '../types.ts';
 
+export const shelfFormatFilters = [
+  { value: 'epub', label: 'EPUB' },
+  { value: 'cbz', label: 'CBZ' },
+  { value: 'pdf', label: 'PDF' },
+  { value: 'mobi', label: 'MOBI' },
+  { value: 'txt', label: 'TXT' },
+  { value: 'markdown', label: 'Markdown' }
+] as const;
+
 export function bookShelfCategory(book: Book) {
   const format = resolveBookFormat(book);
   if (format === 'pdf') return 'other';

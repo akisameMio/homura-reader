@@ -229,10 +229,3 @@
       outline: 2px solid var(--md-primary);
       outline-offset: 2px;
     }
-    /* 书架搜索框的焦点反馈由外层胶囊承载，输入本体不再画方框 */
-    .library-search-input:focus-visible {
-      outline: none;
-    }
-    .library-search-field:focus-within {
-      background-color: var(--md-surface-highest);
-    }

@@ -33,6 +33,7 @@
           v-model:query="query"
           v-model:type="typeFilter"
           v-model:sort="sortKey"
+          v-model:filter-open="shelfFilterOpen"
         >
           <template v-if="isCompact" #actions>
             <LibraryImportActions
@@ -144,7 +145,7 @@ import {
 } from './services/nativeImport.ts';
 import { resolveBookFormat, scrollAppToTop } from './services/utils.ts';
 import { sortShelfBooks } from './services/bookTitles.ts';
-import { bookShelfCategory } from './services/shelfSections.ts';
+import { bookShelfCategory, shelfFormatFilters } from './services/shelfSections.ts';
 import { installProgressFlushHooks } from './services/progress.ts';
 import { useSyncStore } from './stores/sync.ts';
 import { useImporter } from './composables/useImporter.ts';
@@ -195,6 +196,7 @@ const fileInput = ref(null);
 const folderInput = ref(null);
 const importMenuOpen = ref(false);
 const appearanceOpen = ref(false);
+const shelfFilterOpen = ref(false);
 const activeNav = ref('shelf');
 const settingsViewRef = shallowRef(null);
 const settingsDetailOpen = ref(false);
@@ -356,7 +358,6 @@ const overlayLocksBody = computed(() => (
     )
   )
 ));
-const FORMAT_FILTERS = ['epub', 'pdf', 'mobi', 'txt', 'markdown'];
 const SPLASH_MIN_DURATION = 720;
 let previousUpdateBodyOverflow = '';
 let updateBodyLocked = false;
@@ -385,6 +386,10 @@ useAndroidBackExit(reader, () => {
   }
   if (importMenuOpen.value) {
     importMenuOpen.value = false;
+    return true;
+  }
+  if (shelfFilterOpen.value) {
+    shelfFilterOpen.value = false;
     return true;
   }
   if (isCompact.value && importProgress.status !== 'idle' && importProgress.expanded) {
@@ -416,6 +421,9 @@ watch(
 );
 
 watch(isCompact, () => { importMenuOpen.value = false; });
+watch(shelfFilterOpen, open => {
+  if (open) appearanceOpen.value = false;
+});
 watch(() => importProgress.status, status => {
   if (status !== 'idle') importMenuOpen.value = false;
 });
@@ -424,6 +432,7 @@ watch(() => importProgress.status, status => {
 watch(() => reader.currentBook, book => {
   if (book) {
     appearanceOpen.value = false;
+    shelfFilterOpen.value = false;
     return;
   }
   // 阅读器被关掉后，转场状态机与加载页一并归零，下次从书架重新开始
@@ -461,8 +470,7 @@ async function renameActiveCollection() {
 
 const visibleBooks = computed(() => {
   let list = favoritesOnly.value ? favoriteBooks.value : shelf.library;
-  // 筛选 chips：类型（漫画 / 轻小说）+ 文件格式
-  if (FORMAT_FILTERS.includes(typeFilter.value)) {
+  if (shelfFormatFilters.some(option => option.value === typeFilter.value)) {
     list = list.filter(book => resolveBookFormat(book) === typeFilter.value);
   } else if (['manga', 'novel', 'other'].includes(typeFilter.value)) {
     list = list.filter(book => bookShelfCategory(book) === typeFilter.value);
@@ -561,6 +569,7 @@ function onRailNav(key) {
   if (!['shelf', 'recent', 'favorite', 'settings'].includes(key)) return;
   importMenuOpen.value = false;
   appearanceOpen.value = false;
+  shelfFilterOpen.value = false;
   activeNav.value = key;
   if (key === 'settings') {
     scrollAppToTop('smooth');

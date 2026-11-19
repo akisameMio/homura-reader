@@ -89,7 +89,7 @@ async function select(value: string | number, event: MouseEvent) {
   z-index: 0;
   width: calc((100% - 6px) / var(--md-segment-count, 1));
   border-radius: 17px;
-  background-color: var(--md-primary);
+  background-color: var(--md-segmented-selected-bg, var(--md-primary));
   opacity: 0;
   transform: translate3d(calc(var(--md-segment-index, 0) * 100%), 0, 0);
   /* 胶囊整格位移：强调减速 + 轻微过冲，落位时收得住又带一点弹性 */
@@ -137,7 +137,7 @@ async function select(value: string | number, event: MouseEvent) {
 }
 
 .md-segmented-option.is-selected {
-  color: var(--md-on-primary);
+  color: var(--md-segmented-selected-color, var(--md-on-primary));
 }
 
 .md-segmented-option.is-animating :deep(.md3-icon) {

@@ -157,6 +157,20 @@ test('忙碌态且未开启 scrimCloseable 时点遮罩不关闭', async () => {
   } finally { app.unmount(); }
 });
 
+test('指针从面板内拖到遮罩上松手时不会误关闭', async () => {
+  const { app, events } = mount();
+  try {
+    await flush();
+    const dialog = document.querySelector('dialog');
+    dialog.querySelector('.md-mobile-sheet').dispatchEvent(new window.Event('pointerdown', { bubbles: true }));
+    dialog.dispatchEvent(new window.MouseEvent('click', { bubbles: true, detail: 1 }));
+    assert.deepEqual(events, []);
+    dialog.dispatchEvent(new window.Event('pointerdown', { bubbles: true }));
+    dialog.dispatchEvent(new window.MouseEvent('click', { bubbles: true, detail: 1 }));
+    assert.deepEqual(events, ['close']);
+  } finally { app.unmount(); }
+});
+
 test('软键盘改变可视视口时调整面板可用高度，关闭后移除监听', async () => {
   const { app, state } = mount();
   try {

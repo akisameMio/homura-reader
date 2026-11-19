@@ -9,6 +9,7 @@
       :aria-busy="busy || undefined"
       @cancel.prevent="onCancel"
       @close="onNativeClose"
+      @pointerdown.capture="onDialogPointerDown"
       @click="onBackdropClick"
       @keydown.stop
     >
@@ -89,6 +90,7 @@ let unlockScroll: (() => void) | null = null;
 let trigger: HTMLElement | null = null;
 let entered = false;
 let anchoredViewportHeight = 0;
+let backdropPointerDown = false;
 
 function onBeforeEnter(element: Element) {
   entered = true;
@@ -124,8 +126,13 @@ function requestClose() {
   if (!props.busy) emit('close');
 }
 
+function onDialogPointerDown(event: PointerEvent) {
+  backdropPointerDown = event.target === dialogRef.value;
+}
+
 function onBackdropClick(event: MouseEvent) {
-  if (event.target !== dialogRef.value) return;
+  // 拖拽从面板内开始，松手时落在遮罩上也可能派发 click。
+  if (event.target !== dialogRef.value || (event.detail > 0 && !backdropPointerDown)) return;
   // 忙碌（如导入进行中）时点遮罩仍需能收起面板「继续在后台跑」，但拖拽 / Esc / 关闭按钮保持锁定。
   if (props.busy) {
     if (props.scrimCloseable) emit('close');
