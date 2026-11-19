@@ -36,7 +36,7 @@
 
 HOMURA is a **local-first** reader: import manga, light novels, PDFs and image galleries and read them right away. Parsing, pagination and rendering all happen on your machine — book content is never uploaded. The desktop app is packaged with Tauri 2, and the same frontend also ships an Android build.
 
-- Version: **2.3.1**
+- Version: **2.3.2**
 - Stack: Vue 3 + Pinia + Vite 6 + Tauri 2 + TypeScript
 - Repository: [Leon-Ning-san/HomuraReader](https://github.com/Leon-Ning-san/HomuraReader)
 - Download: [GitHub Releases](https://github.com/Leon-Ning-san/HomuraReader/releases)
@@ -92,7 +92,7 @@ Before committing, run `npm test` (unit tests), `npm run typecheck`, and `npm ru
 
 ## Status & Limitations
 
-- Version `2.3.1`; both desktop (macOS / Windows / Linux) and Android (arm64 / armv7) are buildable, and the core reading flow is complete and usable.
+- Version `2.3.2`; both desktop (macOS / Windows / Linux) and Android (arm64 / armv7) are buildable, and the core reading flow is complete and usable.
 - Tags and bookmarks are not implemented yet; DRM, AZW3 / KF8 and encrypted PDF are unsupported, and PDFs cannot reflow.
 - WebDAV requires an existing HTTPS folder, strong ETags and conditional writes; passwords are saved locally with the connection and cleared when it is removed. The full sync flow on real NAS servers and Android devices remains untested.
 - Unit tests plus type checking, but no E2E and no ESLint — key flows still need manual regression.
@@ -119,4 +119,4 @@ If you don't want this fish to go hungry, drop a Star 🐋
 
 ---
 
-*README organized for v2.3.1; see [`docs/features.md`](docs/features.md) for details. Feature status follows the code — this fish is off to grab some dried fish now.* 🐋
+*README organized for v2.3.2; see [`docs/features.md`](docs/features.md) for details. Feature status follows the code — this fish is off to grab some dried fish now.* 🐋

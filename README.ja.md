@@ -37,7 +37,7 @@
 
 HOMURA は**ローカルファースト**のリーダーです。漫画、ライトノベル、PDF、画像ギャラリーをインポートすればすぐに読めます。解析・ページ分割・描画はすべて端末上で完結し、書籍の内容がアップロードされることはありません。デスクトップ版は Tauri 2 でパッケージされ、同じフロントエンドが Android ビルドも提供します。
 
-- 現在のバージョン：**2.3.1**
+- 現在のバージョン：**2.3.2**
 - 技術スタック：Vue 3 + Pinia + Vite 6 + Tauri 2 + TypeScript
 - リポジトリ：[Leon-Ning-san/HomuraReader](https://github.com/Leon-Ning-san/HomuraReader)
 - ダウンロード：[GitHub Releases](https://github.com/Leon-Ning-san/HomuraReader/releases)
@@ -93,7 +93,7 @@ npm run build      # tauri build、フロントエンドをビルドしてから
 
 ## 現状と制限
 
-- バージョン `2.3.1`。デスクトップ（macOS / Windows / Linux）と Android（arm64 / armv7）の両方をビルド可能で、主要な読書フローは完成しています。
+- バージョン `2.3.2`。デスクトップ（macOS / Windows / Linux）と Android（arm64 / armv7）の両方をビルド可能で、主要な読書フローは完成しています。
 - タグとブックマークは未実装。DRM、AZW3 / KF8、暗号化 PDF は非対応で、PDF はリフローできません。
 - WebDAV には作成済みの HTTPS フォルダー、強い ETag、条件付き書き込みが必要です。パスワードは接続情報と端末内に保存し、接続を削除すると消去します。実際の NAS と Android 端末での同期全体は未検証です。
 - ユニットテストと型チェックがありますが、E2E と ESLint はなく、主要なフローは手動で確認する必要があります。
@@ -120,4 +120,4 @@ npm run build      # tauri build、フロントエンドをビルドしてから
 
 ---
 
-*README は v2.3.1 に合わせて整理しています。詳細は [`docs/features.md`](docs/features.md) を参照してください。機能の状態はコードに準拠します。この魚は小魚のおやつを食べに行きます。* 🐋
+*README は v2.3.2 に合わせて整理しています。詳細は [`docs/features.md`](docs/features.md) を参照してください。機能の状態はコードに準拠します。この魚は小魚のおやつを食べに行きます。* 🐋
