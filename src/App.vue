@@ -3,8 +3,12 @@
   <div id="homura-mobile-nav-root"></div>
 
   <div
-    class="library-back-layer flex flex-1 min-h-0"
-    :class="{ 'is-under-reader': !!reader.currentBook, 'has-contained-shelf-scroll': containedShelfScroll }"
+    class="library-back-layer flex min-h-0"
+    :class="{
+      'is-under-reader': !!reader.currentBook,
+      'has-contained-shelf-scroll': containedShelfScroll,
+      'flex-1': !containedShelfScroll
+    }"
     @wheel="onLibraryWheel"
   >
     <SideNav v-if="!isCompact || !settingsDetailOpen" :active="activeNav" @nav="onRailNav" />

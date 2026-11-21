@@ -232,7 +232,7 @@ let closeSpringDelay: ReturnType<typeof setTimeout> | undefined;
 
 const usesInnerScroller = computed(() => isCompact.value || props.containedScroll);
 
-watch([() => props.scrollRoot, usesInnerScroller, () => props.title], ([root, inner], _, onCleanup) => {
+watch([() => props.scrollRoot, usesInnerScroller, isCompact, () => props.title], ([root, inner, compact], _, onCleanup) => {
   scrollHidden.value = false;
   if (!root) return;
 
@@ -241,6 +241,32 @@ watch([() => props.scrollRoot, usesInnerScroller, () => props.title], ([root, in
   const scrollLimit = () => Math.max(0, scroller.scrollHeight - scroller.clientHeight);
   let limit = scrollLimit();
   let turningPoint = Math.max(0, Math.min(limit, scroller.scrollTop));
+  let touch: { x: number; startY: number; y: number; turningY: number; vertical: boolean } | null = null;
+
+  function keepHeaderVisible() {
+    return searchOpen.value || props.appearanceOpen || props.filterOpen
+      || !!toolbarRef.value?.querySelector(':focus-visible');
+  }
+
+  function updateTouchHeader(top: number) {
+    if (!touch?.vertical) return;
+    if (keepHeaderVisible()) {
+      scrollHidden.value = false;
+      touch.turningY = touch.y;
+    } else if (scrollHidden.value) {
+      touch.turningY = Math.min(touch.turningY, touch.y);
+      if (touch.y - touch.turningY >= 8) {
+        scrollHidden.value = false;
+        touch.turningY = touch.y;
+      }
+    } else {
+      touch.turningY = Math.max(touch.turningY, touch.y);
+      if (top > 1 && touch.turningY - touch.y >= 12) {
+        scrollHidden.value = true;
+        touch.turningY = touch.y;
+      }
+    }
+  }
 
   function onShelfScroll() {
     const nextLimit = scrollLimit();
@@ -248,11 +274,14 @@ watch([() => props.scrollRoot, usesInnerScroller, () => props.title], ([root, in
     // 手机顶栏收起会增加内容区高度。触底后的 scrollTop 钳制不算反向滚动。
     const wasClamped = nextLimit < limit && top >= nextLimit - 1 && turningPoint >= nextLimit - 1;
     limit = nextLimit;
-    if (top <= 1 || searchOpen.value || props.appearanceOpen || props.filterOpen
-      || toolbarRef.value?.querySelector(':focus-visible')) {
+    if (top <= 1 || keepHeaderVisible()) {
       scrollHidden.value = false;
       turningPoint = top;
     } else if (wasClamped) {
+      turningPoint = top;
+    } else if (touch?.vertical) {
+      // 手指按住时按触控方向切换；松手后再交还给原生惯性滚动。
+      updateTouchHeader(top);
       turningPoint = top;
     } else if (scrollHidden.value) {
       turningPoint = Math.max(turningPoint, top);
@@ -269,8 +298,50 @@ watch([() => props.scrollRoot, usesInnerScroller, () => props.title], ([root, in
     }
   }
 
+  function onTouchStart(event: TouchEvent) {
+    const point = event.touches.length === 1 ? event.touches[0] : null;
+    touch = point ? { x: point.clientX, startY: point.clientY, y: point.clientY, turningY: point.clientY, vertical: false } : null;
+  }
+
+  function onTouchMove(event: TouchEvent) {
+    if (!touch) return;
+    if (event.touches.length !== 1 || document.body.classList.contains('md-touch-dragging')) {
+      touch = null;
+      return;
+    }
+    const point = event.touches[0];
+    touch.y = point.clientY;
+    if (!touch.vertical) {
+      const horizontal = Math.abs(point.clientX - touch.x);
+      const vertical = Math.abs(touch.y - touch.startY);
+      if (horizontal >= 8 && horizontal >= vertical) touch = null;
+      if (!touch || vertical < 8 || vertical <= horizontal * 1.15) return;
+      touch.vertical = true;
+    }
+    updateTouchHeader(scroller.scrollTop);
+  }
+
+  function onTouchEnd() {
+    touch = null;
+    turningPoint = Math.max(0, Math.min(scrollLimit(), scroller.scrollTop));
+  }
+
   eventTarget.addEventListener('scroll', onShelfScroll, { passive: true });
-  onCleanup(() => eventTarget.removeEventListener('scroll', onShelfScroll));
+  if (compact) {
+    root.addEventListener('touchstart', onTouchStart, { passive: true });
+    root.addEventListener('touchmove', onTouchMove, { passive: true });
+    root.addEventListener('touchend', onTouchEnd, { passive: true });
+    root.addEventListener('touchcancel', onTouchEnd, { passive: true });
+  }
+  onCleanup(() => {
+    eventTarget.removeEventListener('scroll', onShelfScroll);
+    if (compact) {
+      root.removeEventListener('touchstart', onTouchStart);
+      root.removeEventListener('touchmove', onTouchMove);
+      root.removeEventListener('touchend', onTouchEnd);
+      root.removeEventListener('touchcancel', onTouchEnd);
+    }
+  });
 }, { immediate: true, flush: 'post' });
 
 watch(scrollHidden, (hidden, _, onCleanup) => {

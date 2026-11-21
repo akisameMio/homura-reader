@@ -18,8 +18,7 @@
     >
       <MdIcon name="chevron_left" class="w-5 h-5" />
     </button>
-    <p v-if="currentCollection.parentId && !selecting" class="min-w-0 flex-1 truncate text-[12px] text-[var(--md-on-surface-variant)]" :title="currentCollectionPath">{{ currentCollectionPath }}</p>
-    <div class="relative h-11" :class="currentCollection.parentId && !selecting ? 'w-16 shrink-0' : 'flex-1 min-w-0'">
+    <div class="relative h-11 flex-1 min-w-0">
       <Transition name="shelf-select">
         <button v-if="!selecting" key="select" type="button" class="absolute right-0 top-0 md-library-text-button" :disabled="!displayBooks.length && !displayCollections.length" @click="toggleSelection">{{ t('选择') }}</button>
         <ShelfBatchBar
@@ -98,7 +97,6 @@ const selectedIds = ref<string[]>([]);
 const selectedCollectionIds = ref<string[]>([]);
 const busy = ref(false);
 const currentCollection = computed(() => props.favoritesOnly ? null : shelf.collectionsById.get(shelf.activeCollectionId ?? '') ?? null);
-const currentCollectionPath = computed(() => currentCollection.value ? collectionPath(currentCollection.value, shelf.collectionsById) : '');
 const backLabel = computed(() => currentCollection.value?.parentId ? t('返回上一级') : t('返回书架'));
 const showShelfHeaderRow = computed(() => !currentCollection.value && !selecting.value);
 const groupedIds = computed(() => new Set(shelf.collections.flatMap(item => item.bookIds)));
