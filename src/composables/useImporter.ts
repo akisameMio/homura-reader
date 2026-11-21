@@ -10,7 +10,7 @@ import { useSettingsStore } from '../stores/settings.ts';
 import { useImportProgressStore, importFailureReason } from '../stores/importProgress.ts';
 import { useDuplicateImport } from './useDuplicateImport.ts';
 import { useShelfDialogs } from './useShelfDialogs.ts';
-import { planFolderCollections, availableCollectionName, collectionNameError } from '../services/collections.ts';
+import { planFolderCollections, planImportFolders, importFolderPath, availableCollectionName, collectionNameError, type ImportFolder } from '../services/collections.ts';
 import { findSameTitleBook, normalizeBookTitle } from '../services/bookTitles.ts';
 import { HomuraStore } from '../services/storage.ts';
 import { formatBytes, isAndroid } from '../services/platform.ts';
@@ -133,6 +133,11 @@ interface FsEntry {
 
 let quotaWarned = false;
 let activeImportBatch: Promise<unknown> | null = null;
+interface FolderImport {
+  folders: ImportFolder[];
+  sourceKey: string;
+}
+const retryFolderImports = new WeakMap<ImportFile, FolderImport>();
 const IMPORT_TIMING_ENABLED = !!import.meta.env?.DEV;
 const LARGE_FILE_BYTES = 64 * 1024 * 1024;
 const VERY_LARGE_FILE_BYTES = 256 * 1024 * 1024;
@@ -354,7 +359,7 @@ export function useImporter() {
     });
   }
 
-  function handleFiles(fileList: FileList | ImportFile[] | Array<ReturnType<typeof makeNativeImportFile>> | null, { offerCollection = false, targetId = shelf.activeCollectionId }: { offerCollection?: boolean; targetId?: string | null } = {}) {
+  function handleFiles(fileList: FileList | ImportFile[] | Array<ReturnType<typeof makeNativeImportFile>> | null, { offerCollection = false, targetId = shelf.activeCollectionId, sourceKey = '', folderSelection = false, retry = false }: { offerCollection?: boolean; targetId?: string | null; sourceKey?: string; folderSelection?: boolean; retry?: boolean } = {}) {
     if (!fileList || fileList.length === 0) return;
     // useImporter 会被 App 与 DragOverlay 分别实例化，锁必须放在模块级；
     // 否则拖拽入口能绕过锁，第二批会覆盖当前进度。
@@ -363,7 +368,7 @@ export function useImporter() {
     if (files.length === 0) return;
 
     // 所有导入入口与清空书架共用互斥队列，防止同名漏判和源文件删除竞态。
-    activeImportBatch = runShelfMutation(() => importBatch(files, targetId, offerCollection)).catch(err => {
+    activeImportBatch = runShelfMutation(() => importBatch(files, targetId, { offerCollection, sourceKey, folderSelection, retry })).catch(err => {
       console.error('[HOMURA] 导入失败', err);
       throw err;
     }).finally(() => {
@@ -375,10 +380,38 @@ export function useImporter() {
   function retryFailed() {
     const files = importProgress.retryFiles.slice();
     if (!files.length) return;
-    return handleFiles(files, { targetId: importProgress.targetId });
+    return handleFiles(files, { targetId: importProgress.targetId, retry: true });
   }
 
-  async function importBatch(files: ImportFile[], targetId: string | null = null, offerCollection: boolean) {
+  async function importFolderBooks(files: ImportFile[], folderImport: FolderImport) {
+    const booksByPath = new Map<string, string[]>();
+    const collectionPaths = new Set(folderImport.folders.map(folder => folder.path));
+    for (const file of files) {
+      // 同一 File 对象也会交给失败重试，保留原批次的目录映射。
+      retryFolderImports.set(file, folderImport);
+    }
+    try {
+      return await importFiles(files, {
+        targetId: null,
+        targetLabel: t('按目录导入'),
+        onSaved: (book, task) => {
+          const file = task.file ?? task.group?.files[0];
+          if (!file) return;
+          const path = importFolderPath(file);
+          if (!collectionPaths.has(path)) return;
+          const ids = booksByPath.get(path) ?? [];
+          if (!booksByPath.has(path)) booksByPath.set(path, ids);
+          ids.push(book.id);
+        }
+      });
+    } finally {
+      if (booksByPath.size) {
+        await shelf.organizeImportedFolders(folderImport.folders, booksByPath, folderImport.sourceKey);
+      }
+    }
+  }
+
+  async function importBatch(files: ImportFile[], targetId: string | null, { offerCollection, sourceKey, folderSelection, retry }: { offerCollection: boolean; sourceKey: string; folderSelection: boolean; retry: boolean }) {
     const targetLabel = targetId
       ? (shelf.collections.find(item => item.id === targetId)?.title || t('全部作品'))
       : t('全部作品');
@@ -388,14 +421,30 @@ export function useImporter() {
       if (ids.length && targetId && shelf.collections.some(item => item.id === targetId)) await shelf.moveBooks(ids, targetId);
       return ids;
     };
-    if (!settings.importCollectionPrompt) return importIntoCurrent();
-    const plan = planFolderCollections(files as unknown as { name: string; webkitRelativePath?: string; customRelativePath?: string }[]);
-    if (plan.bookCount < 2 || (!plan.hasDirectories && (!offerCollection || targetId))) return importIntoCurrent();
-    const grouping = plan.hasDirectories ? t('按目录分别创建 {0} 个一级书库', { 0: plan.groups.length }) : t('将这批作品放进一个新书库');
+    if (retry) {
+      const folderImport = retryFolderImports.get(files[0]);
+      return folderImport ? importFolderBooks(files, folderImport) : importIntoCurrent();
+    }
+    if (!folderSelection && !settings.importCollectionPrompt) return importIntoCurrent();
+    const plan = planFolderCollections(files);
+    if (plan.hasDirectories) {
+      const folders = planImportFolders(plan.groups);
+      const shelfBookCount = plan.bookCount - folders.reduce((total, folder) => total + folder.bookCount, 0);
+      const create = await askShelfDialog({
+        kind: 'folder', title: t('预览导入目录'), bookCount: plan.bookCount,
+        shelfBookCount, folders
+      });
+      if (create === null) return [];
+      if (!create) return importIntoCurrent();
+      return importFolderBooks(plan.groups.flatMap(group => group.files), {
+        folders, sourceKey: sourceKey || crypto.randomUUID()
+      });
+    }
+    if (plan.bookCount < 2 || !offerCollection || targetId) return importIntoCurrent();
     const create = await askShelfDialog({
       kind: 'folder', title: t('为导入内容创建书库？'),
-      bookCount: plan.bookCount, collectionCount: plan.groups.length, groupByFolder: plan.hasDirectories,
-      message: t('检测到 {0} 本作品。可以{1}，也可以直接导入。', { 0: plan.bookCount, 1: grouping })
+      bookCount: plan.bookCount,
+      message: t('检测到 {0} 本作品。可以{1}，也可以直接导入。', { 0: plan.bookCount, 1: t('将这批作品放进一个新书库') })
     });
     if (create === null) return [];
     if (!create) return importIntoCurrent();
@@ -916,7 +965,7 @@ export function useImporter() {
     return accepted;
   }
 
-  async function commitPreparedBatch(preparedList: (Prepared | null)[], taskList: ImportTask[], savedBooks: Book[], metrics: ImportMetrics, duplicateSession: DuplicateSession) {
+  async function commitPreparedBatch(preparedList: (Prepared | null)[], taskList: ImportTask[], onSaved: (book: Book, task: ImportTask) => void, metrics: ImportMetrics, duplicateSession: DuplicateSession) {
     importProgress.setPhase('save');
     const accepted = await confirmPreparedDuplicates(preparedList, taskList, metrics, duplicateSession);
     if (!accepted.length) return;
@@ -932,6 +981,12 @@ export function useImporter() {
         taskByBookId.set(prepared.book.id, taskList[index]);
       }
     }
+    const recordSaved = (book: Book) => {
+      const task = taskByBookId.get(book.id);
+      if (task) onSaved(book, task);
+      metrics.saved++;
+      importProgress.addSaved(1);
+    };
     importProgress.setPhase('save');
     importProgress.setCurrentName(
       accepted.length === 1 ? (accepted[0].book.title ?? '') : t('本批 {0} 本作品', { 0: accepted.length })
@@ -949,11 +1004,7 @@ export function useImporter() {
           onSaved: book => releaseImportedBookRuntime(book, coverThumbs.get(book.id))
         }
       );
-      for (const book of result.saved) {
-        savedBooks.push(book);
-        metrics.saved++;
-        importProgress.addSaved(1);
-      }
+      for (const book of result.saved) recordSaved(book);
       for (const failure of result.failed) {
         const prepared = preparedById.get(failure.book.id);
         if (!prepared) {
@@ -969,9 +1020,7 @@ export function useImporter() {
             timing: metrics,
             onSaved: book => releaseImportedBookRuntime(book, prepared.coverThumb)
           });
-          savedBooks.push(prepared.book);
-          metrics.saved++;
-          importProgress.addSaved(1);
+          recordSaved(prepared.book);
         } catch (singleErr) {
           metrics.failed++;
           console.warn('[HOMURA] 本地存档单本重试失败，已跳过', prepared.book.title, singleErr);
@@ -989,9 +1038,7 @@ export function useImporter() {
             timing: metrics,
             onSaved: book => releaseImportedBookRuntime(book, prepared.coverThumb)
           });
-          savedBooks.push(prepared.book);
-          metrics.saved++;
-          importProgress.addSaved(1);
+          recordSaved(prepared.book);
         } catch (singleErr) {
           metrics.failed++;
           console.warn('[HOMURA] 本地存档写入失败，已跳过', prepared.book.title, singleErr);
@@ -1004,7 +1051,7 @@ export function useImporter() {
     }
   }
 
-  async function importFiles(files: ImportFile[], { targetId = shelf.activeCollectionId, targetLabel = '' }: { targetId?: string | null; targetLabel?: string } = {}) {
+  async function importFiles(files: ImportFile[], { targetId = shelf.activeCollectionId, targetLabel = '', onSaved }: { targetId?: string | null; targetLabel?: string; onSaved?: (book: Book, task: ImportTask) => void } = {}) {
     const tasks = buildImportTasks(files);
     const metrics = createImportMetrics(files, tasks);
     if (!tasks.length) {
@@ -1035,6 +1082,10 @@ export function useImporter() {
       });
 
       const savedBooks: Book[] = [];
+      const recordSaved = (book: Book, task: ImportTask) => {
+        savedBooks.push(book);
+        onSaved?.(book, task);
+      };
       metrics.concurrency = chooseImportConcurrency(importTasks);
       const commitBatchSize = chooseCommitBatchSize(importTasks);
       metrics.commitBatchSize = commitBatchSize;
@@ -1064,7 +1115,7 @@ export function useImporter() {
             },
             () => importProgress.cancelRequested
           );
-          await commitPreparedBatch(prepared, batchTasks, savedBooks, metrics, duplicateSession);
+          await commitPreparedBatch(prepared, batchTasks, recordSaved, metrics, duplicateSession);
           if (importProgress.cancelRequested) break;
         }
       } catch (err: unknown) {
@@ -1167,7 +1218,7 @@ export function useImporter() {
           await traverseFileTree(entry, '', collectedFiles);
         }
         if (collectedFiles.length > 0) {
-          await handleFiles(collectedFiles);
+          await handleFiles(collectedFiles, { folderSelection: entries.some(entry => entry.isDirectory) });
           return;
         }
       }
@@ -1228,7 +1279,8 @@ export function useImporter() {
         return true;
       }
       shelf.error = '';
-      await handleFiles(files);
+      const sourceKey = files[0].nativePath?.split('/document/', 1)[0];
+      await handleFiles(files, { sourceKey, folderSelection: true });
       return true;
     }
     const paths = await pickNativeImportPaths({ directory: true, multiple: false, title: t('导入文件夹') });
@@ -1239,7 +1291,7 @@ export function useImporter() {
       console.warn('[HOMURA] 该文件夹内没有可导入的文件');
       return true;
     }
-    await handleFiles(files);
+    await handleFiles(files, { sourceKey: paths[0], folderSelection: true });
     return true;
   }
 
@@ -1253,7 +1305,7 @@ export function useImporter() {
     if (!dirHandle) return;
     const files: ImportFile[] = [];
     await collectFilesFromDirHandle(dirHandle, dirHandle.name + '/', files);
-    if (files.length > 0) await handleFiles(files);
+    if (files.length > 0) await handleFiles(files, { folderSelection: true });
     else console.warn('[HOMURA] 该文件夹内没有可导入的文件');
   }
 

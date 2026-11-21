@@ -15,6 +15,7 @@ export const RELEASES_PAGE_URL = `${REPOSITORY_URL}/releases`;
 const RELEASES_API_URL = 'https://api.github.com/repos/Leon-Ning-san/HomuraReader/releases?per_page=10';
 const REQUEST_TIMEOUT = 12000;
 const CACHE_TTL = 5 * 60 * 1000;
+const RATE_LIMIT_RETRY_DELAY = 60 * 1000;
 
 /** 清洗后的发布说明分组 */
 interface ReleaseNotesGroup {
@@ -62,6 +63,7 @@ interface ParsedVersion {
 let cachedReleases: NormalizedRelease[] = [];
 let cachedAt = 0;
 let pendingRequest: Promise<NormalizedRelease[]> | null = null;
+let rateLimitUntil = 0;
 
 const GROUP_LABELS: [RegExp, string][] = [
   [/新功能|新增|features?/i, '新增'],
@@ -382,7 +384,31 @@ export function getUpdateErrorMessage(error: unknown) {
   return '无法连接 GitHub，请检查网络后重试。';
 }
 
-async function requestReleases() {
+async function checkRateLimit(response: Response) {
+  if (response.status !== 403 && response.status !== 429) return;
+
+  const remaining = response.headers.get('x-ratelimit-remaining');
+  const retryAfter = response.headers.get('retry-after');
+  if (response.status === 403 && remaining !== '0' && !retryAfter) {
+    const body = await response.text();
+    if (!/rate limit/i.test(body)) return;
+  }
+
+  const now = Date.now();
+  const retryTime = retryAfter && /^\d+$/.test(retryAfter)
+    ? now + Number(retryAfter) * 1000
+    : Date.parse(retryAfter ?? '');
+  const resetTime = remaining === '0'
+    ? Number(response.headers.get('x-ratelimit-reset')) * 1000
+    : 0;
+  rateLimitUntil = Math.max(retryTime || 0, resetTime || 0);
+  if (rateLimitUntil <= now || !Number.isFinite(rateLimitUntil)) {
+    rateLimitUntil = now + RATE_LIMIT_RETRY_DELAY;
+  }
+  throw updateError('RATE_LIMIT', 'GitHub API rate limit reached');
+}
+
+async function requestReleases(force: boolean) {
   if (typeof fetch !== 'function') throw updateError('NETWORK', '当前环境不支持网络请求。');
 
   const controller = new AbortController();
@@ -394,11 +420,11 @@ async function requestReleases() {
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28'
       },
-      cache: 'no-store',
+      cache: force ? 'no-cache' : 'default',
       signal: controller.signal
     });
 
-    if (response.status === 403) throw updateError('RATE_LIMIT', 'GitHub API rate limit reached');
+    await checkRateLimit(response);
     if (!response.ok) throw updateError('HTTP_ERROR', `GitHub 返回了 ${response.status}。`);
 
     const releases = normalizeReleases(await response.json());
@@ -415,8 +441,9 @@ export async function fetchStableReleases({ force = false }: { force?: boolean }
     return cachedReleases;
   }
   if (pendingRequest) return pendingRequest;
+  if (now < rateLimitUntil) throw updateError('RATE_LIMIT', 'GitHub API rate limit reached');
 
-  pendingRequest = requestReleases()
+  pendingRequest = requestReleases(force)
     .then(releases => {
       cachedReleases = releases;
       cachedAt = Date.now();

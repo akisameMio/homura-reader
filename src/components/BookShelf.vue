@@ -10,17 +10,18 @@
       class="shelf-back-button w-11 h-11 shrink-0 rounded-full grid place-items-center bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)] transition-colors duration-200"
       :class="{ 'is-drop-target': touchDrag.home }"
       data-shelf-home
-      :title="t('返回书架')"
-      :aria-label="t('返回书架')"
-      @click="shelf.activeCollectionId = null"
+      :title="backLabel"
+      :aria-label="backLabel"
+      @click="navigateUp"
       @dragover="onRootDragOver"
       @drop="onRootDrop"
     >
       <MdIcon name="chevron_left" class="w-5 h-5" />
     </button>
-    <div class="relative flex-1 min-w-0 h-11">
+    <p v-if="currentCollection.parentId && !selecting" class="min-w-0 flex-1 truncate text-[12px] text-[var(--md-on-surface-variant)]" :title="currentCollectionPath">{{ currentCollectionPath }}</p>
+    <div class="relative h-11" :class="currentCollection.parentId && !selecting ? 'w-16 shrink-0' : 'flex-1 min-w-0'">
       <Transition name="shelf-select">
-        <button v-if="!selecting" key="select" type="button" class="absolute right-0 top-0 md-library-text-button" :disabled="!displayBooks.length" @click="toggleSelection">{{ t('选择') }}</button>
+        <button v-if="!selecting" key="select" type="button" class="absolute right-0 top-0 md-library-text-button" :disabled="!displayBooks.length && !displayCollections.length" @click="toggleSelection">{{ t('选择') }}</button>
         <ShelfBatchBar
           v-else
           key="batch"
@@ -75,6 +76,7 @@ import { useShelfStore } from '../stores/shelf.ts';
 import { useShelfDialogs } from '../composables/useShelfDialogs.ts';
 import { useViewport } from '../composables/useViewport.ts';
 import { compareBookTitles, normalizeBookTitle } from '../services/bookTitles.ts';
+import { collectionPath } from '../services/collections.ts';
 import { groupShelfBooks } from '../services/shelfSections.ts';
 import BookCard from './BookCard.vue';
 import ContinueReading from './ContinueReading.vue';
@@ -95,7 +97,9 @@ const selecting = ref(false);
 const selectedIds = ref<string[]>([]);
 const selectedCollectionIds = ref<string[]>([]);
 const busy = ref(false);
-const currentCollection = computed(() => props.favoritesOnly ? null : shelf.collections.find(item => item.id === shelf.activeCollectionId) || null);
+const currentCollection = computed(() => props.favoritesOnly ? null : shelf.collectionsById.get(shelf.activeCollectionId ?? '') ?? null);
+const currentCollectionPath = computed(() => currentCollection.value ? collectionPath(currentCollection.value, shelf.collectionsById) : '');
+const backLabel = computed(() => currentCollection.value?.parentId ? t('返回上一级') : t('返回书架'));
 const showShelfHeaderRow = computed(() => !currentCollection.value && !selecting.value);
 const groupedIds = computed(() => new Set(shelf.collections.flatMap(item => item.bookIds)));
 const displayBooks = computed(() => props.books.filter(book => props.favoritesOnly ? book.favorite : currentCollection.value ? currentCollection.value.bookIds.includes(book.id) : !groupedIds.value.has(book.id)));
@@ -121,7 +125,7 @@ const selectionLabel = computed(() => {
   if (collectionCount) return t('已选 {0} 项', { 0: bookCount + collectionCount });
   return t('已选 {0} 本', { 0: bookCount });
 });
-const compactSelectionLabel = computed(() => currentCollection.value ? t('{0} 本', { 0: selectedIds.value.length }) : selectionLabel.value);
+const compactSelectionLabel = computed(() => currentCollection.value && !selectedCollectionIds.value.length ? t('{0} 本', { 0: selectedIds.value.length }) : selectionLabel.value);
 const emptyShelfHint = computed(() => {
   if (props.hasFilter) return t('没有符合条件的作品，换个关键词或筛选试试');
   if (props.favoritesOnly) return t('还没有收藏的书，在阅读器中点亮星星即可收藏');
@@ -150,18 +154,34 @@ let swallowClick = false;
 let swallowClickTimer: number | null = null;
 
 const canTouchMoveBooks = computed(() => !props.favoritesOnly && (displayCollections.value.length > 0 || !!currentCollection.value));
-const displayCollections = computed(() => {
-  if (props.favoritesOnly || currentCollection.value) return [];
+const matchingBranches = computed(() => {
+  const matches = new Set<string>();
+  if (!props.hasFilter) return matches;
   const visible = new Set(props.books.map(book => book.id));
   const keyword = normalizeBookTitle(props.query);
-  const list = shelf.collections.filter(item => !props.hasFilter || (keyword && normalizeBookTitle(item.title).includes(keyword)) || item.bookIds.some((id: string) => visible.has(id)));
-  const latest = (item: Collection) => Math.max(0, ...item.bookIds.map((id: string) => shelf.progressMap[id]?.updatedAt || 0));
-  return [...list].sort((a, b) => (props.sortKey === 'recent' ? (b.createdAt || 0) - (a.createdAt || 0) : props.sortKey === 'progress' ? latest(b) - latest(a) : 0) || compareBookTitles(a, b));
+  for (const item of shelf.collections) {
+    if (!(keyword && normalizeBookTitle(item.title).includes(keyword)) && !item.bookIds.some(id => visible.has(id))) continue;
+    for (let branch: Collection | undefined = item; branch && !matches.has(branch.id); branch = shelf.collectionsById.get(branch.parentId ?? '')) {
+      matches.add(branch.id);
+    }
+  }
+  return matches;
+});
+const displayCollections = computed(() => {
+  if (props.favoritesOnly) return [];
+  const list = shelf.collections.filter(item => item.parentId === currentCollection.value?.id
+    && (!props.hasFilter || matchingBranches.value.has(item.id)));
+  const latest = (item: Collection) => booksForCollection(item).reduce((time, book) => Math.max(time, shelf.progressMap[book.id]?.updatedAt || 0), 0);
+  return list.sort((a, b) => (props.sortKey === 'recent' ? (b.createdAt || 0) - (a.createdAt || 0) : props.sortKey === 'progress' ? latest(b) - latest(a) : 0) || compareBookTitles(a, b));
 });
 
 function booksForCollection(collection: Collection) {
-  const ids = new Set(collection.bookIds);
-  return shelf.library.filter(book => ids.has(book.id));
+  return shelf.branchBooks.get(collection.id) ?? [];
+}
+
+function navigateUp() {
+  shelf.activeCollectionId = currentCollection.value?.parentId ?? null;
+  emit('browse');
 }
 
 function openCollection(id: string) { shelf.activeCollectionId = id; emit('browse'); }
@@ -192,7 +212,7 @@ async function perform(action: () => unknown) {
 }
 
 async function chooseDestination() {
-  const options = shelf.collections.filter(item => item.id !== shelf.activeCollectionId).sort(compareBookTitles).map(item => ({ value: item.id, title: item.title }));
+  const options = shelf.collections.filter(item => item.id !== shelf.activeCollectionId).sort(compareBookTitles).map(item => ({ value: item.id, title: collectionPath(item, shelf.collectionsById) }));
   const target = await askShelfDialog({ kind: 'move', title: t('移入书库'), message: t('将选中的 {0} 本书移动到：', { 0: selectedIds.value.length }), options });
   if (typeof target === 'string') await moveSelected(target);
 }
@@ -204,7 +224,10 @@ async function deleteSelected() {
   const removingFavorites = props.favoritesOnly;
   const changes: string[] = [];
   if (bookCount) changes.push(t('删除选中的 {0} 本作品、原始文件与阅读记录', { 0: bookCount }));
-  if (collectionCount) changes.push(t('删除选中的 {0} 个书库（书库内作品会移回主页）', { 0: collectionCount }));
+  if (collectionCount) {
+    const hasChildren = shelf.collections.some(item => item.parentId && selectedCollectionIds.value.includes(item.parentId));
+    changes.push(t(hasChildren ? '删除选中的 {0} 个书库（直接收录的作品移回主页，子书库提升一级）' : '删除选中的 {0} 个书库（书库内作品会移回主页）', { 0: collectionCount }));
+  }
   const confirmed = await askShelfDialog({
     kind: 'confirm',
     intent: removingFavorites ? 'favorite' : 'delete',
@@ -353,7 +376,7 @@ function finishTouchDrag(commit: boolean) {
   resetTouchDrag();
   if (!commit || !wasActive) return;
   if (targetId) moveDropped(ids, targetId);
-  else if (moveHome) moveDropped(ids, null);
+  else if (moveHome) moveDropped(ids, currentCollection.value?.parentId ?? null);
 }
 
 function cancelTouchCandidate() {
@@ -462,11 +485,11 @@ function onRootDrop(event: DragEvent) {
   if (!Array.from(event.dataTransfer?.types || []).includes('application/x-homura-books')) return;
   event.preventDefault();
   event.stopPropagation();
-  try { const ids = JSON.parse(event.dataTransfer!.getData('application/x-homura-books')); if (Array.isArray(ids)) moveDropped(ids.filter(id => typeof id === 'string'), null); } catch (err) { console.warn('[HOMURA] 拖动书本失败', err); }
+  try { const ids = JSON.parse(event.dataTransfer!.getData('application/x-homura-books')); if (Array.isArray(ids)) moveDropped(ids.filter(id => typeof id === 'string'), currentCollection.value?.parentId ?? null); } catch (err) { console.warn('[HOMURA] 拖动书本失败', err); }
 }
 
-watch(() => shelf.activeCollectionId, () => { selecting.value = false; selectedIds.value = []; });
-watch(() => props.homeRequest, () => { selecting.value = false; selectedIds.value = []; });
+watch(() => shelf.activeCollectionId, () => { selecting.value = false; clearSelection(); });
+watch(() => props.homeRequest, () => { selecting.value = false; clearSelection(); });
 watch(displayBooks, list => { const ids = new Set(list.map(book => book.id)); selectedIds.value = selectedIds.value.filter(id => ids.has(id)); });
 
 // 超大书架先渲染前几屏；卡片本身用 content-visibility 跳过屏外布局，

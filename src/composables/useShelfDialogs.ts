@@ -1,4 +1,5 @@
 import { shallowRef } from 'vue';
+import type { ImportFolder } from '../services/collections.ts';
 
 export interface ShelfDialogOptions {
   kind: string;
@@ -7,8 +8,8 @@ export interface ShelfDialogOptions {
   intent?: 'create' | 'rename' | 'delete' | 'favorite';
   removesFiles?: boolean;
   bookCount?: number;
-  collectionCount?: number;
-  groupByFolder?: boolean;
+  shelfBookCount?: number;
+  folders?: ImportFolder[];
   initialName?: string;
   options?: Array<{ value: string; title?: string }>;
   confirmLabel?: string;

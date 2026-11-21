@@ -209,3 +209,26 @@ test('云端引用不参与本地文件指纹匹配，元数据同步保留云�
   assert.deepEqual(device.local.collections[0].bookIds, [cloud.id]);
   assert.ok(!device.state.document.records.some(record => record.kind !== 'collection'));
 });
+
+test('同步保留本机书库层级，V1 文档继续同步书库名称和归属', async () => {
+  const a = client('device-a');
+  const b = client('device-b', snapshot('book-b'));
+  const remote = server();
+  a.local.collections = [
+    { id: 'root', title: '漫画', bookIds: [], createdAt: 1 },
+    { id: 'child', title: '作者', parentId: 'root', importFolderKey: 'private-location', bookIds: ['book-a'], createdAt: 2 }
+  ];
+  await a.engine.sync(remote.transport);
+  await b.engine.sync(remote.transport);
+  const localChild = b.local.collections.find(item => item.id === 'child');
+  assert.equal(localChild.parentId, undefined);
+  assert.equal(localChild.importFolderKey, undefined);
+  assert.deepEqual(localChild.bookIds, ['book-b']);
+  localChild.title = '改名';
+  await b.engine.sync(remote.transport);
+  await a.engine.sync(remote.transport);
+  assert.deepEqual(a.local.collections.find(item => item.id === 'child'), {
+    id: 'child', title: '改名', parentId: 'root', importFolderKey: 'private-location', bookIds: ['book-a'], createdAt: 2
+  });
+  assert.doesNotMatch(JSON.stringify(remote.document), /parentId|importFolderKey|private-location/);
+});

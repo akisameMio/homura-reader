@@ -44,7 +44,7 @@ HOMURA is a **local-first** reader: import manga, light novels, PDFs and image g
 ## Features
 
 - **Multi-format shelf**: EPUB / KEPUB, CBZ / ZIP manga archives, PDF, MOBI, TXT, Markdown and image folders.
-- **Top-level libraries & favorites**: create / rename / delete libraries, multi-select move, cross-library transfer; the favorites page lays out all favorites flat.
+- **Nested libraries & favorites**: create / rename / delete libraries, add sub-libraries, multi-select move and cross-library transfer; the favorites page lays out all favorites flat.
 - **Two reading modes**: paginated or scrolling novels (including vertical text); single-page / double-page / first-page-single / webtoon for manga.
 - **Local progress memory**: per-book page, direction, single/double page, font size, typeface, line spacing, page margins and webtoon size — resume automatically.
 - **Import & updates**: import files or folders on desktop and Android, with cancellation, per-book retry and duplicate-name prompts; check for, download and install updates in the app.

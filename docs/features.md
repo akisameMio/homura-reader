@@ -11,15 +11,15 @@
 | 发布版本 | `2.3.2`，`package.json`、`Cargo.toml`、`tauri.conf.json` 三处版本一致 |
 | 桌面平台 | macOS / Windows / Linux |
 | 移动平台 | Android arm64-v8a / armeabi-v7a APK |
-| 核心链路 | 导入、本地存档、恢复、分页/滚动阅读、目录跳转、进度记忆、一级书库、收藏、自定义封面、导入进度与失败重试、应用内更新、运行日志查看与导出均可用 |
+| 核心链路 | 导入、本地存档、恢复、分页/滚动阅读、目录跳转、进度记忆、多级书库、收藏、自定义封面、导入进度与失败重试、应用内更新、运行日志查看与导出均可用 |
 | 尚未完成 | 标签功能尚未实现；书签功能尚未实现 |
-| 质量保障 | 有 `node:test` + jsdom 单元测试（388 条）与 `vue-tsc` 类型检查；没有 ESLint 或 E2E，关键阅读流程仍需手动回归 |
+| 质量保障 | 有 `node:test` + jsdom 单元测试（446 条）与 `vue-tsc` 类型检查；没有 ESLint 或 E2E，关键阅读流程仍需手动回归 |
 | 许可 | MIT，完整条款见 [`LICENSE`](../LICENSE) |
 
 ## 功能概览
 
 - **多格式书架**：EPUB / KEPUB、CBZ / ZIP 漫画压缩包、PDF、MOBI、TXT、Markdown 和图片文件夹。
-- **一级书库与收藏**：可新建、改名、删除书库，书本可多选移入或跨库搬移；收藏页平铺展示全部收藏书。
+- **多级书库与收藏**：可新建、改名、删除书库，书库内还能继续建子书库；书本可多选移入或跨库搬移，收藏页平铺展示全部收藏书。
 - **两种阅读方式**：小说支持自动分页与纵向滚动；漫画支持单页、双页、首页单排和上下条漫。
 - **本地进度记忆**：按书保存页码、阅读比例、方向、单双页、字号、字体、行距、页边距和条漫尺寸，重开自动续读。
 - **导入进度与更新**：导入过程可取消、单本失败可重试，同名书会提示确认；应用内可检查、下载并安装新版本。
@@ -33,9 +33,9 @@
 - 点击右下角「导入」选择文件或文件夹；桌面端还支持把文件、目录直接拖进窗口。
 - 文件选择支持多选，一次可以连续导入多种格式。Android 版通过「导入文件夹」打开系统目录选择器，递归导入所选目录中的支持格式。iOS Safari 不支持目录选择。
 - 图片文件夹会按子目录自动拆成多本书；空书架首次启动时会放入示例漫画与示例轻小说。
-- 「新建」可建立自定义一级书库；支持拖入书本、多选移入、跨库移动与移回主页。每本书只属于一个书库，删除书库会将书本放回主页，保留原文件和阅读进度。
+- 「新建」可建立自定义书库，在书库内新建会得到子书库；支持拖入书本、多选移入、跨库移动与回到上级。每本书只属于一个书库，删除书库会保留原文件和阅读进度：直接收录的作品回到书架首页，子书库提升到被删书库的父级。
 - 书库始终排在单本前；书库卡沿用书本卡结构，显示库内排序的第一本封面，后面两层薄叠影表现堆叠，正上方标注册数与「系列」。
-- 导入包含多本作品的文件夹时，可以选择按目录分别创建书库，逐个确认名称；深层目录也会展平为独立书库，不建立嵌套书库。在书库中导入单独文件会归入当前书库。
+- 导入文件夹时先预览目录树：可以选择保留层级、把子目录建成嵌套书库，也可以直接导入到书架或当前书库。根目录直属的作品放在书架首页；再次导入同一来源的目录会复用已建书库并更新归属，不会叠出一套新的。在书库中导入单独文件会归入当前书库。
 - 书架与收藏支持类型筛选（全部 / 漫画 / 轻小说 / 其他），PDF 及不属于漫画、小说的书归入「其他」；还支持格式筛选（EPUB / CBZ / PDF / MOBI / TXT / Markdown）和三种排序（书名 / 最近添加 / 阅读进度）。默认按书名排序：数字按自然顺序排列，中文按拼音与英文字母混排。
 - 主页在同一个网格中紧接排列「继续阅读 → 书库 → 小说 → 漫画 → 其他」，不显示分类标题、不按类别强制换行；同类书本沿用所选排序，PDF 放在「其他」。继续阅读也可直接返回书库内上次阅读的作品。
 - 阅读器顶栏的星星可收藏 / 取消收藏本书，独立书本也支持收藏。导航中的「收藏」平铺展示所有已收藏书本（包含库内书本），支持排序、搜索和格式筛选，不显示继续阅读卡或书库；导入书籍的收藏重启后保留，示例书收藏随本次示例保留。
@@ -122,7 +122,7 @@ homura-reader/
 │   │   └── styles/             # tokens / base / library / overlays / controls /
 │   │                           # canvas / legacy / theme-picker / content / mobile-sheets
 │   ├── stores/                 # 9 个 setup store：theme / shelf / reader / ui / settings / importProgress / updates / sync / runtimeLogs
-│   ├── services/               # 53 个：解析、存储、平台适配、原生桥接、更新、i18n、WebDAV 同步（不依赖 Vue / Pinia）
+│   ├── services/               # 58 个：解析、存储、平台适配、原生桥接、更新、i18n、WebDAV 同步（不依赖 Vue / Pinia）
 │   │   ├── parsers.ts / epubParser.ts / epubType.ts   # 解析调度与漫画/小说判定
 │   │   ├── pagination.ts       # 小说智能分页、章节与图片页构建
 │   │   ├── pdf.ts / mobi.ts / markdown.ts / textEncoding.ts
@@ -133,13 +133,13 @@ homura-reader/
 │   │   ├── runtimeLogs.ts / runtimeLogExport.ts
 │   │   └── updates.ts / updateDownload.ts / external.ts / readerGestures.ts / archiveAccess.ts / sanitize.ts 等
 │   ├── locales/                # 界面文案：中文原文作 key，en / ja 覆盖
-│   ├── composables/            # 13 个：useImporter / useViewport / useShortcuts / useSheetDrag / useSheetSpring / useI18n /
+│   ├── composables/            # 14 个：useImporter / useViewport / useShortcuts / useSheetDrag / useSheetSpring / useI18n /
 │   │                           # useShelfDialogs / useScrollBounce / useDuplicateImport /
 │   │                           # useReaderBackDismiss / useAndroidBackExit / useSettingsTransition /
 │   │                           # useVolumeKeys
-│   └── components/             # 47 个 SFC：SideNav、LibraryHeader、BookShelf、BookCard、MobileBottomSheet、SyncSettings、
+│   └── components/             # 49 个 SFC：SideNav、LibraryHeader、BookShelf、BookCard、MobileBottomSheet、SyncSettings、
 │                               # ReaderModal、PaginatedView、WebtoonView、DesktopIsland、SettingsView 等
-├── tests/                      # 57 个 .test.mjs（node:test + jsdom）
+├── tests/                      # 67 个 .test.mjs（node:test + jsdom）
 ├── scripts/                    # check-dark-glow / generate-icons / release-notes / sync-android-icons /
 │                               # patch-android-manifest
 ├── references/                 # MD3 组件写法、token、系统布局、桌面灵动胶囊、bottom sheet、WebDAV 同步协议
@@ -162,7 +162,7 @@ npm run build      # tauri build，Tauri 会先构建前端再打包安装包
 
 | 命令 | 作用 |
 | --- | --- |
-| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，388 条用例，覆盖解析、书名排序、同名识别、书库归属、目录分组、阅读手势、翻页几何、抽屉拖动、多语言、WebDAV 同步与阅读模式恢复 |
+| `npm test` | `node --experimental-strip-types --test tests/*.test.mjs`，446 条用例，覆盖解析、书名排序、同名识别、书库归属、目录分组、阅读手势、翻页几何、抽屉拖动、多语言、WebDAV 同步与阅读模式恢复 |
 | `npm run typecheck` | `vue-tsc --noEmit`，类型检查（当前 0 报错） |
 | `npm run dev:vite` | 只启动 Vite 开发服务器，端口固定为 `5173`，支持 HMR |
 | `npm run build:vite` | `check:dark-glow` + 构建前端到 `dist/`，是最快的构建验证 |
@@ -199,7 +199,7 @@ sudo apt-get install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev pat
 开发和代码约束以仓库根目录的 [`AGENTS.md`](../AGENTS.md) 为准。提交前至少运行：
 
 ```bash
-npm test          # 单元测试（388 条）
+npm test          # 单元测试（446 条）
 npm run typecheck # vue-tsc 类型检查
 npm run build:vite
 ```
@@ -226,4 +226,4 @@ CI 只在推送 `v*` 标签或手动触发 `workflow_dispatch` 时运行，不�
 - 目录可以跳转，但目录状态不保存；书签功能尚未实现。
 - 书架搜索只匹配书名与书库名，不支持作者搜索或标签筛选。
 - macOS 安装包尚未签名/公证，首次启动需要手动放行。
-- 项目提供书名排序、同名识别、书库归属、目录分组、手势判定、翻页几何、抽屉双档拖动、多语言词典、WebDAV 同步和阅读模式恢复等单元测试（`npm test`，388 条），配合 `npm run typecheck` 做类型检查；但没有 E2E、覆盖不到完整阅读流程，也没有 ESLint，改动后仍需执行构建并手动回归关键阅读流程。
+- 项目提供书名排序、同名识别、书库归属、目录分组、手势判定、翻页几何、抽屉双档拖动、多语言词典、WebDAV 同步和阅读模式恢复等单元测试（`npm test`，446 条），配合 `npm run typecheck` 做类型检查；但没有 E2E、覆盖不到完整阅读流程，也没有 ESLint，改动后仍需执行构建并手动回归关键阅读流程。

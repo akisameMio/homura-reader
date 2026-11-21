@@ -84,6 +84,8 @@ function normalizeCollection(record: unknown) {
   return {
     id: rec.id,
     title: String(rec.title || ''),
+    ...(typeof rec.parentId === 'string' && rec.parentId ? { parentId: rec.parentId } : {}),
+    ...(typeof rec.importFolderKey === 'string' && rec.importFolderKey ? { importFolderKey: rec.importFolderKey } : {}),
     createdAt: Number(rec.createdAt) || 0,
     bookIds: Array.isArray(rec.bookIds) ? rec.bookIds.filter((id): id is string => typeof id === 'string') : []
   };
@@ -105,6 +107,17 @@ async function serializeBook(book: Book): Promise<Record<string, unknown>> {
   };
 }
 
+function serializeCollection(item: Collection) {
+  return {
+    id: item.id,
+    title: item.title,
+    parentId: item.parentId,
+    importFolderKey: item.importFolderKey,
+    createdAt: Number(item.createdAt) || 0,
+    bookIds: Array.isArray(item.bookIds) ? item.bookIds : []
+  };
+}
+
 async function serializeSnapshot(snapshot: { books?: Book[]; collections?: Collection[]; progress?: unknown[] }) {
   const books: Promise<Record<string, unknown>>[] = [];
   for (const book of snapshot.books || []) {
@@ -112,12 +125,7 @@ async function serializeSnapshot(snapshot: { books?: Book[]; collections?: Colle
   }
   return {
     books: await Promise.all(books),
-    collections: (snapshot.collections || []).map((item: Collection) => ({
-      id: item.id,
-      title: item.title,
-      createdAt: Number(item.createdAt) || 0,
-      bookIds: Array.isArray(item.bookIds) ? item.bookIds : []
-    })),
+    collections: (snapshot.collections || []).map(serializeCollection),
     progress: snapshot.progress || []
   };
 }
@@ -166,12 +174,7 @@ export async function saveNativeCollections(collections: Collection[] | null | u
     null,
     'metadata_save_collections',
     {
-      collections: (collections || []).map((item: Collection) => ({
-        id: item.id,
-        title: item.title,
-        createdAt: Number(item.createdAt) || 0,
-        bookIds: Array.isArray(item.bookIds) ? item.bookIds : []
-      }))
+      collections: (collections || []).map(serializeCollection)
     },
     { feature: FEATURE }
   );

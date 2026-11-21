@@ -58,6 +58,11 @@
     <div v-else class="md-mobile-sheet-card md-mobile-sheet-notice is-danger" role="alert">
       <MdIcon name="error" /><span class="md-mobile-sheet-copy"><b>{{ status === 'download-error' ? t('下载没有完成') : t('暂时无法检查更新') }}</b><small>{{ t(errorMessage) }}</small></span>
     </div>
+    <div v-if="status === 'error'" class="md-mobile-sheet-card">
+      <button type="button" class="md-mobile-sheet-row" @click="openReleasePage(RELEASES_PAGE_URL)">
+        <span class="md-mobile-sheet-copy"><b>{{ t('在 GitHub 查看全部发布') }}</b></span><MdIcon name="chevron_right" />
+      </button>
+    </div>
     <p v-if="linkError" class="md-mobile-sheet-field-error" role="alert">{{ linkError }}</p>
   </section>
 </template>
@@ -65,10 +70,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import type { PropType } from 'vue';
-import type { NormalizedRelease } from '../services/updates.ts';
 import { openGitHubUrl } from '../services/external.ts';
 import { formatBytes } from '../services/platform.ts';
-import { getUpdateErrorMessage } from '../services/updates.ts';
+import { getUpdateErrorMessage, RELEASES_PAGE_URL, type NormalizedRelease } from '../services/updates.ts';
 import { getDownloadErrorMessage } from '../services/updateDownload.ts';
 import MdIcon from './MdIcon.vue';
 import { useI18n } from '../composables/useI18n.ts';
@@ -213,15 +217,18 @@ const primaryAction = computed(() => {
   };
 });
 
-async function openDetails() {
-  if (!props.release) return;
+async function openReleasePage(url: string) {
   linkError.value = '';
   try {
-    await openGitHubUrl(props.release.htmlUrl);
+    await openGitHubUrl(url);
   } catch (error) {
     linkError.value = t('无法打开系统浏览器，请稍后再试。');
     console.warn('打开更新链接失败', error);
   }
+}
+
+function openDetails() {
+  if (props.release) return openReleasePage(props.release.htmlUrl);
 }
 
 function runPrimaryAction() {

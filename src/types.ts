@@ -116,6 +116,8 @@ export interface Collection {
   name?: string;
   title?: string;
   bookIds: string[];
+  parentId?: string;
+  importFolderKey?: string;
   createdAt?: number;
   [key: string]: unknown;
 }

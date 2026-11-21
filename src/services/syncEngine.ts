@@ -5,6 +5,7 @@
    按字段使用逻辑版本合并；网络写入使用 ETag，提交本地时再次核对并发编辑。
    ========================================================================== */
 
+import { normalizeCollectionParents } from './collections.ts';
 import type { BookSource, Collection, ReadingProgress } from '../types.ts';
 import { mergeSyncDocuments, syncRecordKey, validateSyncDocument, type SyncDocument, type SyncKind, type SyncRecord } from './syncModel.ts';
 import { localSnapshotSignature, portableProgress, replacePortableProgress, type SyncLocalSnapshot } from './syncSnapshot.ts';
@@ -228,7 +229,7 @@ export function createSyncEngine(deps: SyncEngineDependencies) {
     for (const item of snapshot.collections) collections.set(item.id, { ...item, bookIds: [] });
     for (const record of state.document.records.filter(item => item.kind === 'collection')) {
       if (record.deleted) collections.delete(record.key);
-      else collections.set(record.key, { id: record.key, ...(record.value as { title: string; createdAt: number }), bookIds: [] });
+      else collections.set(record.key, { ...collections.get(record.key), id: record.key, ...(record.value as { title: string; createdAt: number }), bookIds: [] });
     }
     for (const book of books) {
       const record = records.get(`membership:${identityFor(state, book.id)}`);
@@ -243,7 +244,7 @@ export function createSyncEngine(deps: SyncEngineDependencies) {
       const retained = previousOrder.filter(id => members.delete(id));
       item.bookIds = retained.concat([...members]);
     }
-    return { books, progress: [...progress.values()], collections: [...collections.values()] };
+    return { books, progress: [...progress.values()], collections: normalizeCollectionParents([...collections.values()]) };
   }
 
   async function capture() {

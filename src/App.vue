@@ -324,16 +324,12 @@ const libraryView = ref('shelf');
 const favoritesOnly = computed(() => libraryView.value === 'favorite');
 const favoriteBooks = computed(() => shelf.library.filter(book => book.favorite));
 const activeCollection = computed(() => activeNav.value === 'shelf' ? shelf.collections.find(item => item.id === shelf.activeCollectionId) || null : null);
-const activeCollectionBookCount = computed(() => {
-  const ids = new Set(activeCollection.value?.bookIds || []);
-  return shelf.library.filter(book => ids.has(book.id)).length;
-});
 const headerTitle = computed(() => {
   if (activeNav.value === 'favorite') return t('收藏');
   if (activeNav.value === 'recent') return t('最近');
   return activeCollection.value?.title || t('书架');
 });
-const headerCount = computed(() => activeCollection.value ? activeCollectionBookCount.value : favoritesOnly.value ? favoriteBooks.value.length : shelf.library.length);
+const headerCount = computed(() => activeCollection.value ? (shelf.branchBooks.get(activeCollection.value.id)?.length ?? 0) : favoritesOnly.value ? favoriteBooks.value.length : shelf.library.length);
 const desktopIslandVisible = computed(() => (
   !isCompact.value
   && (
@@ -401,7 +397,7 @@ useAndroidBackExit(reader, () => {
     appearanceOpen.value = false;
     return true;
   }
-  if (shelf.activeCollectionId) { shelf.activeCollectionId = null; return true; }
+  if (shelf.activeCollectionId) { shelf.activeCollectionId = activeCollection.value?.parentId ?? null; return true; }
   return false;
 });
 
@@ -445,9 +441,14 @@ watch(() => reader.currentBook, book => {
 
 async function createCollection() {
   importMenuOpen.value = false;
-  const title = await askShelfDialog({ kind: 'name', title: t('新建书库'), initialName: availableCollectionName(t('新建书库'), shelf.collections), validate: name => collectionNameError(name, shelf.collections) });
+  const parentId = activeCollection.value?.id;
+  const title = await askShelfDialog({
+    kind: 'name', title: t('新建书库'),
+    initialName: availableCollectionName(t('新建书库'), shelf.collections, parentId),
+    validate: name => collectionNameError(name, shelf.collections, null, parentId)
+  });
   if (title === null) return;
-  try { await shelf.createCollection(title); } catch (err) { console.warn('[HOMURA] 新建书库失败', err); }
+  try { await shelf.createCollection(title, parentId); } catch (err) { console.warn('[HOMURA] 新建书库失败', err); }
 }
 
 async function renameActiveCollection() {
@@ -458,7 +459,7 @@ async function renameActiveCollection() {
     intent: 'rename',
     title: t('重命名书库'),
     initialName: item.title,
-    validate: name => collectionNameError(name, shelf.collections, item.id)
+    validate: name => collectionNameError(name, shelf.collections, item.id, item.parentId)
   });
   if (title === null) return;
   try {
@@ -540,11 +541,12 @@ async function openFolderPicker() {
   folderInput.value && folderInput.value.click();
 }
 
-async function onFileChange(e) {
+async function onFileChange(event) {
+  const input = event.target;
   try {
-    await importer.handleFiles(e.target.files, { offerCollection: isCompact.value });
+    await importer.handleFiles(input.files, { offerCollection: isCompact.value, folderSelection: input.hasAttribute('webkitdirectory') });
   } finally {
-    e.target.value = '';
+    input.value = '';
   }
 }
 

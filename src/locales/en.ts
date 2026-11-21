@@ -1,4 +1,13 @@
 export default {
+  '{0} 本作品放在书架首页': 'On the main shelf ({0})',
+  '导入到书架': 'Import to shelf',
+  '选择要导入的文件夹，里面的子文件夹也会一起扫描。按钮灰色时，可以进入下一级再选择。': 'Select a folder to scan its contents and subfolders. If the button is disabled, open a subfolder and select it.',
+  '保留层级导入': 'Keep folder structure',
+  '预览导入目录': 'Preview folder structure',
+  '按目录导入': 'Import with folder structure',
+  '查看更多目录': 'Show more folders',
+  '返回上一级': 'Go up one level',
+  '删除选中的 {0} 个书库（直接收录的作品移回主页，子书库提升一级）': 'delete {0} selected collections (their books return to the shelf and subcollections move up one level)',
   'HOMURA 正在启动': 'HOMURA is starting',
   '(默认)': '(default)',
   '表面 ·': 'Surface ·',

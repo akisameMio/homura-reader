@@ -57,7 +57,7 @@
                 <MdIcon name="chevron_right" :size="20" />
               </button>
             </div>
-            <p v-if="isAndroid && canPickFolder" class="md-mobile-sheet-hint px-3">{{ t('进入书籍所在的子文件夹，再点「使用此文件夹」。按钮灰色时，可用「导入文件」多选。') }}</p>
+            <p v-if="isAndroid && canPickFolder" class="md-mobile-sheet-hint px-3">{{ t('选择要导入的文件夹，里面的子文件夹也会一起扫描。按钮灰色时，可以进入下一级再选择。') }}</p>
             <p class="md-mobile-sheet-label">{{ t('整理书架') }}</p>
             <div class="md-mobile-sheet-card">
               <button type="button" class="md-mobile-sheet-row island-menu-item" @click="choose('create-collection')">
@@ -122,10 +122,10 @@
             </button>
           </template>
           <template v-else-if="surface === 'shelf'">
-            <button v-if="shelfDialogDisplay?.kind === 'confirm'" type="button" class="md-surface-text-button island-cancel-confirm" @click="resolveShelfDialog()">
+            <button v-if="shelfDialogDisplay?.kind === 'confirm' || shelfDialogDisplay?.folders" type="button" class="md-surface-text-button island-cancel-confirm" @click="resolveShelfDialog()">
               {{ t('取消') }}
             </button>
-            <button v-if="shelfDialogDisplay?.kind === 'folder'" type="button" class="md-surface-text-button" @click="resolveShelfDialog(false)">
+            <button v-if="shelfDialogDisplay?.kind === 'folder' && shelfDialogDisplay.folders?.length !== 0" type="button" class="md-surface-text-button" @click="resolveShelfDialog(false)">
               {{ t('直接导入') }}
             </button>
           </template>

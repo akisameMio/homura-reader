@@ -37,7 +37,8 @@ export function localSnapshotSignature(snapshot: SyncLocalSnapshot): string {
     books: sort(snapshot.books.map(book => ({ id: book.id, favorite: !!book.favorite }))),
     progress: sort(snapshot.progress.map(record => ({ id: String(record.id), value: portableProgress(record) }))),
     collections: sort(snapshot.collections.map(item => ({
-      id: item.id, title: item.title || item.name || '', createdAt: item.createdAt || 0, bookIds: item.bookIds
+      id: item.id, title: item.title || item.name || '', createdAt: item.createdAt || 0, bookIds: item.bookIds,
+      parentId: item.parentId, importFolderKey: item.importFolderKey
     })))
   });
 }

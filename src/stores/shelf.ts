@@ -8,8 +8,8 @@
 
 import { t } from '../composables/useI18n.ts';
 import { defineStore } from 'pinia';
-import { shallowRef, ref } from 'vue';
-import { collectionNameError, moveCollectionBooks, restoreCollections } from '../services/collections.ts';
+import { computed, shallowRef, ref } from 'vue';
+import { assignImportedFolders, collectionNameError, moveCollectionBooks, restoreCollections, type ImportFolder } from '../services/collections.ts';
 import { sortShelfBooks } from '../services/bookTitles.ts';
 import { HomuraStore } from '../services/storage.ts';
 import { restoreLibrary, persistBook, persistBooks } from '../services/restore.ts';
@@ -32,6 +32,22 @@ export const useShelfStore = defineStore('shelf', () => {
   let favoriteQueue: Promise<unknown> = Promise.resolve();
   let coverOptimizationQueued = false;
 
+  const collectionsById = computed(() => new Map(collections.value.map(item => [item.id, item])));
+  const branchBooks = computed(() => {
+    const libraryById = new Map(library.value.map(book => [book.id, book]));
+    const result = new Map<string, Book[]>();
+    for (const item of collections.value) {
+      const books = item.bookIds.map(id => libraryById.get(id)).filter((book): book is Book => !!book);
+      if (!books.length) continue;
+      for (let branch: Collection | undefined = item; branch; branch = collectionsById.value.get(branch.parentId ?? '')) {
+        const contents = result.get(branch.id) ?? [];
+        if (!result.has(branch.id)) result.set(branch.id, contents);
+        for (const book of books) contents.push(book);
+      }
+    }
+    return result;
+  });
+
   function booksInCollection(id: string) {
     const collection = collections.value.find(item => item.id === id);
     if (!collection) return [];
@@ -53,11 +69,12 @@ export const useShelfStore = defineStore('shelf', () => {
     return task;
   }
 
-  async function createCollection(title: string) {
-    const item = { id: `collection_${crypto.randomUUID()}`, title: title.trim(), createdAt: Date.now(), bookIds: [] };
+  async function createCollection(title: string, parentId?: string) {
+    const item = { id: `collection_${crypto.randomUUID()}`, title: title.trim(), createdAt: Date.now(), bookIds: [], ...(parentId ? { parentId } : {}) };
     await updateCollections((current: Collection[]) => {
-      const message = collectionNameError(title, current);
+      const message = collectionNameError(title, current, null, parentId);
       if (message) throw new Error(message);
+      if (parentId && !current.some(parent => parent.id === parentId)) throw new Error(t('目标书库不存在'));
       return [...current, item];
     });
     return item;
@@ -65,15 +82,29 @@ export const useShelfStore = defineStore('shelf', () => {
 
   function renameCollection(id: string, title: string) {
     return updateCollections((current: Collection[]) => {
-      const message = collectionNameError(title, current, id);
+      const message = collectionNameError(title, current, id, current.find(item => item.id === id)?.parentId);
       if (message) throw new Error(message);
       return current.map((item: Collection) => item.id === id ? { ...item, title: title.trim() } : item);
     });
   }
 
   async function deleteCollection(id: string) {
-    await updateCollections((current: Collection[]) => current.filter((item: Collection) => item.id !== id));
-    if (activeCollectionId.value === id) activeCollectionId.value = null;
+    let parentId: string | undefined;
+    await updateCollections(current => {
+      parentId = current.find(item => item.id === id)?.parentId;
+      return current.filter(item => item.id !== id).map(item => {
+        if (item.parentId !== id) return item;
+        const { parentId: _parentId, ...child } = item;
+        return parentId ? { ...child, parentId } : child;
+      });
+    });
+    if (activeCollectionId.value === id) activeCollectionId.value = parentId ?? null;
+  }
+
+  function organizeImportedFolders(folders: ImportFolder[], booksByPath: ReadonlyMap<string, string[]>, sourceKey: string) {
+    return updateCollections(current => assignImportedFolders(
+      current, folders, booksByPath, sourceKey, Date.now(), () => `collection_${crypto.randomUUID()}`
+    ));
   }
 
   function moveBooks(ids: string[], targetId: string | null = null) {
@@ -369,11 +400,14 @@ export const useShelfStore = defineStore('shelf', () => {
     library,
     progressMap,
     collections,
+    collectionsById,
+    branchBooks,
     activeCollectionId,
     sortKey,
     booksInCollection,
     error,
     createCollection,
+    organizeImportedFolders,
     renameCollection,
     deleteCollection,
     moveBooks,

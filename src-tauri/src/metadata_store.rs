@@ -18,7 +18,7 @@ use tauri::{AppHandle, Manager, State};
 
 const DB_DIR: &str = "homura-metadata";
 const DB_FILE: &str = "homura.sqlite3";
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 const MAX_BOOKS: usize = 50_000;
 const MAX_COLLECTIONS: usize = 5_000;
 const MAX_PROGRESS_RECORDS: usize = 50_000;
@@ -66,6 +66,10 @@ pub struct CollectionRecord {
     pub created_at: i64,
     #[serde(default)]
     pub book_ids: Vec<String>,
+    #[serde(default)]
+    pub parent_id: Option<String>,
+    #[serde(default)]
+    pub import_folder_key: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -212,9 +216,23 @@ fn initialize_schema(connection: &mut Connection) -> Result<(), String> {
             ",
         )
         .map_err(|error| db_error("创建 SQLite 元数据表失败", error))?;
-    connection
-        .pragma_update(None, "user_version", SCHEMA_VERSION)
-        .map_err(|error| db_error("写入 SQLite 版本失败", error))?;
+    if version < 2 {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| db_error("开始 SQLite 书库迁移失败", error))?;
+        transaction
+            .execute_batch(
+                "ALTER TABLE collections ADD COLUMN parent_id TEXT;
+                 ALTER TABLE collections ADD COLUMN import_folder_key TEXT;",
+            )
+            .map_err(|error| db_error("迁移 SQLite 书库层级失败", error))?;
+        transaction
+            .pragma_update(None, "user_version", SCHEMA_VERSION)
+            .map_err(|error| db_error("写入 SQLite 版本失败", error))?;
+        transaction
+            .commit()
+            .map_err(|error| db_error("提交 SQLite 书库迁移失败", error))?;
+    }
     Ok(())
 }
 
@@ -335,11 +353,12 @@ fn upsert_books(connection: &mut Connection, books: &[BookRecord]) -> Result<(),
         .map_err(|error| db_error("提交书目批量写入事务失败", error))
 }
 
-fn normalize_collection(
-    collection: &CollectionRecord,
-) -> Result<(String, String, i64, String), String> {
+fn normalize_collection(collection: &CollectionRecord) -> Result<String, String> {
     validate_id(&collection.id, "书库 ID")?;
     validate_text(&collection.title, 80, "书库名称")?;
+    if let Some(parent_id) = &collection.parent_id {
+        validate_id(parent_id, "上级书库 ID")?;
+    }
     if collection.book_ids.len() > MAX_COLLECTION_BOOK_IDS {
         return Err(limit_exceeded("书库中的书本数量过多"));
     }
@@ -351,12 +370,7 @@ fn normalize_collection(
     if book_ids_json.len() > MAX_COLLECTION_JSON_BYTES {
         return Err(limit_exceeded("书库书目数据过大"));
     }
-    Ok((
-        collection.id.clone(),
-        collection.title.clone(),
-        collection.created_at.max(0),
-        book_ids_json,
-    ))
+    Ok(book_ids_json)
 }
 
 fn normalize_progress(record: &Value) -> Result<(String, String, i64), String> {
@@ -387,7 +401,7 @@ fn save_collections(
     }
     let mut normalized = Vec::with_capacity(collections.len());
     for collection in collections {
-        normalized.push(normalize_collection(collection)?);
+        normalized.push((collection, normalize_collection(collection)?));
     }
 
     let transaction = connection
@@ -399,13 +413,20 @@ fn save_collections(
     {
         let mut statement = transaction
             .prepare(
-                "INSERT INTO collections (id, title, created_at, book_ids_json)
-                 VALUES (?1, ?2, ?3, ?4)",
+                "INSERT INTO collections (id, title, created_at, book_ids_json, parent_id, import_folder_key)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             )
             .map_err(|error| db_error("准备书库写入失败", error))?;
-        for (id, title, created_at, book_ids_json) in normalized {
+        for (collection, book_ids_json) in normalized {
             statement
-                .execute(params![id, title, created_at, book_ids_json])
+                .execute(params![
+                    collection.id,
+                    collection.title,
+                    collection.created_at.max(0),
+                    book_ids_json,
+                    collection.parent_id,
+                    collection.import_folder_key,
+                ])
                 .map_err(|error| db_error("写入书库失败", error))?;
         }
     }
@@ -457,14 +478,21 @@ fn replace_all(
     {
         let mut statement = transaction
             .prepare(
-                "INSERT INTO collections (id, title, created_at, book_ids_json)
-                 VALUES (?1, ?2, ?3, ?4)",
+                "INSERT INTO collections (id, title, created_at, book_ids_json, parent_id, import_folder_key)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             )
             .map_err(|error| db_error("准备书库写入失败", error))?;
         for collection in &snapshot.collections {
-            let (id, title, created_at, book_ids_json) = normalize_collection(collection)?;
+            let book_ids_json = normalize_collection(collection)?;
             statement
-                .execute(params![id, title, created_at, book_ids_json])
+                .execute(params![
+                    collection.id,
+                    collection.title,
+                    collection.created_at.max(0),
+                    book_ids_json,
+                    collection.parent_id,
+                    collection.import_folder_key,
+                ])
                 .map_err(|error| db_error("写入书库失败", error))?;
         }
     }
@@ -535,7 +563,7 @@ fn load_all(connection: &Connection) -> Result<MetadataSnapshot, String> {
 
     let mut collections_statement = connection
         .prepare(
-            "SELECT id, title, created_at, book_ids_json
+            "SELECT id, title, created_at, book_ids_json, parent_id, import_folder_key
              FROM collections ORDER BY created_at ASC, id ASC",
         )
         .map_err(|error| db_error("准备书库读取失败", error))?;
@@ -546,12 +574,14 @@ fn load_all(connection: &Connection) -> Result<MetadataSnapshot, String> {
                 row.get::<_, String>(1)?,
                 row.get::<_, i64>(2)?,
                 row.get::<_, String>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<String>>(5)?,
             ))
         })
         .map_err(|error| db_error("读取书库失败", error))?;
     let mut collections = Vec::new();
     for row in collection_rows {
-        let (id, title, created_at, book_ids_json) =
+        let (id, title, created_at, book_ids_json, parent_id, import_folder_key) =
             row.map_err(|error| db_error("解析书库失败", error))?;
         let book_ids = serde_json::from_str::<Vec<String>>(&book_ids_json)
             .map_err(|error| command_failed(format!("解析书库书目失败：{error}")))?;
@@ -560,6 +590,8 @@ fn load_all(connection: &Connection) -> Result<MetadataSnapshot, String> {
             title,
             created_at,
             book_ids,
+            parent_id,
+            import_folder_key,
         });
     }
 
@@ -745,6 +777,8 @@ mod tests {
             title: "主书库".to_string(),
             created_at: 123,
             book_ids: vec!["book-1".to_string()],
+            parent_id: None,
+            import_folder_key: None,
         }
     }
 
@@ -785,6 +819,39 @@ mod tests {
         );
         assert_eq!(loaded.collections.len(), 1);
         assert_eq!(loaded.progress[0]["index"], 3);
+        drop(connection);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn migrates_v1_collections_and_persists_folder_fields() {
+        let (dir, path) = temp_db();
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE collections (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL,
+                created_at INTEGER NOT NULL, book_ids_json TEXT NOT NULL);
+             INSERT INTO collections VALUES ('old', '旧书库', 12, '[]');
+             PRAGMA user_version = 1;",
+            )
+            .unwrap();
+        drop(connection);
+
+        let mut connection = open_database(&path).unwrap();
+        let old = load_all(&connection).unwrap().collections.pop().unwrap();
+        assert_eq!(old.id, "old");
+        assert_eq!(old.parent_id, None);
+        let mut child = collection("child");
+        child.parent_id = Some(old.id.clone());
+        child.import_folder_key = Some("local-source".to_string());
+        save_collections(&mut connection, &[old, child]).unwrap();
+        drop(connection);
+
+        let connection = open_database(&path).unwrap();
+        let collections = load_all(&connection).unwrap().collections;
+        let child = collections.iter().find(|item| item.id == "child").unwrap();
+        assert_eq!(child.parent_id.as_deref(), Some("old"));
+        assert_eq!(child.import_folder_key.as_deref(), Some("local-source"));
         drop(connection);
         let _ = fs::remove_dir_all(dir);
     }
@@ -866,6 +933,8 @@ mod tests {
             title: "书库".to_string(),
             created_at: 0,
             book_ids: vec!["x".repeat(MAX_ID_CHARS + 1)],
+            parent_id: None,
+            import_folder_key: None,
         })
         .unwrap_err()
         .starts_with("NATIVE_INVALID_DATA"));

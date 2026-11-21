@@ -19,18 +19,35 @@
       <div class="md-mobile-sheet-card">
         <div class="md-mobile-sheet-row">
           <span class="md-mobile-sheet-icon is-accent"><MdIcon name="folder_open" /></span>
-          <span class="md-mobile-sheet-copy"><b>{{ t('{0} 本作品等待导入', { 0: requestCountLabel }) }}</b><small>{{ folderScanHint }}</small></span>
+          <span class="md-mobile-sheet-copy">
+            <b>{{ t('{0} 本作品等待导入', { 0: requestCountLabel }) }}</b>
+            <small v-if="folderScanHint">{{ folderScanHint }}</small>
+            <small v-if="request.shelfBookCount">{{ t('{0} 本作品放在书架首页', { 0: request.shelfBookCount }) }}</small>
+          </span>
         </div>
       </div>
-      <p class="md-mobile-sheet-label">{{ t('推荐整理方式') }}</p>
-      <div class="md-mobile-sheet-card">
-        <div class="md-mobile-sheet-row">
-          <span class="md-mobile-sheet-icon is-accent"><MdIcon name="create_new_folder" /></span>
-          <span class="md-mobile-sheet-copy"><b>{{ folderMode }}</b><small>{{ t('目录名会作为书库名，作品会自动归档') }}</small></span>
-          <MdIcon name="check" />
+      <ul v-if="request.folders?.length" class="md-mobile-sheet-card folder-preview" :aria-label="t('预览导入目录')">
+        <li v-for="folder in previewFolders" :key="folder.path" class="folder-preview-row"
+          :style="{ paddingInlineStart: Math.min(folder.depth, 6) * 12 + 12 + 'px' }">
+          <MdIcon name="folder" :size="18" />
+          <span class="folder-preview-name" :title="folder.path">{{ folder.depth > 6 ? folder.path : folder.title }}</span>
+          <small v-if="folder.bookCount">{{ t('{0} 册', { 0: folder.bookCount }) }}</small>
+        </li>
+        <li v-if="previewLimit < request.folders.length" class="px-3">
+          <button type="button" class="md-text-button" @click="previewLimit += 100">{{ t('查看更多目录') }}</button>
+        </li>
+      </ul>
+      <template v-else-if="!request.folders">
+        <p class="md-mobile-sheet-label">{{ t('推荐整理方式') }}</p>
+        <div class="md-mobile-sheet-card">
+          <div class="md-mobile-sheet-row">
+            <span class="md-mobile-sheet-icon is-accent"><MdIcon name="create_new_folder" /></span>
+            <span class="md-mobile-sheet-copy"><b>{{ t('创建一个新书库') }}</b><small>{{ t('目录名会作为书库名，作品会自动归档') }}</small></span>
+            <MdIcon name="check" />
+          </div>
         </div>
-      </div>
-      <p class="md-mobile-sheet-hint px-3">{{ request.message }}</p>
+        <p class="md-mobile-sheet-hint px-3">{{ request.message }}</p>
+      </template>
     </template>
     <template v-else-if="request.kind === 'move'">
       <p class="md-mobile-sheet-label">{{ request.message || t('选择目标书库') }}</p>
@@ -91,20 +108,13 @@ const dialogIcon = computed(() => {
   if (props.request?.kind === 'name') return 'create_new_folder';
   return 'local_library';
 });
-const requestCountLabel = computed(() => {
-  const count = props.request?.bookCount;
-  if (count === undefined) return '—';
-  return String(Math.max(0, count)).padStart(2, '0');
-});
-const folderMode = computed(() => (
-  props.request?.groupByFolder
-    ? t('按目录创建书库')
-    : t('创建一个新书库')
-));
+const requestCountLabel = computed(() => props.request?.bookCount ?? 0);
+const previewLimit = ref(100);
+const previewFolders = computed(() => props.request?.folders?.slice(0, previewLimit.value) ?? []);
 const folderScanHint = computed(() => {
-  return props.request?.groupByFolder
-    ? t('预计 {0} 个书库', { 0: props.request.collectionCount })
-    : t('可整理为一个书库');
+  const { folders } = props.request ?? {};
+  if (!folders) return t('可整理为一个书库');
+  return folders.length ? t('预计 {0} 个书库', { 0: folders.length }) : '';
 });
 const nameActionLabel = computed(() => (
   props.request?.intent === 'rename' ? t('保存名称') : t('创建书库')
@@ -113,9 +123,10 @@ const primaryAction = computed(() => {
   const request = props.request;
   if (!request) return null;
   if (request.kind === 'folder') {
+    const shelfOnly = request.folders?.length === 0;
     return {
-      label: t('创建书库'),
-      icon: 'create_new_folder',
+      label: shelfOnly ? t('导入到书架') : request.folders ? t('保留层级导入') : t('创建书库'),
+      icon: shelfOnly ? 'upload_file' : 'create_new_folder',
       variant: 'primary',
       disabled: false
     };
@@ -147,6 +158,7 @@ const primaryAction = computed(() => {
 watch(
   () => props.request,
   request => {
+    previewLimit.value = 100;
     name.value = request?.initialName || '';
     error.value = '';
   },
@@ -189,3 +201,28 @@ function runPrimaryAction() {
 
 defineExpose({ focusInitial, primaryAction, runPrimaryAction });
 </script>
+
+<style scoped>
+.folder-preview {
+  list-style: none;
+  margin-inline: 0;
+  padding-block: 6px;
+}
+.folder-preview-row {
+  display: flex;
+  align-items: start;
+  gap: 8px;
+  padding-block: 8px;
+  padding-inline-end: 12px;
+  font-size: 13px;
+}
+.folder-preview-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.folder-preview-row small {
+  flex-shrink: 0;
+  color: var(--md-on-surface-variant);
+}
+</style>

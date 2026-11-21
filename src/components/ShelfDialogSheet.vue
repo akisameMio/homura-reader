@@ -7,7 +7,7 @@
       <button v-if="displayRequest?.kind !== 'move' && primaryAction" type="button"
         :class="[primaryAction.variant === 'tonal' ? 'md-tonal-button' : 'md-filled-button', { 'md-mobile-sheet-danger': primaryAction.variant === 'danger' }]"
         @click="contentRef?.runPrimaryAction()"><MdIcon :name="primaryAction.icon" />{{ primaryAction.label }}</button>
-      <button v-if="displayRequest?.kind === 'folder'" type="button" class="md-tonal-button" @click="resolveShelfDialog(false)">{{ t('直接导入') }}</button>
+      <button v-if="displayRequest?.kind === 'folder' && displayRequest.folders?.length !== 0" type="button" class="md-tonal-button" @click="resolveShelfDialog(false)">{{ t('直接导入') }}</button>
       <button type="button" class="md-text-button" @click="resolveShelfDialog()">{{ t('取消') }}</button>
     </template>
   </MobileBottomSheet>

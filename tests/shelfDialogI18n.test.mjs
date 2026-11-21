@@ -54,16 +54,22 @@ test('导入数量与按目录分组在切换语言后仍准确', async () => {
   setLocale('en');
   const app = mount({
     kind: 'folder', title: 'Import', message: 'Import these files?',
-    bookCount: 12, collectionCount: 3, groupByFolder: true
+    bookCount: 12, shelfBookCount: 1,
+    folders: [
+      { path: '漫画/作者', parentPath: '', title: '作者', depth: 0, bookCount: 0 },
+      { path: '漫画/作者/作品', parentPath: '漫画/作者', title: '作品', depth: 1, bookCount: 11 }
+    ]
   });
   try {
     await nextTick();
     assert.match(document.body.textContent, /12 books waiting to import/);
-    assert.match(document.body.textContent, /3 collections planned/);
+    assert.match(document.body.textContent, /2 collections planned/);
+    assert.deepEqual([...document.querySelectorAll('.folder-preview-name')].map(item => item.textContent), ['作者', '作品']);
+    assert.match(document.body.textContent, /On the main shelf \(1\)/);
     setLocale('ja');
     await nextTick();
     assert.match(document.body.textContent, /12 冊がインポート待ち/);
-    assert.match(document.body.textContent, /3 個のコレクションを作成予定/);
+    assert.match(document.body.textContent, /2 個のコレクションを作成予定/);
   } finally {
     app.unmount();
     setLocale('zh-CN');

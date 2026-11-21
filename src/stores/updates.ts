@@ -139,7 +139,7 @@ export const useUpdateStore = defineStore('updates', () => {
     }
 
     try {
-      const result = await fetchStableReleases({ force: true });
+      const result = await fetchStableReleases({ force: !startup });
       if (requestId !== updateRequestId) return false;
       releases.value = result;
       latestRelease.value = result[0] || null;
