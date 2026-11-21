@@ -20,6 +20,11 @@
     user-select: none;
   }
 
+  .has-contained-shelf-scroll .shelf-backdrop {
+    position: absolute;
+    inset: auto 0 0;
+  }
+
   .shelf-backdrop-crop {
     position: absolute;
     inset: auto 0 0;

@@ -8,7 +8,6 @@
     :aria-label="started ? t('继续阅读：{0}', { 0: featured.book.title }) : t('开始阅读：{0}', { 0: featured.book.title })"
     @click="onOpen"
   >
-    <span class="height-anchor" aria-hidden="true"></span>
     <span class="content">
       <span class="eyebrow-row">
         <MdIcon name="auto_stories" class="section-icon" />
@@ -193,7 +192,6 @@ const progressPercent = computed(() => {
   box-shadow: var(--md-elevation-card-soft);
   transition: transform 280ms var(--md-ease-emphasized), box-shadow 280ms var(--md-ease-emphasized);
 }
-.height-anchor { display: none; }
 .content {
   position: relative;
   z-index: 1;
@@ -296,7 +294,7 @@ const progressPercent = computed(() => {
 .play-icon { position: relative; width: 32px; height: 32px; transition: transform 420ms var(--md-ease-spring); }
 .action-label { color: var(--md-on-primary-container); font-size: 11px; font-weight: 650; }
 @media (hover: hover) and (pointer: fine) {
-  .continue-card:hover { transform: translateY(-2px); box-shadow: var(--md-elevation-card-soft), var(--md-elevation-hover); }
+  .continue-card:hover { box-shadow: var(--md-elevation-card-soft), var(--md-elevation-hover); }
   .continue-card:hover .play-shape { transform: rotate(12deg) scale(1.06); }
   .continue-card:hover .play-icon { transform: translateX(2px); }
 }
@@ -321,41 +319,37 @@ const progressPercent = computed(() => {
   .play-icon { width: 26px; height: 26px; }
   .action-label { font-size: 10px; }
 }
-@media (min-width: 900px) {
-  .continue-card { min-height: 0; }
-  /* 特色卡跨三列：用一根不可见的单列卡占位，把整行锁到普通书卡 / 书库卡的自然高度 */
-  .height-anchor {
-    display: block;
-    flex: none;
-    width: calc((100% - 2 * var(--md-shelf-gap, var(--md-space-200))) / 3);
-    aspect-ratio: 3 / 4;
-    /* 单本书卡信息栏约 58.4px，向上取整避免亚像素压缩 */
-    margin-bottom: 59px;
+@media (min-width: 768px) {
+  /* 同排书卡决定行高，特色卡随网格拉伸。 */
+  .continue-card { height: auto; min-height: 0; align-self: stretch; }
+  .continue-card:not(:has(+ .md-shelf-card)) { min-height: 188px; }
+  .eyebrow-row,
+  .book-chips,
+  .detail-label {
+    display: none;
   }
   .content {
     position: absolute;
     inset: 0 auto 0 0;
     width: 69%;
-    gap: 12px;
-    padding: 12px 8px 12px 16px;
+    gap: 8px;
+    padding: 12px 8px 12px clamp(16px, 2vw, 28px);
   }
-}
-@media (min-width: 900px) and (max-width: 1179px) {
-  .content { gap: 8px; padding: 10px 8px 10px 16px; }
-  .cover-shell { flex-basis: 66px; width: 66px; height: 88px; }
-  .book-title { font-size: 18px; }
-  .detail-value { font-size: 24px; }
-}
-@media (min-width: 1600px) {
-  .content {
-    gap: 10px;
-    padding: 10px 8px 10px 14px;
+  .book-summary { gap: 12px; }
+  .cover-shell {
+    flex: 0 0 auto;
+    width: clamp(48px, 24%, 78px);
+    height: auto;
+    aspect-ratio: 3 / 4;
   }
-  .cover-shell { flex-basis: 76px; width: 76px; height: 101px; }
-  .detail-value { font-size: 24px; }
-}
-@media (min-width: 768px) and (max-width: 899px) {
-  .continue-card { grid-column: span 3; }
+  .book-title { font-size: clamp(17px, 2vw, 22px); }
+  .reading-details { grid-template-columns: auto minmax(0, 1fr); gap: 0 12px; align-items: baseline; }
+  .detail-value { font-size: 17px; }
+  .detail-value small { font-size: 11px; }
+  .progress-track { flex: 0 0 20px; }
+  .action-content { left: 12px; gap: 8px; }
+  .play { width: clamp(44px, 74%, 100px); }
+  .play-icon { width: 28px; height: 28px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .continue-card, .play-shape, .play-icon { transition: none; }

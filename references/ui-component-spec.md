@@ -287,6 +287,7 @@ HOMURA 是一个本地优先、内容优先的 ACGN 阅读器。界面首先服�
 - 侧栏是浮动圆角卡片：展开 220px / 折叠 104px，四周 16px 留白，`28px` 圆角，底色为 `primary-container` 18% + `surface-low`。
 - 展开/折叠只跟随用户手动偏好，存 `localStorage.homura_sidenav_collapsed`，不按窗口宽度强制折叠。
 - 主列必须是 `flex-1 min-w-0`，防止长书名或菜单把布局撑破。
+- macOS Tauri 的书架把滚动收进主内容区（`has-contained-shelf-scroll`）：侧栏与顶栏不随内容滚动，滚轮停在侧栏 / 顶栏时仍要转发给 `library-scroll`。
 - 阅读设置打开时，桌面正文区同步预留 372px，不让 sheet 遮住当前阅读列。
 
 ### 4.3 手机骨架
@@ -808,6 +809,7 @@ Hover 规则：
 ### 12.2 启动 Splash
 
 - 首帧前由 `index.html` 同步恢复主题，启动层不得出现黑屏或主题闪白。
+- 启动层底色跟随 `data-mode` / `data-black`：白昼 `#F8FAFC`、夜间 `#0F1115`、纯黑 `#000000`，与书库画布一致，淡出时不露色差。
 - 文案与图标必须可被辅助技术识别为“正在启动”。
 - 淡出约 200ms；`prefers-reduced-motion` 下直接结束。
 - 启动层只用于等待首次书架恢复，不承载营销、错误或更新公告。

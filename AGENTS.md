@@ -163,6 +163,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 - `useViewport` 还暴露 `isPhone(≤767)`、`isTablet(768–1023)`、`isDesktop(≥1024)`，只用于细节，不要拿它替代 900 主断点。
 - 桌面窗口 `minWidth` 是 900，所以桌面端基本不会进入 compact；compact 主要服务于 Android / 浏览器窄屏调试。
 - 桌面骨架：浮动圆角侧栏（展开 220px / 折叠 104px，`SideNav.vue`）→ 主列 → 64px sticky 顶栏（手机 56px）。侧栏展开/折叠只跟随用户手动偏好（`homura_sidenav_collapsed`），不按窗口宽度强制折叠。
+- macOS Tauri 的书架使用内容区内部滚动（`.has-contained-shelf-scroll`）：侧栏、顶栏和背景装饰留在外壳，只有 `main.library-scroll` 滚动；`LibraryHeader` 的 `contained-scroll`、滚轮转发与回到顶部都要跟这层判定同步，其他桌面平台继续使用窗口滚动。
 - 侧栏展开/折叠使用 `280ms` 宽度与内部位置过渡；`prefers-reduced-motion: reduce` 时直接切换。
 - 展开侧栏在 `900–1079px` 时，书架顶栏搜索框独占一行；`>=1080px` 才嵌入顶栏中段，避免压住标题和右侧按钮。
 - 手机底部导航是悬浮胶囊（`SideNav.vue` 的 `.mobile-nav`）：`left/right 14px`、`height 76px`、`border-radius 38px`、`max-width 560px`、`bottom: calc(14px + env(safe-area-inset-bottom))`；内容区必须挂 `.md-bottom-nav-space`（`6.5rem + safe-area`）。

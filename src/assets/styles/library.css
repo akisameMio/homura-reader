@@ -170,20 +170,14 @@
       }
     }
 
-    /* 继续阅读特色卡：手机整行 / 桌面跨三列 */
+    /* 继续阅读特色卡：手机整行，平板与桌面跨三列 */
     .md-featured-cell {
       grid-column: span 3;
-    }
-    @media (min-width: 768px) and (max-width: 899px) {
-      .md-featured-cell { grid-column: span 2; }
-    }
-    @media (min-width: 900px) {
-      .md-featured-cell { grid-column: span 3; }
     }
 
     /* ==========================================================================
        MD3 Cards — 12px medium shape。Filled 为书架默认卡型，
-       hover 只做 2px 抬升与柔光投影，focus / pressed 仍只叠加状态层。
+       hover 只叠加状态层与柔光投影，避免移动鼠标命中区。
        Featured 是应用内的 tonal 特色卡，沿用同一套几何与交互语言。
        ========================================================================== */
     .md-card {
@@ -216,42 +210,26 @@
       outline: 2px solid var(--md-primary);
       outline-offset: 2px;
     }
-    /* 书架卡默认在屏外跳过布局与绘制；auto 会记住首屏实测高度，避免滚动时抖动 */
     .md-shelf-card {
       --md-shelf-cover-ratio: 348 / 512;
       --md-shelf-cover-radius: clamp(12px, 2.9vw, 16px);
-      content-visibility: auto;
-      contain-intrinsic-size: auto 208px;
       color: var(--md-on-surface);
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
-      transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1);
     }
     @media (hover: hover) and (pointer: fine) {
       .md-shelf-card:not(.is-touch-dragging):hover {
         z-index: 1;
-        transform: translateY(-2px);
       }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .md-shelf-card { transition: none; }
-      .md-shelf-card:not(.is-touch-dragging):hover { transform: none; }
-    }
-    @media (min-width: 768px) and (max-width: 899px) {
-      .md-shelf-card { contain-intrinsic-size: auto 248px; }
-    }
-    @media (min-width: 900px) {
-      .md-shelf-card { contain-intrinsic-size: auto 272px; }
-    }
-    @media (min-width: 1280px) {
-      .md-shelf-card { contain-intrinsic-size: auto 312px; }
     }
     .md-shelf-card.is-touch-dragging { opacity: 0.38; transform: scale(0.96); }
 
     .md-shelf-cover {
       position: relative;
       overflow: hidden;
+      /* 封面外框有确定尺寸，跳过内部绘制时仍保留真实网格行高。 */
+      content-visibility: auto;
       aspect-ratio: var(--md-shelf-cover-ratio);
       border-radius: var(--md-shelf-cover-radius);
       background: var(--md-secondary-container);

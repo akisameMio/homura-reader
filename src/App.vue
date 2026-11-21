@@ -4,7 +4,8 @@
 
   <div
     class="library-back-layer flex flex-1 min-h-0"
-    :class="{ 'is-under-reader': !!reader.currentBook }"
+    :class="{ 'is-under-reader': !!reader.currentBook, 'has-contained-shelf-scroll': containedShelfScroll }"
+    @wheel="onLibraryWheel"
   >
     <SideNav v-if="!isCompact || !settingsDetailOpen" :active="activeNav" @nav="onRailNav" />
 
@@ -27,6 +28,7 @@
           :count="headerCount"
           :title="headerTitle"
           :scroll-root="activeNav === 'shelf' ? libraryScrollRef : null"
+          :contained-scroll="containedShelfScroll"
           :appearance-open="appearanceOpen"
           :renamable="!!activeCollection"
           @toggle-appearance="appearanceOpen = !appearanceOpen"
@@ -138,7 +140,7 @@ import { useSettingsStore } from './stores/settings.ts';
 import { useUiStore } from './stores/ui.ts';
 import { useUpdateStore } from './stores/updates.ts';
 import { useImportProgressStore } from './stores/importProgress.ts';
-import { fileAccept, canPickFolder, hasFileSystemAccess, isAndroid } from './services/platform.ts';
+import { fileAccept, canPickFolder, hasFileSystemAccess, isAndroid, isMacOSTauri } from './services/platform.ts';
 import {
   canUseNativeImport,
   isNativeImportCancelled,
@@ -192,14 +194,30 @@ const { pendingShelfDialog, askShelfDialog, resolveShelfDialog } = useShelfDialo
 const { isCompact } = useViewport();
 
 const measurerRef = ref(null);
-const libraryScrollRef = shallowRef<HTMLElement | null>(null);
+const libraryScrollRef = shallowRef(null);
 const fileInput = ref(null);
 const folderInput = ref(null);
 const importMenuOpen = ref(false);
 const appearanceOpen = ref(false);
 const shelfFilterOpen = ref(false);
 const activeNav = ref('shelf');
+const containedShelfScroll = computed(() => isMacOSTauri && !isCompact.value && activeNav.value !== 'settings');
 const settingsViewRef = shallowRef(null);
+
+// macOS 桌面把书架滚动收进内容区后，侧栏与顶栏不再有可滚动祖先；
+// 指针停在这两处时把竖向滚轮转给书架，避免出现滚不动的死区。
+function onLibraryWheel(event) {
+  if (!containedShelfScroll.value || event.ctrlKey) return;
+  if (!event.deltaY || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+  const scroller = libraryScrollRef.value;
+  const target = event.target;
+  if (!scroller || scroller.scrollHeight <= scroller.clientHeight + 1) return;
+  if (!(target instanceof Element) || target.closest('.library-scroll')) return;
+  const sidebar = target.closest('.sidenav');
+  if (sidebar && sidebar.scrollHeight > sidebar.clientHeight + 1) return;
+  const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? scroller.clientHeight : 1;
+  scroller.scrollTop += event.deltaY * unit;
+}
 const settingsDetailOpen = ref(false);
 
 useScrollBounce(libraryScrollRef);

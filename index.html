@@ -11,6 +11,16 @@
   <link rel="preload" as="image" href="./splash-icon.png" fetchpriority="high" />
   <style>
     /* 启动层直接写进入口，首帧即可覆盖 WebView 的默认底色 */
+    /* 与 stores/theme.ts 的 SURFACE_CANVAS 保持一致：引导脚本先写 data-mode / data-black，首帧就能用对底色 */
+    html {
+      --homura-splash-bg: #F8FAFC;
+    }
+    html[data-mode='dark'] {
+      --homura-splash-bg: #0F1115;
+    }
+    html[data-mode='dark'][data-black='pure'] {
+      --homura-splash-bg: #000000;
+    }
     html.homura-splashing,
     html.homura-splashing body {
       overflow: hidden;
@@ -24,7 +34,7 @@
       display: grid;
       place-items: center;
       overflow: hidden;
-      background: #FFFFFF;
+      background: var(--homura-splash-bg);
       opacity: 1;
       touch-action: none;
       transition: opacity 200ms cubic-bezier(0.2, 0, 0, 1);

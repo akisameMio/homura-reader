@@ -1,8 +1,8 @@
 /* ============================================================================
    HOMURA · 书架滚动回弹
    ----------------------------------------------------------------------------
-   手机书架在内部滚动容器里、桌面在窗口里滚动。到达顶部或底部后继续拖动
-   （触摸 / 滚轮），只位移书架内容并施加阻力；松手后沿弹簧曲线归位。
+   触摸到达顶部或底部后继续拖动时，书架内容带阻力位移；松手后沿弹簧曲线归位。
+   滚轮由系统处理，避免连续滚动时反复拉动整列书架。
    这里直接写 DOM transform，不回灌响应式状态，避免滚动期间触发重渲染。
    ========================================================================== */
 
@@ -11,9 +11,7 @@ import { onBeforeUnmount, watch } from 'vue';
 const MAX_PULL = 48;
 const RESISTANCE = 0.55;
 const MAX_RAW_PULL = 180;
-const MAX_WHEEL_STEP = 64;
 const SETTLE_MS = 200;
-const WHEEL_SETTLE_MS = 90;
 const CLICK_GUARD_MS = 420;
 const IGNORE_TARGET = 'input, textarea, select, [contenteditable], [data-no-scroll-bounce]';
 
@@ -34,11 +32,6 @@ function isIgnoredTarget(target: EventTarget | null) {
   return !!(target instanceof Element && target.closest(IGNORE_TARGET));
 }
 
-function wheelDistance(event: WheelEvent) {
-  const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
-  return Math.min(MAX_WHEEL_STEP, Math.abs(event.deltaY * unit));
-}
-
 interface TouchState {
   scroller: Element;
   lastX: number;
@@ -54,22 +47,13 @@ export function useScrollBounce(targetRef: { value: HTMLElement | null }) {
   let touchState: TouchState | null = null;
   let rawPull = 0;
   let offset = 0;
-  let wheelDirection = 0;
-  let wheelActive = false;
   let settleTimer: number | null = null;
-  let wheelTimer: number | null = null;
   let clickTimer: number | null = null;
   let suppressClick = false;
 
   function clearTimer(timer: number | null) {
     if (timer) window.clearTimeout(timer);
     return null;
-  }
-
-  function clearMotionTimers() {
-    settleTimer = clearTimer(settleTimer);
-    wheelTimer = clearTimer(wheelTimer);
-    wheelActive = false;
   }
 
   function resolveScroller() {
@@ -89,7 +73,7 @@ export function useScrollBounce(targetRef: { value: HTMLElement | null }) {
 
   function beginVisual() {
     if (!target) return;
-    clearMotionTimers();
+    settleTimer = clearTimer(settleTimer);
     target.style.transition = 'none';
     target.style.willChange = 'transform';
   }
@@ -105,10 +89,9 @@ export function useScrollBounce(targetRef: { value: HTMLElement | null }) {
   }
 
   function resetVisual() {
-    clearMotionTimers();
+    settleTimer = clearTimer(settleTimer);
     rawPull = 0;
     offset = 0;
-    wheelDirection = 0;
     if (!target) return;
     target.style.transition = '';
     target.style.transform = '';
@@ -116,8 +99,6 @@ export function useScrollBounce(targetRef: { value: HTMLElement | null }) {
   }
 
   function settle() {
-    clearMotionTimers();
-    wheelDirection = 0;
     if (!target || Math.abs(offset) < 0.5) {
       resetVisual();
       return;
@@ -253,56 +234,19 @@ export function useScrollBounce(targetRef: { value: HTMLElement | null }) {
     finishTouch(false);
   }
 
-  function onWheel(event: WheelEvent) {
-    if (event.ctrlKey || event.metaKey || !event.cancelable || prefersReducedMotion()) return;
-    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || isIgnoredTarget(event.target)) return;
-
-    const boundary = boundaryOf(resolveScroller());
-    const direction = event.deltaY < 0 ? 1 : -1;
-    const atEdge = direction > 0 ? boundary.top : boundary.bottom;
-    if (!boundary.scrollable || !atEdge) return;
-
-    const delta = wheelDistance(event);
-    if (!delta) return;
-    event.preventDefault();
-
-    if (wheelDirection !== direction) {
-      rawPull = 0;
-      wheelDirection = direction;
-    }
-    if (!wheelActive) {
-      beginVisual();
-      wheelActive = true;
-    }
-
-    rawPull = direction > 0
-      ? Math.min(MAX_RAW_PULL, rawPull + delta)
-      : Math.max(-MAX_RAW_PULL, rawPull - delta);
-    writeOffset(rubberBand(rawPull));
-
-    wheelTimer = clearTimer(wheelTimer);
-    wheelTimer = window.setTimeout(() => {
-      wheelTimer = null;
-      wheelActive = false;
-      wheelDirection = 0;
-      settle();
-    }, WHEEL_SETTLE_MS);
-  }
-
   function unbind() {
     if (target) {
       target.removeEventListener('touchstart', onTouchStart);
       target.removeEventListener('touchmove', onTouchMove);
       target.removeEventListener('touchend', onTouchEnd);
       target.removeEventListener('touchcancel', onTouchCancel);
-      target.removeEventListener('wheel', onWheel);
     }
     document.removeEventListener('click', onDocumentClick, true);
     touchState = null;
     rawPull = 0;
     offset = 0;
     suppressClick = false;
-    clearMotionTimers();
+    settleTimer = clearTimer(settleTimer);
     clickTimer = clearTimer(clickTimer);
     if (target) {
       target.style.transition = '';
@@ -320,7 +264,6 @@ export function useScrollBounce(targetRef: { value: HTMLElement | null }) {
     target.addEventListener('touchmove', onTouchMove, { passive: false });
     target.addEventListener('touchend', onTouchEnd, { passive: false });
     target.addEventListener('touchcancel', onTouchCancel, { passive: false });
-    target.addEventListener('wheel', onWheel, { passive: false });
     document.addEventListener('click', onDocumentClick, true);
   }
 

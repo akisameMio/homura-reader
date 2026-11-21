@@ -201,6 +201,7 @@ const props = defineProps({
   title: { type: String, default: '书架' },
   count: { type: Number, default: 0 },
   scrollRoot: { type: Object as PropType<HTMLElement | null>, default: null },
+  containedScroll: { type: Boolean, default: false },
   appearanceOpen: { type: Boolean, default: false },
   filterOpen: { type: Boolean, default: false },
   query: { type: String, default: '' },
@@ -229,12 +230,14 @@ const searchSpring = makeAxis(0, 740);
 let cancelSearchSpring: (() => void) | null = null;
 let closeSpringDelay: ReturnType<typeof setTimeout> | undefined;
 
-watch([() => props.scrollRoot, isCompact, () => props.title], ([root, compact], _, onCleanup) => {
+const usesInnerScroller = computed(() => isCompact.value || props.containedScroll);
+
+watch([() => props.scrollRoot, usesInnerScroller, () => props.title], ([root, inner], _, onCleanup) => {
   scrollHidden.value = false;
   if (!root) return;
 
-  const scroller = compact ? root : document.scrollingElement ?? document.documentElement;
-  const eventTarget = compact ? root : window;
+  const scroller = inner ? root : document.scrollingElement ?? document.documentElement;
+  const eventTarget = inner ? root : window;
   const scrollLimit = () => Math.max(0, scroller.scrollHeight - scroller.clientHeight);
   let limit = scrollLimit();
   let turningPoint = Math.max(0, Math.min(limit, scroller.scrollTop));
@@ -445,13 +448,17 @@ const sortOptions = [
 
 <style scoped>
 .library-header-bar {
-  --library-toolbar-height: 64px;
+  --library-toolbar-height: var(--library-desktop-toolbar-height, 64px);
   --library-header-target: 0;
   --library-header-progress: var(--library-header-target);
   position: sticky;
   top: 0;
   pointer-events: none;
   transform: translateY(calc(-100% * var(--library-header-progress)));
+}
+.has-contained-shelf-scroll .library-header-bar {
+  position: absolute;
+  inset: 0 0 auto;
 }
 .library-header-bar.is-scroll-hidden {
   --library-header-target: 1;

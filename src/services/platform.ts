@@ -20,6 +20,8 @@ export const isIOS = /iPad|iPhone|iPod/.test(ua)
 
 export const isAndroid = /Android/i.test(ua);
 
+export const isMacOSTauri = /Macintosh/i.test(ua) && !isIOS && canUseNativeBridge();
+
 // Tauri 的 WebView2 与桌面浏览器都会把 Windows 写进平台信息，
 // 浏览器调试环境（macOS / Linux）不会误判。
 export const isWindows = typeof navigator !== 'undefined'

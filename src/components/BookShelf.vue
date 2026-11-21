@@ -492,7 +492,7 @@ watch(() => shelf.activeCollectionId, () => { selecting.value = false; clearSele
 watch(() => props.homeRequest, () => { selecting.value = false; clearSelection(); });
 watch(displayBooks, list => { const ids = new Set(list.map(book => book.id)); selectedIds.value = selectedIds.value.filter(id => ids.has(id)); });
 
-// 超大书架先渲染前几屏；卡片本身用 content-visibility 跳过屏外布局，
+// 超大书架先渲染前几屏；封面内部用 content-visibility 跳过屏外绘制，
 // 这里再限制 DOM 数量，避免几千本书一次性建节点。
 function observeLoadMore() {
   if (!loadMoreObserver) {

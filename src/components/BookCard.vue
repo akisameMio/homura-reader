@@ -16,13 +16,16 @@
         <span class="md-shelf-cover-title line-clamp-3">{{ book.title }}</span>
       </div>
 
-      <span v-if="book.remote" class="book-cloud-tag absolute bottom-2.5 left-2.5 rounded-full px-2 py-[3px] text-[10px] min-[900px]:text-[11px] font-semibold">{{ t('云端') }}</span>
-
       <span v-if="selecting" class="md-select-badge md-shape-morph md-shape-boom" :class="{ 'is-selected': selected }" aria-hidden="true">
         <MdIcon :name="selected ? 'check' : 'radio_button_unchecked'" :size="16" />
       </span>
-      <span v-else class="book-type-badge" role="img" :aria-label="badgeText">
-        <MdIcon name="auto_stories" />
+      <span v-else class="book-badges">
+        <span v-if="book.remote" class="book-badge" role="img" :aria-label="t('云端')">
+          <MdIcon name="cloud" />
+        </span>
+        <span class="book-badge" role="img" :aria-label="badgeText">
+          <MdIcon name="auto_stories" />
+        </span>
       </span>
 
       <div v-if="progress" class="book-progress-track" role="progressbar" :aria-label="t('阅读进度')" :aria-valuenow="progress.percent">
@@ -78,12 +81,18 @@ const badgeText = computed(() => {
 </script>
 
 <style scoped>
-.book-type-badge {
+.book-badges {
   position: absolute;
-  top: 2.2%;
-  right: 3.2%;
+  inset: 2.2% 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.book-badge {
   display: grid;
-  width: clamp(17px, 13%, 36px);
+  flex: 0 0 clamp(17px, 13%, 36px);
   aspect-ratio: 1;
   place-items: center;
   border-radius: 36%;
@@ -91,12 +100,14 @@ const badgeText = computed(() => {
   color: var(--md-surface);
 }
 
-.book-type-badge svg {
+.book-badge:last-child {
+  margin-inline-end: 3.2%;
+}
+
+.book-badge svg {
   width: 65%;
   height: 65%;
 }
-
-.book-cloud-tag { background: var(--md-primary-container); color: var(--md-on-primary-container); }
 
 .book-progress-track {
   position: absolute;

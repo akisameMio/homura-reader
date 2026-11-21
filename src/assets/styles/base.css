@@ -45,6 +45,39 @@
       min-height: 100vh;
     }
 
+    /* macOS Tauri 的书架只在内容区滚动，侧栏、顶栏和背景装饰留在外壳。 */
+    html:has(.has-contained-shelf-scroll) {
+      overflow-y: hidden;
+      overscroll-behavior-y: none;
+      scrollbar-gutter: auto;
+    }
+
+    .has-contained-shelf-scroll {
+      --library-desktop-toolbar-height: 64px;
+      flex: none;
+      height: 100vh;
+      height: 100dvh;
+      overflow: clip;
+    }
+
+    .has-contained-shelf-scroll > .sidenav {
+      position: relative;
+      top: auto;
+    }
+
+    .has-contained-shelf-scroll .library-scroll {
+      min-height: 0;
+      padding-block-start: var(--library-desktop-toolbar-height);
+      scroll-padding-block-start: var(--library-desktop-toolbar-height);
+      overflow-y: auto;
+      overscroll-behavior-y: none;
+      scrollbar-gutter: stable;
+    }
+
+    html.reader-scroll-locked .has-contained-shelf-scroll .library-scroll {
+      overflow-y: hidden;
+    }
+
     /* 手机书架：整页固定外壳，只有内容列滚动。
        顶栏 / 底栏 / FAB 都留在不滚动的外壳里，避开安卓 WebView 固定层的滚动抖动。 */
     @media (max-width: 899px) {
@@ -121,7 +154,7 @@
       will-change: transform;
     }
 
-    /* 桌面书架跟随窗口滚动，整页平移会让 sticky 侧栏/顶栏跟着左右晃；
+    /* 桌面书架跟随窗口或内容区滚动，整页平移会让 sticky 侧栏/顶栏跟着左右晃；
        桌面只让阅读器自己滑出，书架保持原位。手机仍保留跟手平移。 */
     @media (min-width: 900px) {
       .library-back-layer.is-under-reader {
