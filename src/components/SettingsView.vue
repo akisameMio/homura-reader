@@ -14,7 +14,6 @@
         </button>
         <div class="settings-topbar-title">
           <h1>{{ activeSection ? t(sectionTitles[activeSection]) : t('设置') }}</h1>
-          <p v-if="!activeSection">{{ t('让阅读，更合你的习惯。') }}</p>
         </div>
         <div v-if="activeSection === 'logs'" class="settings-topbar-actions">
           <div v-if="logSearchOpen" class="settings-log-search" role="search">
@@ -70,16 +69,6 @@
     </div>
     <div v-if="!activeSection" class="settings-grid">
       <section class="settings-card settings-appearance" aria-labelledby="settings-appearance-title">
-        <button
-          type="button"
-          class="settings-card-open"
-          :aria-label="t('打开外观设置')"
-          @click="openSection('appearance', $event)"
-        >
-          <span class="settings-card-open-icon">
-            <MdIcon name="chevron_right" />
-          </span>
-        </button>
         <div class="appearance-content">
           <div class="settings-card-head">
             <h2 id="settings-appearance-title">
@@ -87,8 +76,7 @@
               {{ t('外观') }}
             </h2>
           </div>
-          <h3>{{ t('给阅读换个心情') }}</h3>
-          <p>{{ t('从明亮白昼，到安静的夜间。') }}</p>
+          <p class="settings-control-label">{{ t('表面模式') }}</p>
           <MdSegmentedControl
             :model-value="theme.surfaceMode"
             :options="surfaceOptions"
@@ -96,25 +84,26 @@
             @update:model-value="setSurfaceMode"
           />
         </div>
-        <p class="settings-detail-hint">{{ t('更多外观设置') }}</p>
         <div class="settings-book-stage" aria-hidden="true">
           <div class="settings-open-book">
             <div class="settings-book-page">
-              <b>{{ t('夏日的序章') }}</b>
-              <p>
-                {{ t('风穿过敞开的窗，') }}
-                <br />
-                {{ t('书页轻轻翻动。') }}
-              </p>
-              <i v-for="line in 5" :key="line"></i>
+              <i v-for="line in 7" :key="line"></i>
               <span>12</span>
             </div>
             <div class="settings-book-page">
-              <i v-for="line in 9" :key="line"></i>
+              <i v-for="line in 7" :key="line"></i>
               <span>13</span>
             </div>
           </div>
         </div>
+        <button
+          type="button"
+          class="settings-card-open"
+          @click="openSection('appearance', $event)"
+        >
+          <span>{{ t('更多外观设置') }}</span>
+          <MdIcon name="chevron_right" :size="20" />
+        </button>
       </section>
       <section class="settings-card settings-language" aria-labelledby="settings-language-title">
         <div class="settings-card-head">
@@ -122,7 +111,6 @@
             <MdIcon name="language" />
             {{ t('语言') }}
           </h2>
-          <span>{{ t('立即应用，并自动保存。') }}</span>
         </div>
         <SettingsSelectRow
           :label="t('界面语言')"
@@ -132,16 +120,6 @@
         />
       </section>
       <section class="settings-card settings-reading" aria-labelledby="settings-reading-title">
-        <button
-          type="button"
-          class="settings-card-open"
-          :aria-label="t('打开阅读默认值')"
-          @click="openSection('reading', $event)"
-        >
-          <span class="settings-card-open-icon">
-            <MdIcon name="chevron_right" />
-          </span>
-        </button>
         <div class="settings-card-head">
           <h2 id="settings-reading-title">
             <MdIcon name="auto_stories" />
@@ -151,10 +129,7 @@
         </div>
         <div class="settings-reading-controls">
           <div class="settings-block">
-            <div class="settings-head">
-              <span>{{ t('翻页方式') }}</span>
-              <b>{{ t(transitionLabel) }}</b>
-            </div>
+            <p class="settings-control-label">{{ t('翻页方式') }}</p>
             <MdSegmentedControl
               :model-value="settings.transitionStyle"
               :options="transitionOptions"
@@ -163,10 +138,7 @@
             />
           </div>
           <div class="settings-block">
-            <div class="settings-head">
-              <span>{{ t('阅读方向') }}</span>
-              <b>{{ t(directionLabel) }}</b>
-            </div>
+            <p class="settings-control-label">{{ t('阅读方向') }}</p>
             <MdSegmentedControl
               :model-value="readerDefaults.pagedDirection"
               :options="directionOptions"
@@ -176,10 +148,7 @@
             />
           </div>
           <div class="settings-block">
-            <div class="settings-head">
-              <span>{{ t('跨页布局') }}</span>
-              <b>{{ t(spreadLabel) }}</b>
-            </div>
+            <p class="settings-control-label">{{ t('跨页布局') }}</p>
             <MdSegmentedControl
               :model-value="readerDefaults.spread"
               :options="spreadOptions"
@@ -188,21 +157,18 @@
               @update:model-value="setSpread"
             />
           </div>
-          <p v-if="isScrollDefault" class="settings-scroll-note">{{ t('滚动模式沿用上次的分页方向与跨页布局，切回分页后生效。') }}</p>
+          <p v-if="isScrollDefault" class="settings-scroll-note">{{ t('条漫模式沿用上次的分页方向与跨页布局，切回分页后生效。') }}</p>
         </div>
-        <p class="settings-detail-hint">{{ t('更多阅读设置') }}</p>
-      </section>
-      <section class="settings-card settings-storage" aria-labelledby="settings-storage-title">
         <button
           type="button"
           class="settings-card-open"
-          :aria-label="t('打开存储与数据')"
-          @click="openSection('storage', $event)"
+          @click="openSection('reading', $event)"
         >
-          <span class="settings-card-open-icon">
-            <MdIcon name="chevron_right" />
-          </span>
+          <span>{{ t('更多阅读设置') }}</span>
+          <MdIcon name="chevron_right" :size="20" />
         </button>
+      </section>
+      <section class="settings-card settings-storage" aria-labelledby="settings-storage-title">
         <div class="settings-card-head">
           <h2 id="settings-storage-title">
             <MdIcon name="database" />
@@ -220,8 +186,13 @@
           </button>
         </div>
         <template v-if="diskSegments">
-          <strong class="storage-number">{{ formatBytes(diskSegments.appBytes) }}</strong>
-          <p class="settings-note">{{ t('HOMURA 占用 · 共 {0}', { 0: storageTotalText }) }}</p>
+          <div class="storage-summary">
+            <div>
+              <p class="settings-note">{{ t('HOMURA 占用') }}</p>
+              <strong class="storage-number">{{ formatBytes(diskSegments.appBytes) }}</strong>
+            </div>
+            <p class="settings-note">{{ t('共 {0}', { 0: storageTotalText }) }}</p>
+          </div>
           <div
             class="storage-stack"
             :class="{ 'is-revealing': storageRevealing }"
@@ -254,8 +225,13 @@
           </div>
         </template>
         <template v-else>
-          <strong class="storage-number">{{ storageUsageText }}</strong>
-          <p class="settings-note">{{ nativeStorageEnabled ? t('WebView 本地数据') : t('浏览器本地数据') }}</p>
+          <div class="storage-summary">
+            <div>
+              <p class="settings-note">{{ nativeStorageEnabled ? t('WebView 本地数据') : t('浏览器本地数据') }}</p>
+              <strong class="storage-number">{{ storageUsageText }}</strong>
+            </div>
+            <p class="settings-note">{{ storageQuotaText }}</p>
+          </div>
           <div
             class="storage-bar"
             :class="{ 'is-revealing': storageRevealing }"
@@ -267,67 +243,58 @@
           >
             <i :style="{ width: storageBarWidth }"></i>
           </div>
-          <p class="settings-note">{{ storageQuotaText }}</p>
           <p v-if="nativeStorageEnabled" class="settings-note">{{ t('原始文件存入本机，容量受磁盘剩余空间限制。') }}</p>
         </template>
-        <p class="settings-detail-hint">{{ t('管理本机数据') }}</p>
-      </section>
-      <div class="settings-card-stack">
-        <section class="settings-card settings-sync" aria-labelledby="settings-sync-title">
-          <button
-            type="button"
-            class="settings-card-open"
-            :aria-label="t('打开 WebDAV 同步')"
-            @click="openSection('sync', $event)"
-          >
-            <span class="settings-card-open-icon"><MdIcon name="chevron_right" /></span>
-          </button>
-          <div class="settings-card-head">
-            <h2 id="settings-sync-title"><MdIcon name="update" />{{ t('WebDAV 同步') }}</h2>
-          </div>
-          <p class="settings-sync-copy">{{ t('在不同设备间继续阅读') }}</p>
-          <p class="settings-note">{{ t('同步阅读进度、收藏与书库，原始文件不会上传。') }}</p>
-          <p class="settings-detail-hint">{{ t('配置同步连接') }}</p>
-        </section>
-        <section class="settings-card settings-import" aria-labelledby="settings-import-title">
-          <button
-            type="button"
-            class="settings-card-open"
-            :aria-label="t('打开导入偏好')"
-            @click="openSection('import', $event)"
-          >
-            <span class="settings-card-open-icon">
-              <MdIcon name="chevron_right" />
-            </span>
-          </button>
-          <div class="settings-card-head">
-            <h2 id="settings-import-title">
-              <MdIcon name="upload_file" />
-              {{ t('导入偏好') }}
-            </h2>
-          </div>
-          <MdSwitch
-            :model-value="settings.importCollectionPrompt"
-            :title="t('导入多本作品时询问是否创建书库')"
-            @update:model-value="settings.setImportCollectionPrompt"
-          >
-            <span class="settings-value-copy">
-              <b>{{ t('导入时询问创建书库') }}</b>
-              <span>{{ t('按目录整理，一次归好类。') }}</span>
-            </span>
-          </MdSwitch>
-          <p class="settings-note">{{ settings.importCollectionPrompt ? t('导入多本作品时，按目录询问') : t('默认直接导入') }}</p>
-        </section>
-      </div>
-      <section class="settings-card settings-logs" aria-labelledby="settings-logs-title">
         <button
           type="button"
           class="settings-card-open"
-          :aria-label="t('打开运行日志')"
-          @click="openSection('logs', $event)"
+          @click="openSection('storage', $event)"
         >
-          <span class="settings-card-open-icon"><MdIcon name="chevron_right" /></span>
+          <span>{{ t('管理本机数据') }}</span>
+          <MdIcon name="chevron_right" :size="20" />
         </button>
+      </section>
+      <section class="settings-card settings-sync" aria-labelledby="settings-sync-title">
+        <div class="settings-card-head">
+          <h2 id="settings-sync-title"><MdIcon name="update" />{{ t('WebDAV 同步') }}</h2>
+        </div>
+        <p class="settings-note">{{ t('同步阅读进度、收藏与书库，原始文件不会上传。') }}</p>
+        <button
+          type="button"
+          class="settings-card-open"
+          @click="openSection('sync', $event)"
+        >
+          <span>{{ t('配置同步连接') }}</span>
+          <MdIcon name="chevron_right" :size="20" />
+        </button>
+      </section>
+      <section class="settings-card settings-import" aria-labelledby="settings-import-title">
+        <div class="settings-card-head">
+          <h2 id="settings-import-title">
+            <MdIcon name="upload_file" />
+            {{ t('导入偏好') }}
+          </h2>
+        </div>
+        <MdSwitch
+          :model-value="settings.importCollectionPrompt"
+          :title="t('导入多本作品时询问是否创建书库')"
+          @update:model-value="settings.setImportCollectionPrompt"
+        >
+          <span class="settings-value-copy">
+            <b>{{ t('导入时询问创建书库') }}</b>
+            <span>{{ t('导入多本作品时，按目录询问') }}</span>
+          </span>
+        </MdSwitch>
+        <button
+          type="button"
+          class="settings-card-open"
+          @click="openSection('import', $event)"
+        >
+          <span>{{ t('打开导入偏好') }}</span>
+          <MdIcon name="chevron_right" :size="20" />
+        </button>
+      </section>
+      <section class="settings-card settings-logs" aria-labelledby="settings-logs-title">
         <div class="settings-card-head">
           <h2 id="settings-logs-title">
             <MdIcon name="history" />
@@ -335,7 +302,6 @@
           </h2>
         </div>
         <MdSwitch
-          class="settings-list-row"
           :model-value="settings.runtimeLogCapture"
           :title="t('记录应用运行期间的日志')"
           @update:model-value="settings.setRuntimeLogCapture"
@@ -345,20 +311,20 @@
             <span>{{ t('记录用户操作、运行信息与异常') }}</span>
           </span>
         </MdSwitch>
-        <p class="settings-note">{{ logTotalText }} · {{ t('最近 300 条留在本机') }}</p>
-        <p class="settings-detail-hint">{{ t('查看运行日志') }}</p>
-      </section>
-      <section class="settings-card settings-about" aria-labelledby="settings-about-title">
+        <div class="settings-log-summary">
+          <span>{{ logTotalText }}</span>
+          <span>{{ t('最近 300 条留在本机') }}</span>
+        </div>
         <button
           type="button"
           class="settings-card-open"
-          :aria-label="t('打开关于 HOMURA')"
-          @click="openSection('about', $event)"
+          @click="openSection('logs', $event)"
         >
-          <span class="settings-card-open-icon">
-            <MdIcon name="chevron_right" />
-          </span>
+          <span>{{ t('查看运行日志') }}</span>
+          <MdIcon name="chevron_right" :size="20" />
         </button>
+      </section>
+      <section class="settings-card settings-about" aria-labelledby="settings-about-title">
         <div class="settings-card-head">
           <h2 id="settings-about-title">
             <MdIcon name="info" />
@@ -382,33 +348,37 @@
             {{ t('更新日志') }}
             <i v-if="hasNewRelease" class="about-log-new" :aria-label="t('有新版本')"></i>
           </button>
+          <button type="button" class="settings-text-button" @click="openRepository">
+            {{ t('开源仓库') }}
+            <MdIcon name="open_in_new" />
+          </button>
         </div>
-        <button type="button" class="settings-text-button about-repository" @click="openRepository">
-          {{ t('开源仓库') }}
-          <MdIcon name="open_in_new" />
-        </button>
         <p v-if="aboutLinkError" class="settings-note" role="alert">{{ aboutLinkError }}</p>
-      </section>
-      <section class="settings-card settings-debug" aria-labelledby="settings-debug-title">
         <button
           type="button"
           class="settings-card-open"
-          :aria-label="t('打开调试设置')"
-          @click="openSection('debug', $event)"
+          @click="openSection('about', $event)"
         >
-          <span class="settings-card-open-icon">
-            <MdIcon name="chevron_right" />
-          </span>
+          <span>{{ t('打开关于 HOMURA') }}</span>
+          <MdIcon name="chevron_right" :size="20" />
         </button>
+      </section>
+      <section class="settings-card settings-debug" aria-labelledby="settings-debug-title">
         <div class="settings-card-head">
           <h2 id="settings-debug-title">
             <MdIcon name="science" />
             {{ t('调试') }}
           </h2>
         </div>
-        <p class="settings-debug-copy">{{ t('调试与实验功能') }}</p>
         <p class="settings-note">{{ t('自动检查更新、全屏入口与示例内容。') }}</p>
-        <p class="settings-detail-hint">{{ t('打开调试设置') }}</p>
+        <button
+          type="button"
+          class="settings-card-open"
+          @click="openSection('debug', $event)"
+        >
+          <span>{{ t('打开调试设置') }}</span>
+          <MdIcon name="chevron_right" :size="20" />
+        </button>
       </section>
     </div>
     <div v-else class="settings-detail">
@@ -547,7 +517,7 @@
               </span>
             </MdSwitch>
           </div>
-          <p v-if="isScrollDefault" class="settings-detail-note">{{ t('滚动模式沿用上次的分页方向与跨页布局，切回分页后生效。') }}</p>
+          <p v-if="isScrollDefault" class="settings-detail-note">{{ t('条漫模式沿用上次的分页方向与跨页布局，切回分页后生效。') }}</p>
         </section>
         <section class="settings-detail-group" aria-labelledby="settings-text-heading">
           <h2 id="settings-text-heading">{{ t('文字与滚动') }}</h2>
@@ -1107,7 +1077,6 @@ import { useRuntimeLogStore } from '../stores/runtimeLogs.ts';
 import {
   SURFACE_MODE_OPTIONS,
   THEME_OPTIONS,
-  TRANSITION_LABELS,
   TRANSITION_OPTIONS,
   useThemeStore
 } from '../stores/theme.ts';
@@ -1215,13 +1184,7 @@ const themeLabel = computed(() => {
   const option = THEME_OPTIONS.find(item => item.name === theme.themeColor);
   return option ? t(option.title.replace(' (默认)', '')) : theme.themeColor;
 });
-const transitionLabel = computed(() => TRANSITION_LABELS[settings.transitionStyle] || '');
 const isScrollDefault = computed(() => readerDefaults.direction === 'vertical');
-const directionLabel = computed(() => {
-  const option = directionOptions.find(item => item.value === readerDefaults.pagedDirection);
-  return option ? option.label : '';
-});
-const spreadLabel = computed(() => readerDefaults.spread === 2 ? t('双页') : t('单页'));
 const storageInfo = ref<{ usage: number; quota: number; ratio: number } | null>(null);
 const diskStats = ref<DiskStorageStats | null>(null);
 const storageRevealing = ref(false);
@@ -1693,12 +1656,6 @@ onBeforeUnmount(() => {
   letter-spacing: -0.025em;
 }
 
-.settings-topbar p {
-  margin: 6px 0 0;
-  color: var(--md-on-surface-variant);
-  font-size: 12px;
-}
-
 .settings-import-status {
   position: sticky;
   top: calc(88px + env(safe-area-inset-top));
@@ -1707,30 +1664,24 @@ onBeforeUnmount(() => {
 
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-flow: row dense;
-  align-items: stretch;
-  gap: 22px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
   max-width: 1480px;
   margin: auto;
   padding: 12px 28px 0;
 }
 
-.settings-card-stack {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: inherit;
-  min-width: 0;
-}
-
-.settings-card-stack > .settings-import {
-  min-height: 0;
-}
-
 .settings-card {
+  --settings-card-padding: 24px;
+  --settings-card-radius: 32px;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   min-width: 0;
-  padding: 26px;
-  border-radius: 34px;
+  padding: var(--settings-card-padding);
+  border-radius: var(--settings-card-radius);
   background: var(--md-surface);
   box-shadow: 0 6px 10px -8px color-mix(in oklab, var(--md-shadow-color-soft) 18%, transparent), 0 14px 30px -16px color-mix(in oklab, var(--md-shadow-color-soft) 24%, transparent);
 }
@@ -1740,15 +1691,16 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 28px;
-  margin-bottom: 24px;
+  min-height: 44px;
+  flex-wrap: wrap;
+  row-gap: 4px;
 }
 
 .settings-card-head h2 {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin: 0;
   font-size: 17px;
   font-weight: 650;
@@ -1756,14 +1708,19 @@ onBeforeUnmount(() => {
 
 .settings-card-head h2 svg {
   flex: none;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   color: var(--md-on-surface-variant);
 }
 
-.settings-card-head > span {
+.settings-card-head > span,
+.settings-grid .settings-note,
+.settings-grid .settings-value-copy span,
+.settings-log-summary,
+.settings-control-label {
   color: var(--md-on-surface-variant);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .settings-note {
@@ -1773,90 +1730,67 @@ onBeforeUnmount(() => {
   color: var(--md-on-surface-variant);
 }
 
-.settings-sync {
-  position: relative;
-}
-
-.settings-sync-copy {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.settings-logs {
-  display: flex;
-  flex-direction: column;
-  min-height: 240px;
-}
-
-.settings-logs > .settings-note {
-  margin-top: 18px;
-}
-
-.settings-logs > .settings-detail-hint {
-  margin-top: auto;
-  padding-top: 18px;
-}
-
 .settings-appearance {
-  grid-column: span 2;
-  min-height: 294px;
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 20px;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 34%);
+  align-items: center;
+  column-gap: 24px;
+}
+
+.settings-appearance > .settings-card-open {
+  grid-column: 1 / -1;
+}
+
+.settings-appearance .settings-book-stage {
+  position: static;
+  padding: 16px;
+  border-radius: calc(var(--settings-card-radius) - var(--settings-card-padding));
+}
+
+.settings-appearance .settings-open-book {
+  width: 108px;
+  height: 104px;
+  border-width: 3px;
+}
+
+.settings-appearance .settings-book-page {
+  padding: 9px 6px;
+}
+
+.settings-appearance .settings-book-page i {
+  height: 2px;
+  margin-block: 5px;
 }
 
 .settings-language {
   grid-column: 1 / -1;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .settings-language .settings-select-row {
-  padding-inline: 0;
+  width: auto;
+  min-height: 44px;
+  padding: 8px 0;
 }
 
-.settings-appearance > .settings-detail-hint {
-  align-self: stretch;
-  z-index: 1;
-  margin: auto 30px 0 0;
+.settings-language :deep(.settings-select-label) {
+  display: none;
 }
 
-.settings-appearance .settings-book-stage {
-  bottom: 64px;
+.settings-grid .settings-note {
+  margin: 0;
 }
 
-.settings-appearance .settings-open-book {
-  max-height: calc(100% - 40px);
-}
-
-.appearance-content {
-  position: relative;
-  z-index: 1;
-  width: 57%;
-}
-
-.appearance-content h3 {
-  font-size: 24px;
-  line-height: 1.4;
-  letter-spacing: -0.025em;
-  margin: 27px 0 8px;
-  font-weight: 650;
-}
-
-.appearance-content > p {
-  margin: 0 0 28px;
-  font-size: 12px;
-  color: var(--md-on-surface-variant);
+.appearance-content .settings-card-head {
+  margin-bottom: 12px;
 }
 
 .appearance-content :deep(.md-segmented) {
-  max-width: 340px;
-}
-
-.appearance-content :deep(.md-segmented-option) {
-  min-height: 44px;
+  max-width: 480px;
 }
 
 .settings-book-stage {
@@ -1927,14 +1861,14 @@ onBeforeUnmount(() => {
 }
 
 .settings-reading {
-  grid-column: span 2;
+  grid-column: 1 / -1;
   container: reading / inline-size;
 }
 
 .settings-reading-controls {
   display: grid;
-  grid-template-columns: 1.4fr 1.1fr 0.8fr;
-  gap: 20px;
+  grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .settings-head {
@@ -1957,17 +1891,31 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.settings-reading :deep(.md-segmented-option) {
+.settings-control-label {
+  margin: 0 0 8px;
+  font-weight: 550;
+}
+
+.settings-reading :deep(.md-segmented-option),
+.appearance-content :deep(.md-segmented-option) {
   min-height: 44px;
-  padding-inline: 6px;
-  font-size: 11px;
+  gap: 4px;
+  padding-inline: 4px;
+  white-space: normal;
+  text-align: center;
+}
+
+.settings-grid :deep(.md-segmented-option svg) {
+  flex: none;
+  width: 14px;
+  height: 14px;
 }
 
 .settings-scroll-note {
   grid-column: 1 / -1;
-  margin: 2px 0 0;
+  margin: 0;
   color: var(--md-on-surface-variant);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.7;
 }
 
@@ -2050,14 +1998,39 @@ onBeforeUnmount(() => {
 
 .settings-card-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 16px;
+  gap: 4px;
 }
 
-.settings-storage .settings-card-head {
-  margin-bottom: 12px;
+.storage-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.settings-storage .storage-number {
+  font-size: 26px;
+}
+
+.settings-storage :is(.storage-stack, .storage-bar) {
+  margin: 0;
+}
+
+.settings-storage .storage-legend {
+  gap: 4px;
+}
+
+.settings-storage .storage-legend > div {
+  font-size: 12px;
+}
+
+.settings-log-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
 }
 
 .storage-number {
@@ -2130,15 +2103,11 @@ onBeforeUnmount(() => {
   flex: none;
 }
 
-.settings-about, .settings-import, .settings-debug {
-  min-height: 240px;
-}
-
 .settings-card-head > .settings-badge {
   flex: none;
   border-radius: 16px;
   padding: 6px 9px;
-  font-size: 10px;
+  font-size: 12px;
   background: var(--md-primary-container);
   color: var(--md-on-primary-container);
 }
@@ -2158,7 +2127,7 @@ onBeforeUnmount(() => {
 
 .about-version h3 {
   margin: 0;
-  font-size: 19px;
+  font-size: 17px;
   letter-spacing: -0.025em;
   font-weight: 650;
 }
@@ -2173,30 +2142,11 @@ onBeforeUnmount(() => {
   margin-top: 5px;
 }
 
-.about-repository {
-  margin-top: 4px;
-}
-
 .about-log-new {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--md-primary);
-}
-
-.settings-debug-copy {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 550;
-}
-
-.settings-debug > .settings-text-button {
-  margin-top: 14px;
-  padding-left: 0;
-}
-
-.settings-import > .settings-note {
-  margin-top: 18px;
 }
 
 .settings-footer {
@@ -2249,33 +2199,13 @@ onBeforeUnmount(() => {
   }
 }
 
-@container reading (max-width: 680px) {
+@container reading (max-width: 679px) {
   .settings-reading-controls {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .settings-reading-controls > .settings-block:first-child {
     grid-column: 1 / -1;
-  }
-
-  .settings-scroll-note {
-    grid-column: 1 / -1;
-  }
-
-}
-
-@container settings (max-width: 1039px) {
-  .settings-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
-  }
-
-  .settings-card {
-    padding: 24px;
-  }
-
-  .settings-about {
-    min-height: 0;
   }
 }
 
@@ -2287,13 +2217,8 @@ onBeforeUnmount(() => {
   }
 
   .settings-card {
-    padding: 22px;
-    border-radius: 28px;
-  }
-
-  .settings-appearance, .settings-reading, .settings-storage, .settings-about {
-    grid-column: auto;
-    grid-row: auto;
+    --settings-card-padding: 16px;
+    --settings-card-radius: 28px;
   }
 
   .settings-topbar-inner {
@@ -2305,92 +2230,29 @@ onBeforeUnmount(() => {
     font-size: 22px;
   }
 
-  .settings-topbar p {
-    font-size: 11px;
-  }
-
-  .settings-card-head {
-    margin-bottom: 22px;
-  }
-
-  .settings-card-head h2 {
-    font-size: 17px;
-  }
-
-  .settings-card-head > span {
-    font-size: 10px;
-  }
-
   .settings-appearance {
-    min-height: 266px;
-  }
-
-  .appearance-content {
-    width: 66%;
-  }
-
-  .appearance-content h3 {
-    margin-top: 25px;
-    font-size: 21px;
-  }
-
-  .appearance-content > p {
-    font-size: 10px;
-    margin-bottom: 24px;
-  }
-
-  .appearance-content :deep(.md-segmented-option) {
-    padding-inline: 4px;
-    font-size: 11px;
-  }
-
-  .settings-book-stage {
-    left: 71%;
-    border-radius: 65px 0 0 80px;
-  }
-
-  .settings-open-book {
-    width: 88px;
-    height: 158px;
-    transform: rotate(9deg);
-  }
-
-  .settings-book-page {
-    padding: 18px 5px;
-  }
-
-  .settings-book-page b {
-    font-size: 7px;
-  }
-
-  .settings-book-page p {
-    font-size: 6px;
-  }
-
-  .settings-book-page i {
-    height: 2px;
-    margin-block: 7px;
-  }
-
-  .settings-reading-controls {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .settings-reading-controls > .settings-block:first-child {
-    grid-column: auto;
-  }
-
-  .settings-scroll-note {
-    grid-column: 1 / -1;
-  }
-
-  .settings-about, .settings-import, .settings-debug, .settings-logs {
-    min-height: 0;
+  .settings-appearance .settings-book-stage {
+    display: none;
   }
 
   .settings-footer {
     padding: 24px 20px 32px;
-    font-size: 10px;
+    font-size: 12px;
+  }
+}
+
+@container reading (max-width: 359px) {
+  .settings-reading-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container settings (max-width: 399px) {
+  .settings-grid :deep(.md-segmented.has-many-options .md-segmented-option svg) {
+    display: none;
   }
 }
 
@@ -2537,56 +2399,54 @@ onBeforeUnmount(() => {
 
 /* 二级设置使用整页分组列表，首页卡片保留快捷控件。 */
 
-.settings-card {
-  position: relative;
-  isolation: isolate;
-}
-
-.settings-card > .settings-card-open {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  border-radius: inherit;
-  background: transparent;
+.settings-card-open {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  margin: auto 0 -8px;
+  padding-top: 4px;
+  border-top: 0.5px solid var(--md-outline-variant);
+  color: var(--md-primary);
+  font-size: 13px;
+  font-weight: 550;
+  text-align: start;
   cursor: pointer;
 }
 
-.settings-card-open-icon {
-  position: absolute;
-  right: 24px;
-  bottom: 24px;
-  display: grid;
-  place-items: center;
+.settings-card-open svg {
+  flex: none;
   color: var(--md-on-surface-variant);
 }
 
-.settings-card > :not(.settings-card-open) {
-  pointer-events: none;
+/* 保留整卡入口，独立控件置于点击层上方。 */
+.settings-card-open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--settings-card-radius);
 }
 
-.settings-card :deep(.md-segmented), .settings-card :deep(.md-range), .settings-card :deep(.theme-swatch-grid), .settings-card button:not(.settings-card-open) {
+.settings-card :is(button:not(.settings-card-open), .md-segmented) {
   position: relative;
-  z-index: 2;
-  pointer-events: auto;
+  z-index: 1;
 }
 
-.settings-card :deep(button), .settings-card :deep(input) {
-  pointer-events: auto;
+@media (hover: hover) and (pointer: fine) {
+  .settings-card-open:hover svg {
+    color: var(--md-primary);
+  }
 }
 
-.settings-page .settings-card-open:focus-visible {
-  outline-offset: -4px;
-}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .settings-card-open svg {
+    transition: transform var(--md-duration-short) var(--md-ease-emphasized);
+  }
 
-.settings-detail-hint {
-  margin: 20px 30px 0 0;
-  min-height: 24px;
-  color: var(--md-primary);
-  font-size: 12px;
+  .settings-card-open:hover svg {
+    transform: translateX(3px);
+  }
 }
 
 .settings-back-button {
