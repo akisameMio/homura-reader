@@ -1,24 +1,25 @@
 <template>
   <section :class="{ 'is-island': desktop }">
     <p v-if="!desktop" class="md-mobile-sheet-label">{{ panelTitle }}</p>
-    <div v-if="store.status === 'running'" class="md-mobile-sheet-card is-padded">
+    <div v-if="store.total > 0" class="md-mobile-sheet-card is-padded">
       <div class="import-overview mobile-import-overview">
         <div class="import-count"><b>{{ store.done }}<span> / {{ store.total }}</span></b><small>{{ t('本作品已处理') }}</small></div>
-        <div class="import-percent"><b>{{ store.percent }}%</b><span>{{ statusMeta }}</span></div>
+        <div class="import-percent"><b v-if="!isIndeterminate">{{ store.percent }}%</b><span>{{ statusMeta }}</span></div>
       </div>
-      <div class="import-track" role="progressbar" :aria-label="t('导入进度')" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="store.percent">
-        <i :style="{ transform: `scaleX(${store.percent / 100})` }"></i>
+      <div class="import-track" :class="{ 'is-indeterminate': isIndeterminate }" role="progressbar"
+        :aria-label="t('导入进度')" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="isIndeterminate ? undefined : store.percent">
+        <i ref="progressFill"></i>
       </div>
-      <div class="import-steps" aria-hidden="true">
+      <div v-if="store.isRunning" class="import-steps" aria-hidden="true">
         <template v-for="(step, index) in steps" :key="step.key">
           <span class="import-step" :class="{ 'is-done': stepState(step.key) === 'complete', 'is-active': stepState(step.key) === 'active' }">
-            <MdIcon v-if="stepState(step.key) === 'complete'" name="check" />{{ t(step.label) }}
+            <MdIcon name="check" :size="12" class="import-step-check" />{{ t(step.label) }}
           </span>
           <span v-if="index < steps.length - 1" class="import-step-line"></span>
         </template>
       </div>
     </div>
-    <div v-else class="md-mobile-sheet-card">
+    <div v-if="!store.isRunning" class="md-mobile-sheet-card">
       <div class="md-mobile-sheet-row">
         <span class="md-mobile-sheet-icon is-accent"><MdIcon name="check" /></span>
         <span class="md-mobile-sheet-copy"><b>{{ t('已添加 {0} 本', { 0: store.saved }) }}</b><small>{{ savedNote }}</small></span>
@@ -51,7 +52,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import {
   useImportProgressStore,
   importPhaseLabel,
@@ -59,6 +60,7 @@ import {
 } from '../stores/importProgress.ts';
 import MdIcon from './MdIcon.vue';
 import { useI18n } from '../composables/useI18n.ts';
+import { makeAxis, runSpring, snapAxes } from '../services/spring.ts';
 
 const { t } = useI18n();
 
@@ -66,6 +68,39 @@ defineProps({ desktop: { type: Boolean, default: false } });
 const emit = defineEmits(['retry', 'close']);
 
 const store = useImportProgressStore();
+// 单本导入只知道当前阶段，无法按作品数估算未完成时的百分比。
+const isIndeterminate = computed(() => store.isRunning && store.total === 1);
+const progressFill = shallowRef<HTMLElement | null>(null);
+const progressSpring = makeAxis(0, 560);
+const progressAxes = [progressSpring];
+const reduceMotion = typeof window !== 'undefined' ? window.matchMedia?.('(prefers-reduced-motion: reduce)') : undefined;
+let stopProgressSpring: (() => void) | null = null;
+
+watch(
+  [progressFill, () => store.startedAt, () => store.percent, isIndeterminate],
+  ([fill, startedAt, percent, indeterminate], [previousFill, previousStart, previousPercent, wasIndeterminate]) => {
+    progressSpring.target = percent / 100;
+    const paint = () => fill?.style.setProperty('--import-fill', String(Math.min(progressSpring.pos, progressSpring.target)));
+
+    if (!fill || fill !== previousFill || startedAt !== previousStart || percent < previousPercent
+      || indeterminate || wasIndeterminate || reduceMotion?.matches) {
+      stopProgressSpring?.();
+      stopProgressSpring = null;
+      snapAxes(progressAxes);
+      paint();
+      return;
+    }
+
+    // 批量任务连续完成时只更新目标，沿用动画当前的位置和速度。
+    if (stopProgressSpring || progressSpring.pos === progressSpring.target) return;
+    stopProgressSpring = runSpring(progressAxes, paint, () => { stopProgressSpring = null; }, {
+      stopWhen: () => !!reduceMotion?.matches || progressSpring.pos >= progressSpring.target
+    });
+  },
+  { flush: 'post' }
+);
+onBeforeUnmount(() => stopProgressSpring?.());
+
 const steps = [
   { key: 'read', label: '读取' },
   { key: 'parse', label: '解析' },
@@ -244,7 +279,23 @@ defineExpose({ primaryAction, runPrimaryAction });
   border-radius: inherit;
   background: var(--md-primary);
   transform-origin: left center;
-  transition: transform var(--md-duration-short) var(--md-ease-emphasized);
+  transform: scaleX(var(--import-fill, 0));
+}
+
+.import-track.is-indeterminate i {
+  width: 30%;
+  transform: translateX(116.67%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .import-track.is-indeterminate i {
+    animation: import-progress-sweep 1.4s linear infinite;
+  }
+
+  @keyframes import-progress-sweep {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(333.34%); }
+  }
 }
 
 .import-steps {
@@ -266,13 +317,17 @@ defineExpose({ primaryAction, runPrimaryAction });
   font-weight: 600;
 }
 
-.import-step :deep(svg) {
-  width: 12px;
-  height: 12px;
+.import-step-check {
+  flex: none;
+  visibility: hidden;
 }
 
 .import-step.is-done {
   color: var(--md-primary);
+}
+
+.import-step.is-done .import-step-check {
+  visibility: visible;
 }
 
 .import-step.is-active {

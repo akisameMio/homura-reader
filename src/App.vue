@@ -1,6 +1,6 @@
 <template>
   <!-- 手机底栏挂在阅读器预见式返回的 transform 容器外，避免长书架把 fixed 底栏带出视口 -->
-  <div id="homura-mobile-nav-root"></div>
+  <div id="homura-mobile-nav-root" :inert="!!reader.currentBook"></div>
 
   <div
     class="library-back-layer flex min-h-0"
@@ -9,6 +9,7 @@
       'has-contained-shelf-scroll': containedShelfScroll,
       'flex-1': !containedShelfScroll
     }"
+    :inert="!!reader.currentBook"
     @wheel="onLibraryWheel"
   >
     <SideNav v-if="!isCompact || !settingsDetailOpen" :active="activeNav" @nav="onRailNav" />
@@ -60,7 +61,7 @@
           data-app-scroll
         >
           <p v-if="shelf.error || (!reader.currentBook && reader.openError)" role="alert" class="mx-4 min-[900px]:mx-7 mt-3 text-[13px] text-[var(--md-error)]">{{ t(shelf.error || reader.openError) }}</p>
-          <BookShelf v-if="favoritesOnly || shelf.library.length || shelf.collections.length" :books="visibleBooks" :favorites-only="favoritesOnly" :sort-key="sortKey" :query="query" :has-filter="!!query.trim() || typeFilter !== 'all'" :home-request="shelfHomeRequest" @open="openBookWithTransition" @browse="query = ''; typeFilter = 'all'" />
+          <BookShelf v-if="favoritesOnly || shelf.library.length || shelf.collections.length || shelfImportActive" :books="visibleBooks" :favorites-only="favoritesOnly" :sort-key="sortKey" :query="query" :has-filter="!!query.trim() || typeFilter !== 'all'" :home-request="shelfHomeRequest" :importing="shelfImportActive" :pending-import-count="shelfImportActive ? importProgress.pending : 0" @open="openBookWithTransition" @browse="query = ''; typeFilter = 'all'" />
           <EmptyShelf v-else @pick-file="openFilePicker" @pick-folder="openFolderPicker" />
         </main>
         <ShelfBackdrop v-if="activeNav === 'shelf'" />
@@ -70,6 +71,7 @@
 
   <DesktopIsland
     v-if="desktopIslandVisible"
+    :inert="!!reader.currentBook"
     :active-nav="activeNav"
     @create-collection="createCollection"
     @pick-files="pickFiles"
@@ -505,6 +507,11 @@ const visibleBooks = computed(() => {
   }
   return sortShelfBooks(list, sortKey.value, shelf.progressMap);
 });
+
+const shelfImportActive = computed(() => (
+  activeNav.value === 'shelf' && !activeCollection.value && !query.value.trim()
+  && typeFilter.value === 'all' && importProgress.isRunning && !importProgress.targetId
+));
 
 // Tauri 的 Activity 结果回调只有一个槽位，文件与文件夹选择不能同时启动。
 let nativeImportPending = false;

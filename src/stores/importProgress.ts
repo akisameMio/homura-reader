@@ -88,6 +88,7 @@ export const useImportProgressStore = defineStore('importProgress', () => {
   const phase = ref('read');
   const currentName = ref('');
   const saved = ref(0);
+  const pending = ref(0);
   const skipped = ref(0);
   const failed = ref(0);
   const failures = ref<{ name: string; reason: string; kind: string }[]>([]);
@@ -128,6 +129,8 @@ export const useImportProgressStore = defineStore('importProgress', () => {
     phase.value = 'read';
     currentName.value = '';
     saved.value = 0;
+    // total 已排除预检时跳过的作品。解析完成后，卡位仍保留到保存或失败。
+    pending.value = total.value;
     skipped.value = Math.max(0, Number(options.skipped) || 0);
     failed.value = 0;
     failures.value = [];
@@ -162,11 +165,15 @@ export const useImportProgressStore = defineStore('importProgress', () => {
   }
 
   function addSaved(count = 1) {
-    saved.value += Math.max(0, Number(count) || 0);
+    const settled = Math.max(0, Number(count) || 0);
+    saved.value += settled;
+    pending.value = Math.max(0, pending.value - settled);
   }
 
   function addSkipped(count = 1) {
-    skipped.value += Math.max(0, Number(count) || 0);
+    const settled = Math.max(0, Number(count) || 0);
+    skipped.value += settled;
+    pending.value = Math.max(0, pending.value - settled);
   }
 
   function recordFailure({ name = '', reason = t('无法读取这个文件'), kind = '', files = null }: { name?: string; reason?: string; kind?: string; files?: FileList | File[] | null } = {}) {
@@ -177,6 +184,7 @@ export const useImportProgressStore = defineStore('importProgress', () => {
       kind
     }];
     failed.value++;
+    pending.value = Math.max(0, pending.value - 1);
     const nextFiles = normalizeRetryFiles(files);
     if (nextFiles.length) retryFiles.value = [...retryFiles.value, ...nextFiles];
   }
@@ -188,6 +196,7 @@ export const useImportProgressStore = defineStore('importProgress', () => {
 
   function finish(nextStatus = '') {
     if (status.value !== 'running') return;
+    pending.value = 0;
     status.value = nextStatus === 'cancelled' || cancelRequested.value ? 'cancelled' : 'done';
     finishedAt.value = Date.now();
     currentName.value = '';
@@ -209,6 +218,7 @@ export const useImportProgressStore = defineStore('importProgress', () => {
     phase.value = 'read';
     currentName.value = '';
     saved.value = 0;
+    pending.value = 0;
     skipped.value = 0;
     failed.value = 0;
     failures.value = [];
@@ -230,6 +240,7 @@ export const useImportProgressStore = defineStore('importProgress', () => {
     phase,
     currentName,
     saved,
+    pending,
     skipped,
     failed,
     failures,

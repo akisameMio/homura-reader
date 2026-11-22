@@ -71,11 +71,8 @@
       scroll-padding-block-start: var(--library-desktop-toolbar-height);
       overflow-y: auto;
       overscroll-behavior-y: none;
+      /* 阅读期间由 inert 挡住操作。WebKit 切到 hidden 会收走滚动槽位。 */
       scrollbar-gutter: stable;
-    }
-
-    html.reader-scroll-locked .has-contained-shelf-scroll .library-scroll {
-      overflow-y: hidden;
     }
 
     /* 手机书架：整页固定外壳，只有内容列滚动。

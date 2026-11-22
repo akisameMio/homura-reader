@@ -52,6 +52,26 @@ test('running 阶段百分比封顶 99，finish 后才到 100', () => {
   assert.equal(importPercent({ status: 'cancelled', total: 40, done: 20 }), 50);
 });
 
+test('书架占位保留到保存、跳过或失败，结束时清空剩余占位', () => {
+  const store = createStore();
+  store.begin({ total: 5, skipped: 2 });
+  assert.equal(store.pending, 5);
+
+  store.taskSettled({}, 100);
+  assert.equal(store.pending, 5);
+  store.addSaved(2);
+  store.addSkipped();
+  store.recordFailure({ name: '损坏的作品' });
+  assert.equal(store.pending, 1);
+
+  store.requestCancel();
+  store.finish();
+  assert.equal(store.pending, 0);
+  store.dismiss();
+  store.begin({ total: 1 });
+  assert.equal(store.pending, 1);
+});
+
 test('ETA 按整批吞吐估算，自动折算并发，done 小于 2 时不显示', () => {
   assert.equal(estimateImportEtaSeconds({ total: 20, done: 1, elapsedMs: 1000 }), null);
   assert.equal(estimateImportEtaSeconds({ total: 20, done: 5, elapsedMs: 5000 }), 15);

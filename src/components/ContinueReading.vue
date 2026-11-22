@@ -9,47 +9,35 @@
     @click="onOpen"
   >
     <span class="content">
-      <span class="eyebrow-row">
-        <MdIcon name="auto_stories" class="section-icon" />
-        <span class="section-label">{{ t('阅读进度') }}</span>
-        <span class="reading-state"><span class="state-dot"></span>{{ started ? t('继续阅读') : t('开始阅读') }}</span>
+      <span class="cover-shell" :data-book-cover-id="featured.book.id">
+        <img v-if="featured.book.cover" :src="featured.book.cover" class="cover-image" alt="" loading="lazy" decoding="async" draggable="false" />
+        <span v-else class="cover-fallback" aria-hidden="true"><MdIcon name="auto_stories" /></span>
       </span>
 
-      <span class="book-summary">
-        <span class="cover-shell" :data-book-cover-id="featured.book.id">
-          <img v-if="featured.book.cover" :src="featured.book.cover" class="cover-image" alt="" loading="lazy" decoding="async" draggable="false" />
-          <span v-else class="cover-fallback" aria-hidden="true"><MdIcon name="auto_stories" /></span>
-          <span v-if="featured.book.remote" class="cover-cloud-tag">{{ t('云端') }}</span>
-        </span>
-        <span class="book-copy">
-          <span class="book-title">{{ featured.book.title }}</span>
-          <span class="book-chips">
-            <span class="format-chip">{{ typeLabel }}</span>
-            <span class="count-chip">{{ totalPages }} {{ started ? t('页') : countUnit }}</span>
-          </span>
+      <span class="book-heading">
+        <span class="book-title">{{ featured.book.title }}</span>
+        <span class="book-meta">
+          <span>{{ typeLabel }}</span>
+          <span v-if="featured.book.remote">{{ t('云端') }}</span>
+          <span v-if="started">{{ lastReadLabel }}</span>
+          <span v-else-if="totalPages">{{ totalPages }} {{ countUnit }}</span>
         </span>
       </span>
 
       <span class="reading-details">
-        <span class="detail-group">
-          <span class="detail-label">{{ t('阅读进度') }}</span>
-          <span class="detail-value">{{ progressPercent }}<small>%</small></span>
-        </span>
-        <span class="detail-group">
-          <span class="detail-label">{{ lastReadLabel }}</span>
-          <span class="detail-position">
-            <template v-if="started">{{ t('第 {0} / {1} 页', { 0: (featured.progress?.index ?? 0) + 1, 1: totalPages }) }}</template>
-            <template v-else>{{ remainingText }}</template>
-          </span>
+        <span class="detail-value">{{ progressPercent }}<small>%</small></span>
+        <span class="detail-position">
+          <template v-if="started">{{ t('第 {0} / {1} 页', { 0: (featured.progress?.index ?? 0) + 1, 1: totalPages }) }}</template>
+          <template v-else>{{ t('尚未开始') }}</template>
         </span>
       </span>
 
-      <span class="progress-track" :class="{ 'is-complete': progressPercent === 100 }" :style="{ '--reading-progress': progressPercent + '%', '--reading-progress-gap': progressPercent > 0 ? '8px' : '0px' }" role="progressbar" :aria-label="t('阅读进度')" :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="progressPercent">
-        <span class="progress-rail" aria-hidden="true">
+      <span class="progress-track" :class="{ 'is-complete': progressPercent === 100 }" :style="{ '--reading-progress': progressPercent + '%', '--reading-progress-gap': progressPercent > 0 ? '6px' : '0px' }" role="progressbar" :aria-label="t('阅读进度')" :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="progressPercent">
+        <span ref="progressRail" class="progress-rail" aria-hidden="true">
           <span class="progress-rest"></span>
-          <span v-if="progressPercent > 0" class="progress-active"><span class="progress-wave"></span></span>
-          <span v-if="progressPercent > 0" class="progress-cap progress-cap-start"></span>
-          <span v-if="progressPercent > 0" class="progress-cap"></span>
+          <svg v-if="progressPercent > 0" class="progress-active" focusable="false">
+            <path :d="progressWavePath" :stroke-width="progressStrokeWidth" />
+          </svg>
         </span>
       </span>
     </span>
@@ -70,7 +58,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, type PropType } from 'vue';
+import { computed, ref, shallowRef, watch, type PropType } from 'vue';
 import { useShelfStore } from '../stores/shelf.ts';
 import { resolveBookFormat } from '../services/utils.ts';
 import MdIcon from './MdIcon.vue';
@@ -155,33 +143,54 @@ const clockText = computed(() => {
   return `${date.getMonth() + 1}/${date.getDate()}`;
 });
 
-const lastReadLabel = computed(() => {
-  if (!started.value) return t('初次阅读');
-  return clockText.value ? t('上次 {0}', { 0: clockText.value }) : t('上次阅读');
-});
-
-const remainingText = computed(() => {
-  const item = featured.value;
-  if (!item || !started.value) return t('尚未开始');
-  const rest = Math.max(0, totalPages.value - (item.progress?.index ?? 0) - 1);
-  return t('剩 {0} 页', { 0: rest });
-});
+const lastReadLabel = computed(() => clockText.value ? t('上次 {0}', { 0: clockText.value }) : t('上次阅读'));
 
 const progressPercent = computed(() => {
   const percent = featured.value ? Number(featured.value.progress?.percent) : 0;
   return Math.min(100, Math.max(0, Number.isFinite(percent) ? percent : 0));
 });
+
+const progressRail = shallowRef<HTMLElement | null>(null);
+const progressRailWidth = ref(0);
+watch(progressRail, (rail, _, onCleanup) => {
+  progressRailWidth.value = rail?.clientWidth ?? 0;
+  if (!rail || typeof ResizeObserver === 'undefined') return;
+  const observer = new ResizeObserver(([entry]) => {
+    progressRailWidth.value = entry.contentRect.width;
+  });
+  observer.observe(rail);
+  onCleanup(() => observer.disconnect());
+});
+
+const progressLength = computed(() => progressRailWidth.value * progressPercent.value / 100);
+const progressStrokeWidth = computed(() => Math.min(4, progressLength.value));
+const progressWavePath = computed(() => {
+  const radius = progressStrokeWidth.value / 2;
+  const length = progressLength.value - 2 * radius;
+  const start = `M ${radius} 10`;
+  if (length <= 16) return `${start} h ${length}`;
+
+  // 每段绘制完整波形，圆头与灰轨始终落在同一条中线上。
+  const cycles = Math.max(1, Math.round(length / 32));
+  const quarter = length / cycles / 4;
+  const handle = quarter * 0.5;
+  const amplitude = Math.min(2.5, (length - 16) / 6);
+  const wave = ` c ${handle} 0 ${handle} ${-amplitude} ${quarter} ${-amplitude}`
+    + ` s ${handle} ${amplitude} ${quarter} ${amplitude}`
+    + ` s ${handle} ${amplitude} ${quarter} ${amplitude}`
+    + ` s ${handle} ${-amplitude} ${quarter} ${-amplitude}`;
+  return start + wave.repeat(cycles);
+});
 </script>
 
 <style scoped>
-.cover-cloud-tag { position: absolute; bottom: 6px; left: 6px; padding: 3px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; background: var(--md-primary-container); color: var(--md-on-primary-container); }
 .continue-card {
   position: relative;
+  container: continue-reading / inline-size;
   display: flex;
   width: 100%;
-  height: 100%;
   min-width: 0;
-  min-height: 292px;
+  min-height: 184px;
   padding: 0;
   border: 0;
   border-radius: 32px;
@@ -195,104 +204,93 @@ const progressPercent = computed(() => {
 .content {
   position: relative;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 24px;
-  width: 69%;
+  display: grid;
+  grid-template-columns: clamp(56px, 28%, 108px) minmax(0, 1fr);
+  grid-template-areas:
+    "cover heading"
+    "cover details"
+    "cover progress";
+  align-content: center;
+  gap: 6px clamp(12px, 3.5cqi, 22px);
+  width: 71%;
   min-width: 0;
-  padding: 28px 12px 28px 28px;
+  padding: 16px 12px 16px clamp(16px, 4cqi, 28px);
 }
-.eyebrow-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.section-icon { width: 20px; height: 20px; color: var(--md-on-surface-variant); }
-.section-label { font-size: 12px; font-weight: 600; color: var(--md-on-surface-variant); }
-.reading-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-  font-size: 11px;
-  font-weight: 650;
-}
-.state-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.book-summary { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .cover-shell {
-  position: relative;
+  grid-area: cover;
+  align-self: center;
   display: grid;
   place-items: center;
-  flex: 0 0 84px;
-  width: 84px;
-  height: 112px;
+  aspect-ratio: 3 / 4;
   overflow: hidden;
   border-radius: 12px;
   background: var(--md-secondary-container);
   color: var(--md-on-secondary-container);
 }
 .cover-image { display: block; width: 100%; height: 100%; object-fit: cover; }
-.cover-fallback { display: grid; place-items: center; }
-.cover-fallback :deep(svg) { width: 40px; height: 40px; }
-.book-copy { display: flex; flex: 1; flex-direction: column; gap: 10px; min-width: 0; }
+.cover-fallback { display: grid; width: 100%; place-items: center; }
+.cover-fallback :deep(svg) { width: clamp(28px, 42%, 44px); height: auto; }
+.book-heading { grid-area: heading; align-self: end; min-width: 0; }
 .book-title {
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  font-size: 22px;
+  font-size: clamp(17px, 3.65cqi, 22px);
   font-weight: 700;
   letter-spacing: -.025em;
-  line-height: 1.28;
+  line-height: 1.3;
   overflow-wrap: anywhere;
 }
-.book-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.format-chip, .count-chip {
-  padding: 4px 9px;
-  border-radius: 999px;
-  background: var(--md-surface-container);
+.book-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin-top: 6px;
   color: var(--md-on-surface-variant);
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 12px;
 }
-.reading-details { display: grid; grid-template-columns: 1fr 1.4fr; gap: 16px; align-items: end; }
-.detail-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.detail-label { color: var(--md-on-surface-variant); font-size: 11px; }
-.detail-value { font-size: 28px; font-weight: 750; line-height: 1; font-variant-numeric: tabular-nums; }
-.detail-value small { margin-left: 3px; font-size: 13px; font-weight: 600; }
-.detail-position { font-size: 13px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
-.progress-track { position: relative; display: block; height: 20px; color: var(--md-reading-progress); }
-.progress-rail { position: absolute; inset: 0 16px 0 0; }
+.reading-details {
+  grid-area: details;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.detail-value { font-size: clamp(17px, 3.65cqi, 22px); font-weight: 700; line-height: 1; }
+.detail-value small { margin-left: 2px; font-size: 12px; font-weight: 600; }
+.detail-position { font-size: 12px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.progress-track { grid-area: progress; position: relative; display: block; height: 20px; color: var(--md-reading-progress); }
+.progress-rail { position: absolute; inset: 0 12px 0 0; }
 .progress-rest {
   position: absolute;
-  top: 7px;
+  top: 8px;
   left: min(100%, calc(var(--reading-progress) + var(--reading-progress-gap)));
   right: 0;
-  height: 6px;
+  height: 4px;
   border-radius: 999px;
   background: var(--md-outline-variant);
 }
-.progress-active { position: absolute; inset: 0 auto 0 0; width: var(--reading-progress); overflow: hidden; }
-.progress-wave {
+.progress-active {
   position: absolute;
-  inset: 0 auto 0 0;
-  width: calc(100% + 20px);
-  height: 20px;
-  background: currentColor;
-  -webkit-mask: url('../assets/shapes/progress-wave.svg') left center / 20px 20px repeat-x;
-  mask: url('../assets/shapes/progress-wave.svg') left center / 20px 20px repeat-x;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
 }
-.progress-cap { position: absolute; z-index: 1; top: 7.25px; left: var(--reading-progress); width: 5.5px; height: 5.5px; border-radius: 50%; background: currentColor; transform: translateX(-50%); }
-.progress-cap-start { left: 0; transform: translateX(0); }
-.progress-track::after { position: absolute; top: 6px; right: 0; width: 8px; height: 8px; border-radius: 50%; background: currentColor; content: ''; }
-.action-panel { position: absolute; inset: 0 0 0 auto; width: 34%; }
+.progress-track::after { position: absolute; top: 7px; right: 0; width: 6px; height: 6px; border-radius: 50%; background: currentColor; content: ''; }
+.action-panel { position: absolute; inset: 0 0 0 auto; width: 32%; }
 .action-surface { position: absolute; inset: 0; width: 100%; height: 100%; fill: color-mix(in oklab, var(--md-primary-container) 54%, var(--md-surface-low)); }
-.action-content { position: absolute; inset: 0 0 0 20px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px; }
-.play { position: relative; display: grid; place-items: center; width: clamp(76px, 13vw, 124px); aspect-ratio: 1; color: var(--md-on-primary); }
+.action-content { position: absolute; inset: 0 8px 0 14px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; }
+.play { position: relative; display: grid; place-items: center; width: clamp(48px, 65%, 96px); aspect-ratio: 1; color: var(--md-on-primary); }
 .play-shape { position: absolute; inset: 0; width: 100%; height: 100%; fill: var(--md-primary); filter: drop-shadow(0 5px 8px color-mix(in oklab, var(--md-shadow-color-soft) 18%, transparent)); transition: transform 420ms var(--md-ease-spring); }
 .play-icon { position: relative; width: 32px; height: 32px; transition: transform 420ms var(--md-ease-spring); }
-.action-label { color: var(--md-on-primary-container); font-size: 11px; font-weight: 650; }
+.action-label { color: var(--md-on-primary-container); font-size: 12px; font-weight: 650; text-align: center; }
 @media (hover: hover) and (pointer: fine) {
   .continue-card:hover { box-shadow: var(--md-elevation-card-soft), var(--md-elevation-hover); }
   .continue-card:hover .play-shape { transform: rotate(12deg) scale(1.06); }
@@ -301,55 +299,28 @@ const progressPercent = computed(() => {
 .continue-card:active { transform: scale(.99); }
 .continue-card:active .play-shape { transform: rotate(-8deg) scale(1.1, .92); }
 @media (max-width: 599px) {
-  .continue-card { min-height: 264px; border-radius: 28px; }
-  .content { gap: 20px; width: 74%; padding: 20px 12px 20px 20px; }
-  .section-label { display: none; }
-  .book-summary { gap: 10px; }
-  .cover-shell { flex-basis: 60px; width: 60px; height: 80px; border-radius: 10px; }
-  .cover-fallback :deep(svg) { width: 32px; height: 32px; }
-  .book-title { font-size: 17px; }
-  .book-chips { gap: 4px; }
-  .format-chip, .count-chip { padding: 3px 7px; }
-  .reading-details { gap: 10px; grid-template-columns: 1fr 1.5fr; }
-  .detail-value { font-size: 24px; }
-  .detail-position { font-size: 12px; }
-  .action-panel { width: 29%; }
-  .action-content { left: 12px; gap: 10px; }
-  .play { width: 68px; }
-  .play-icon { width: 26px; height: 26px; }
-  .action-label { font-size: 10px; }
+  .continue-card { border-radius: 28px; }
 }
 @media (min-width: 768px) {
   /* 同排书卡决定行高，特色卡随网格拉伸。 */
-  .continue-card { height: auto; min-height: 0; align-self: stretch; }
+  .continue-card { min-height: 0; align-self: stretch; }
   .continue-card:not(:has(+ .md-shelf-card)) { min-height: 188px; }
-  .eyebrow-row,
-  .book-chips,
-  .detail-label {
-    display: none;
-  }
+  .content { position: absolute; inset: 0 auto 0 0; }
+}
+@container continue-reading (max-width: 379px) {
   .content {
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: 69%;
-    gap: 8px;
-    padding: 12px 8px 12px clamp(16px, 2vw, 28px);
+    grid-template-columns: 52px minmax(0, 1fr);
+    grid-template-areas:
+      "cover heading"
+      "details details"
+      "progress progress";
+    column-gap: 10px;
+    padding: 16px 8px 16px 16px;
   }
-  .book-summary { gap: 12px; }
-  .cover-shell {
-    flex: 0 0 auto;
-    width: clamp(48px, 24%, 78px);
-    height: auto;
-    aspect-ratio: 3 / 4;
-  }
-  .book-title { font-size: clamp(17px, 2vw, 22px); }
-  .reading-details { grid-template-columns: auto minmax(0, 1fr); gap: 0 12px; align-items: baseline; }
-  .detail-value { font-size: 17px; }
-  .detail-value small { font-size: 11px; }
-  .progress-track { flex: 0 0 20px; }
-  .action-content { left: 12px; gap: 8px; }
-  .play { width: clamp(44px, 74%, 100px); }
-  .play-icon { width: 28px; height: 28px; }
+  .book-heading { align-self: center; }
+  .cover-shell { border-radius: 10px; }
+  .action-content { left: 8px; }
+  .play-icon { width: 24px; height: 24px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .continue-card, .play-shape, .play-icon { transition: none; }

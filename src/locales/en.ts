@@ -155,6 +155,7 @@ export default {
   '作品已保存到本地书架': 'Books saved to your local shelf',
   '本次没有新增作品': 'No books were added',
   '正在导入': 'Importing',
+  '正在导入 {0} 本': 'Importing {0}',
   '导入进行中': 'Import in progress',
   '导入完成，有项目未完成': 'Import finished with incomplete items',
   '正在整理你的书架': 'Adding books to your shelf',

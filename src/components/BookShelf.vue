@@ -1,7 +1,10 @@
 <template>
   <Transition name="shelf-header">
     <div v-if="showShelfHeaderRow" class="min-h-11 px-4 min-[900px]:px-7 pt-3 flex items-center gap-2">
-      <span class="text-[11px] font-medium text-[var(--md-on-surface-variant)] flex-1">{{ favoritesOnly ? t('已收藏 · {0} 本作品', { 0: displayBooks.length }) : t('我的书架') }}</span>
+      <div class="flex flex-1 flex-wrap items-center gap-x-2.5 gap-y-1">
+        <span class="text-[11px] font-medium text-[var(--md-on-surface-variant)]">{{ favoritesOnly ? t('已收藏 · {0} 本作品', { 0: displayBooks.length }) : t('我的书架') }}</span>
+        <span v-if="pendingImportCount > 0" class="shelf-import-status">{{ t('正在导入 {0} 本', { 0: pendingImportCount }) }}</span>
+      </div>
       <button type="button" class="md-library-text-button ml-auto" :disabled="!displayBooks.length && !displayCollections.length" @click="toggleSelection">{{ t('选择') }}</button>
     </div>
   </Transition>
@@ -59,18 +62,30 @@
       />
     </div>
   </Transition>
-  <section class="md-shelf-grid" :aria-label="favoritesOnly ? t('收藏内容') : currentCollection ? t('书库：{0}', { 0: currentCollection.title }) : t('书架内容')">
+  <section ref="gridRef" class="md-shelf-grid" :aria-label="favoritesOnly ? t('收藏内容') : currentCollection ? t('书库：{0}', { 0: currentCollection.title }) : t('书架内容')">
     <ContinueReading v-if="!favoritesOnly && !currentCollection && !selecting && featuredBooks.length" :books="featuredBooks" @open="$emit('open', $event)" />
     <CollectionCard v-for="collection in displayCollections" :key="collection.id" :collection="collection" :books="booksForCollection(collection)" :sort-key="sortKey" :touch-over="touchDrag.overId === collection.id" :selecting="selecting" :selected="selectedCollectionIds.includes(collection.id)" @open="openCollection" @toggle="toggleCollection" @move="moveDropped" />
     <BookCard v-for="book in renderedBooks" :key="book.id" :book="book" :progress="shelf.progressInfoFor(book.id) ?? undefined" :selecting="selecting" :selected="selectedIds.includes(book.id)" :dragging="touchDrag.active && touchDrag.ids.includes(book.id)" @open="openBook" @drag="onBookDrag" @touchstart="onBookTouchStart($event, book.id)" />
+    <template v-if="!selecting">
+      <div
+        v-for="slot in importPlaceholderCount"
+        :key="`import-slot-${slot}`"
+        class="md-shelf-card shelf-import-placeholder self-start"
+        :style="{ '--shelf-shimmer-delay': `${(slot - 1) * 110}ms` }"
+        aria-hidden="true"
+      >
+        <div class="md-shelf-cover"></div>
+        <div class="md-shelf-caption"></div>
+      </div>
+    </template>
     <div v-if="renderedBooks.length < orderedBooks.length" ref="loadMoreSentinel" class="col-span-full h-8" aria-hidden="true"></div>
-    <p v-if="!displayBooks.length && !displayCollections.length" class="col-span-full py-16 text-center text-[13px] text-[var(--md-on-surface-variant)]">{{ emptyShelfHint }}</p>
+    <p v-if="!importing && !displayBooks.length && !displayCollections.length" class="col-span-full py-16 text-center text-[13px] text-[var(--md-on-surface-variant)]">{{ emptyShelfHint }}</p>
   </section>
 
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type PropType } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch, type PropType } from 'vue';
 import { useShelfStore } from '../stores/shelf.ts';
 import { useShelfDialogs } from '../composables/useShelfDialogs.ts';
 import { useViewport } from '../composables/useViewport.ts';
@@ -87,7 +102,7 @@ import { useI18n } from '../composables/useI18n.ts';
 
 const { t } = useI18n();
 
-const props = defineProps({ books: { type: Array as PropType<Book[]>, default: () => [] }, sortKey: { type: String, default: 'title' }, query: { type: String, default: '' }, hasFilter: { type: Boolean, default: false }, homeRequest: { type: Number, default: 0 }, favoritesOnly: { type: Boolean, default: false } });
+const props = defineProps({ books: { type: Array as PropType<Book[]>, default: () => [] }, sortKey: { type: String, default: 'title' }, query: { type: String, default: '' }, hasFilter: { type: Boolean, default: false }, homeRequest: { type: Number, default: 0 }, favoritesOnly: { type: Boolean, default: false }, importing: { type: Boolean, default: false }, pendingImportCount: { type: Number, default: 0 } });
 const emit = defineEmits(['open', 'browse']);
 const shelf = useShelfStore();
 const { askShelfDialog } = useShelfDialogs();
@@ -105,8 +120,10 @@ const featuredBooks = computed(() => currentCollection.value ? displayBooks.valu
 const orderedBooks = computed(() => currentCollection.value ? displayBooks.value : groupShelfBooks(displayBooks.value).flatMap(section => section.books));
 const INITIAL_RENDER_LIMIT = 96;
 const RENDER_STEP = 96;
+const importPlaceholderCount = computed(() => Math.min(8, props.pendingImportCount));
 const renderLimit = ref(INITIAL_RENDER_LIMIT);
-const loadMoreSentinel = ref<HTMLElement | null>(null);
+const gridRef = shallowRef<HTMLElement | null>(null);
+const loadMoreSentinel = shallowRef<HTMLElement | null>(null);
 const renderedBooks = computed(() => orderedBooks.value.length > renderLimit.value
   ? orderedBooks.value.slice(0, renderLimit.value)
   : orderedBooks.value);
@@ -490,6 +507,29 @@ watch(() => shelf.activeCollectionId, () => { selecting.value = false; clearSele
 watch(() => props.homeRequest, () => { selecting.value = false; clearSelection(); });
 watch(displayBooks, list => { const ids = new Set(list.map(book => book.id)); selectedIds.value = selectedIds.value.filter(id => ids.has(id)); });
 
+watch([renderedBooks, () => props.importing], async ([books, importing], [previousBooks, wasImporting]) => {
+  const grid = gridRef.value;
+  if (!grid || (!importing && !wasImporting) || books === previousBooks) return;
+  const main = grid.closest<HTMLElement>('main[data-app-scroll]');
+  const scroller = main && /auto|scroll/.test(getComputedStyle(main).overflowY) ? main : null;
+  if ((scroller?.scrollTop ?? window.scrollY) <= 0) return;
+
+  // 新书仍按当前规则排序；若落在视口上方，保住正在查看的原有书卡。
+  const top = scroller?.getBoundingClientRect().top ?? 0;
+  const bottom = scroller?.getBoundingClientRect().bottom ?? window.innerHeight;
+  const card = Array.from(grid.querySelectorAll<HTMLElement>(':scope > .md-shelf-card:not(.shelf-import-placeholder)')).find(node => {
+    const rect = node.getBoundingClientRect();
+    return rect.bottom > top && rect.top < bottom;
+  });
+  if (!card) return;
+  const previousTop = card.getBoundingClientRect().top;
+  await nextTick();
+  if (!card.isConnected) return;
+  const shift = card.getBoundingClientRect().top - previousTop;
+  if (Math.abs(shift) < 1) return;
+  (scroller ?? window).scrollBy({ top: shift, behavior: 'instant' });
+});
+
 // 超大书架先渲染前几屏；封面内部用 content-visibility 跳过屏外绘制，
 // 这里再限制 DOM 数量，避免几千本书一次性建节点。
 function observeLoadMore() {
@@ -517,6 +557,7 @@ watch(
     nextTick(observeLoadMore);
   }
 );
+watch(loadMoreSentinel, observeLoadMore, { flush: 'post' });
 
 onMounted(() => {
   document.addEventListener('click', onDocumentClick, true);
@@ -532,6 +573,70 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.shelf-import-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  font-size: 12px;
+  font-weight: 600;
+}
+.shelf-import-status::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--md-primary);
+}
+.shelf-import-placeholder {
+  pointer-events: none;
+  overflow-anchor: none;
+}
+.shelf-import-placeholder .md-shelf-cover {
+  border: 0.5px solid var(--md-outline-variant);
+  background: linear-gradient(112deg,
+    var(--md-surface-high) 10%,
+    color-mix(in oklab, var(--md-surface-high) 66%, var(--md-surface)) 51%,
+    var(--md-surface-high) 91%);
+}
+.shelf-import-placeholder .md-shelf-caption {
+  display: grid;
+  justify-items: center;
+  min-height: 1lh;
+}
+.shelf-import-placeholder .md-shelf-caption::before {
+  content: '';
+  width: 58%;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: var(--md-surface-high);
+}
+.shelf-import-placeholder:nth-child(even) .md-shelf-caption::before { width: 68%; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .shelf-import-placeholder .md-shelf-cover::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg,
+      transparent 24%,
+      color-mix(in oklab, var(--md-primary) 14%, transparent) 50%,
+      transparent 76%);
+    transform: translateX(-100%);
+    animation: shelf-import-shimmer 2s linear var(--shelf-shimmer-delay) infinite;
+  }
+
+  @keyframes shelf-import-shimmer {
+    0% { transform: translateX(-100%); }
+    72%, 100% { transform: translateX(100%); }
+  }
+}
+
 .shelf-header-enter-active,
 .shelf-header-leave-active,
 .shelf-batch-enter-active,
