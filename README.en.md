@@ -25,7 +25,7 @@
   </p>
   <p>
     <em>Stories are found things, like fossils in the ground.</em><br>
-    <sub>— Stephen King</sub>
+    <sub>— Stephen William Hawking</sub>
   </p>
   <img src="https://github.com/user-attachments/assets/049e7a11-e0af-4a94-a77e-8f8c72cb50e7" width="160" alt="HOMURA animation" />
 </div>
