@@ -26,7 +26,7 @@
   <p>
     <em>Stories are found things, like fossils in the ground.</em><br>
     <sub>故事是埋在地下的宝藏，静待有心人拾起。</sub><br>
-    <sub>— Stephen King</sub>
+    <sub>— Stephen William Hawking</sub>
   </p>
   <img src="https://github.com/user-attachments/assets/049e7a11-e0af-4a94-a77e-8f8c72cb50e7" width="160" alt="HOMURA 动图" />
 </div>
