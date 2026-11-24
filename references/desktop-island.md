@@ -4,7 +4,7 @@
 >
 > 适用范围：桌面端（`>= 900px`）右下角的导入 / 更新 / 书库确认胶囊。
 >
-> 不适用：手机端（`< 900px`）的 `ImportStatusBar` 与四个独立 sheet 组件 `ShelfDialogSheet` / `DuplicateImportSheet` / `ImportMenuSheet` / `ImportProgressSheet` / `UpdateDialog`。
+> 不适用：手机端（`< 900px`）的 `ImportStatusBar` 与 `ShelfDialogSheet` / `DuplicateImportSheet` / `ImportProgressSheet` / `UpdateDialog`。
 
 本文记录灵动胶囊的**当前实现**，用于以后改布局、补状态或调整动效时快速定位。
 如果与代码冲突，以当前 `src/` 为准，并同步修正本文。
@@ -16,10 +16,10 @@
 - [DuplicateImportContent.vue](../src/components/DuplicateImportContent.vue)：同名导入确认，桌面与手机共用内容。
 - [ShelfDialogContent.vue](../src/components/ShelfDialogContent.vue)：删除 / 建库 / 命名 / 移动书库的内容层。
 - [UpdateIslandPanel.vue](../src/components/UpdateIslandPanel.vue)：检查更新、下载、完成、失败等更新状态。
-- [ImportMenuSheet.vue](../src/components/ImportMenuSheet.vue)：手机导入菜单独立 bottom sheet。
+- [ImportMenuContent.vue](../src/components/ImportMenuContent.vue)：桌面和手机共用的添加内容菜单。
 - [ImportProgressSheet.vue](../src/components/ImportProgressSheet.vue)：手机导入进行中 / 完成独立 bottom sheet。
 - [DuplicateImportSheet.vue](../src/components/DuplicateImportSheet.vue)：手机同名确认独立 bottom sheet 外壳。
-- [ShelfDialogSheet.vue](../src/components/ShelfDialogSheet.vue)：手机书库确认独立 bottom sheet 外壳。
+- [ShelfDialogSheet.vue](../src/components/ShelfDialogSheet.vue)：手机添加内容与书库确认共用的 bottom sheet。
 - [useShelfDialogs.js](../src/composables/useShelfDialogs.js)：书库确认的 Promise 队列。
 - [importProgress.js](../src/stores/importProgress.js)：导入任务、取消、失败重试、自动收起。
 - [updates.js](../src/stores/updates.js)：更新版本、下载、安装与更新面板开关。
@@ -44,7 +44,6 @@
 
 ```html
 <LibraryImportActions v-if="isCompact" compact ... />
-<ImportMenuSheet v-if="isCompact" ... />
 <ImportProgressSheet v-if="isCompact" ... />
 
 <DesktopIsland
@@ -156,9 +155,7 @@ surface 宽度由 `surfaceWidth` 决定，并写入 CSS 变量：
 :style="{
   '--island-width': `${surfaceWidth}px`,
   '--trigger-width': `${triggerWidth}px`,
-  '--enter-seed-width': `${enterSeed.width}px`,
-  '--enter-seed-right': `${enterSeed.right}px`,
-  '--enter-seed-bottom': `${enterSeed.bottom}px`
+  '--enter-seed-width': `${enterSeedWidth}px`
 }"
 ```
 
@@ -167,15 +164,12 @@ surface 宽度由 `surfaceWidth` 决定，并写入 CSS 变量：
 `right: 0; bottom: 0`、展开时锚定 `right: 20px; bottom: 20px`。
 surface 的缩放原点固定为 `100% 100%`，按钮宽度变化和更新圆钮进出都不会推动 surface。
 `triggerWidth` 为空闲态 / 完成态 `104px`、进行中 / 已停止 `56px`，用于**收起时的目标控制**。
-入场种子另用 `enterSeed`：在 `surfaceKey` 从空变为某个 surface 时同步读取按钮当时的
+入场种子另用 `enterSeedWidth`：在外壳从关闭变为展开时读取按钮当时的
 `offsetWidth`，此时按钮在锚点 `right: 0; bottom: 0`。这样从空闲胶囊直接开始导入时
 仍从 `104 × 56` 长出来；完成卡从完成胶囊展开，也与导入菜单卡使用同一颗
 `104 × 56` 种子。只有从进行中 / 已停止的进度环重新展开时才从 `56 × 56` 长出来。
 
-非空 surface 之间切换时按钮仍停在卡片动作位，入场种子改用按钮当前宽度并带上
-`right: 20px; bottom: 20px`，保证新卡片也精确从这颗动作按钮长出来，而不是从卡片
-外框的右下角另起一颗小圆。surface 不再按 `seed-x / seed-y` 压扁，而是用 `clip-path`
-从按钮的真实矩形长出来。
+卡片之间切换时，按钮持续停在 `right: 20px; bottom: 20px` 的动作位。外壳从当前尺寸过渡到下一张卡片的实测宽高。
 
 surface 自身的 `border-radius` 始终是 `28px`。不要把它过渡到 `999px`：`104 × 56` 与
 `56 × 56` 的种子在 `28px` 圆角下本来就是胶囊 / 圆形，而把整张 `416 × 400` 的卡片
@@ -229,20 +223,19 @@ const surface = computed(() => {
 - 导入进度优先级高于更新，因为导入可能正在写 IndexedDB / 原生文件。
 - 更新最后，确保它不会抢走输入和确认的焦点。
 
-### 4.3 surfaceKey
+### 4.3 卡片切换
 
-`surfaceKey` 控制进入 / 离开过渡：
+`surface` 控制外壳的展开与收起，`cardPage` 区分需要切换正文的卡片，例如：
 
 ```js
 duplicate
-shelf-${kind}
+shelf-${kind}-${title}
 update-${updateStatus}
 menu
-import
+import-${status}
 ```
 
-同一 surface 内内容变化不一定触发整块过渡；更新状态变化会触发，因为 key 包含 `updateStatus`。
-如果新增的状态切换不应重播整块动画，就不要把变化量放进 `surfaceKey`。
+更新和导入的阶段变化会切换卡片。进度数字等连续变化沿用当前卡片。
 
 ### 4.4 胶囊收起
 
@@ -327,7 +320,7 @@ surface 进入：
 - 起点是导入按钮**入场前**的真实矩形：空闲胶囊 / 完成胶囊为 `104 × 56 / 28px`，
   只有进行中 / 已停止的进度环为 `56 × 56 / 28px`
 - `clip-path` 从
-  `inset(calc(100% - var(--enter-seed-bottom) - 56px) var(--enter-seed-right) var(--enter-seed-bottom) calc(100% - var(--enter-seed-right) - var(--enter-seed-width)) round 28px)`
+  `inset(calc(100% - 56px) 0 0 calc(100% - var(--enter-seed-width)) round 28px)`
   展开到完整卡片，不再把整张卡片压扁成长条
 - `transform` 只从 `scale(0.985)` 轻微回弹到 `1`，避免内容跟着按钮尺寸失真
 - 外壳保持实色，不做整卡 opacity 淡入；否则会像 modal 幽灵浮现，而不是胶囊本体变大
@@ -356,17 +349,11 @@ surface 离开：
   `right: 0; bottom: 0`；位置、宽度、圆角、底色、文字色与阴影在同一段过渡内完成
 - 动作文案先保留约 140ms，再与导入文案交叉淡入淡出；不允许出现克隆节点
 - 收起期间 `surfaceLeaving` 为真，按钮关闭指针事件，避免动画中途重复触发动作
-- 非空 surface 之间切换（例如同名确认 `duplicate → import`、更新
-  `available → downloading`）时 Transition **不再使用 `out-in`**：旧卡片离场与
-  新卡片入场同时进行，新卡片叠在旧卡片上方。这样卡片始终存在，不会在旧卡收成
-  按钮后留下几百毫秒“只剩进度环”的空档。`surfaceSwapping` 只负责动作文案交接，
-  按钮继续停在卡片右下角，不再先缩回进度环
-- 同时过渡时给 `.island-surface-enter-active` 显式 `z-index: 2`，保证入场卡片
-  盖住离场卡片；否则两张卡片的文字会短暂叠在一起
+- 卡片之间切换（例如同名确认进入导入进度、更新从可用进入下载）时，共用外壳过渡实测宽高，正文淡入。尺寸变化期间隐藏临时滚动条，按钮停在卡片右下角。
 - `prefers-reduced-motion` 下跳过位移与文案延迟，直接恢复到导入胶囊
 
 进入与离开都以 `clip-path` 为主，让卡片从右下角按钮矩形里长出来 / 收回去；
-`transform` 只负责很轻的整体回弹。实现不过渡 surface 宽高，内容不跟着卡片缩放。
+`transform` 只负责很轻的整体回弹。
 按钮自己只过渡位置、宽度、圆角、颜色与阴影。
 
 改这里时先用 1440×900 实测：展开首帧按钮应在导入胶囊原矩形内，展开末帧右下角
@@ -405,14 +392,16 @@ surface 离开：
 
 菜单只包含：
 
-- 导入文件
-- 导入文件夹（平台支持时）
+- 导入文件（和底部「选择文件」打开同一个系统选择器）
+- 导入文件夹（平台支持时，直接打开系统选择器）
+- 原位置入库开关（支持原生导入时）
 - 新建书库
 
 行为：
 
 - 打开前必须 `importProgress.status === 'idle'`
-- 选择动作后先关闭菜单，再触发原有 `pick-files` / `pick-folder` / `create-collection`
+- 开关同时控制文件与文件夹。开启时从原位置入库，关闭时复制到 HOMURA。
+- 打开系统文件或文件夹选择器时保留当前卡片，取消选择后可继续操作。
 - 导入状态一旦进入 `running`，菜单自动关闭
 
 不要在这个菜单里新增第二套导入入口；原生文件选择、文件夹扫描、重名确认都仍由 `useImporter` 处理。
@@ -564,7 +553,7 @@ const isTextEntry = active && (
 
 1. 在 `DesktopIsland.vue` 的 `surface` computed 中加入状态来源。
 2. 明确它相对现有五级的优先级。
-3. 在 `surfaceKey`、`surfaceWidth` 和 `surfaceTitle` 中补充对应状态。
+3. 在 `cardPage`、`surfaceWidth` 和 `surfaceTitle` 中补充对应状态。
 4. 内容组件暴露 `primaryAction` 与 `runPrimaryAction()`，按需提供初始焦点。
 5. 桌面卡片页脚渲染次要按钮，主按钮由胶囊承载。
 6. 在 `.island-body` 中挂载内容组件，并在 `closeSurface` 中接入关闭按钮。
@@ -575,7 +564,7 @@ const isTextEntry = active && (
 ### 10.2 新增一个更新状态
 
 1. 改 `UpdateIslandPanel.vue` 的模板分支，并检查 `DesktopIsland.vue` 和 `UpdateDialog.vue` 的标题。
-2. 如果状态变化需要重播 surface 动画，加入 `surfaceKey`；不需要则不要加。
+2. 用 `cardPage` 核对哪些状态要触发卡片过渡。
 3. 动作用 `updates` store 方法，不在组件里复制业务。
 4. 检查 `updatePending` 是否需要包含新状态，避免待处理圆钮提前消失。
 5. 检查 `closeUpdateDialog()` 对新状态是否应该取消下载、保留安装包或只关面板。

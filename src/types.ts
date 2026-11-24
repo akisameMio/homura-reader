@@ -97,7 +97,11 @@ export interface BookSource {
   handle?: SourceFileHandle | null;
   entries?: BookSource[];
   nativePath?: string;
+  nativeReference?: string;
   nativePageManifest?: unknown;
+  contentFingerprint?: string;
+  managedStorageVersion?: 1;
+  managedArchive?: unknown;
   opfsPath?: string;
   preStaged?: boolean;
   [key: string]: unknown;

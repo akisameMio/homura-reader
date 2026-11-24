@@ -3,70 +3,52 @@
     ref="rootRef"
     class="desktop-island md-fab-pos"
   >
-    <!-- 非空 surface 切换时让新旧卡片同时过渡，避免 out-in 收成按钮后出现空白间隔。 -->
+    <!-- 卡片切换复用外壳；胶囊展开和收起时才播放裁切动画。 -->
     <Transition
       name="island-surface"
-      @enter="onSurfaceEnter"
       @after-leave="onSurfaceAfterLeave"
       @leave-cancelled="onSurfaceLeaveCancelled"
     >
       <div
-        v-if="surfaceKey"
-        :key="surfaceKey"
-        :ref="setSurfaceRef"
+        v-if="surface"
+        ref="surfaceRef"
         class="desktop-island-surface"
-        :class="{ 'is-update': surface === 'update' }"
+        :class="{ 'is-update': surface === 'update', 'is-resizing': isResizing }"
         tabindex="-1"
         :style="{
           '--island-width': `${surfaceWidth}px`,
           '--trigger-width': `${triggerWidth}px`,
           '--island-action-width': `${buttonWidth}px`,
-          '--enter-seed-width': `${enterSeed.width}px`,
-          '--enter-seed-right': `${enterSeed.right}px`,
-          '--enter-seed-bottom': `${enterSeed.bottom}px`
+          '--enter-seed-width': `${enterSeedWidth}px`
         }"
         :role="surface === 'shelf' && shelfDialogDisplay?.kind === 'confirm' ? 'alertdialog' : 'dialog'"
         :aria-modal="surface === 'shelf' || surface === 'duplicate' ? 'true' : undefined"
-        :aria-labelledby="`desktop-island-title-${surfaceKey}`"
-        :aria-owns="surfaceKey ? 'homura-island-action' : undefined"
+        aria-labelledby="desktop-island-title"
+        aria-owns="homura-island-action"
       >
         <ReaderDrawerHeader
           prominent
           :title="surfaceTitle"
-          :title-id="`desktop-island-title-${surfaceKey}`"
+          title-id="desktop-island-title"
           :subtitle="surface === 'update' ? t('当前版本 v{0}', { 0: updates.appVersion }) : ''"
+          :back-label="surface === 'shelf' && shelfDialogDisplay?.returnToImportMenu ? '返回添加内容' : ''"
           :close-label="surface === 'import' && importProgress.status === 'running'
             ? t('收起，继续导入')
             : surface === 'update' && updates.updateStatus === 'downloading' ? t('取消下载') : t('关闭')"
-          :close-disabled="surface === 'duplicate' && !!pendingDuplicate?.busy"
+          :close-disabled="surface === 'duplicate' && !!duplicateDisplay?.busy"
           @close="closeSurface"
+          @back="emit('back-to-import-menu')"
         />
 
-        <div class="island-body">
-          <template v-if="surface === 'menu'">
-            <p class="md-mobile-sheet-label">{{ t('导入作品') }}</p>
-            <div class="md-mobile-sheet-card">
-              <button type="button" class="md-mobile-sheet-row island-menu-item" @click="choose('pick-files')">
-                <span class="md-mobile-sheet-icon is-accent"><MdIcon name="upload_file" /></span>
-                <span class="md-mobile-sheet-copy"><b>{{ t('导入文件') }}</b><small>EPUB, CBZ, ZIP, PDF, MOBI, TXT, MD</small></span>
-                <MdIcon name="chevron_right" :size="20" />
-              </button>
-              <button v-if="canPickFolder" type="button" class="md-mobile-sheet-row island-menu-item" @click="choose('pick-folder')">
-                <span class="md-mobile-sheet-icon"><MdIcon name="folder_open" /></span>
-                <span class="md-mobile-sheet-copy"><b>{{ t('导入文件夹') }}</b><small>{{ t('图片目录会合并成一本漫画') }}</small></span>
-                <MdIcon name="chevron_right" :size="20" />
-              </button>
-            </div>
-            <p v-if="isAndroid && canPickFolder" class="md-mobile-sheet-hint px-3">{{ t('选择要导入的文件夹，里面的子文件夹也会一起扫描。按钮灰色时，可以进入下一级再选择。') }}</p>
-            <p class="md-mobile-sheet-label">{{ t('整理书架') }}</p>
-            <div class="md-mobile-sheet-card">
-              <button type="button" class="md-mobile-sheet-row island-menu-item" @click="choose('create-collection')">
-                <span class="md-mobile-sheet-icon"><MdIcon name="create_new_folder" /></span>
-                <span class="md-mobile-sheet-copy"><b>{{ t('新建书库') }}</b><small>{{ t('先建一个书库，再放入作品') }}</small></span>
-                <MdIcon name="chevron_right" :size="20" />
-              </button>
-            </div>
-          </template>
+        <div :key="cardPage" class="island-body" :class="{ 'md-drawer-tab-panel': contentTransition }">
+          <ImportMenuContent
+            v-if="surface === 'menu'"
+            v-model:import-in-place="importInPlace"
+            desktop
+            @pick-files="emit('pick-files')"
+            @pick-folder="emit('pick-folder')"
+            @create-collection="emit('create-collection')"
+          />
 
           <ImportProgressPanel
             v-else-if="surface === 'import'"
@@ -80,7 +62,7 @@
             v-else-if="surface === 'duplicate'"
             ref="duplicateContentRef"
             desktop
-            :pending="pendingDuplicate"
+            :pending="duplicateDisplay"
             @resolve="resolveImport"
           />
 
@@ -167,7 +149,7 @@
 
       <span
         class="island-trigger-spacer"
-        :class="{ 'is-collapsed': !!surfaceKey }"
+        :class="{ 'is-collapsed': !!surface }"
         :style="{ '--trigger-slot-width': `${triggerWidth}px` }"
         aria-hidden="true"
       ></span>
@@ -182,11 +164,10 @@
       :class="{
         'is-ring': showProgressRing && !actionFaceShown,
         'is-failed': importProgress.status !== 'idle' && importProgress.hasFailures && !actionFaceShown,
-        'is-card-position': !!surface && !surfaceSwapping,
+        'is-card-position': !!surface,
         'is-card-primary': actionFaceShown && heldAction?.variant === 'primary',
         'is-card-tonal': actionFaceShown && heldAction?.variant === 'tonal',
         'is-card-danger': actionFaceShown && heldAction?.variant === 'danger',
-        'is-returning': surfaceLeaving || surfaceSwapping,
         'is-docking': surfaceLeaving
       }"
       :style="{ width: `${buttonWidth}px` }"
@@ -259,15 +240,15 @@ import {
   shallowRef,
   watch
 } from 'vue';
-import type { ComponentPublicInstance } from 'vue';
-import { canPickFolder, isAndroid } from '../services/platform.ts';
 import { useImportProgressStore } from '../stores/importProgress.ts';
 import { useUpdateStore } from '../stores/updates.ts';
 import { useShelfDialogs } from '../composables/useShelfDialogs.ts';
+import { usePanelResizeTransition } from '../composables/usePanelResizeTransition.ts';
 import { DUPLICATE_SKIP_ALL, useDuplicateImport } from '../composables/useDuplicateImport.ts';
 import DuplicateImportContent from './DuplicateImportContent.vue';
 import ShelfDialogContent from './ShelfDialogContent.vue';
 import ImportProgressPanel from './ImportProgressPanel.vue';
+import ImportMenuContent from './ImportMenuContent.vue';
 import UpdateIslandPanel from './UpdateIslandPanel.vue';
 import MdIcon from './MdIcon.vue';
 import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
@@ -278,7 +259,7 @@ const { t } = useI18n();
 const props = defineProps({
   activeNav: { type: String, default: 'shelf' }
 });
-const emit = defineEmits(['create-collection', 'pick-files', 'pick-folder', 'retry-failed']);
+const emit = defineEmits(['create-collection', 'pick-files', 'pick-folder', 'retry-failed', 'back-to-import-menu']);
 
 const importProgress = useImportProgressStore();
 const updates = useUpdateStore();
@@ -294,29 +275,18 @@ const updatePanelRef = shallowRef<InstanceType<typeof UpdateIslandPanel> | null>
 const importButtonRef = shallowRef<HTMLButtonElement | null>(null);
 const updateButtonRef = shallowRef<HTMLButtonElement | null>(null);
 
-const menuOpen = ref(false);
+const menuOpen = defineModel('menuOpen', { type: Boolean, required: true });
+const importInPlace = defineModel('importInPlace', { type: Boolean, required: true });
 const lastTrigger = shallowRef<HTMLElement | null>(null);
 const restoreFocusTarget = shallowRef<HTMLElement | null>(null);
 type IslandAction = { label?: string; icon?: string; variant?: 'primary' | 'tonal' | 'danger'; disabled?: boolean; run?: () => void };
 const heldAction = shallowRef<IslandAction | null>(null);
 const actionFaceShown = ref(false);
-const surfaceSwapping = ref(false);
 const surfaceLeaving = ref(false);
-const enterSeed = ref({ width: 104, right: 0, bottom: 0 });
+const enterSeedWidth = ref(104);
 const returnFocus = ref('import');
 let autoDismissTimer = 0;
 let actionFaceTimer = 0;
-
-function setSurfaceRef(element: Element | ComponentPublicInstance | null) {
-  // 两张卡片同时在 DOM 中时只跟随最新挂载的那张，旧卡片卸载不能清空引用。
-  if (element instanceof HTMLElement) {
-    surfaceRef.value = element;
-    return;
-  }
-  if (surfaceRef.value && !surfaceRef.value.isConnected) {
-    surfaceRef.value = null;
-  }
-}
 
 const updatePending = computed(() => (
   updates.hasNewRelease
@@ -326,23 +296,46 @@ const updatePending = computed(() => (
 const importSurfaceOpen = computed(() => (
   importProgress.status !== 'idle' && importProgress.expanded
 ));
-const shelfDialogDisplay = computed(() => pendingShelfDialog.value);
 const updateErrorForDisplay = computed(() => (updates.updateError ?? null) as Record<string, unknown> | null);
 const downloadErrorForDisplay = computed(() => (updates.downloadError ?? null) as Record<string, unknown> | null);
-const surface = computed(() => {
+const activeSurface = computed(() => {
   if (pendingDuplicate.value) return 'duplicate';
   if (pendingShelfDialog.value) return 'shelf';
-  if (menuOpen.value && importProgress.status === 'idle') return 'menu';
+  if (menuOpen.value) return 'menu';
   if (importSurfaceOpen.value) return 'import';
   if (updates.updateDialogOpen) return 'update';
   return null;
 });
-const surfaceKey = computed(() => {
-  if (surface.value === 'duplicate') return 'duplicate';
-  if (surface.value === 'shelf') return `shelf-${shelfDialogDisplay.value?.kind || 'dialog'}`;
-  if (surface.value === 'update') return `update-${updates.updateStatus}`;
-  return surface.value;
+const surface = shallowRef(activeSurface.value);
+let closeFrame = 0;
+watch(activeSurface, nextSurface => {
+  cancelAnimationFrame(closeFrame);
+  if (nextSurface) {
+    surface.value = nextSurface;
+    return;
+  }
+  // 确认结束后，导入队列可能在同一帧内才交出下一张卡片。
+  closeFrame = requestAnimationFrame(() => { surface.value = null; });
 });
+const shelfDialogDisplay = computed<typeof pendingShelfDialog.value>(previous => (
+  pendingShelfDialog.value ?? (surface.value === 'shelf' ? previous : null) ?? null
+));
+const duplicateDisplay = computed<typeof pendingDuplicate.value>(previous => (
+  pendingDuplicate.value ?? (surface.value === 'duplicate' ? previous : null) ?? null
+));
+const cardPage = computed<string | undefined>(previous => {
+  if (!activeSurface.value && surface.value) return previous;
+  if (surface.value === 'duplicate') return duplicateDisplay.value?.batch ? 'duplicate-batch' : 'duplicate';
+  if (surface.value === 'shelf') {
+    const request = shelfDialogDisplay.value;
+    return `shelf-${request?.kind}-${request?.title}`;
+  }
+  if (surface.value === 'import') return `import-${importProgress.status}`;
+  if (surface.value === 'update') return `update-${updates.updateStatus}`;
+  return surface.value ?? undefined;
+});
+const { isResizing } = usePanelResizeTransition(surfaceRef, () => cardPage.value);
+const contentTransition = ref(false);
 const surfaceWidth = computed(() => (
   surface.value === 'menu' || surface.value === 'import' ? 384 : 416
 ));
@@ -409,7 +402,7 @@ const activeAction = computed(() => {
   return activeContent.value?.primaryAction || null;
 });
 const buttonWidth = computed(() => {
-  if (!surface.value || surfaceSwapping.value || !actionFaceShown.value || !heldAction.value) {
+  if (!surface.value || !actionFaceShown.value || !heldAction.value) {
     return showProgressRing.value ? 56 : 104;
   }
   // 当前字号下中文字宽约 13.2px，用估算宽度让胶囊到卡片动作的尺寸过渡连续。
@@ -431,20 +424,14 @@ const buttonHasPopup = computed(() => {
 });
 const buttonExpanded = computed(() => {
   if (actionFaceShown.value) return undefined;
-  return importProgress.status === 'idle'
-    ? surface.value === 'menu'
-    : importProgress.expanded;
+  if (surface.value === 'menu') return true;
+  return importProgress.status !== 'idle' && importProgress.expanded;
 });
 const buttonDisabled = computed(() => (
   actionFaceShown.value
   && !surfaceLeaving.value
   && !!heldAction.value?.disabled
 ));
-
-function choose(action: 'pick-files' | 'pick-folder' | 'create-collection') {
-  menuOpen.value = false;
-  emit(action);
-}
 
 function openUpdate() {
   returnFocus.value = 'update';
@@ -454,7 +441,7 @@ function openUpdate() {
 
 function onImportClick() {
   if (surface.value) {
-    if (!surfaceLeaving.value && !surfaceSwapping.value) runActiveAction();
+    if (activeSurface.value === surface.value && !surfaceLeaving.value) runActiveAction();
     return;
   }
   if (surfaceLeaving.value) return;
@@ -469,7 +456,7 @@ function onImportClick() {
 
 function runActiveAction() {
   if (surface.value === 'menu') {
-    choose('pick-files');
+    emit('pick-files');
     return;
   }
   if (activeAction.value?.disabled) return;
@@ -496,24 +483,17 @@ function clearActionFaceTimer() {
 
 function releaseActionFace() {
   clearActionFaceTimer();
-  if (surfaceKey.value) return;
+  if (surface.value) return;
   actionFaceShown.value = false;
   heldAction.value = null;
 }
 
 function syncActiveAction() {
   const action = activeAction.value;
-  if (!action || !surface.value || surfaceSwapping.value) return;
+  if (!action || !surface.value) return;
   clearActionFaceTimer();
   heldAction.value = action as IslandAction | null;
   actionFaceShown.value = true;
-}
-
-function beginSurfaceSwap() {
-  surfaceSwapping.value = true;
-  clearActionFaceTimer();
-  actionFaceShown.value = false;
-  heldAction.value = null;
 }
 
 function scheduleActionFaceRelease() {
@@ -528,31 +508,19 @@ function scheduleActionFaceRelease() {
 function onSurfaceLeaveCancelled() {
   clearActionFaceTimer();
   surfaceLeaving.value = false;
-  surfaceSwapping.value = false;
-  syncActiveAction();
-}
-
-function onSurfaceEnter() {
-  if (!surfaceSwapping.value) return;
-  surfaceSwapping.value = false;
   syncActiveAction();
 }
 
 function captureEnterSeed() {
   const button = importButtonRef.value;
   const width = button?.isConnected ? Math.round(button.offsetWidth) : triggerWidth.value;
-  enterSeed.value = {
-    width: width || triggerWidth.value,
-    right: 0,
-    bottom: 0
-  };
+  enterSeedWidth.value = width || triggerWidth.value;
 }
 
 function onSurfaceAfterLeave() {
-  if (surfaceKey.value) return;
+  if (surface.value) return;
   clearActionFaceTimer();
   surfaceLeaving.value = false;
-  surfaceSwapping.value = false;
   releaseActionFace();
   focusSurface(null);
 }
@@ -564,7 +532,7 @@ function focusImportWhenReady(remaining = 5) {
     trigger.focus();
     return;
   }
-  if (remaining <= 0 || surfaceKey.value) return;
+  if (remaining <= 0 || surface.value) return;
   requestAnimationFrame(() => focusImportWhenReady(remaining - 1));
 }
 
@@ -599,15 +567,18 @@ async function focusSurface(key: string | null) {
   }
 
   await nextTick();
+  if (cardPage.value !== key || activeSurface.value !== surface.value) return;
   if (surface.value === 'duplicate') {
     surfaceRef.value?.querySelector<HTMLElement>('.island-skip-duplicate:not(:disabled)')?.focus();
     return;
   }
   if (surface.value === 'shelf') {
     const cancel = surfaceRef.value?.querySelector<HTMLElement>('.island-cancel-confirm');
-    if (cancel) cancel.focus();
+    if (cancel) cancel.focus({ preventScroll: true });
     else if (!await shelfContentRef.value?.focusInitial()) {
-      surfaceRef.value?.querySelector<HTMLElement>('.md-drawer-header button')?.focus();
+      if (cardPage.value === key) {
+        surfaceRef.value?.querySelector<HTMLElement>('.md-drawer-header button')?.focus({ preventScroll: true });
+      }
     }
     return;
   }
@@ -634,7 +605,7 @@ async function focusSurface(key: string | null) {
     return;
   }
   if (surface.value === 'menu') {
-    surfaceRef.value?.querySelector<HTMLElement>('.island-menu-item')?.focus();
+    surfaceRef.value?.querySelector<HTMLElement>('.island-menu-item')?.focus({ preventScroll: true });
   }
 }
 
@@ -645,7 +616,6 @@ function focusableElements(): HTMLElement[] {
   )) as HTMLElement[];
   if (
     surface.value
-    && !surfaceSwapping.value
     && importButtonRef.value
     && !importButtonRef.value.disabled
   ) {
@@ -663,7 +633,8 @@ function onKeydown(event: KeyboardEvent) {
     }
     if (pendingShelfDialog.value) {
       event.preventDefault();
-      resolveShelfDialog();
+      if (pendingShelfDialog.value.returnToImportMenu) emit('back-to-import-menu');
+      else resolveShelfDialog();
       return;
     }
     if (menuOpen.value) {
@@ -685,7 +656,7 @@ function onKeydown(event: KeyboardEvent) {
     }
   }
 
-  if (event.key !== 'Tab' || !surfaceKey.value) return;
+  if (event.key !== 'Tab' || !surface.value) return;
   const elements = focusableElements();
   if (!elements.length) return;
   const first = elements[0];
@@ -744,7 +715,7 @@ watch(
     }
     if (pending && surface.value === 'shelf') {
       nextTick(() => {
-        if (pending === pendingShelfDialog.value) void focusSurface(surfaceKey.value);
+        if (pending === pendingShelfDialog.value) void focusSurface(cardPage.value ?? null);
       });
     }
   },
@@ -767,8 +738,7 @@ watch(
 
 watch(
   () => importProgress.status,
-  status => {
-    if (status !== 'idle') menuOpen.value = false;
+  () => {
     window.clearTimeout(autoDismissTimer);
     autoDismissTimer = 0;
     if (!importProgress.isAutoDismissable || importProgress.expanded) return;
@@ -780,13 +750,10 @@ watch(
   }
 );
 
-watch(surfaceRef, element => {
-  if (element) {
-    focusSurface(surfaceKey.value);
-    return;
-  }
-  if (!surfaceKey.value) focusSurface(null);
-});
+watch(cardPage, (page, previous) => {
+  contentTransition.value = !!page && !!previous;
+  if (page) void focusSurface(page);
+}, { immediate: true });
 
 watch(
   () => props.activeNav,
@@ -800,25 +767,14 @@ watch(activeAction, value => {
   syncActiveAction();
 }, { immediate: true });
 
-watch(surfaceKey, (key, previous) => {
-  if (key) {
+watch(() => !!surface.value, open => {
+  if (open) {
     clearActionFaceTimer();
     surfaceLeaving.value = false;
-    if (previous && previous !== key) {
-      beginSurfaceSwap();
-      enterSeed.value = {
-        width: importButtonRef.value?.offsetWidth || triggerWidth.value,
-        right: 20,
-        bottom: 20
-      };
-    } else {
-      captureEnterSeed();
-    }
+    captureEnterSeed();
     return;
   }
-  if (!previous) return;
   surfaceRef.value?.style.setProperty('--trigger-width', `${triggerWidth.value}px`);
-  surfaceSwapping.value = false;
   surfaceLeaving.value = true;
   scheduleActionFaceRelease();
 }, { flush: 'sync' });
@@ -829,6 +785,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  cancelAnimationFrame(closeFrame);
   window.clearTimeout(autoDismissTimer);
   clearActionFaceTimer();
   document.removeEventListener('pointerdown', onDocumentPointerDown);
@@ -943,14 +900,10 @@ onBeforeUnmount(() => {
   bottom: 20px;
 }
 
-.island-import-trigger.is-returning {
-  transition-delay: 0s;
-  pointer-events: none;
-}
-
 /* 真正关闭卡片时先快速归位到锚点，再让卡片裁切收进这颗按钮；
    卡片之间切换不套用这段更快的位移，避免按钮在切换首帧抖一下。 */
 .island-import-trigger.is-docking {
+  pointer-events: none;
   transition:
     right 180ms var(--island-morph-ease),
     bottom 180ms var(--island-morph-ease),
@@ -1140,6 +1093,11 @@ onBeforeUnmount(() => {
   max-height: min(680px, calc(100dvh - 52px));
 }
 
+/* 切到较矮的卡片时，由动画控制高度，避免新卡片的上限提前截断首帧。 */
+.desktop-island-surface.is-resizing {
+  max-height: none;
+}
+
 :global([data-mode="dark"] .desktop-island-surface) {
   box-shadow:
     0 0 0 1px color-mix(in oklab, var(--md-outline-variant) 60%, transparent),
@@ -1159,6 +1117,9 @@ onBeforeUnmount(() => {
   padding: 0 20px 4px;
   scrollbar-width: thin;
 }
+
+.is-resizing > .island-body { scrollbar-width: none; }
+.is-resizing > .island-body::-webkit-scrollbar { display: none; }
 
 .island-body :deep(.md-mobile-sheet-card) {
   margin-bottom: 10px;
@@ -1216,7 +1177,7 @@ onBeforeUnmount(() => {
   will-change: clip-path, transform, filter;
 }
 
-.island-surface-enter-active > * {
+.island-surface-enter-active > :not(.md-drawer-tab-panel) {
   animation: island-content-in 420ms var(--island-spring) 50ms both;
 }
 
@@ -1245,14 +1206,8 @@ onBeforeUnmount(() => {
   /* 56 × 56 种子在 28px 圆角下已经是圆，不要过渡到 999px 把整张卡变成白球。 */
   border-radius: 28px;
   clip-path: inset(
-    calc(100% - var(--enter-seed-bottom, 0px) - 56px)
-    var(--enter-seed-right, 0px)
-    var(--enter-seed-bottom, 0px)
-    calc(
-      100%
-      - var(--enter-seed-right, 0px)
-      - var(--enter-seed-width, var(--trigger-width, 104px))
-    )
+    calc(100% - 56px) 0 0
+    calc(100% - var(--enter-seed-width, var(--trigger-width, 104px)))
     round 28px
   );
   filter: blur(0.6px);
@@ -1305,7 +1260,7 @@ onBeforeUnmount(() => {
     background: color-mix(in oklab, var(--md-primary-container) 92%, var(--md-on-primary-container));
   }
 
-  .island-menu-item:hover {
+  .island-body :deep(.island-menu-item:hover) {
     background: color-mix(in oklab, var(--md-primary-container) 46%, transparent);
   }
 }

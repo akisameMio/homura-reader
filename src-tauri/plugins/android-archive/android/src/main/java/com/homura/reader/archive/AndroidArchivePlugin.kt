@@ -1,15 +1,19 @@
 package com.homura.reader.archive
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
 import android.provider.OpenableColumns
+import android.util.Base64
 import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.result.ActivityResult
 import app.tauri.annotation.ActivityCallback
@@ -21,6 +25,7 @@ import app.tauri.plugin.JSArray
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -56,6 +61,9 @@ private const val MAX_IMPORT_NAME_CHARS = 180
 private const val MAX_IMPORT_TREE_ENTRIES = 20_000
 private const val MAX_IMPORT_TREE_DEPTH = 64
 private const val IMPORT_PART_PREFIX = ".homura-import-"
+private const val REFERENCE_PREFS = "homura_saf_references"
+private const val REFERENCE_PREFIX = "grant_"
+private const val MAX_REFERENCE_CHUNK_BYTES = 1024 * 1024
 
 private val IMAGE_NAME = Regex(""".*\.(jpg|jpeg|png|webp|gif|avif|bmp)$""", RegexOption.IGNORE_CASE)
 
@@ -104,6 +112,35 @@ class StageImportUriOptions {
 @InvokeArg
 class ImportPickerOptions {
   var multiple: Boolean? = null
+  var persistReadAccess: Boolean = false
+}
+
+@InvokeArg
+class ImportFolderPickerOptions {
+  var persistReadAccess: Boolean = false
+}
+
+@InvokeArg
+class ReferenceOptions {
+  lateinit var referenceToken: String
+}
+
+@InvokeArg
+class HashReferenceOptions {
+  lateinit var referenceToken: String
+  var uri: String? = null
+}
+
+@InvokeArg
+class ReadReferenceOptions {
+  lateinit var referenceToken: String
+  var offset: Long = 0
+  var length: Int = 256 * 1024
+}
+
+@InvokeArg
+class ReleaseReferenceOptions {
+  lateinit var referenceTokens: Array<String>
 }
 
 private class ArchiveSession(
@@ -132,9 +169,28 @@ private data class ImportUriMetadata(
   val modifiedMs: Long
 )
 
+private data class ReferenceGrant(
+  val token: String,
+  val uri: String,
+  val grantUri: String,
+  val name: String,
+  val size: Long,
+  val mime: String,
+  val modifiedMs: Long
+)
+
+private data class ResolvedReference(
+  val grant: ReferenceGrant,
+  val current: ImportUriMetadata,
+  val seekable: Boolean,
+  val stale: Boolean,
+  val resolvedSize: Long
+)
+
 @TauriPlugin
 class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
   private var lastImportFolderUri: Uri? = null
+  private val referenceLock = Any()
   private val sessions = HashMap<String, ArchiveSession>()
   private val extractCounters = ConcurrentHashMap<String, Int>()
   private val prefetchGenerations = ConcurrentHashMap<String, Int>()
@@ -344,6 +400,75 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
   }
 
   @Command
+  fun resolveReference(invoke: Invoke) {
+    val options = invoke.parseArgs(ReferenceOptions::class.java)
+    runAsync(invoke) {
+      try {
+        val resolved = resolveReferenceBlocking(options.referenceToken)
+        referenceResultJson(resolved)
+      } catch (error: Throwable) {
+        throw nativeImportError(error)
+      }
+    }
+  }
+
+  @Command
+  fun readReference(invoke: Invoke) {
+    val options = invoke.parseArgs(ReadReferenceOptions::class.java)
+    runAsync(invoke) {
+      try {
+        readReferenceBlocking(options)
+      } catch (error: Throwable) {
+        throw nativeImportError(error)
+      }
+    }
+  }
+
+  @Command
+  fun hashReference(invoke: Invoke) {
+    val options = invoke.parseArgs(HashReferenceOptions::class.java)
+    runAsync(invoke) {
+      try {
+        hashReferenceBlocking(options.referenceToken, options.uri)
+      } catch (error: Throwable) {
+        throw nativeImportError(error)
+      }
+    }
+  }
+
+  @Command
+  fun openReferenceArchive(invoke: Invoke) {
+    val options = invoke.parseArgs(ReferenceOptions::class.java)
+    runAsync(invoke) {
+      try {
+        val resolved = resolveReferenceBlocking(options.referenceToken)
+        if (!isArchiveName(resolved.grant.name)) {
+          throw NativeImportException("NATIVE_UNSUPPORTED", "引用不是 EPUB、CBZ 或 ZIP 压缩包")
+        }
+        if (resolved.stale) throw referenceStaleError()
+        referenceResultJson(resolved).apply {
+          // java.util.zip.ZipFile 只能打开本地 File。这里明确暴露有界引用读取，
+          // 不通过后台复制文件冒充 SAF 压缩包随机访问。
+          put("nativeRandomAccess", false)
+          put("readMode", "bounded-chunks")
+          put("maxChunkBytes", MAX_REFERENCE_CHUNK_BYTES)
+          put("reason", "Android SAF URI cannot be opened directly by java.util.zip.ZipFile")
+        }
+      } catch (error: Throwable) {
+        throw nativeImportError(error)
+      }
+    }
+  }
+
+  @Command
+  fun releaseReference(invoke: Invoke) {
+    val options = invoke.parseArgs(ReleaseReferenceOptions::class.java)
+    runAsync(invoke) {
+      releaseReferencesBlocking(options.referenceTokens)
+    }
+  }
+
+  @Command
   fun pickImportUris(invoke: Invoke) {
     try {
       val options = invoke.parseArgs(ImportPickerOptions::class.java)
@@ -354,7 +479,7 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
         // 因此放开所有类型，由 JS 侧按扩展名筛选。
         type = "*/*"
         putExtra(Intent.EXTRA_ALLOW_MULTIPLE, options.multiple ?: true)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
       }
       startActivityForResult(invoke, intent, "importPickerResult")
     } catch (error: Throwable) {
@@ -373,9 +498,24 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
             uris.add(clip.getItemAt(index).uri.toString())
           }
         } ?: data?.data?.let { uris.add(it.toString()) }
-        invoke.resolve(JSObject().apply {
-          put("files", JSArray.from(uris.toTypedArray()))
-        })
+        val options = invoke.parseArgs(ImportPickerOptions::class.java)
+        runAsync(invoke) {
+          val references = JSArray()
+          if (options.persistReadAccess) {
+            uris.forEach { rawUri ->
+              try {
+                references.put(persistPickedReference(rawUri))
+              } catch (error: Throwable) {
+                references.put(referenceUnavailableJson(rawUri, error))
+              }
+            }
+          }
+          JSObject().apply {
+            // files 保持旧版字符串结构；reference 模式额外读取 references。
+            put("files", JSArray.from(uris.toTypedArray()))
+            put("references", references)
+          }
+        }
       }
       Activity.RESULT_CANCELED -> invoke.reject("NATIVE_CANCELLED: 用户取消选择")
       else -> invoke.reject("NATIVE_COMMAND_FAILED: 系统文件选择器返回异常")
@@ -385,8 +525,9 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun pickImportFolder(invoke: Invoke) {
     try {
+      invoke.parseArgs(ImportFolderPickerOptions::class.java)
       val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
           // 文件选择器可能记住内置存储或 Download 根目录，两处都不能授予目录权限。
           val initialUri = lastImportFolderUri ?: DocumentsContract.buildDocumentUri(
@@ -419,18 +560,21 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
     )
     runAsync(invoke) {
       try {
-        scanImportTree(treeUri)
+        val options = invoke.parseArgs(ImportFolderPickerOptions::class.java)
+        val referenceGrantUri = treeUri.takeIf { options.persistReadAccess }
+        scanImportTree(treeUri, referenceGrantUri)
       } catch (error: Exception) {
         throw nativeImportError(error)
       }
     }
   }
 
-  private fun scanImportTree(treeUri: Uri): JSObject {
+  private fun scanImportTree(treeUri: Uri, referenceGrantUri: Uri?): JSObject {
     val rootId = DocumentsContract.getTreeDocumentId(treeUri)
     val rootUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, rootId)
     val rootName = inspectImportUri(rootUri.toString()).name
     val files = JSArray()
+    val referenceEditor = referenceGrantUri?.let { referencePreferences().edit() }
     val visitedDirectories = mutableSetOf(rootId)
     val projection = arrayOf(
       Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE,
@@ -464,12 +608,24 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
           if (it.getString(mimeColumn) == Document.MIME_TYPE_DIR) {
             if (visitedDirectories.add(id)) children.add(id to relativePath)
           } else if (isSupportedImportName(name)) {
+            val fileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, id)
             files.put(JSObject().apply {
-              put("uri", DocumentsContract.buildDocumentUriUsingTree(treeUri, id).toString())
+              put("uri", fileUri.toString())
               put("name", name)
               put("relativePath", relativePath)
               if (sizeColumn >= 0 && !it.isNull(sizeColumn)) put("size", it.getLong(sizeColumn).coerceAtLeast(0))
               if (modifiedColumn >= 0 && !it.isNull(modifiedColumn)) put("modifiedMs", it.getLong(modifiedColumn))
+              if (referenceGrantUri != null) {
+                try {
+                  val metadata = inspectImportUri(fileUri.toString())
+                  val grant = createReferenceGrant(fileUri, referenceGrantUri, metadata, referenceEditor)
+                  put("referenceToken", grant.token)
+                  put("referenceAvailable", true)
+                } catch (error: Throwable) {
+                  put("referenceAvailable", false)
+                  put("referenceError", referenceErrorMessage(error))
+                }
+              }
             })
           }
         }
@@ -479,7 +635,18 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
     }
 
     scanDirectory(rootId, rootName.replace('/', '_').replace('\\', '_'), 0)
-    return JSObject().apply { put("files", files) }
+    if (referenceGrantUri != null && referenceEditor != null && files.length() > 0) {
+      synchronized(referenceLock) {
+        takePersistableReadGrant(referenceGrantUri)
+        if (!referenceEditor.commit()) {
+          throw NativeImportException("NATIVE_COMMAND_FAILED", "无法保存文件夹引用授权")
+        }
+      }
+    }
+    return JSObject().apply {
+      put("files", files)
+      if (referenceGrantUri != null) put("folderKey", referenceGrantUri.toString())
+    }
   }
 
   @Command
@@ -580,6 +747,381 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
       modifiedMs = modifiedMs.coerceAtLeast(0L)
     )
   }
+
+  private fun persistPickedReference(rawUri: String): JSObject {
+    val uri = contentUriOrThrow(rawUri)
+    val metadata = inspectImportUri(rawUri)
+    return synchronized(referenceLock) {
+      takePersistableReadGrant(uri)
+      referenceGrantJson(createReferenceGrant(uri, uri, metadata))
+    }
+  }
+
+  private fun takePersistableReadGrant(grantUri: Uri) {
+    try {
+      activity.contentResolver.takePersistableUriPermission(
+        grantUri,
+        Intent.FLAG_GRANT_READ_URI_PERMISSION
+      )
+    } catch (error: SecurityException) {
+      throw NativeImportException(
+        "NATIVE_REFERENCE_UNAVAILABLE",
+        "文件提供方未授予可持久化的读取权限"
+      )
+    }
+    if (!hasPersistedReadGrant(grantUri)) {
+      throw NativeImportException(
+        "NATIVE_REFERENCE_UNAVAILABLE",
+        "系统未保存所选文件的持久读取授权"
+      )
+    }
+  }
+
+  private fun hasPersistedReadGrant(grantUri: Uri): Boolean {
+    return try {
+      activity.contentResolver.persistedUriPermissions.any { permission ->
+        permission.isReadPermission && permission.uri == grantUri
+      }
+    } catch (_: Throwable) {
+      false
+    }
+  }
+
+  private fun createReferenceGrant(
+    uri: Uri,
+    grantUri: Uri,
+    metadata: ImportUriMetadata,
+    editor: SharedPreferences.Editor? = null
+  ): ReferenceGrant {
+    val token = "saf_${UUID.randomUUID()}"
+    val grant = ReferenceGrant(
+      token = token,
+      uri = uri.toString(),
+      grantUri = grantUri.toString(),
+      name = metadata.name,
+      size = metadata.size,
+      mime = metadata.mime,
+      modifiedMs = metadata.modifiedMs
+    )
+    val destination = editor ?: referencePreferences().edit()
+    destination.putString(
+      REFERENCE_PREFIX + token,
+      JSONObject().apply {
+        put("uri", grant.uri)
+        put("grantUri", grant.grantUri)
+        put("name", grant.name)
+        put("size", grant.size)
+        put("mime", grant.mime)
+        put("modifiedMs", grant.modifiedMs)
+        put("createdMs", System.currentTimeMillis())
+      }.toString()
+    )
+    if (editor == null && !destination.commit()) {
+      throw NativeImportException("NATIVE_COMMAND_FAILED", "无法保存文件引用授权")
+    }
+    return grant
+  }
+
+  private fun referencePreferences() =
+    activity.getSharedPreferences(REFERENCE_PREFS, Context.MODE_PRIVATE)
+
+  private fun getReferenceGrant(referenceToken: String): ReferenceGrant {
+    if (referenceToken.isBlank()) {
+      throw NativeImportException("NATIVE_INVALID_DATA", "缺少文件引用令牌")
+    }
+    val raw = referencePreferences().getString(REFERENCE_PREFIX + referenceToken, null)
+      ?: throw NativeImportException("NATIVE_REFERENCE_NOT_FOUND", "文件引用令牌不存在")
+    val json = try {
+      JSONObject(raw)
+    } catch (_: Throwable) {
+      throw NativeImportException("NATIVE_INVALID_DATA", "文件引用授权记录已损坏")
+    }
+    val uri = json.optString("uri", "")
+    val grantUri = json.optString("grantUri", "")
+    val name = json.optString("name", "")
+    if (uri.isBlank() || grantUri.isBlank() || name.isBlank()) {
+      throw NativeImportException("NATIVE_INVALID_DATA", "文件引用授权记录不完整")
+    }
+    return ReferenceGrant(
+      token = referenceToken,
+      uri = uri,
+      grantUri = grantUri,
+      name = name,
+      size = json.optLong("size", 0L).coerceAtLeast(0L),
+      mime = json.optString("mime", mimeFor(name)),
+      modifiedMs = json.optLong("modifiedMs", 0L).coerceAtLeast(0L)
+    )
+  }
+
+  private fun resolveReferenceBlocking(referenceToken: String): ResolvedReference {
+    val grant = getReferenceGrant(referenceToken)
+    val uri = contentUriOrThrow(grant.uri)
+    val grantUri = contentUriOrThrow(grant.grantUri)
+    if (!hasPersistedReadGrant(grantUri)) {
+      throw NativeImportException(
+        "NATIVE_REFERENCE_PERMISSION_LOST",
+        "文件持久读取授权已失效，请重新选择原文件"
+      )
+    }
+
+    val current = inspectImportUri(grant.uri)
+    var seekable = false
+    var descriptorSize = -1L
+    try {
+      activity.contentResolver.openFileDescriptor(uri, "r")?.let { descriptor ->
+        descriptorSize = descriptor.statSize
+        ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { input ->
+          seekable = try {
+            input.channel.position(0L)
+            true
+          } catch (_: Throwable) {
+            false
+          }
+        }
+      } ?: throw NativeImportException("NATIVE_COMMAND_FAILED", "无法打开文件引用")
+    } catch (error: SecurityException) {
+      throw NativeImportException("NATIVE_REFERENCE_PERMISSION_LOST", "文件读取授权已被撤销")
+    } catch (error: NativeImportException) {
+      throw error
+    } catch (error: Throwable) {
+      throw NativeImportException(
+        "NATIVE_COMMAND_FAILED",
+        error.message?.takeIf { it.isNotBlank() } ?: "无法打开文件引用"
+      )
+    }
+
+    val sizeChanged = grant.size > 0L && current.size > 0L && grant.size != current.size
+    val modifiedChanged = grant.modifiedMs > 0L && current.modifiedMs > 0L &&
+      grant.modifiedMs != current.modifiedMs
+    val resolvedSize = when {
+      current.size > 0L -> current.size
+      descriptorSize >= 0L -> descriptorSize
+      else -> grant.size
+    }
+    return ResolvedReference(
+      grant = grant,
+      current = current,
+      seekable = seekable,
+      stale = sizeChanged || modifiedChanged,
+      resolvedSize = resolvedSize
+    )
+  }
+
+  private fun readReferenceBlocking(options: ReadReferenceOptions): JSObject {
+    if (options.offset < 0L) {
+      throw NativeImportException("NATIVE_INVALID_DATA", "引用读取偏移不能为负数")
+    }
+    if (options.length <= 0 || options.length > MAX_REFERENCE_CHUNK_BYTES) {
+      throw NativeImportException(
+        "NATIVE_LIMIT_EXCEEDED",
+        "单次引用读取必须在 1 字节到 ${MAX_REFERENCE_CHUNK_BYTES} 字节之间"
+      )
+    }
+    val resolved = resolveReferenceBlocking(options.referenceToken)
+    if (resolved.stale) throw referenceStaleError()
+    if (resolved.resolvedSize < options.length || options.offset > resolved.resolvedSize - options.length) {
+      throw NativeImportException("NATIVE_INVALID_DATA", "引用读取范围越界")
+    }
+    if (!resolved.seekable) {
+      throw NativeImportException("NATIVE_UNSUPPORTED", "文件提供方不支持有界随机读取")
+    }
+
+    val uri = contentUriOrThrow(resolved.grant.uri)
+    val output = ByteArray(options.length)
+    var total = 0
+    try {
+      activity.contentResolver.openFileDescriptor(uri, "r")?.let { descriptor ->
+        ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { input ->
+          input.channel.position(options.offset)
+          while (total < output.size) {
+            val read = input.read(output, total, output.size - total)
+            if (read < 0) break
+            if (read == 0) continue
+            total += read
+          }
+        }
+      } ?: throw NativeImportException("NATIVE_COMMAND_FAILED", "无法打开文件引用")
+    } catch (error: NativeImportException) {
+      throw error
+    } catch (error: SecurityException) {
+      throw NativeImportException("NATIVE_REFERENCE_PERMISSION_LOST", "文件读取授权已被撤销")
+    } catch (error: Throwable) {
+      throw NativeImportException(
+        "NATIVE_UNSUPPORTED",
+        error.message?.takeIf { it.isNotBlank() } ?: "文件提供方不支持有界读取"
+      )
+    }
+
+    val bytes = if (total == output.size) output else output.copyOf(total)
+    val end = options.offset + total
+    return JSObject().apply {
+      put("referenceToken", resolved.grant.token)
+      put("offset", options.offset)
+      put("length", total)
+      put("size", resolved.resolvedSize)
+      put("eof", resolved.resolvedSize > 0L && end >= resolved.resolvedSize)
+      put("encoding", "base64")
+      put("data", Base64.encodeToString(bytes, Base64.NO_WRAP))
+    }
+  }
+
+  private fun hashReferenceBlocking(referenceToken: String, expectedUri: String?): JSObject {
+    val grant = getReferenceGrant(referenceToken)
+    if (!expectedUri.isNullOrBlank() && expectedUri != grant.uri) {
+      throw NativeImportException("NATIVE_REFERENCE_MISMATCH", "引用令牌与 URI 不匹配")
+    }
+    val uri = contentUriOrThrow(grant.uri)
+    val grantUri = contentUriOrThrow(grant.grantUri)
+    if (!hasPersistedReadGrant(grantUri)) {
+      throw NativeImportException("NATIVE_REFERENCE_PERMISSION_LOST", "文件持久读取授权已失效")
+    }
+    val current = inspectImportUri(grant.uri)
+    if (current.size > MAX_IMPORT_ARCHIVE_BYTES) {
+      throw NativeImportException("NATIVE_LIMIT_EXCEEDED", "文件超过 16 GiB，无法计算引用哈希")
+    }
+
+    val digest = java.security.MessageDigest.getInstance("SHA-256")
+    var total = 0L
+    try {
+      activity.contentResolver.openInputStream(uri)?.use { input ->
+        val buffer = ByteArray(64 * 1024)
+        while (true) {
+          val read = input.read(buffer)
+          if (read < 0) break
+          total += read
+          if (total > MAX_IMPORT_ARCHIVE_BYTES) {
+            throw NativeImportException("NATIVE_LIMIT_EXCEEDED", "文件超过 16 GiB，无法计算引用哈希")
+          }
+          digest.update(buffer, 0, read)
+        }
+      } ?: throw NativeImportException("NATIVE_COMMAND_FAILED", "无法打开文件引用")
+    } catch (error: NativeImportException) {
+      throw error
+    } catch (error: SecurityException) {
+      throw NativeImportException("NATIVE_REFERENCE_PERMISSION_LOST", "文件读取授权已被撤销")
+    } catch (error: Throwable) {
+      throw NativeImportException(
+        "NATIVE_COMMAND_FAILED",
+        error.message?.takeIf { it.isNotBlank() } ?: "无法计算文件引用哈希"
+      )
+    }
+
+    val sha256 = digest.digest().joinToString("") { byte ->
+      (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+    }
+    val stale = grant.size > 0L && current.size > 0L && grant.size != current.size ||
+      grant.modifiedMs > 0L && current.modifiedMs > 0L && grant.modifiedMs != current.modifiedMs
+    return JSObject().apply {
+      put("referenceToken", grant.token)
+      put("uri", grant.uri)
+      put("algorithm", "SHA-256")
+      put("sha256", sha256)
+      put("bytes", total)
+      put("size", if (current.size > 0L) current.size else total)
+      put("modifiedMs", current.modifiedMs)
+      put("stale", stale)
+    }
+  }
+
+  private fun referenceResultJson(resolved: ResolvedReference): JSObject {
+    return JSObject().apply {
+      put("referenceToken", resolved.grant.token)
+      put("uri", resolved.grant.uri)
+      put("name", resolved.current.name)
+      put("size", resolved.resolvedSize)
+      put("mime", resolved.current.mime)
+      put("modifiedMs", resolved.current.modifiedMs)
+      put("available", !resolved.stale)
+      put("stale", resolved.stale)
+      put("seekable", resolved.seekable)
+      put("maxChunkBytes", MAX_REFERENCE_CHUNK_BYTES)
+    }
+  }
+
+  private fun referenceGrantJson(grant: ReferenceGrant): JSObject {
+    return JSObject().apply {
+      put("uri", grant.uri)
+      put("name", grant.name)
+      put("size", grant.size)
+      put("mime", grant.mime)
+      put("modifiedMs", grant.modifiedMs)
+      put("referenceToken", grant.token)
+      put("referenceAvailable", true)
+    }
+  }
+
+  private fun referenceUnavailableJson(rawUri: String, error: Throwable): JSObject {
+    val metadata = inspectImportUri(rawUri)
+    return JSObject().apply {
+      put("uri", rawUri)
+      put("name", metadata.name)
+      put("size", metadata.size)
+      put("mime", metadata.mime)
+      put("modifiedMs", metadata.modifiedMs)
+      put("referenceAvailable", false)
+      put("referenceError", referenceErrorMessage(error))
+    }
+  }
+
+  private fun referenceErrorMessage(error: Throwable): String {
+    val nativeError = nativeImportError(error)
+    return nativeError.message ?: "无法保存文件引用"
+  }
+
+  private fun releaseReferencesBlocking(referenceTokens: Array<String>): JSObject = synchronized(referenceLock) {
+    if (referenceTokens.size > MAX_IMPORT_TREE_ENTRIES || referenceTokens.any { !it.startsWith("saf_") }) {
+      throw NativeImportException("NATIVE_INVALID_DATA", "文件引用令牌无效或过多")
+    }
+    val preferences = referencePreferences()
+    val keys = referenceTokens.mapTo(mutableSetOf()) { REFERENCE_PREFIX + it }
+    val remaining = mutableSetOf<String>()
+    val released = mutableSetOf<String>()
+    for ((key, value) in preferences.all) {
+      if (!key.startsWith(REFERENCE_PREFIX) || value !is String) continue
+      val uri = try {
+        JSONObject(value).optString("grantUri", "")
+      } catch (_: Throwable) {
+        ""
+      }
+      if (uri.isNotBlank()) (if (key in keys) released else remaining).add(uri)
+    }
+    val editor = preferences.edit()
+    keys.forEach { editor.remove(it) }
+    if (!editor.commit()) {
+      throw NativeImportException("NATIVE_COMMAND_FAILED", "无法释放文件引用令牌")
+    }
+    for (uri in released - remaining) {
+      try {
+        activity.contentResolver.releasePersistableUriPermission(
+          contentUriOrThrow(uri),
+          Intent.FLAG_GRANT_READ_URI_PERMISSION
+        )
+      } catch (_: SecurityException) {}
+    }
+    JSObject().apply { put("released", true) }
+  }
+
+  private fun contentUriOrThrow(rawUri: String): Uri {
+    val uri = try {
+      Uri.parse(rawUri)
+    } catch (_: Throwable) {
+      Uri.EMPTY
+    }
+    if (!"content".equals(uri.scheme, ignoreCase = true)) {
+      throw NativeImportException("NATIVE_INVALID_DATA", "文件引用必须是 content:// URI")
+    }
+    return uri
+  }
+
+  private fun isArchiveName(name: String): Boolean =
+    name.endsWith(".epub", ignoreCase = true) ||
+      name.endsWith(".cbz", ignoreCase = true) ||
+      name.endsWith(".zip", ignoreCase = true)
+
+  private fun referenceStaleError() = NativeImportException(
+    "NATIVE_REFERENCE_STALE",
+    "原文件大小或修改时间已变化，请先校验并重新关联"
+  )
 
   private fun stageImportUriBlocking(options: StageImportUriOptions): JSObject {
     val uri = try {

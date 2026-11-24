@@ -12,6 +12,7 @@ mod log_export;
 mod metadata_store;
 mod mobi_parser;
 mod native_import;
+mod native_reference;
 mod storage_stats;
 mod sync_webdav;
 mod text_decoder;
@@ -98,6 +99,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(update_downloader::UpdateDownloadState::default())
         .manage(desktop_archive::DesktopArchiveState::default())
+        .manage(native_reference::NativeReferenceState::default())
         .manage(metadata_store::MetadataState::default())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
@@ -121,6 +123,12 @@ pub fn run() {
             cover_thumb::create_cover_thumbnail_from_archive,
             native_import::stage_import_path,
             native_import::scan_import_paths,
+            native_reference::pick_native_reference,
+            native_reference::pick_native_reference_folder,
+            native_reference::inspect_native_reference,
+            native_reference::forget_native_reference,
+            native_reference::read_native_reference_range,
+            native_reference::hash_native_reference,
             metadata_store::metadata_load,
             metadata_store::metadata_replace_all,
             metadata_store::metadata_upsert_book,

@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-readReference"
+description = "Enables the readReference command without any pre-configured scope."
+commands.allow = ["readReference"]
+
+[[permission]]
+identifier = "deny-readReference"
+description = "Denies the readReference command without any pre-configured scope."
+commands.deny = ["readReference"]

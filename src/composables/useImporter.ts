@@ -17,6 +17,7 @@ import { formatBytes, isAndroid } from '../services/platform.ts';
 import { parseCbzFileLazy, parseTxtFile, parseMobiFileLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks, discardParsedBook, isJunkImagePath } from '../services/parsers.ts';
 import { createNativeMangaManifest, makeEpubId, parseEpubFile } from '../services/epubParser.ts';
 import {
+  buildReferencedImageBook,
   makeFileSource,
   makeFolderSource,
   stageNativeFileSource,
@@ -40,6 +41,11 @@ import { createCoverThumbnail } from '../services/coverThumb.ts';
 import { releaseBookPageUrls } from '../services/pagination.ts';
 import { runShelfMutation } from '../services/mutationQueue.ts';
 import { NativeErrorCode } from '../services/nativeRuntime.ts';
+import { fingerprintNativeReference, openNativeReferenceSource, pickNativeReferenceFiles, pickNativeReferenceFolder, readNativeReferenceFile } from '../services/nativeReference.ts';
+import { releaseUnusedReferences } from '../services/bookStorage.ts';
+import { parseRangeBook } from '../services/rangeBook.ts';
+import { buildManagedNovel, canStoreManagedNovel, makeManagedNovelSource } from '../services/managedBook.ts';
+import { fingerprintSource } from '../services/syncIdentity.ts';
 import type { Book, BookSource } from '../types.ts';
 
 
@@ -65,6 +71,7 @@ type ImportFile = File & {
   webkitRelativePath?: string;
   customHandle?: FileSystemFileHandle | null;
   nativePath?: string;
+  nativeReference?: string;
 };
 
 /** 批次耗时统计 */
@@ -138,6 +145,7 @@ interface FolderImport {
   sourceKey: string;
 }
 const retryFolderImports = new WeakMap<ImportFile, FolderImport>();
+const managedImportFiles = new WeakSet<ImportFile>();
 const IMPORT_TIMING_ENABLED = !!import.meta.env?.DEV;
 const LARGE_FILE_BYTES = 64 * 1024 * 1024;
 const VERY_LARGE_FILE_BYTES = 256 * 1024 * 1024;
@@ -361,14 +369,31 @@ export function useImporter() {
 
   function handleFiles(fileList: FileList | ImportFile[] | Array<ReturnType<typeof makeNativeImportFile>> | null, { offerCollection = false, targetId = shelf.activeCollectionId, sourceKey = '', folderSelection = false, retry = false }: { offerCollection?: boolean; targetId?: string | null; sourceKey?: string; folderSelection?: boolean; retry?: boolean } = {}) {
     if (!fileList || fileList.length === 0) return;
+    const selected = Array.from(fileList as ArrayLike<ImportFile>);
+    const references = selected.flatMap(file => file.nativeReference ? [file.nativeReference] : []);
+    const files = selected.filter(file => !file.name.startsWith('.'));
+    const releaseUnkept = async (tokens: string[]) => {
+      const retryTokens = new Set((importProgress.retryFiles as ImportFile[]).map(file => file.nativeReference));
+      await releaseUnusedReferences(tokens.filter(token => !retryTokens.has(token))).catch(error => {
+        console.warn('[HOMURA] 释放未使用的导入授权失败', error);
+      });
+    };
     // useImporter 会被 App 与 DragOverlay 分别实例化，锁必须放在模块级；
     // 否则拖拽入口能绕过锁，第二批会覆盖当前进度。
-    if (activeImportBatch || importProgress.isRunning) return;
-    const files = (Array.from(fileList as ArrayLike<File>) as ImportFile[]).filter((f: File) => !f.name.startsWith('.'));
-    if (files.length === 0) return;
+    if (activeImportBatch || importProgress.isRunning || !files.length) {
+      if (!retry && references.length) return runShelfMutation(() => releaseUnkept(references));
+      return;
+    }
 
     // 所有导入入口与清空书架共用互斥队列，防止同名漏判和源文件删除竞态。
-    activeImportBatch = runShelfMutation(() => importBatch(files, targetId, { offerCollection, sourceKey, folderSelection, retry })).catch(err => {
+    activeImportBatch = runShelfMutation(async () => {
+      const previousRetries = (importProgress.retryFiles as ImportFile[]).flatMap(file => file.nativeReference ? [file.nativeReference] : []);
+      try {
+        return await importBatch(files, targetId, { offerCollection, sourceKey, folderSelection, retry });
+      } finally {
+        if (references.length || previousRetries.length) await releaseUnkept([...references, ...previousRetries]);
+      }
+    }).catch(err => {
       console.error('[HOMURA] 导入失败', err);
       throw err;
     }).finally(() => {
@@ -587,7 +612,9 @@ export function useImporter() {
       nativePath,
       archiveSize: source.size,
       loadFallbackFile: nativePath
-        ? () => materializeStagedNativeImportFile(file, nativePath)
+        ? () => file.nativeReference
+          ? readNativeReferenceFile(file.nativeReference, source)
+          : materializeStagedNativeImportFile(file, nativePath)
         : undefined
     };
     const parseFullEpub = () => parseEpubFile(file, parseOptions);
@@ -618,7 +645,8 @@ export function useImporter() {
             parseFailure = fullError;
           }
         }
-      } else if (book?.needsFullParse || (book?.type === 'manga' && !book.pageItems?.length)) {
+      } else if (book?.needsFullParse || (book?.type === 'manga' && !book.pageItems?.length)
+        || (book?.type === 'epub' && managedImportFiles.has(task.file!))) {
         if (IMPORT_TIMING_ENABLED) console.info('[HOMURA] EPUB 元数据采样不足，回退全量解析');
         try {
           book = await parseFullEpub();
@@ -641,7 +669,7 @@ export function useImporter() {
       if (nativePath) await removeNativeBookDir(bookId).catch(() => {});
       return null;
     }
-    book.nativeArchiveStaged = !!nativePath;
+    book.nativeArchiveStaged = !!nativePath && !file.nativeReference;
     const pageManifest = createNativeMangaManifest(book);
     if (pageManifest) source = { ...source, nativePageManifest: pageManifest } as BookSource;
     return { book, source };
@@ -707,9 +735,11 @@ export function useImporter() {
         name: file.name,
         nativePath,
         archiveSize: source.size,
-        staged: !!nativePath,
+        staged: !!nativePath && !file.nativeReference,
         loadFallbackFile: nativePath
-          ? () => materializeStagedNativeImportFile(file, nativePath)
+          ? () => file.nativeReference
+            ? readNativeReferenceFile(file.nativeReference, source)
+            : materializeStagedNativeImportFile(file, nativePath)
           : undefined
       });
     } catch (err) {
@@ -722,7 +752,7 @@ export function useImporter() {
       if (nativePath) await removeNativeBookDir(bookId).catch(() => {});
       return null;
     }
-    book.nativeArchiveStaged = !!nativePath;
+    book.nativeArchiveStaged = !!nativePath && !file.nativeReference;
     const pageManifest = createNativeMangaManifest(book);
     if (pageManifest) source = { ...source, nativePageManifest: pageManifest } as BookSource;
     return { book, source };
@@ -750,8 +780,11 @@ export function useImporter() {
             metrics.nativeStageMs += readStarted - stageStarted;
             metrics.stageMs += readStarted - stageStarted;
           }
-          file = await materializeStagedNativeImportFile(file, stagedSource.nativePath as string);
+          file = file.nativeReference
+            ? await readNativeReferenceFile(file.nativeReference, stagedSource)
+            : await materializeStagedNativeImportFile(file, stagedSource.nativePath as string);
         } catch (err: unknown) {
+          if (file.nativeReference) throw err;
           if (!shouldFallbackNativeImport(err)) throw err;
           if (viaAndroidUri) {
             if (!stagedSource) (err as { nativeImportFallback?: boolean }).nativeImportFallback = true;
@@ -784,7 +817,7 @@ export function useImporter() {
     }
     if (stagedSource) {
       book.id = stagedBookId;
-      book.nativeArchiveStaged = true;
+      book.nativeArchiveStaged = !!stagedSource.preStaged;
       return { book, source: stagedSource };
     }
     return { book, source: makeFileSource(file) };
@@ -792,7 +825,19 @@ export function useImporter() {
 
   async function prepareImportTask(task: ImportTask, metrics: ImportMetrics): Promise<Prepared | null> {
     let prepared: Prepared | null = null;
-    if (task.kind === 'epub') prepared = await prepareEpubTask(task, metrics);
+    const file = task.file;
+    if (file?.nativeReference && (task.kind === 'pdf' || ((isAndroid || !canUseNativeArchive()) && (task.kind === 'epub' || task.kind === 'archive')))) {
+      try {
+        const id = `${task.kind}_${crypto.randomUUID()}`;
+        const source = await stageNativePathSource(id, file);
+        const range = await openNativeReferenceSource(file.nativeReference, source);
+        const book = await parseRangeBook(range, file.name, id, { metadataOnly: true });
+        if (book) prepared = { book, source };
+      } catch (err) {
+        markTaskFailure(task, err);
+        return null;
+      }
+    } else if (task.kind === 'epub') prepared = await prepareEpubTask(task, metrics);
     else if (task.kind === 'archive') prepared = await prepareArchiveTask(task, metrics);
     else if (task.kind === 'pdf') prepared = await prepareParsedTask(task, parsePdfFileLazy, metrics, 'PDF');
     else if (task.kind === 'mobi') prepared = await prepareParsedTask(task, parseMobiFileLazy, metrics, 'MOBI');
@@ -806,7 +851,27 @@ export function useImporter() {
         markTaskFailure(task, new Error(t('图片分组缺失')));
         return null;
       }
-      if (group.files.some((file: ImportFile) => isNativeImportFile(file))) {
+      if (group.files.every(file => !!file.nativeReference)) {
+        try {
+          const source: BookSource = {
+            kind: 'folder',
+            name: group.folderName,
+            entries: group.files.map(file => ({
+              kind: 'file',
+              name: file.name,
+              path: file.customRelativePath || file.name,
+              size: file.size,
+              lastModified: file.lastModified,
+              nativePath: file.nativePath,
+              nativeReference: file.nativeReference
+            }))
+          };
+          prepared = { source, book: await buildReferencedImageBook(group.book.id, source, true) };
+        } catch (err) {
+          markTaskFailure(task, err);
+          return null;
+        }
+      } else if (group.files.some((file: ImportFile) => isNativeImportFile(file))) {
         const readStarted = now();
         try {
           const files = new Array(group.files.length);
@@ -878,12 +943,42 @@ export function useImporter() {
       return null;
     }
 
+    const managed = (file && managedImportFiles.has(file)) || task.group?.files.some(entry => managedImportFiles.has(entry));
+    try {
+      if (prepared.source.nativeReference) {
+        prepared.source.contentFingerprint = await fingerprintNativeReference(prepared.source.nativeReference);
+      } else if (managed) {
+        prepared.source.managedStorageVersion = 1;
+        const archive = canStoreManagedNovel(prepared.book)
+          ? await buildManagedNovel(prepared.book, await fingerprintSource(prepared.source)).catch(err => {
+            console.warn('[HOMURA] 正文转存不可用，保留已复制的原格式', err);
+            return null;
+          })
+          : null;
+        if (archive) {
+          if (prepared.source.preStaged) {
+            const { nativeArchiveId, nativeArchivePath } = prepared.book;
+            await releaseNativeArchiveSession({ nativeArchiveId, nativeArchivePath });
+            await removeNativeBookDir(prepared.book.id);
+            prepared.book.coverNative = null;
+          }
+          prepared.book.nativeArchiveStaged = false;
+          prepared.source = makeManagedNovelSource(prepared.source, archive);
+        }
+      }
+    } catch (err) {
+      console.warn('[HOMURA] 生成阅读存档或校验原文件失败', err);
+      await discardParsedBook(prepared.book);
+      markTaskFailure(task, err);
+      return null;
+    }
+
     importProgress.setPhase('cover');
     const coverStarted = now();
     prepared.coverThumb = await createCoverThumbnail(
       prepared.book.coverBlob ?? null,
       undefined,
-      prepared.book.coverNative as { archivePath?: string; entryPath?: string } | null | undefined
+      prepared.source.nativeReference ? null : prepared.book.coverNative as { archivePath?: string; entryPath?: string } | null | undefined
     ).catch(() => null);
     metrics.coverMs += now() - coverStarted;
     return prepared;
@@ -1231,7 +1326,7 @@ export function useImporter() {
 
   // ---- File System Access：优先引用原文件句柄 ----
 
-  async function pickFilesViaFSA(options: { offerCollection?: boolean; targetId?: string | null }) {
+  async function pickFilesViaFSA({ retainHandle = true, ...options }: { offerCollection?: boolean; targetId?: string | null; retainHandle?: boolean }) {
     let handles: FileSystemFileHandle[] = [];
     try {
       handles = await window.showOpenFilePicker({ multiple: true });
@@ -1242,7 +1337,7 @@ export function useImporter() {
     for (const handle of handles) {
       try {
         const file = await handle.getFile();
-        Object.defineProperty(file, 'customHandle', { value: handle, writable: false });
+        if (retainHandle) Object.defineProperty(file, 'customHandle', { value: handle, writable: false });
         files.push(file);
       } catch (err) {}
     }
@@ -1251,26 +1346,63 @@ export function useImporter() {
 
   // Tauri 优先用系统选择器：桌面拿真实路径，Android 拿 content:// URI，
   // 大文件都由原生侧直接复制，WebView 只接收轻量元数据。
-  async function pickNativeFiles(options: { offerCollection?: boolean; targetId?: string | null }) {
-    if (isAndroid) {
-      const files = await pickNativeUriImportFiles({ multiple: true });
-      if (!files || files.length === 0) return false;
-      await handleFiles(files, options);
-      return true;
-    }
-    const paths = await pickNativeImportPaths({ directory: false, multiple: true });
-    if (!paths || paths.length === 0) return false;
-    const entries = await scanNativeImportPaths(paths);
-    const files = entries.map(makeNativeImportFile);
-    if (files.length === 0) {
-      console.warn('[HOMURA] 所选路径里没有可导入的支持格式');
-      return true;
+  async function importPickedCopies(files: Array<ReturnType<typeof makeNativeImportFile>>, options: {
+    offerCollection?: boolean;
+    targetId?: string | null;
+    mode?: string;
+    sourceKey?: string;
+    folderSelection?: boolean;
+  }) {
+    if (options.mode === 'copy') {
+      const bytes = files.reduce((sum, file) => sum + file.size, 0);
+      const confirmed = await askShelfDialog({
+        kind: 'confirm',
+        title: t('复制到 HOMURA'),
+        message: t('按所选原文件估算，新增占用约 {0}。最终以存档大小为准，原文件留在原位置。', { 0: formatBytes(bytes) }),
+        confirmLabel: t('复制到 HOMURA'),
+        confirmIcon: 'content_copy'
+      });
+      if (!confirmed) return false;
+      files.forEach(file => managedImportFiles.add(file as unknown as ImportFile));
     }
     await handleFiles(files, options);
     return true;
   }
 
-  async function pickNativeFolder() {
+  async function pickNativeFiles(options: { offerCollection?: boolean; targetId?: string | null; mode?: string }) {
+    if (options.mode === 'reference') {
+      const files = await pickNativeReferenceFiles();
+      if (!files.length) return false;
+      await handleFiles(files, options);
+      return true;
+    }
+    if (isAndroid) {
+      const files = await pickNativeUriImportFiles({ multiple: true });
+      if (!files || files.length === 0) return false;
+      return importPickedCopies(files, options);
+    }
+    const paths = await pickNativeImportPaths({ directory: false, multiple: true });
+    if (!paths || paths.length === 0) return false;
+    const entries = await scanNativeImportPaths(paths);
+    const files: Array<ReturnType<typeof makeNativeImportFile>> = entries.map(makeNativeImportFile);
+    if (files.length === 0) {
+      console.warn('[HOMURA] 所选路径里没有可导入的支持格式');
+      return true;
+    }
+    return importPickedCopies(files, options);
+  }
+
+  async function pickNativeFolder(mode = 'copy') {
+    if (mode === 'reference') {
+      const selection = await pickNativeReferenceFolder();
+      if (!selection) return false;
+      if (!selection.files.length) {
+        shelf.error = t('该文件夹内没有可导入的文件');
+        return true;
+      }
+      await handleFiles(selection.files, { sourceKey: selection.key, folderSelection: true });
+      return true;
+    }
     if (isAndroid) {
       const files = await pickNativeUriImportFolder();
       if (!files) return false;
@@ -1280,8 +1412,7 @@ export function useImporter() {
       }
       shelf.error = '';
       const sourceKey = files[0].nativePath?.split('/document/', 1)[0];
-      await handleFiles(files, { sourceKey, folderSelection: true });
-      return true;
+      return importPickedCopies(files, { mode, sourceKey, folderSelection: true });
     }
     const paths = await pickNativeImportPaths({ directory: true, multiple: false, title: t('导入文件夹') });
     if (!paths || paths.length === 0) return false;
@@ -1291,8 +1422,7 @@ export function useImporter() {
       console.warn('[HOMURA] 该文件夹内没有可导入的文件');
       return true;
     }
-    await handleFiles(files, { sourceKey: paths[0], folderSelection: true });
-    return true;
+    return importPickedCopies(files, { mode, sourceKey: paths[0], folderSelection: true });
   }
 
   async function pickFolderViaFSA() {

@@ -8,8 +8,13 @@ const COMMANDS: &[&str] = &[
   "clearAll",
   "inspectImportUris",
   "pickImportUris",
-    "pickImportFolder",
+  "pickImportFolder",
   "stageImportUri",
+  "resolveReference",
+  "readReference",
+  "hashReference",
+  "openReferenceArchive",
+  "releaseReference",
 ];
 
 fn main() {

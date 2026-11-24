@@ -31,6 +31,7 @@ import {
 } from './nativeMetadata.ts';
 import type { Book, BookSource, Collection, ReadingProgress } from '../types.ts';
 import { localSnapshotSignature, replacePortableProgress, type SyncLocalSnapshot } from './syncSnapshot.ts';
+import { nativeReferencesOf } from './nativeReference.ts';
 
 const metadataListeners = new Set<() => void>();
 export function subscribeMetadataChanges(listener: () => void) {
@@ -486,6 +487,44 @@ export const HomuraStore = (() => {
     return idbGetSource(id);
   }
 
+  async function listNativeReferences() {
+    if (disabled) return new Set<string>();
+    const db = await openDb();
+    return new Promise<Set<string>>((resolve, reject) => {
+      const tx = db.transaction(STORE_SOURCES, 'readonly');
+      const req = tx.objectStore(STORE_SOURCES).openCursor();
+      const references = new Set<string>();
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (cursor) {
+          for (const token of nativeReferencesOf(cursor.value)) references.add(token);
+          cursor.continue();
+        }
+      };
+      tx.oncomplete = () => resolve(references);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+
+  async function replaceBookSource(id: string, source: BookSource) {
+    if (disabled) throw new Error('本地存储不可用');
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction([STORE_BOOKS, STORE_SOURCES], 'readwrite');
+      const req = tx.objectStore(STORE_BOOKS).getKey(id);
+      let found = false;
+      req.onsuccess = () => {
+        found = req.result !== undefined;
+        if (found) tx.objectStore(STORE_SOURCES).put({ ...source, id });
+      };
+      tx.oncomplete = () => found ? resolve() : reject(new Error('书目不存在'));
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+    notifyMetadataChanges();
+  }
+
   function updateSourceManifest(id: string, nativePageManifest: unknown) {
     return idbUpdateSourceManifest(id, nativePageManifest);
   }
@@ -688,6 +727,8 @@ export const HomuraStore = (() => {
     updateBookMeta,
     updateBookFavorite,
     getSource,
+    listNativeReferences,
+    replaceBookSource,
     updateSourceManifest,
     listCollections,
     saveCollections,

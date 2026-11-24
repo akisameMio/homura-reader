@@ -20,12 +20,12 @@
     <button
       type="button"
       class="md-icon-button"
-      :title="t(closeLabel)"
-      :aria-label="t(closeLabel)"
+      :title="t(backLabel || closeLabel)"
+      :aria-label="t(backLabel || closeLabel)"
       :disabled="closeDisabled"
-      @click="$emit('close')"
+      @click="backLabel ? $emit('back') : $emit('close')"
     >
-      <MdIcon name="close" />
+      <MdIcon :name="backLabel ? 'arrow_back' : 'close'" />
     </button>
     <slot name="status" />
   </header>
@@ -45,10 +45,11 @@ defineProps({
   subtitle: { type: String, default: '' },
   titleId: { type: String, required: true },
   closeLabel: { type: String, default: '关闭' },
+  backLabel: { type: String, default: '' },
   closeDisabled: { type: Boolean, default: false }
 });
 
-defineEmits(['close', 'drag-start', 'drag-move', 'drag-end', 'drag-cancel']);
+defineEmits(['close', 'back', 'drag-start', 'drag-move', 'drag-end', 'drag-cancel']);
 </script>
 
 <style scoped>

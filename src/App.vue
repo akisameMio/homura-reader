@@ -61,7 +61,7 @@
           data-app-scroll
         >
           <p v-if="shelf.error || (!reader.currentBook && reader.openError)" role="alert" class="mx-4 min-[900px]:mx-7 mt-3 text-[13px] text-[var(--md-error)]">{{ t(shelf.error || reader.openError) }}</p>
-          <BookShelf v-if="favoritesOnly || shelf.library.length || shelf.collections.length || shelfImportActive" :books="visibleBooks" :favorites-only="favoritesOnly" :sort-key="sortKey" :query="query" :has-filter="!!query.trim() || typeFilter !== 'all'" :home-request="shelfHomeRequest" :importing="shelfImportActive" :pending-import-count="shelfImportActive ? importProgress.pending : 0" @open="openBookWithTransition" @browse="query = ''; typeFilter = 'all'" />
+          <BookShelf v-if="favoritesOnly || shelf.library.length || shelf.collections.length || shelfImportActive" :books="visibleBooks" :favorites-only="favoritesOnly" :sort-key="sortKey" :query="query" :has-filter="!!query.trim() || typeFilter !== 'all'" :home-request="shelfHomeRequest" :importing="shelfImportActive" :pending-import-count="shelfImportActive ? importProgress.pending : 0" @open="openBookWithTransition" @manage-storage="manageBookStorage" @browse="query = ''; typeFilter = 'all'" />
           <EmptyShelf v-else @pick-file="openFilePicker" @pick-folder="openFolderPicker" />
         </main>
         <ShelfBackdrop v-if="activeNav === 'shelf'" />
@@ -73,9 +73,12 @@
     v-if="desktopIslandVisible"
     :inert="!!reader.currentBook"
     :active-nav="activeNav"
+    v-model:menu-open="importMenuOpen"
+    v-model:import-in-place="importInPlace"
+    @back-to-import-menu="backToImportMenu"
     @create-collection="createCollection"
     @pick-files="pickFiles"
-    @pick-folder="pickFolder"
+    @pick-folder="openFolderPicker"
     @retry-failed="retryFailedImport"
   />
 
@@ -83,13 +86,6 @@
   <input v-if="canPickFolder && !isAndroid" ref="folderInput" type="file" webkitdirectory directory multiple class="hidden" @change="onFileChange" />
 
   <AppearanceSheet v-model:open="appearanceOpen" />
-  <ImportMenuSheet
-    v-if="isCompact"
-    v-model:open="importMenuOpen"
-    @create-collection="createCollection"
-    @pick-files="pickFiles"
-    @pick-folder="pickFolder"
-  />
   <ImportProgressSheet v-if="isCompact" @retry="retryFailedImport" />
   <DragOverlay />
   <ReaderLoadingPage
@@ -97,8 +93,10 @@
     :phase="readerLoadingPhase"
     :title="readerLoadingBook?.title || ''"
     :cover="readerLoadingBook?.cover || ''"
-    :message="reader.openError || t('无法加载这本书，请重试。')"
+    :message="relinkError || reader.openError || t('无法加载这本书，请重试。')"
+    :can-relink="canUseNativeImport() && !readerLoadingBook?.remote && !relinking"
     @retry="retryReaderOpen"
+    @relink="relinkReaderBook"
     @cancel="cancelReaderOpen"
   />
   <div v-if="reader.currentBook" class="reader-back-scrim md-scrim" aria-hidden="true"></div>
@@ -131,7 +129,15 @@
     @retry="updates.loadChangelog(true)"
   />
   <DuplicateImportSheet v-if="isCompact" />
-  <ShelfDialogSheet v-if="isCompact" />
+  <ShelfDialogSheet
+    v-if="isCompact"
+    v-model:menu-open="importMenuOpen"
+    v-model:import-in-place="importInPlace"
+    @back-to-import-menu="backToImportMenu"
+    @create-collection="createCollection"
+    @pick-files="pickFiles"
+    @pick-folder="openFolderPicker"
+  />
 
   <!-- Offscreen Measurer for Smart Novel Screen-Fit Pagination -->
   <div ref="measurerRef" id="novelPaginationMeasurer" class="fixed -left-[9999px] top-0 pointer-events-none invisible z-[-1] epub-content md-reader-prose"></div>
@@ -167,7 +173,6 @@ import { useScrollBounce } from './composables/useScrollBounce.ts';
 import SideNav from './components/SideNav.vue';
 import LibraryHeader from './components/LibraryHeader.vue';
 import LibraryImportActions from './components/LibraryImportActions.vue';
-import ImportMenuSheet from './components/ImportMenuSheet.vue';
 import ImportProgressSheet from './components/ImportProgressSheet.vue';
 import DesktopIsland from './components/DesktopIsland.vue';
 import ImportStatusBar from './components/ImportStatusBar.vue';
@@ -184,6 +189,8 @@ import ChangelogSheet from './components/ChangelogSheet.vue';
 import DuplicateImportSheet from './components/DuplicateImportSheet.vue';
 import ShelfDialogSheet from './components/ShelfDialogSheet.vue';
 import { useI18n } from './composables/useI18n.ts';
+import { keepSmartArchive, relinkBookSource } from './services/bookStorage.ts';
+import { scheduleSmartStorage } from './services/smartStorageRuntime.ts';
 
 const { t } = useI18n();
 
@@ -204,6 +211,8 @@ const libraryScrollRef = shallowRef(null);
 const fileInput = ref(null);
 const folderInput = ref(null);
 const importMenuOpen = ref(false);
+const importInPlace = ref(true);
+const importMode = computed(() => importInPlace.value ? 'reference' : 'copy');
 const appearanceOpen = ref(false);
 const shelfFilterOpen = ref(false);
 const activeNav = ref('shelf');
@@ -277,9 +286,53 @@ function clearLoadingGuard() {
 
 const readerLoadingVisible = ref(false);
 const readerLoadingPhase = computed(() => (reader.openError ? 'error' : 'loading'));
+const relinkError = ref('');
+const relinking = ref(false);
+
+async function relinkReaderBook() {
+  const book = readerLoadingBook.value;
+  if (!book || relinking.value || importProgress.isRunning || nativeImportPending) return;
+  relinkError.value = '';
+  relinking.value = true;
+  nativeImportPending = true;
+  try {
+    if (await relinkBookSource(book) && readerLoadingBook.value === book) await retryReaderOpen();
+  } catch (err) {
+    if (!isNativeImportCancelled(err)) relinkError.value = t('无法重新定位：{0}', { 0: err?.message || t('请检查本地存档') });
+  } finally {
+    relinking.value = false;
+    nativeImportPending = false;
+  }
+}
+
+async function manageBookStorage(id) {
+  const book = bookById(id);
+  if (!book || book.remote || importProgress.isRunning || nativeImportPending) return;
+  const action = await askShelfDialog({
+    kind: 'move',
+    title: t('书籍存储'),
+    message: book.title,
+    options: [
+      { value: 'relink', title: t('重新定位原文件') },
+      { value: 'keep', title: t('保留自动存档到 HOMURA') }
+    ]
+  });
+  if (!action || nativeImportPending) return;
+  nativeImportPending = true;
+  try {
+    if (action === 'relink') await relinkBookSource(book);
+    else if (!await keepSmartArchive(book)) shelf.error = t('这本书还没有自动生成的阅读存档。');
+    shelf.touchBook(book);
+  } catch (err) {
+    if (!isNativeImportCancelled(err)) shelf.error = t('无法更新书籍存储：{0}', { 0: err?.message || t('请检查本地存档') });
+  } finally {
+    nativeImportPending = false;
+  }
+}
 
 // 真正的打开动作：带转场的封装，是书架 open 事件的唯一入口
 async function openBookWithTransition(id) {
+  relinkError.value = '';
   const book = bookById(id);
   if (!book) { await reader.openBook(id); return; }
   readerLoadingBook.value = book;
@@ -309,6 +362,7 @@ async function openBookWithTransition(id) {
 
 // 加载页「重试」：再跑一次同一本书
 async function retryReaderOpen() {
+  relinkError.value = '';
   const book = readerLoadingBook.value;
   if (!book) { readerPhase.value = 'shelf'; readerLoadingVisible.value = false; return; }
   const minVisible = startLoadingMinTimer();
@@ -389,7 +443,11 @@ useAndroidBackExit(reader, () => {
     cancelReaderOpen();
     return true;
   }
-  if (pendingShelfDialog.value) { resolveShelfDialog(); return true; }
+  if (pendingShelfDialog.value) {
+    if (pendingShelfDialog.value.returnToImportMenu) backToImportMenu();
+    else resolveShelfDialog();
+    return true;
+  }
   if (pendingDuplicate.value) {
     resolveImport();
     return true;
@@ -442,6 +500,10 @@ watch(
 );
 
 watch(isCompact, () => { importMenuOpen.value = false; });
+watch(pendingShelfDialog, request => {
+  if (request?.returnToImportMenu) importMenuOpen.value = false;
+});
+watch(() => [settings.smartStorageEnabled, settings.smartStorageBudgetMb], () => scheduleSmartStorage(), { immediate: true });
 watch(shelfFilterOpen, open => {
   if (open) appearanceOpen.value = false;
 });
@@ -463,11 +525,17 @@ watch(() => reader.currentBook, book => {
   }
 });
 
+function backToImportMenu() {
+  if (!pendingShelfDialog.value?.returnToImportMenu) return;
+  importMenuOpen.value = true;
+  resolveShelfDialog();
+}
+
 async function createCollection() {
-  importMenuOpen.value = false;
   const parentId = activeCollection.value?.id;
   const title = await askShelfDialog({
     kind: 'name', title: t('新建书库'),
+    returnToImportMenu: true,
     initialName: availableCollectionName(t('新建书库'), shelf.collections, parentId),
     validate: name => collectionNameError(name, shelf.collections, null, parentId)
   });
@@ -518,13 +586,20 @@ let nativeImportPending = false;
 
 async function openFilePicker() {
   if (importProgress.isRunning || nativeImportPending) return;
-  if (canUseNativeImport()) {
+  const mode = importMode.value;
+  const nativeImport = canUseNativeImport();
+  if (nativeImport) {
     nativeImportPending = true;
     try {
-      await importer.pickNativeFiles({ offerCollection: isCompact.value });
+      await importer.pickNativeFiles({ offerCollection: isCompact.value, mode });
       return;
     } catch (err) {
       if (isNativeImportCancelled(err)) return;
+      if (mode === 'reference') {
+        console.warn('[HOMURA] 原位置入库选择失败', err);
+        shelf.error = t('无法读取原位置。请重新选择，或在「添加内容」中关闭「原位置入库」后重试。');
+        return;
+      }
       if (!shouldFallbackNativeImport(err) || err?.nativeSavedCount > 0) {
         console.warn('[HOMURA] 原生文件选择失败', err);
         shelf.error = err?.nativeSavedCount > 0
@@ -538,7 +613,7 @@ async function openFilePicker() {
     }
   }
   if (hasFileSystemAccess) {
-    importer.pickFilesViaFSA({ offerCollection: isCompact.value });
+    importer.pickFilesViaFSA({ offerCollection: isCompact.value, retainHandle: !nativeImport });
     return;
   }
   fileInput.value && fileInput.value.click();
@@ -546,13 +621,19 @@ async function openFilePicker() {
 
 async function openFolderPicker() {
   if (importProgress.isRunning || nativeImportPending || !canPickFolder) return;
+  if (isCompact.value) importMenuOpen.value = false;
   if (canUseNativeImport()) {
+    const mode = importMode.value;
     nativeImportPending = true;
     try {
-      await importer.pickNativeFolder();
+      await importer.pickNativeFolder(mode);
       return;
     } catch (err) {
       if (isNativeImportCancelled(err)) return;
+      if (mode === 'reference') {
+        shelf.error = t('无法读取原位置。请重新选择，或在「添加内容」中关闭「原位置入库」后重试。');
+        return;
+      }
       if (isAndroid || !shouldFallbackNativeImport(err)) {
         console.warn('[HOMURA] 原生文件夹导入失败', err);
         shelf.error = t('读取所选文件夹失败，请重新选择');
@@ -563,11 +644,20 @@ async function openFolderPicker() {
       nativeImportPending = false;
     }
   }
-  if (window.showDirectoryPicker) {
-    importer.pickFolderViaFSA();
-    return;
+  await openBrowserFolderPicker();
+}
+
+async function openBrowserFolderPicker() {
+  try {
+    if (window.showDirectoryPicker) {
+      await importer.pickFolderViaFSA();
+      return;
+    }
+    folderInput.value?.click();
+  } catch (err) {
+    console.warn('[HOMURA] 浏览器文件夹导入失败', err);
+    shelf.error = t('读取所选文件夹失败，请重新选择');
   }
-  folderInput.value && folderInput.value.click();
 }
 
 async function onFileChange(event) {
@@ -579,15 +669,9 @@ async function onFileChange(event) {
   }
 }
 
-// FAB 菜单：先收起菜单再走原有导入流程
 function pickFiles() {
-  importMenuOpen.value = false;
+  if (isCompact.value) importMenuOpen.value = false;
   openFilePicker();
-}
-
-function pickFolder() {
-  importMenuOpen.value = false;
-  openFolderPicker();
 }
 
 function retryFailedImport() {

@@ -6,6 +6,12 @@ description = "允许本地主窗口调用 HOMURA 原生功能"
 commands.allow = [
   "stageImportPath",
   "scanImportPaths",
+  "pickNativeReference",
+  "pickNativeReferenceFolder",
+  "inspectNativeReference",
+  "forgetNativeReference",
+  "readNativeReferenceRange",
+  "hashNativeReference",
   "open",
   "openDocument",
   "extract",

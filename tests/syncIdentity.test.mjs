@@ -68,6 +68,28 @@ test('文件夹拒绝重复路径、空目录和路径穿越', async () => {
   }
 });
 
+test('原位置图片目录的同步指纹保留分层路径，并与复制入库一致', async () => {
+  const files = [['漫画/上篇/001.jpg', 'first'], ['漫画/下篇/001.jpg', 'second']];
+  const byToken = new Map(files.map(([path, bytes]) => [path, digest(bytes)]));
+  const calls = [];
+  globalThis.window = { __TAURI__: { core: { async invoke(command, { token }) {
+    assert.equal(command, 'hashNativeReference');
+    calls.push(token);
+    return { sha256: byToken.get(token) };
+  } } } };
+  const source = {
+    kind: 'folder', name: '漫画',
+    entries: files.map(([path]) => ({ kind: 'file', name: '001.jpg', path, nativeReference: path }))
+  };
+  const prepared = await prepareSourceIdentity(source);
+  const copy = {
+    ...source,
+    entries: files.map(([path, bytes]) => ({ path, blob: new Blob([bytes]) }))
+  };
+  assert.equal(await fingerprintSource(prepared.source), await fingerprintSource(copy));
+  assert.deepEqual(calls, files.map(([path]) => path));
+});
+
 test('文件夹 Unicode 排序与 JSON 转义具有跨语言稳定摘要', async () => {
   const files = [['😀.jpg', 'emoji'], ['\uE000.jpg', 'private'], ['中".jpg', 'quote'], ['a.jpg', 'ascii']];
   assert.equal(await fingerprintSource({

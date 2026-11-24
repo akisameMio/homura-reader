@@ -195,7 +195,7 @@ design-preview/            设计原型 HTML 与截图，不是生产代码
 
 - 新增或重做组件前，先读 [references/md3-component-guide.md](references/md3-component-guide.md)；里面有按钮、开关、分段控件、列表和抽屉的直接写法。新增 bottom sheet 还必须遵守 [references/bottom-sheet-spec.md](references/bottom-sheet-spec.md)。
 - Token 全表见 [references/tokens.md](references/tokens.md)，系统级布局说明见 [references/ui-component-spec.md](references/ui-component-spec.md)。
-- 桌面灵动胶囊的状态机、尺寸、分裂 / 合并动效与焦点规则见 [references/desktop-island.md](references/desktop-island.md)；实现是 `DesktopIsland.vue` + `ImportMenuSheet.vue` + `ImportProgressPanel.vue` + `UpdateIslandPanel.vue`。
+- 桌面灵动胶囊的状态机、尺寸、分裂 / 合并动效与焦点规则见 [references/desktop-island.md](references/desktop-island.md)；实现是 `DesktopIsland.vue` + `ShelfDialogContent.vue` + `ImportProgressPanel.vue` + `UpdateIslandPanel.vue`。
 - 旧笔记 `.trae/skills/homura-md3-ui/SKILL.md` 只作补充；`.trae/` 被 gitignore，克隆仓库后可能不存在。与上述文档或当前 `src/` 冲突时，以当前代码和 `references/md3-component-guide.md` 为准。
 
 ## 6. 不能破坏的行为

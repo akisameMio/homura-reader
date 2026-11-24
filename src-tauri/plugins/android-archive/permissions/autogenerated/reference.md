@@ -15,6 +15,11 @@ Allows HOMURA to read CBZ/ZIP pages and EPUB document entries through the Androi
 - `allow-pickImportUris`
 - `allow-pickImportFolder`
 - `allow-stageImportUri`
+- `allow-resolveReference`
+- `allow-readReference`
+- `allow-hashReference`
+- `allow-openReferenceArchive`
+- `allow-releaseReference`
 
 ## Permission Table
 
@@ -132,6 +137,32 @@ Denies the extract command without any pre-configured scope.
 <tr>
 <td>
 
+`android-archive:allow-hashReference`
+
+</td>
+<td>
+
+Enables the hashReference command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-archive:deny-hashReference`
+
+</td>
+<td>
+
+Denies the hashReference command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `android-archive:allow-inspectImportUris`
 
 </td>
@@ -210,6 +241,32 @@ Denies the openDocument command without any pre-configured scope.
 <tr>
 <td>
 
+`android-archive:allow-openReferenceArchive`
+
+</td>
+<td>
+
+Enables the openReferenceArchive command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-archive:deny-openReferenceArchive`
+
+</td>
+<td>
+
+Denies the openReferenceArchive command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `android-archive:allow-pickImportFolder`
 
 </td>
@@ -262,6 +319,32 @@ Denies the pickImportUris command without any pre-configured scope.
 <tr>
 <td>
 
+`android-archive:allow-readReference`
+
+</td>
+<td>
+
+Enables the readReference command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-archive:deny-readReference`
+
+</td>
+<td>
+
+Denies the readReference command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `android-archive:allow-readTextBatch`
 
 </td>
@@ -281,6 +364,58 @@ Enables the readTextBatch command without any pre-configured scope.
 <td>
 
 Denies the readTextBatch command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-archive:allow-releaseReference`
+
+</td>
+<td>
+
+Enables the releaseReference command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-archive:deny-releaseReference`
+
+</td>
+<td>
+
+Denies the releaseReference command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-archive:allow-resolveReference`
+
+</td>
+<td>
+
+Enables the resolveReference command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`android-archive:deny-resolveReference`
+
+</td>
+<td>
+
+Denies the resolveReference command without any pre-configured scope.
 
 </td>
 </tr>

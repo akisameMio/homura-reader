@@ -42,7 +42,7 @@ compiled = compiled.replace("import ReaderDrawerHeader from './ReaderDrawerHeade
   emits: ['close'], setup(_, { emit }) { return () => h('header', { class: 'md-drawer-header' }, [h('button', { onClick: () => emit('close') }, '关闭')]); }
 };`);
 compiled = "import { h } from '" + pathToFileURL(require.resolve('vue')).href + "';\n" + compiled;
-for (const file of ['composables/useViewport.ts', 'composables/useSheetDrag.ts', 'composables/useSheetSpring.ts', 'services/settingsSelectScrollLock.ts']) {
+for (const file of ['composables/useViewport.ts', 'composables/useSheetDrag.ts', 'composables/useSheetSpring.ts', 'composables/usePanelResizeTransition.ts', 'services/settingsSelectScrollLock.ts']) {
   compiled = compiled.replaceAll(`'../${file}'`, `'${new URL(`../src/${file}`, import.meta.url).href}'`);
 }
 compiled = compiled.replaceAll("'../composables/useI18n.ts'", `'${new URL('../src/composables/useI18n.ts', import.meta.url).href}'`);

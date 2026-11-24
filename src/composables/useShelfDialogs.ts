@@ -4,6 +4,7 @@ import type { ImportFolder } from '../services/collections.ts';
 export interface ShelfDialogOptions {
   kind: string;
   title: string;
+  returnToImportMenu?: boolean;
   message?: string;
   intent?: 'create' | 'rename' | 'delete' | 'favorite';
   removesFiles?: boolean;
@@ -13,6 +14,7 @@ export interface ShelfDialogOptions {
   initialName?: string;
   options?: Array<{ value: string; title?: string }>;
   confirmLabel?: string;
+  confirmIcon?: string;
   validate?: (name: string) => string | null;
 }
 type ShelfDialogResult = string | boolean | null;

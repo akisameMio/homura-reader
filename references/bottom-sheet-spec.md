@@ -16,7 +16,7 @@
 
 | 场景 | 必须使用 | 典型组件 |
 | --- | --- | --- |
-| 页面级、全局流程、确认 / 导入 / 更新 / 设置弹层 | `MobileBottomSheet.vue` | `ImportMenuSheet.vue`、`ImportProgressSheet.vue`、`UpdateDialog.vue`、`ShelfDialogSheet.vue`、`DuplicateImportSheet.vue` |
+| 页面级、全局流程、确认 / 导入 / 更新 / 设置弹层 | `MobileBottomSheet.vue` | `ImportProgressSheet.vue`、`UpdateDialog.vue`、`ShelfDialogSheet.vue`、`DuplicateImportSheet.vue` |
 | 阅读器内部、需要和阅读状态互斥的抽屉 | `.md-drawer` + `ReaderDrawerHeader.vue` | `ReaderSettingsDrawer.vue`、`ReaderFontDrawer.vue`、`ReaderTocDrawer.vue` |
 
 判断规则：

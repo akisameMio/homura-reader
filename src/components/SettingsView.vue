@@ -243,7 +243,7 @@
           >
             <i :style="{ width: storageBarWidth }"></i>
           </div>
-          <p v-if="nativeStorageEnabled" class="settings-note">{{ t('原始文件存入本机，容量受磁盘剩余空间限制。') }}</p>
+          <p v-if="nativeStorageEnabled" class="settings-note">{{ t('应用内存档保存在此设备，容量受可用空间限制。') }}</p>
         </template>
         <button
           type="button"
@@ -649,9 +649,42 @@
               <i :style="{ width: storageBarWidth }"></i>
             </div>
             <p class="settings-note">{{ storageQuotaText }}</p>
-            <p v-if="nativeStorageEnabled" class="settings-note">{{ t('原始文件存入本机，容量受磁盘剩余空间限制。') }}</p>
+            <p v-if="nativeStorageEnabled" class="settings-note">{{ t('应用内存档保存在此设备，容量受可用空间限制。') }}</p>
           </template>
         </div>
+        <section class="settings-detail-group" aria-labelledby="settings-smart-storage-heading">
+          <h2 id="settings-smart-storage-heading"><MdIcon name="tune" />{{ t('智能存储') }}</h2>
+          <div class="settings-list">
+            <MdSwitch
+              class="settings-list-row"
+              :model-value="settings.smartStorageEnabled"
+              :title="t('按阅读频率自动转存')"
+              @update:model-value="settings.setSmartStorageEnabled"
+            >
+              <span class="settings-value-copy">
+                <b>{{ t('自动转存常读作品') }}</b>
+                <span>{{ t('根据阅读频率与冷打开耗时，生成可回收的 HOMURA 阅读存档。') }}</span>
+              </span>
+            </MdSwitch>
+            <div class="settings-detail-font">
+              <div class="settings-head">
+                <span>{{ t('自动转存预算') }}</span>
+                <b>{{ settings.smartStorageBudgetMb }} MB</b>
+              </div>
+              <MdRange
+                class="settings-range"
+                :model-value="settings.smartStorageBudgetMb"
+                :min="SMART_STORAGE_MIN_BUDGET_MB"
+                :max="SMART_STORAGE_MAX_BUDGET_MB"
+                :step="SMART_STORAGE_BUDGET_STEP_MB"
+                :aria-label="t('自动转存预算')"
+                :aria-value-text="`${settings.smartStorageBudgetMb} MB`"
+                @update:model-value="settings.setSmartStorageBudget"
+              />
+            </div>
+          </div>
+          <p class="settings-detail-note">{{ t('仅在开启后使用。达到预算时，优先回收收益较低的自动存档。') }}</p>
+        </section>
         <section v-if="diskSegments" class="settings-detail-group" aria-labelledby="settings-usage-heading">
           <h2 id="settings-usage-heading">{{ t('本机用量') }}</h2>
           <div class="settings-list">
@@ -694,7 +727,7 @@
             </div>
             <div class="settings-list-row">
               <span class="settings-value-copy">
-                <b>{{ t('书架与原始文件') }}</b>
+                <b>{{ t('书架与应用内存档') }}</b>
                 <span>{{ t('{0} 部作品，删除后无法恢复', { 0: shelf.library.length }) }}</span>
               </span>
               <button
@@ -707,7 +740,7 @@
               </button>
             </div>
           </div>
-          <p class="settings-detail-note">{{ t('清空前会再次确认。删除书架会同时删除原始文件与阅读记录。') }}</p>
+          <p class="settings-detail-note">{{ t('清空书架会删除应用内存档和阅读记录。外部原文件仍由你管理。') }}</p>
           <p v-if="actionNote" class="settings-detail-note" role="status">{{ actionNote }}</p>
         </section>
       </template>
@@ -987,7 +1020,7 @@
       <div class="md-mobile-sheet-card">
         <div class="md-mobile-sheet-row">
           <span class="md-mobile-sheet-icon is-danger"><MdIcon name="delete" /></span>
-          <span class="md-mobile-sheet-copy"><b>{{ displayedAction === 'shelf' ? t('书架、原始文件与阅读记录') : t('阅读位置与排版记忆') }}</b>
+          <span class="md-mobile-sheet-copy"><b>{{ displayedAction === 'shelf' ? t('书架、应用内存档与阅读记录') : t('阅读位置与排版记忆') }}</b>
             <small id="mobile-settings-dialog-copy">{{ t(dataDialogDescription) }}</small>
           </span>
         </div>
@@ -1070,6 +1103,11 @@ import {
   type RuntimeLogLevel
 } from '../services/runtimeLogs.ts';
 import { deliverRuntimeLogExport, formatRuntimeLogEntries, runtimeLogExportFileName } from '../services/runtimeLogExport.ts';
+import {
+  SMART_STORAGE_BUDGET_STEP_MB,
+  SMART_STORAGE_MAX_BUDGET_MB,
+  SMART_STORAGE_MIN_BUDGET_MB
+} from '../services/smartStorageSettings.ts';
 import { useShelfStore } from '../stores/shelf.ts';
 import { useReaderStore } from '../stores/reader.ts';
 import { useSettingsStore } from '../stores/settings.ts';
@@ -1252,11 +1290,11 @@ const storageAriaLabel = computed(() => {
 });
 const progressCount = computed(() => Object.keys(shelf.progressMap || {}).length);
 const dataDialogTitle = computed(() =>
-  displayedAction.value === 'shelf' ? t('清空书架与原始文件？') : t('清空阅读进度？')
+  displayedAction.value === 'shelf' ? t('清空书架与应用内存档？') : t('清空阅读进度？')
 );
 const dataDialogDescription = computed(() => {
   if (displayedAction.value === 'shelf') {
-    return t('将删除 {0} 部作品、原始文件与阅读记录。此操作无法撤销。', { 0: shelf.library.length });
+    return t('将删除 {0} 部作品、应用内存档与阅读记录。此操作无法撤销。', { 0: shelf.library.length });
   }
   return t('将删除 {0} 本作品的阅读位置与排版记忆。作品本身不会被删除。', { 0: progressCount.value });
 });
@@ -1492,7 +1530,7 @@ async function confirmDataAction() {
   try {
     if (action === 'shelf') {
       await shelf.clearShelf();
-      actionNote.value = t('书架与原始文件已清空');
+      actionNote.value = t('书架与应用内存档已清空');
     } else {
       await shelf.clearProgress();
       actionNote.value = t('阅读进度已清空');

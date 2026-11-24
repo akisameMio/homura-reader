@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-releaseReference"
+description = "Enables the releaseReference command without any pre-configured scope."
+commands.allow = ["releaseReference"]
+
+[[permission]]
+identifier = "deny-releaseReference"
+description = "Denies the releaseReference command without any pre-configured scope."
+commands.deny = ["releaseReference"]

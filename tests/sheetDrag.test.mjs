@@ -11,7 +11,8 @@ Object.assign(globalThis, {
   SVGElement: dom.window.SVGElement,
   Node: dom.window.Node,
   getComputedStyle: dom.window.getComputedStyle.bind(dom.window),
-  requestAnimationFrame: callback => setTimeout(callback, 0)
+  requestAnimationFrame: callback => setTimeout(callback, 0),
+  cancelAnimationFrame: id => clearTimeout(id)
 });
 window.matchMedia = () => ({ matches: true });
 

@@ -10,6 +10,7 @@ import { computed, reactive, ref } from 'vue';
 import { isWindows } from '../services/platform.ts';
 import { resolveFontValue } from '../services/readerLayout.ts';
 import { configureRuntimeLogs, RUNTIME_LOG_LEVELS, type RuntimeLogLevel } from '../services/runtimeLogs.ts';
+import { readSmartStorageConfig, writeSmartStorageConfig } from '../services/smartStorageSettings.ts';
 import { TRANSITION_OPTIONS, useThemeStore } from './theme.ts';
 
 const READER_DEFAULTS_KEY = 'homura_reader_defaults';
@@ -142,6 +143,7 @@ function readRuntimeLogCapture() {
 
 export const useSettingsStore = defineStore('settings', () => {
   const theme = useThemeStore();
+  const initialSmartStorageConfig = readSmartStorageConfig();
   const readerDefaults = reactive(readReaderDefaults());
   const transitionStyle = computed(() => readerDefaults.direction === 'vertical' ? 'scroll' : theme.transitionStyle);
   const debugForceFullscreen = ref(readDebugForceFullscreen());
@@ -151,6 +153,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const volumeKeysTurnPage = ref(readVolumeKeysTurnPage());
   const runtimeLogLevel = ref<RuntimeLogLevel>(readRuntimeLogLevel());
   const runtimeLogCapture = ref(readRuntimeLogCapture());
+  const smartStorageEnabled = ref(initialSmartStorageConfig.enabled);
+  const smartStorageBudgetMb = ref(initialSmartStorageConfig.budgetMb);
   const showFullscreenButton = computed(() => isWindows || debugForceFullscreen.value);
 
   configureRuntimeLogs({ level: runtimeLogLevel.value, capture: runtimeLogCapture.value });
@@ -241,6 +245,25 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  function persistSmartStorageConfig() {
+    const saved = writeSmartStorageConfig({
+      enabled: smartStorageEnabled.value,
+      budgetMb: smartStorageBudgetMb.value
+    });
+    smartStorageEnabled.value = saved.enabled;
+    smartStorageBudgetMb.value = saved.budgetMb;
+  }
+
+  function setSmartStorageEnabled(value: unknown) {
+    smartStorageEnabled.value = !!value;
+    persistSmartStorageConfig();
+  }
+
+  function setSmartStorageBudget(value: unknown) {
+    smartStorageBudgetMb.value = Number(value);
+    persistSmartStorageConfig();
+  }
+
   return {
     readerDefaults,
     transitionStyle,
@@ -250,6 +273,8 @@ export const useSettingsStore = defineStore('settings', () => {
     volumeKeysTurnPage,
     runtimeLogLevel,
     runtimeLogCapture,
+    smartStorageEnabled,
+    smartStorageBudgetMb,
     showFullscreenButton,
     setReaderDefault,
     setTransitionStyle,
@@ -259,6 +284,8 @@ export const useSettingsStore = defineStore('settings', () => {
     setImportCollectionPrompt,
     setVolumeKeysTurnPage,
     setRuntimeLogLevel,
-    setRuntimeLogCapture
+    setRuntimeLogCapture,
+    setSmartStorageEnabled,
+    setSmartStorageBudget
   };
 });

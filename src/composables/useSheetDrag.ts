@@ -69,6 +69,7 @@ export function useSheetDrag({ isCompact, isOpen, onClose, onDragBegin }: {
   let pendingTouch: PendingGesture | null = null;
   let pendingMouse: PendingGesture | null = null;
   let motionTimer: ReturnType<typeof setTimeout> | null = null;
+  let detachSettle: (() => void) | null = null;
   let closeAfterDrag = false;
   let suppressClick = false;
   let suppressTimer: ReturnType<typeof setTimeout> | null = null;
@@ -80,6 +81,8 @@ export function useSheetDrag({ isCompact, isOpen, onClose, onDragBegin }: {
       clearTimeout(motionTimer);
       motionTimer = null;
     }
+    detachSettle?.();
+    detachSettle = null;
   }
 
   function releaseCapture(activeDrag: DragState) {
@@ -242,7 +245,6 @@ export function useSheetDrag({ isCompact, isOpen, onClose, onDragBegin }: {
       if (settled) return;
       settled = true;
       clearMotionTimer();
-      el.removeEventListener('transitionend', onTransitionEnd);
       el.style.userSelect = '';
       if (shouldClose) {
         // Sheet 已经移出屏幕，关闭时禁用二次离场动画，避免先弹回顶部再下滑
@@ -265,10 +267,14 @@ export function useSheetDrag({ isCompact, isOpen, onClose, onDragBegin }: {
 
     el.style.transition = `height ${heightChanged ? settleMs : 0}ms ${EASE}, transform ${settleMs}ms ${EASE}`;
     el.addEventListener('transitionend', onTransitionEnd);
-    requestAnimationFrame(() => {
+    const frame = requestAnimationFrame(() => {
       if (heightChanged) el.style.height = `${Math.round(targetHeight)}px`;
       el.style.transform = shouldClose ? 'translate3d(0, 100%, 0)' : 'translate3d(0, 0, 0)';
     });
+    detachSettle = () => {
+      cancelAnimationFrame(frame);
+      el.removeEventListener('transitionend', onTransitionEnd);
+    };
     motionTimer = setTimeout(finish, settleMs + 40);
   }
 
@@ -539,6 +545,7 @@ export function useSheetDrag({ isCompact, isOpen, onClose, onDragBegin }: {
     onDragStart,
     onDragMove,
     onDragEnd,
-    onDragCancel
+    onDragCancel,
+    resetMotion
   };
 }

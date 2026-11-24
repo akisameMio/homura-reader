@@ -19,6 +19,14 @@
     "fs:allow-appdata-meta-recursive",
     "fs:allow-appdata-write-recursive",
     {
+      "identifier": "fs:scope",
+      "deny": [
+        "$APPDATA",
+        "$APPDATA/homura-native-references.json",
+        "$APPDATA/.homura-native-references.json.tmp"
+      ]
+    },
+    {
       "identifier": "opener:allow-open-url",
       "allow": [
         { "url": "https://*" },

@@ -36,6 +36,10 @@ import {
   stageNativeImportPath,
   stageNativeImportUri
 } from './nativeImport.ts';
+import { openNativeReferenceSource, readNativeReferenceFile } from './nativeReference.ts';
+import { parseRangeBook } from './rangeBook.ts';
+import { applyManagedNovel } from './managedBook.ts';
+import { loadSmartArchive } from './smartStorageRuntime.ts';
 
 const nowMs = typeof performance !== 'undefined' && typeof performance.now === 'function'
   ? () => performance.now()
@@ -86,9 +90,20 @@ export async function stageNativeFileSource(bookId: string, file: File & { custo
 
 // 系统选择器给出真实路径或 Android content:// URI 时，由原生侧直接复制，
 // 不再把整本书先读成 WebView Blob。
-export async function stageNativePathSource(bookId: string, file: { nativePath?: string; name: string; lastModified?: number }) {
+export async function stageNativePathSource(bookId: string, file: { nativePath?: string; nativeReference?: string; name: string; size?: number; lastModified?: number }) {
   if (!canUseNativeStorage()) throw new Error('原生存档不可用');
   const nativePath = file.nativePath as string;
+  if (file.nativeReference) {
+    return {
+      kind: 'file',
+      name: file.name,
+      size: file.size,
+      lastModified: file.lastModified,
+      nativePath,
+      nativeReference: file.nativeReference,
+      preStaged: false
+    };
+  }
   const staged = isAndroidContentUri(nativePath)
     ? await stageNativeImportUri(bookId, nativePath, file.name)
     : await stageNativeImportPath(bookId, nativePath);
@@ -112,6 +127,28 @@ export function makeFolderSource(folderName: string, files: Array<File & { custo
       size: f.size,
       lastModified: f.lastModified || Date.now(),
       blob: f
+    }))
+  };
+}
+
+export async function buildReferencedImageBook(id: string, source: BookSource, cover = false): Promise<Book> {
+  const entries = source.entries || [];
+  const first = entries[0];
+  if (!first?.nativeReference || !entries.every(entry => entry.nativeReference)) {
+    throw new Error('图片文件夹引用不完整');
+  }
+  const coverBlob = cover ? await readNativeReferenceFile(first.nativeReference, first) : null;
+  if (!cover) await openNativeReferenceSource(first.nativeReference, first);
+  return {
+    id,
+    title: source.name,
+    type: 'manga',
+    format: 'images',
+    cover: coverBlob ? URL.createObjectURL(coverBlob) : null,
+    coverBlob,
+    pageCount: entries.length,
+    pageItems: entries.map(entry => ({
+      zipEntry: { async: () => readNativeReferenceFile(entry.nativeReference!, entry) }
     }))
   };
 }
@@ -165,6 +202,7 @@ async function stageBlob(path: unknown, blob: Blob) {
 // EPUB / CBZ 已在导入前预存到 AppData，上面会直接复用，不重复复制。
 async function stageSource(bookId: string, source: StoredSource) {
   if (source.kind === 'webdav') return normalizeRemoteBookSource(source);
+  if (source.nativeReference || source.kind === 'managed') return source;
   // 桌面端句柄是零拷贝引用，跨重启可用；Android 的 content:// 句柄不可靠。
   if (source.preStaged && source.nativePath) {
     const { preStaged, ...staged } = source;
@@ -314,7 +352,9 @@ export async function persistBook(book: BookLike, source: StoredSource, options:
     }
     const coverThumb = await coverThumbTask;
     if (coverThumb) meta.coverBlob = coverThumb as Blob;
-    await HomuraStore.saveBook(meta, Object.assign({ id: book.id }, staged) as unknown as BookSource, { timing });
+    await HomuraStore.saveBook(meta, {
+      ...staged, id: book.id, ...(source.managedStorageVersion ? { managedStorageVersion: source.managedStorageVersion } : {})
+    } as BookSource, { timing });
     return { persistence };
   } catch (err) {
     // 元数据没有提交成功时，OPFS / AppData 里已暂存的文件都属于失败导入，必须一并回收。
@@ -356,7 +396,9 @@ export async function persistBooks(items: Array<{ book: BookLike; source: Stored
       entries.push({
         book,
         meta,
-        source: Object.assign({ id: book.id }, staged) as BookSource,
+        source: {
+          ...staged, id: book.id, ...(source.managedStorageVersion ? { managedStorageVersion: source.managedStorageVersion } : {})
+        } as BookSource,
         preStaged: !!source?.preStaged
       });
     } catch (err) {
@@ -467,7 +509,9 @@ async function resolveStoredFile(source: StoredSource, displayName: string) {
   const failures: Array<{ kind: string; path?: string; error: unknown }> = [];
   if (source.nativePath) {
     try {
-      const stored = await getNativeFile(source.nativePath);
+      const stored = source.nativeReference
+        ? await readNativeReferenceFile(source.nativeReference, source)
+        : await getNativeFile(source.nativePath);
       if (typeof source.size === 'number' && stored.size !== source.size) {
         throw new Error(`原生存档文件大小不一致：${stored.size} / ${source.size}`);
       }
@@ -636,6 +680,24 @@ export async function hydrateBook(book: BookLike) {
     return false;
   }
 
+  if (source.kind === 'managed') {
+    applyManagedNovel(book, source.managedArchive);
+    return true;
+  }
+
+  if (source.nativeReference) {
+    try {
+      const archive = await loadSmartArchive(book.id, source);
+      if (archive) {
+        applyManagedNovel(book, archive);
+        book.openedFromSmartArchive = true;
+        return true;
+      }
+    } catch (err) {
+      console.warn('[HOMURA] 智能存档读取失败，尝试原文件', err);
+    }
+  }
+
   if (source.kind === 'webdav') {
     const remote = normalizeRemoteBookSource(source);
     const config = await resolveRemoteBookConfig(remote);
@@ -659,7 +721,9 @@ export async function hydrateBook(book: BookLike) {
   }
 
   let parsed: Book | null = null;
-  if (source.kind === 'folder') {
+  if (source.kind === 'folder' && source.entries?.some(entry => entry.nativeReference)) {
+    parsed = await buildReferencedImageBook(book.id, source);
+  } else if (source.kind === 'folder') {
     const { files, failures } = await resolveFolderFiles(source);
     logSourceFailures(book.id, failures);
     if (files.length === 0) {
@@ -672,8 +736,16 @@ export async function hydrateBook(book: BookLike) {
     const groups = buildImageFolderBooks(files);
     parsed = groups.length > 0 ? (groups[0].book as unknown as Book) : null;
   } else {
+    if (source.nativeReference) {
+      const input = await openNativeReferenceSource(source.nativeReference, source);
+      const sourceName = source.name || '';
+      if (/\.pdf$/i.test(sourceName) || ((isAndroid || !canUseNativeArchive()) && /\.(epub|cbz|zip)$/i.test(sourceName))) {
+        parsed = await parseRangeBook(input, sourceName, book.id);
+        if (!parsed) return false;
+      }
+    }
     // 原生 EPUB / CBZ 不需要把整个原文件读回 JS；允许恢复的失败才回退 Blob 解析。
-    if (source.nativePath && canUseNativeArchive()) {
+    if (!parsed && source.nativePath && canUseNativeArchive()) {
       if (/\.epub$/i.test(source.name || '')) {
         if (isNativeMangaManifestValid(source.nativePageManifest)) {
           try {
@@ -791,6 +863,7 @@ export async function hydrateBook(book: BookLike) {
   };
   book.type = parsed.type;
   book.format = parsed.format;
+  book.epubFixedLayout = parsed.epubFixedLayout;
   book.pageCount = parsed.pageCount;
   book.pageItems = parsed.pageItems;
   book.readingDirection = (parsed.readingDirection || undefined) as string | undefined;

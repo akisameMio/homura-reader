@@ -18,6 +18,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager, State};
 
+use crate::native_reference;
+
 const SOURCE_ROOT: &str = "homura-native-sources";
 const CACHE_ROOT: &str = "homura-native-pages";
 const MAX_ENTRIES: usize = 20_000;
@@ -632,6 +634,9 @@ fn resolve_archive_path(data_root: &Path, raw_path: &str) -> Result<PathBuf, Str
 }
 
 fn resolve_archive_file(app: &AppHandle, raw_path: &str) -> Result<PathBuf, String> {
+    if let Some(reference_path) = native_reference::resolve_archive_spec(app, raw_path)? {
+        return Ok(reference_path);
+    }
     let data_root = app
         .path()
         .app_data_dir()

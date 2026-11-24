@@ -38,6 +38,7 @@
         <div class="rlp-err-icon" aria-hidden="true">!</div>
         <p class="rlp-err-msg">{{ message }}</p>
         <button type="button" class="rlp-retry md-hit-target" @click="$emit('retry')">{{ t('重新加载') }}</button>
+        <button v-if="canRelink" type="button" class="rlp-back md-hit-target" @click="$emit('relink')">{{ t('重新定位原文件') }}</button>
         <button type="button" class="rlp-back font-mono" @click="$emit('cancel')">{{ t('返回书架') }}</button>
       </template>
     </div>
@@ -59,10 +60,11 @@ const props = defineProps({
   phase: { type: String as PropType<'loading' | 'error'>, default: 'loading' },
   title: { type: String, default: '' },
   cover: { type: String, default: '' },
+  canRelink: { type: Boolean, default: false },
   message: { type: String, default: '无法加载这本书，请重试。' }
 });
 
-defineEmits(['retry', 'cancel']);
+defineEmits(['retry', 'cancel', 'relink']);
 
 const STEPS = ['正在解析内容…', '构建分页…', '校准排版…'];
 const step = ref(0);

@@ -19,6 +19,9 @@ import { prepareBookCover } from '../services/bookCover.ts';
 import { createCoverThumbnail } from '../services/coverThumb.ts';
 import { normalizeRemoteBookSource, remoteBookId } from '../services/remoteBookSource.ts';
 import { runShelfMutation } from '../services/mutationQueue.ts';
+import { releaseUnusedReferences } from '../services/bookStorage.ts';
+import { nativeReferencesOf } from '../services/nativeReference.ts';
+import { forgetSmartReading } from '../services/smartStorageRuntime.ts';
 import type { Book, BookSource, Collection, ImportEntry, ReadingProgress } from '../types.ts';
 
 export const useShelfStore = defineStore('shelf', () => {
@@ -182,7 +185,11 @@ export const useShelfStore = defineStore('shelf', () => {
 
   async function removeBook(id: string) {
     try {
-      await HomuraStore.deleteBook(id);
+      await runShelfMutation(async () => {
+        const previous = await HomuraStore.getSource(id).catch(() => null) as BookSource | null;
+        await HomuraStore.deleteBook(id);
+        await Promise.allSettled([forgetSmartReading(id), releaseUnusedReferences(nativeReferencesOf(previous))]);
+      });
     } catch (err) {
       error.value = (err as Error).message || t('移除书本失败，请重试');
       console.error('[HOMURA] 移除书本失败', err);
@@ -207,7 +214,9 @@ export const useShelfStore = defineStore('shelf', () => {
     return runShelfMutation(async () => {
       // 清空与导入共用互斥队列；清空完成后才允许下一批文件写入存储。
       await collectionQueue.catch(() => {});
+      const tokens = await HomuraStore.listNativeReferences().catch(() => new Set<string>());
       await HomuraStore.clear();
+      await Promise.allSettled([forgetSmartReading(), releaseUnusedReferences(tokens)]);
       library.value = [];
       progressMap.value = {};
       collections.value = [];

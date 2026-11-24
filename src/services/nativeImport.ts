@@ -230,7 +230,8 @@ export async function pickNativeUriImportFiles({ multiple = true } = {}) {
   let paths = null;
   try {
     const result = await invokeNativeCommand('android-archive', 'pickImportUris', {
-      multiple
+      multiple,
+      persistReadAccess: false
     }, {
       feature: 'native-import-dialog'
     });

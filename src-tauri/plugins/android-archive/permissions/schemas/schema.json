@@ -343,6 +343,18 @@
           "markdownDescription": "Denies the extract command without any pre-configured scope."
         },
         {
+          "description": "Enables the hashReference command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-hashReference",
+          "markdownDescription": "Enables the hashReference command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the hashReference command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-hashReference",
+          "markdownDescription": "Denies the hashReference command without any pre-configured scope."
+        },
+        {
           "description": "Enables the inspectImportUris command without any pre-configured scope.",
           "type": "string",
           "const": "allow-inspectImportUris",
@@ -379,6 +391,18 @@
           "markdownDescription": "Denies the openDocument command without any pre-configured scope."
         },
         {
+          "description": "Enables the openReferenceArchive command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-openReferenceArchive",
+          "markdownDescription": "Enables the openReferenceArchive command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the openReferenceArchive command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-openReferenceArchive",
+          "markdownDescription": "Denies the openReferenceArchive command without any pre-configured scope."
+        },
+        {
           "description": "Enables the pickImportFolder command without any pre-configured scope.",
           "type": "string",
           "const": "allow-pickImportFolder",
@@ -403,6 +427,18 @@
           "markdownDescription": "Denies the pickImportUris command without any pre-configured scope."
         },
         {
+          "description": "Enables the readReference command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-readReference",
+          "markdownDescription": "Enables the readReference command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the readReference command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-readReference",
+          "markdownDescription": "Denies the readReference command without any pre-configured scope."
+        },
+        {
           "description": "Enables the readTextBatch command without any pre-configured scope.",
           "type": "string",
           "const": "allow-readTextBatch",
@@ -413,6 +449,30 @@
           "type": "string",
           "const": "deny-readTextBatch",
           "markdownDescription": "Denies the readTextBatch command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the releaseReference command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-releaseReference",
+          "markdownDescription": "Enables the releaseReference command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the releaseReference command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-releaseReference",
+          "markdownDescription": "Denies the releaseReference command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the resolveReference command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-resolveReference",
+          "markdownDescription": "Enables the resolveReference command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the resolveReference command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-resolveReference",
+          "markdownDescription": "Denies the resolveReference command without any pre-configured scope."
         },
         {
           "description": "Enables the stageImportUri command without any pre-configured scope.",
@@ -427,10 +487,10 @@
           "markdownDescription": "Denies the stageImportUri command without any pre-configured scope."
         },
         {
-          "description": "Allows HOMURA to read CBZ/ZIP pages and EPUB document entries through the Android archive cache.\n#### This default permission set includes:\n\n- `allow-open`\n- `allow-openDocument`\n- `allow-readTextBatch`\n- `allow-extract`\n- `allow-close`\n- `allow-clearBook`\n- `allow-clearAll`\n- `allow-inspectImportUris`\n- `allow-pickImportUris`\n- `allow-pickImportFolder`\n- `allow-stageImportUri`",
+          "description": "Allows HOMURA to read CBZ/ZIP pages and EPUB document entries through the Android archive cache.\n#### This default permission set includes:\n\n- `allow-open`\n- `allow-openDocument`\n- `allow-readTextBatch`\n- `allow-extract`\n- `allow-close`\n- `allow-clearBook`\n- `allow-clearAll`\n- `allow-inspectImportUris`\n- `allow-pickImportUris`\n- `allow-pickImportFolder`\n- `allow-stageImportUri`\n- `allow-resolveReference`\n- `allow-readReference`\n- `allow-hashReference`\n- `allow-openReferenceArchive`\n- `allow-releaseReference`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Allows HOMURA to read CBZ/ZIP pages and EPUB document entries through the Android archive cache.\n#### This default permission set includes:\n\n- `allow-open`\n- `allow-openDocument`\n- `allow-readTextBatch`\n- `allow-extract`\n- `allow-close`\n- `allow-clearBook`\n- `allow-clearAll`\n- `allow-inspectImportUris`\n- `allow-pickImportUris`\n- `allow-pickImportFolder`\n- `allow-stageImportUri`"
+          "markdownDescription": "Allows HOMURA to read CBZ/ZIP pages and EPUB document entries through the Android archive cache.\n#### This default permission set includes:\n\n- `allow-open`\n- `allow-openDocument`\n- `allow-readTextBatch`\n- `allow-extract`\n- `allow-close`\n- `allow-clearBook`\n- `allow-clearAll`\n- `allow-inspectImportUris`\n- `allow-pickImportUris`\n- `allow-pickImportFolder`\n- `allow-stageImportUri`\n- `allow-resolveReference`\n- `allow-readReference`\n- `allow-hashReference`\n- `allow-openReferenceArchive`\n- `allow-releaseReference`"
         }
       ]
     }

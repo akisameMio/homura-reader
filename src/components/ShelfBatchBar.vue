@@ -7,6 +7,7 @@
       </span>
       <button class="md-library-text-button batch-action-button" @click="$emit('select-all')">{{ allSelected ? t('取消全选') : t('全选') }}</button>
       <button class="md-library-text-button batch-action-button" :disabled="moveDisabled" @click="$emit('move')">{{ t(moveLabel) }}</button>
+      <button v-if="canManageStorage" class="md-library-text-button batch-action-button" @click="$emit('manage-storage')">{{ t('存储') }}</button>
       <button class="md-library-text-button batch-action-button" :class="{ 'batch-delete-button': dangerDelete }" :disabled="deleteDisabled" @click="$emit('delete')">{{ t(deleteLabel) }}</button>
     </div>
     <button
@@ -34,10 +35,11 @@ defineProps({
   moveDisabled: { type: Boolean, default: false },
   deleteLabel: { type: String, required: true },
   deleteDisabled: { type: Boolean, default: false },
+  canManageStorage: { type: Boolean, default: false },
   dangerDelete: { type: Boolean, default: false }
 });
 
-defineEmits(['select-all', 'move', 'delete', 'cancel']);
+defineEmits(['select-all', 'move', 'delete', 'cancel', 'manage-storage']);
 </script>
 
 <style scoped>

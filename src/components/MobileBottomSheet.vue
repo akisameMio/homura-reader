@@ -29,8 +29,10 @@
             :title="title"
             :title-id="titleId"
             :close-label="t(closeLabel)"
+            :back-label="backLabel"
             :close-disabled="busy"
             @close="requestClose"
+            @back="emit('back')"
             @drag-start="onDragStart"
             @drag-move="onDragMove"
             @drag-end="onDragEnd"
@@ -38,7 +40,7 @@
           >
             <template #status><slot name="status" /></template>
           </ReaderDrawerHeader>
-          <div class="md-mobile-sheet-body"><slot /></div>
+          <div :key="resizePage" class="md-mobile-sheet-body" :class="{ 'md-drawer-tab-panel': resizePage }"><slot /></div>
           <footer v-if="$slots.footer" class="md-mobile-sheet-footer"><slot name="footer" /></footer>
         </section>
       </Transition>
@@ -51,6 +53,7 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue
 import { useViewport } from '../composables/useViewport.ts';
 import { useSheetDrag } from '../composables/useSheetDrag.ts';
 import { useSheetSpring } from '../composables/useSheetSpring.ts';
+import { usePanelResizeTransition } from '../composables/usePanelResizeTransition.ts';
 import { lockSettingsSelectScroll as lockBackgroundScroll } from '../services/settingsSelectScrollLock.ts';
 import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
 import { useI18n } from '../composables/useI18n.ts';
@@ -63,14 +66,16 @@ const props = defineProps({
   titleId: { type: String, required: true },
   descriptionId: { type: String, default: '' },
   closeLabel: { type: String, default: '关闭面板' },
+  backLabel: { type: String, default: '' },
   backdropDismissible: { type: Boolean, default: true },
   scrimCloseable: { type: Boolean, default: false },
   draggable: { type: Boolean, default: true },
   busy: { type: Boolean, default: false },
   desktopSide: { type: Boolean, default: false },
-  keyboardAnchored: { type: Boolean, default: false }
+  keyboardAnchored: { type: Boolean, default: false },
+  resizePage: { type: String, default: undefined }
 });
-const emit = defineEmits(['close', 'cancel', 'opened', 'closed']);
+const emit = defineEmits(['close', 'back', 'cancel', 'opened', 'closed']);
 const dialogRef = shallowRef<HTMLDialogElement | null>(null);
 const visible = ref(false);
 const viewport = useViewport();
@@ -78,11 +83,26 @@ const compact = computed(() => !props.desktopSide || viewport.isCompact.value);
 const dragEnabled = computed(() => compact.value && props.draggable && !props.busy);
 const isOpen = computed(() => props.open);
 const spring = useSheetSpring({ isCompact: compact });
-const { sheetRef, onDragStart, onDragMove, onDragEnd, onDragCancel } = useSheetDrag({
+const { sheetRef, onDragStart, onDragMove, onDragEnd, onDragCancel, resetMotion } = useSheetDrag({
   isCompact: dragEnabled,
   isOpen,
   onClose: requestClose,
-  onDragBegin: spring.cancel
+  onDragBegin: () => {
+    cancelResize();
+    spring.cancel();
+  }
+});
+const { cancelResize } = usePanelResizeTransition(sheetRef, () => props.open ? props.resizePage : undefined, () => {
+  spring.cancel();
+  resetMotion();
+});
+watch(() => props.resizePage, async (page, previous) => {
+  if (!page || !previous) return;
+  await nextTick();
+  const sheet = sheetRef.value;
+  if (sheet && props.open && !sheet.contains(document.activeElement)) {
+    sheet.querySelector<HTMLButtonElement>('.md-drawer-header button')?.focus({ preventScroll: true });
+  }
 });
 let revision = 0;
 let disposed = false;
@@ -90,6 +110,7 @@ let unlockScroll: (() => void) | null = null;
 let trigger: HTMLElement | null = null;
 let entered = false;
 let anchoredViewportHeight = 0;
+let anchoredViewportWidth = 0;
 let backdropPointerDown = false;
 
 function onBeforeEnter(element: Element) {
@@ -163,7 +184,8 @@ function syncViewport() {
   const viewport = window.visualViewport;
   if (!dialog) return;
   if (props.keyboardAnchored) {
-    if (!anchoredViewportHeight) {
+    if (!anchoredViewportHeight || anchoredViewportWidth !== window.innerWidth) {
+      anchoredViewportWidth = window.innerWidth;
       anchoredViewportHeight = Math.round(viewport?.height || window.innerHeight);
       dialog.style.height = `${anchoredViewportHeight}px`;
       dialog.style.top = `${Math.round(viewport?.offsetTop || 0)}px`;
@@ -177,6 +199,12 @@ function syncViewport() {
   dialog.style.top = `${viewport.offsetTop}px`;
   dialog.style.setProperty('--md-sheet-viewport-height', `${viewport.height}px`);
 }
+
+watch(() => props.keyboardAnchored, () => {
+  if (!props.open || !dialogRef.value?.open) return;
+  anchoredViewportHeight = 0;
+  syncViewport();
+});
 
 watch(isOpen, async open => {
   const current = ++revision;
@@ -197,10 +225,8 @@ watch(isOpen, async open => {
     anchoredViewportHeight = 0;
     dialog.showModal();
     syncViewport();
-    if (!props.keyboardAnchored) {
-      window.visualViewport?.addEventListener('resize', syncViewport);
-      window.visualViewport?.addEventListener('scroll', syncViewport);
-    }
+    window.visualViewport?.addEventListener('resize', syncViewport);
+    window.visualViewport?.addEventListener('scroll', syncViewport);
   }
   visible.value = true;
   await nextTick();

@@ -36,10 +36,12 @@
           :delete-label="favoritesOnly ? t('取消收藏') : t('删除')"
           :delete-disabled="(!selectedIds.length && !selectedCollectionIds.length) || busy"
           :danger-delete="!favoritesOnly"
+          :can-manage-storage="canManageStorage"
           @select-all="selectAll"
           @move="moveSelected(null)"
           @delete="deleteSelected"
           @cancel="toggleSelection"
+          @manage-storage="emit('manage-storage', selectedIds[0])"
         />
       </Transition>
     </div>
@@ -55,10 +57,12 @@
         :delete-label="favoritesOnly ? t('取消收藏') : t('删除')"
         :delete-disabled="(!selectedIds.length && !selectedCollectionIds.length) || busy"
         :danger-delete="!favoritesOnly"
+        :can-manage-storage="canManageStorage"
         @select-all="selectAll"
         @move="chooseDestination"
         @delete="deleteSelected"
         @cancel="toggleSelection"
+        @manage-storage="emit('manage-storage', selectedIds[0])"
       />
     </div>
   </Transition>
@@ -92,6 +96,7 @@ import { useViewport } from '../composables/useViewport.ts';
 import { compareBookTitles, normalizeBookTitle } from '../services/bookTitles.ts';
 import { collectionPath } from '../services/collections.ts';
 import { groupShelfBooks } from '../services/shelfSections.ts';
+import { canUseNativeImport } from '../services/nativeImport.ts';
 import BookCard from './BookCard.vue';
 import ContinueReading from './ContinueReading.vue';
 import CollectionCard from './CollectionCard.vue';
@@ -103,7 +108,7 @@ import { useI18n } from '../composables/useI18n.ts';
 const { t } = useI18n();
 
 const props = defineProps({ books: { type: Array as PropType<Book[]>, default: () => [] }, sortKey: { type: String, default: 'title' }, query: { type: String, default: '' }, hasFilter: { type: Boolean, default: false }, homeRequest: { type: Number, default: 0 }, favoritesOnly: { type: Boolean, default: false }, importing: { type: Boolean, default: false }, pendingImportCount: { type: Number, default: 0 } });
-const emit = defineEmits(['open', 'browse']);
+const emit = defineEmits(['open', 'browse', 'manage-storage']);
 const shelf = useShelfStore();
 const { askShelfDialog } = useShelfDialogs();
 const { isTouch } = useViewport();
@@ -111,6 +116,8 @@ const selecting = ref(false);
 const selectedIds = ref<string[]>([]);
 const selectedCollectionIds = ref<string[]>([]);
 const busy = ref(false);
+const canManageStorage = computed(() => canUseNativeImport() && !busy.value && selectedIds.value.length === 1
+  && !selectedCollectionIds.value.length && shelf.library.some(book => book.id === selectedIds.value[0] && !book.remote));
 const currentCollection = computed(() => props.favoritesOnly ? null : shelf.collectionsById.get(shelf.activeCollectionId ?? '') ?? null);
 const backLabel = computed(() => currentCollection.value?.parentId ? t('返回上一级') : t('返回书架'));
 const showShelfHeaderRow = computed(() => !currentCollection.value && !selecting.value);
@@ -238,7 +245,7 @@ async function deleteSelected() {
   if ((!bookCount && !collectionCount) || busy.value) return;
   const removingFavorites = props.favoritesOnly;
   const changes: string[] = [];
-  if (bookCount) changes.push(t('删除选中的 {0} 本作品、原始文件与阅读记录', { 0: bookCount }));
+  if (bookCount) changes.push(t('删除选中的 {0} 本作品、应用内存档与阅读记录', { 0: bookCount }));
   if (collectionCount) {
     const hasChildren = shelf.collections.some(item => item.parentId && selectedCollectionIds.value.includes(item.parentId));
     changes.push(t(hasChildren ? '删除选中的 {0} 个书库（直接收录的作品移回主页，子书库提升一级）' : '删除选中的 {0} 个书库（书库内作品会移回主页）', { 0: collectionCount }));

@@ -701,6 +701,9 @@ async function parseEpubFull(archive: EpubArchive, pkg: EpubPackage, id: string)
     id,
     type: 'epub',
     format: 'epub',
+    epubFixedLayout: [...pkg.opfDoc.querySelectorAll('meta, spine > itemref')].some(node =>
+      (node.getAttribute('property') === 'rendition:layout' && node.textContent?.trim() === 'pre-paginated')
+        || (node.getAttribute('properties') || '').split(/\s+/).includes('rendition:layout-pre-paginated')),
     title: pkg.bookTitle,
     cover,
     coverBlob,

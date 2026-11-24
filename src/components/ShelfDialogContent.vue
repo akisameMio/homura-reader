@@ -142,7 +142,7 @@ const primaryAction = computed(() => {
   if (request.kind === 'confirm') {
     return {
       label: request.confirmLabel || t('确认'),
-      icon: isDestructive.value ? 'delete' : 'star',
+      icon: request.confirmIcon || (isDestructive.value ? 'delete' : 'star'),
       variant: isDestructive.value ? 'danger' : 'tonal',
       disabled: false
     };

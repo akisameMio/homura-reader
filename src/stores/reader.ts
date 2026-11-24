@@ -32,6 +32,10 @@ import { logRuntimeOperation } from '../services/runtimeLogs.ts';
 import { collectionReadingOrder, adjacentCollectionBook, spreadBounds } from '../services/collectionReading.ts';
 import { hasArchiveSource } from '../services/archiveAccess.ts';
 import { ensureNativeArchiveSession, releaseNativeArchiveSession } from '../services/nativeArchive.ts';
+import { scheduleSmartStorage } from '../services/smartStorageRuntime.ts';
+import { readSmartStorageConfig } from '../services/smartStorageSettings.ts';
+import { SMART_STORAGE_DEFAULTS } from '../services/smartStorage.ts';
+import { canStoreManagedNovel } from '../services/managedBook.ts';
 import type { Book, ReaderPage } from '../types.ts';
 
 /** 长篇小说增量分页任务对象（内部仅 reader store 使用） */
@@ -90,6 +94,64 @@ export const useReaderStore = defineStore('reader', () => {
   const webtoonBounds = shallowRef({ atStart: true, atEnd: false });
   let openRequestToken = 0;
   const currentIndex = ref(0);
+  let smartReading: {
+    book: Book;
+    openedAt: number;
+    activeSince: number | null;
+    activeMs: number;
+    startIndex: number;
+    progressed: boolean;
+    coldOpenMs?: number;
+    cachedOpenMs?: number;
+    sampleSent: boolean;
+    readingSent: boolean;
+  } | null = null;
+  let smartReadingTimer: number | undefined;
+
+  function updateSmartReadingTime() {
+    if (!smartReading) return;
+    const now = Date.now();
+    if (smartReading.activeSince !== null) smartReading.activeMs += now - smartReading.activeSince;
+    smartReading.activeSince = document.hidden ? null : now;
+  }
+
+  function reportSmartReading() {
+    if (!smartReading) return;
+    const { book, openedAt, activeMs, progressed, coldOpenMs, cachedOpenMs, sampleSent, readingSent } = smartReading;
+    const qualifies = progressed || activeMs >= SMART_STORAGE_DEFAULTS.minReadingSessionMs;
+    if ((sampleSent || (coldOpenMs === undefined && cachedOpenMs === undefined)) && (readingSent || !qualifies)) return;
+    smartReading.sampleSent = true;
+    smartReading.readingSent ||= qualifies;
+    scheduleSmartStorage(book, {
+      bookId: book.id,
+      openedAt,
+      closedAt: Date.now(),
+      activeMs,
+      progressed,
+      coldOpenMs: sampleSent ? undefined : coldOpenMs,
+      cachedOpenMs: sampleSent ? undefined : cachedOpenMs
+    });
+  }
+
+  function updateSmartReadingVisibility() {
+    if (!smartReading) return;
+    updateSmartReadingTime();
+    window.clearTimeout(smartReadingTimer);
+    reportSmartReading();
+    if (!document.hidden && !smartReading.readingSent) {
+      const remaining = Math.max(0, SMART_STORAGE_DEFAULTS.minReadingSessionMs - smartReading.activeMs);
+      smartReadingTimer = window.setTimeout(updateSmartReadingVisibility, remaining);
+    }
+  }
+
+  function finishSmartReading() {
+    if (!smartReading) return;
+    updateSmartReadingTime();
+    reportSmartReading();
+    window.clearTimeout(smartReadingTimer);
+    document.removeEventListener('visibilitychange', updateSmartReadingVisibility);
+    smartReading = null;
+  }
   // 「回到上次位置」：目录跳读前记下起点（锚点 + 页码），左下角出现 ↺ 页码 圆钮，
   // 点击回到跳读前的那一屏。锚点让字号 / 窗口重排后也能落回原章节位置。
   const previousLocation = shallowRef<{ index: number; anchor: { chapterIndex: number; ratio: number } | null; pageNumber: number } | null>(null);
@@ -222,6 +284,10 @@ export const useReaderStore = defineStore('reader', () => {
   }
 
   function touchProgress() {
+    if (smartReading && !smartReading.readingSent && currentIndex.value !== smartReading.startIndex) {
+      smartReading.progressed = true;
+      updateSmartReadingVisibility();
+    }
     const shelf = useShelfStore();
     scheduleProgressSave(progressSnapshot(), shelf);
   }
@@ -466,6 +532,8 @@ export const useReaderStore = defineStore('reader', () => {
     const book = remoteBook || shelf.library.find((b: Book) => b.id === id);
     if (!book) return false;
     const previousBook = currentBook.value;
+    const coldOpen = book.restored === true;
+    const startTime = performance.now();
     const token = ++openRequestToken;
     openingBook.value = true;
     openError.value = '';
@@ -531,6 +599,7 @@ export const useReaderStore = defineStore('reader', () => {
       readingCollectionId.value = collection?.id || null;
       collectionOrderIds.value = order;
       webtoonBounds.value = { atStart: currentIndex.value === 0, atEnd: false };
+      finishSmartReading();
       currentBook.value = book;
       previousLocation.value = null;
       activeNovelPaginationKey = pagePlan.key || '';
@@ -546,6 +615,23 @@ export const useReaderStore = defineStore('reader', () => {
         releaseRemoteBook(previousBook);
       }
       requestRender('none');
+      if (!book.remote && canStoreManagedNovel(book) && readSmartStorageConfig().enabled && typeof document !== 'undefined') {
+        const openedAt = Date.now();
+        smartReading = {
+          book,
+          openedAt,
+          activeSince: document.hidden ? null : openedAt,
+          activeMs: 0,
+          startIndex: currentIndex.value,
+          progressed: false,
+          sampleSent: false,
+          readingSent: false,
+          coldOpenMs: coldOpen && !book.openedFromSmartArchive ? performance.now() - startTime : undefined,
+          cachedOpenMs: coldOpen && book.openedFromSmartArchive ? performance.now() - startTime : undefined
+        };
+        document.addEventListener('visibilitychange', updateSmartReadingVisibility);
+        smartReadingTimer = window.setTimeout(updateSmartReadingVisibility, SMART_STORAGE_DEFAULTS.minReadingSessionMs);
+      }
       return true;
     } catch (err: unknown) {
       if (token === openRequestToken) {
@@ -575,6 +661,7 @@ export const useReaderStore = defineStore('reader', () => {
   }
 
   function closeReader() {
+    finishSmartReading();
     openRequestToken++;
     openingBook.value = false;
     openError.value = '';

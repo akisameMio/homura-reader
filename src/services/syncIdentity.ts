@@ -8,6 +8,7 @@
 import { getFile } from './opfs.ts';
 import { canUseNativeBridge, invokeNativeCommand, NativeErrorCode } from './nativeRuntime.ts';
 import type { BookSource } from '../types.ts';
+import { fingerprintNativeReference } from './nativeReference.ts';
 
 const BLOCK_READ_BYTES = 1024 * 1024;
 const ROUND_CONSTANTS = new Uint32Array([
@@ -108,6 +109,10 @@ async function nativeFingerprint(source: unknown) {
 }
 
 async function fileFingerprint(source: BookSource): Promise<string> {
+  if (source.nativeReference) return fingerprintNativeReference(source.nativeReference);
+  if (source.kind === 'managed' && /^sha256:[a-f0-9]{64}$/.test(source.contentFingerprint || '')) {
+    return source.contentFingerprint!;
+  }
   let lastError: unknown;
   if (source.nativePath && canUseNativeBridge()) {
     try {
@@ -148,7 +153,7 @@ export interface PreparedSyncIdentity {
 // AppData、OPFS 和 Blob 是应用管理的副本，可以继续复用内容指纹。
 export async function prepareSourceIdentity(source: BookSource): Promise<PreparedSyncIdentity> {
   if (source.kind === 'folder') {
-    if (!source.entries?.some(entry => !!entry.handle)) {
+    if (!source.entries?.some(entry => !!entry.handle || !!entry.nativeReference)) {
       return { source, signature: null };
     }
     if (source.entries.length > 20_000) throw new Error('图片文件夹条目无效或过多');
@@ -159,6 +164,14 @@ export async function prepareSourceIdentity(source: BookSource): Promise<Prepare
     return {
       source: { ...source, entries: prepared.map(entry => entry.source) },
       signature: `folder:v1:${JSON.stringify(manifest)}`
+    };
+  }
+  if (source.nativeReference) {
+    const fingerprint = await fingerprintNativeReference(source.nativeReference);
+    if (source.contentFingerprint && fingerprint !== source.contentFingerprint) throw new Error('原文件内容已变更');
+    return {
+      source: { kind: 'managed', name: source.name, path: source.path, contentFingerprint: fingerprint },
+      signature: fingerprint
     };
   }
   if (!source.handle) return { source, signature: null };
@@ -189,7 +202,7 @@ export async function fingerprintSource(source: BookSource): Promise<string> {
   if (!Array.isArray(entries) || !entries.length || entries.length > 20_000) throw new Error('图片文件夹条目无效或过多');
   const paths = entries.map(entry => relativePath(source, entry));
   if (new Set(paths).size !== paths.length) throw new Error('图片文件夹包含重复路径');
-  if (entries.every(entry => !!entry.nativePath) && canUseNativeBridge()) {
+  if (entries.every(entry => !!entry.nativePath && !entry.nativeReference) && canUseNativeBridge()) {
     try {
       return await nativeFingerprint({ kind: 'folder', entries: entries.map((entry, index) => ({ relativePath: paths[index], nativePath: entry.nativePath })) });
     } catch (error) {
