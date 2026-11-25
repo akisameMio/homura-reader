@@ -112,7 +112,7 @@ watch(() => [props.visible, props.reveal, props.phase] as const, ([visible, reve
   } else if (shown.value && reveal && !prefersReducedMotion()) {
     leaving.value = true;
     // 动画事件不可用时也能结束揭幕。
-    revealTimer = window.setTimeout(finishReveal, 360);
+    revealTimer = window.setTimeout(finishReveal, 390);
   } else if (shown.value) {
     hide();
     if (reveal) emit('revealed');
@@ -237,7 +237,7 @@ onBeforeUnmount(() => {
   animation: rlp-meta-out 68ms var(--rlp-ease) 32ms both;
 }
 .rlp-root.is-leaving .rlp-surface {
-  animation: rlp-reveal 240ms var(--rlp-ease) 80ms both;
+  animation: rlp-reveal 270ms cubic-bezier(0.22, 0.72, 0.36, 1) 80ms both;
 }
 @keyframes rlp-cover-out {
   to { opacity: 0; }

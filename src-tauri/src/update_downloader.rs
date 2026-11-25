@@ -19,8 +19,14 @@ use webpki_root_certs::TLS_SERVER_ROOT_CERTS;
 const DOWNLOAD_DIR: &str = "updates";
 const DOWNLOAD_ID_MAX_LEN: usize = 80;
 const FILE_NAME_MAX_LEN: usize = 160;
+const TAG_MAX_LEN: usize = 64;
 const EMIT_INTERVAL: Duration = Duration::from_millis(100);
 const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+const METADATA_TIMEOUT: Duration = Duration::from_secs(15);
+const METADATA_MAX_BYTES: usize = 2 * 1024 * 1024;
+const RELEASE_FEED_URL: &str = "https://github.com/Leon-Ning-san/HomuraReader/releases.atom";
+const RELEASE_ASSETS_BASE_URL: &str =
+    "https://github.com/Leon-Ning-san/HomuraReader/releases/expanded_assets/";
 const ALLOWED_EXTENSIONS: &[&str] = &["apk", "dmg", "exe", "msi", "deb", "rpm", "appimage"];
 
 #[derive(Default)]
@@ -116,6 +122,58 @@ fn validate_asset_url(value: &str) -> Result<Url, DownloadCommandError> {
             "拒绝下载非 HOMURA Release 文件。",
         ))
     }
+}
+
+fn validate_release_tag(tag: &str) -> Result<String, DownloadCommandError> {
+    let trimmed = tag.trim();
+    let valid = !trimmed.is_empty()
+        && trimmed.len() <= TAG_MAX_LEN
+        && !trimmed.contains("..")
+        && trimmed
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_'));
+    if valid {
+        Ok(trimmed.to_string())
+    } else {
+        Err(command_error("INVALID_TAG", "Release 版本标签无效。"))
+    }
+}
+
+fn build_http_client(
+    total_timeout: Duration,
+    proxy_url: Option<&str>,
+) -> Result<Client, DownloadCommandError> {
+    let client_builder = Client::builder()
+        .connect_timeout(Duration::from_secs(20))
+        .read_timeout(IDLE_TIMEOUT)
+        .timeout(total_timeout)
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .user_agent(format!("HOMURA/{}", env!("CARGO_PKG_VERSION")));
+    #[cfg(target_os = "android")]
+    let client_builder = match proxy_url {
+        Some(proxy_url) => client_builder.proxy(
+            reqwest::Proxy::all(proxy_url)
+                .map_err(|error| command_error("NETWORK", error.to_string()))?,
+        ),
+        None => client_builder,
+    };
+    #[cfg(not(target_os = "android"))]
+    let _ = proxy_url;
+    // Android 的 rustls 平台校验器需要先经 JNI 初始化，否则请求线程会直接 panic。
+    // 更新源固定为 GitHub HTTPS，这里改用随包分发的 Mozilla 根证书。
+    #[cfg(target_os = "android")]
+    let client_builder = client_builder.tls_certs_only(
+        TLS_SERVER_ROOT_CERTS
+            .iter()
+            .map(|certificate| reqwest::Certificate::from_der(certificate.as_ref()))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| command_error("NETWORK", error.to_string()))?,
+    );
+    #[cfg(test)]
+    let client_builder = client_builder.no_proxy();
+    client_builder
+        .build()
+        .map_err(|error| command_error("NETWORK", error.to_string()))
 }
 
 fn updates_dir(app: &AppHandle) -> Result<PathBuf, DownloadCommandError> {
@@ -216,37 +274,7 @@ where
     let partial = dir.join(format!("{file_name}.part"));
     let _ = tokio::fs::remove_file(&partial).await;
 
-    let client_builder = Client::builder()
-        .connect_timeout(Duration::from_secs(20))
-        .read_timeout(IDLE_TIMEOUT)
-        .timeout(Duration::from_secs(30 * 60))
-        .redirect(reqwest::redirect::Policy::limited(10))
-        .user_agent(format!("HOMURA/{}", env!("CARGO_PKG_VERSION")));
-    #[cfg(target_os = "android")]
-    let client_builder = match proxy_url.as_deref() {
-        Some(proxy_url) => client_builder.proxy(
-            reqwest::Proxy::all(proxy_url)
-                .map_err(|error| command_error("NETWORK", error.to_string()))?,
-        ),
-        None => client_builder,
-    };
-    #[cfg(not(target_os = "android"))]
-    let _ = proxy_url;
-    // Android 的 rustls 平台校验器需要先经 JNI 初始化，否则请求线程会直接 panic。
-    // 更新源固定为 GitHub HTTPS，这里改用随包分发的 Mozilla 根证书。
-    #[cfg(target_os = "android")]
-    let client_builder = client_builder.tls_certs_only(
-        TLS_SERVER_ROOT_CERTS
-            .iter()
-            .map(|certificate| reqwest::Certificate::from_der(certificate.as_ref()))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| command_error("NETWORK", error.to_string()))?,
-    );
-    #[cfg(test)]
-    let client_builder = client_builder.no_proxy();
-    let client = client_builder
-        .build()
-        .map_err(|error| command_error("NETWORK", error.to_string()))?;
+    let client = build_http_client(Duration::from_secs(30 * 60), proxy_url.as_deref())?;
 
     let mut response = client
         .get(url)
@@ -462,6 +490,88 @@ pub fn open_update_file(
         .map_err(|error| command_error("INSTALL_FAILED", error.to_string()))
 }
 
+async fn fetch_github_text(
+    url: Url,
+    accept: &str,
+    xhr: bool,
+    proxy_url: Option<String>,
+) -> Result<String, DownloadCommandError> {
+    let client = build_http_client(METADATA_TIMEOUT, proxy_url.as_deref())?;
+    let mut request = client.get(url).header(ACCEPT, accept);
+    if xhr {
+        request = request.header("X-Requested-With", "XMLHttpRequest");
+    }
+
+    let mut response = request
+        .send()
+        .await
+        .map_err(|error| command_error("NETWORK", error.to_string()))?;
+
+    let status = response.status();
+    if status.as_u16() == 429 {
+        return Err(command_error("RATE_LIMIT", "GitHub 暂时限制了更新查询，请稍后再试。"));
+    }
+    if !status.is_success() {
+        return Err(command_error(
+            "HTTP_ERROR",
+            format!("GitHub 返回了 {}。", status.as_u16()),
+        ));
+    }
+
+    let mut buffer = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| command_error("NETWORK", error.to_string()))?
+    {
+        if buffer.len().saturating_add(chunk.len()) > METADATA_MAX_BYTES {
+            return Err(command_error("HTTP_ERROR", "GitHub 返回的发布数据过大。"));
+        }
+        buffer.extend_from_slice(&chunk);
+    }
+
+    String::from_utf8(buffer)
+        .map_err(|_| command_error("HTTP_ERROR", "GitHub 返回了无法识别的编码内容。"))
+}
+
+#[tauri::command]
+pub async fn fetch_release_feed(app: AppHandle) -> Result<String, DownloadCommandError> {
+    let url = Url::parse(RELEASE_FEED_URL)
+        .map_err(|_| command_error("INVALID_URL", "Release 订阅地址无效。"))?;
+    #[cfg(target_os = "android")]
+    let proxy_url = android_system_proxy(&app);
+    #[cfg(not(target_os = "android"))]
+    let proxy_url = {
+        let _ = &app;
+        None
+    };
+    fetch_github_text(
+        url,
+        "application/atom+xml, application/xml, text/xml",
+        false,
+        proxy_url,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn fetch_release_assets(
+    app: AppHandle,
+    tag: String,
+) -> Result<String, DownloadCommandError> {
+    let tag = validate_release_tag(&tag)?;
+    let url = Url::parse(&format!("{RELEASE_ASSETS_BASE_URL}{tag}"))
+        .map_err(|_| command_error("INVALID_URL", "Release 安装包列表地址无效。"))?;
+    #[cfg(target_os = "android")]
+    let proxy_url = android_system_proxy(&app);
+    #[cfg(not(target_os = "android"))]
+    let proxy_url = {
+        let _ = &app;
+        None
+    };
+    fetch_github_text(url, "text/html, application/xhtml+xml", true, proxy_url).await
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -530,5 +640,50 @@ mod tests {
             Some(expected_len as u64)
         );
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn validates_release_tag_safely() {
+        assert_eq!(validate_release_tag("v2.3.3").unwrap(), "v2.3.3");
+        assert_eq!(validate_release_tag(" 2.3.3-rc_1 ").unwrap(), "2.3.3-rc_1");
+        assert!(validate_release_tag("").is_err());
+        assert!(validate_release_tag("../v2.3.3").is_err());
+        assert!(validate_release_tag("v2.3.3/extra").is_err());
+        assert!(validate_release_tag("v2.3.3?foo=bar").is_err());
+    }
+
+    #[test]
+    fn fetches_release_feed_text_from_http() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let xml = "<?xml version=\"1.0\"?><feed><title>HOMURA</title></feed>";
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            while reader.read_line(&mut line).unwrap() > 0 {
+                if line == "\r\n" {
+                    break;
+                }
+                line.clear();
+            }
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                xml.len(),
+                xml
+            )
+            .unwrap();
+        });
+
+        let result = tauri::async_runtime::block_on(fetch_github_text(
+            Url::parse(&format!("http://{address}/releases.atom")).unwrap(),
+            "application/atom+xml",
+            false,
+            None,
+        ))
+        .unwrap();
+        server.join().unwrap();
+        assert_eq!(result, xml);
     }
 }

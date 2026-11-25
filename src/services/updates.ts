@@ -11,8 +11,10 @@ import type { Release } from '../types.ts';
 
 export const REPOSITORY_URL = 'https://github.com/Leon-Ning-san/HomuraReader';
 export const RELEASES_PAGE_URL = `${REPOSITORY_URL}/releases`;
+export const LICENSE_PAGE_URL = `${REPOSITORY_URL}/blob/main/LICENSE`;
 
 const RELEASES_API_URL = 'https://api.github.com/repos/Leon-Ning-san/HomuraReader/releases?per_page=10';
+const RELEASES_CACHE_KEY = 'homura_releases_cache_v1';
 const REQUEST_TIMEOUT = 12000;
 const CACHE_TTL = 5 * 60 * 1000;
 const RATE_LIMIT_RETRY_DELAY = 60 * 1000;
@@ -62,6 +64,7 @@ interface ParsedVersion {
 
 let cachedReleases: NormalizedRelease[] = [];
 let cachedAt = 0;
+let cachedEtag = '';
 let pendingRequest: Promise<NormalizedRelease[]> | null = null;
 let rateLimitUntil = 0;
 
@@ -408,45 +411,312 @@ async function checkRateLimit(response: Response) {
   throw updateError('RATE_LIMIT', 'GitHub API rate limit reached');
 }
 
-async function requestReleases(force: boolean) {
+type TauriInvoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
+
+function getTauriInvoke(): TauriInvoke | null {
+  if (typeof window === 'undefined') return null;
+  const bridge = window.__TAURI__;
+  if (!bridge || !bridge.core || typeof bridge.core.invoke !== 'function') return null;
+  return bridge.core.invoke as TauriInvoke;
+}
+
+interface PersistedReleasesCache {
+  cachedAt: number;
+  etag: string;
+  releases: NormalizedRelease[];
+}
+
+function readPersistedCache(): PersistedReleasesCache | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(RELEASES_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PersistedReleasesCache> | null;
+    if (!parsed || !Array.isArray(parsed.releases) || parsed.releases.length === 0) return null;
+    if (!Number.isFinite(parsed.cachedAt)) return null;
+    return {
+      cachedAt: Number(parsed.cachedAt),
+      etag: typeof parsed.etag === 'string' ? parsed.etag : '',
+      releases: parsed.releases
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writePersistedCache(releases: NormalizedRelease[], etag: string, timestamp: number) {
+  if (typeof localStorage === 'undefined' || releases.length === 0) return;
+  try {
+    localStorage.setItem(RELEASES_CACHE_KEY, JSON.stringify({
+      cachedAt: timestamp,
+      etag,
+      releases
+    }));
+  } catch {
+    // 忽略存储配额限制，保留内存缓存即可
+  }
+}
+
+function hydrateMemoryCacheFromStorage() {
+  if (cachedReleases.length > 0) return;
+  const persisted = readPersistedCache();
+  if (!persisted) return;
+  cachedReleases = persisted.releases;
+  cachedAt = persisted.cachedAt;
+  cachedEtag = persisted.etag;
+}
+
+export function resetReleasesCache({ preserveStorage = false } = {}) {
+  cachedReleases = [];
+  cachedAt = 0;
+  cachedEtag = '';
+  rateLimitUntil = 0;
+  if (!preserveStorage && typeof localStorage !== 'undefined') {
+    try {
+      localStorage.removeItem(RELEASES_CACHE_KEY);
+    } catch {
+      // 忽略清理异常
+    }
+  }
+}
+
+function decodeEntities(value: string) {
+  return value.replace(/&(#x[0-9a-fA-F]+|#\d+|lt|gt|amp|quot|apos|nbsp);/gi, (match, entity: string) => {
+    const lower = entity.toLowerCase();
+    if (lower === 'lt') return '<';
+    if (lower === 'gt') return '>';
+    if (lower === 'amp') return '&';
+    if (lower === 'quot') return '"';
+    if (lower === 'apos') return '\'';
+    if (lower === 'nbsp') return ' ';
+    if (lower.startsWith('#x')) {
+      const code = Number.parseInt(lower.slice(2), 16);
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+    }
+    if (lower.startsWith('#')) {
+      const code = Number.parseInt(lower.slice(1), 10);
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+    }
+    return match;
+  });
+}
+
+function atomHtmlToMarkdown(rawContent: string) {
+  // Atom <content type="html"> 把 HTML 实体编码了一层；先还原成 HTML 标签再转换成等价 Markdown 行。
+  const html = decodeEntities(rawContent).replace(/\r\n?/g, '\n');
+  const markdown = html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi, (_m, level: string, inner: string) => `\n${'#'.repeat(Number(level))} ${inner}\n`)
+    .replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, (_m, inner: string) => `\n- ${inner}\n`)
+    .replace(/<p\b[^>]*>([\s\S]*?)<\/p>/gi, (_m, inner: string) => `\n${inner}\n`)
+    .replace(/<[^>]+>/g, '');
+  return decodeEntities(markdown);
+}
+
+function readXmlTag(block: string, tagName: string) {
+  const match = block.match(new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'i'));
+  return match ? match[1].trim() : '';
+}
+
+function extractAtomLinkHref(entryXml: string) {
+  const linkTags = entryXml.match(/<link\b[^>]*>/gi) || [];
+  let fallbackHref = '';
+  for (const tag of linkTags) {
+    const hrefMatch = tag.match(/\bhref=(?:"([^"]+)"|'([^']+)')/i);
+    if (!hrefMatch) continue;
+    const href = decodeEntities(hrefMatch[1] || hrefMatch[2] || '');
+    if (/\brel=(?:"alternate"|'alternate')/i.test(tag)) return href;
+    if (!fallbackHref) fallbackHref = href;
+  }
+  return fallbackHref;
+}
+
+export function parseAtomReleases(xml: string): NormalizedRelease[] {
+  const entries = String(xml || '').match(/<entry\b[^>]*>[\s\S]*?<\/entry>/gi) || [];
+  const seen = new Set<string>();
+
+  return entries
+    .map((entryXml): NormalizedRelease | null => {
+      const id = decodeEntities(readXmlTag(entryXml, 'id'));
+      const rawUrl = extractAtomLinkHref(entryXml);
+      const htmlUrl = isAllowedReleaseUrl(rawUrl) ? rawUrl : RELEASES_PAGE_URL;
+      const tagFromUrl = htmlUrl.match(/\/releases\/tag\/([^/?#]+)/)?.[1];
+      const tagFromId = id.split('/').pop();
+      let rawTag = tagFromUrl || tagFromId || '';
+      try {
+        rawTag = decodeURIComponent(rawTag);
+      } catch {
+        // 保留原始 tag 字符串，交由 parseVersion 校验
+      }
+
+      const parsed = parseVersion(rawTag);
+      if (!parsed || parsed.prerelease) return null;
+
+      const version = normalizeVersion(rawTag);
+      if (seen.has(version)) return null;
+      seen.add(version);
+
+      const publishedAt = decodeEntities(readXmlTag(entryXml, 'updated') || readXmlTag(entryXml, 'published'));
+      const rawTitle = decodeEntities(readXmlTag(entryXml, 'title'));
+      const rawContent = readXmlTag(entryXml, 'content');
+
+      return {
+        id: id || rawTag,
+        version,
+        tag: rawTag.startsWith('v') ? rawTag : `v${version}`,
+        title: cleanInlineMarkdown(rawTitle) || `HOMURA v${version}`,
+        publishedAt,
+        dateLabel: formatReleaseDate(publishedAt),
+        htmlUrl,
+        notes: parseReleaseNotes(atomHtmlToMarkdown(rawContent)),
+        assets: []
+      };
+    })
+    .filter((release): release is NormalizedRelease => release !== null)
+    .sort((left, right) => compareVersions(right.version, left.version));
+}
+
+export function parseExpandedAssetsHtml(html: string): NormalizedAsset[] {
+  const anchors = String(html || '').match(/<a\b[^>]*\bhref=(?:"[^"]+"|'[^']+')[^>]*>/gi) || [];
+  const seen = new Set<string>();
+  const assets: NormalizedAsset[] = [];
+
+  for (const anchor of anchors) {
+    const hrefMatch = anchor.match(/\bhref=(?:"([^"]+)"|'([^']+)')/i);
+    const rawHref = decodeEntities(hrefMatch?.[1] || hrefMatch?.[2] || '');
+    if (!rawHref) continue;
+
+    let urlObj: URL;
+    try {
+      urlObj = new URL(rawHref, 'https://github.com');
+    } catch {
+      continue;
+    }
+
+    const fullUrl = urlObj.toString();
+    if (!isAllowedReleaseUrl(fullUrl)) continue;
+    if (!urlObj.pathname.startsWith('/Leon-Ning-san/HomuraReader/releases/download/')) continue;
+
+    let name = urlObj.pathname.split('/').pop() || '';
+    try {
+      name = decodeURIComponent(name);
+    } catch {
+      // 保留原始文件名
+    }
+    name = name.trim();
+    if (!name || seen.has(fullUrl)) continue;
+    seen.add(fullUrl);
+
+    assets.push({
+      name,
+      url: fullUrl,
+      browser_download_url: fullUrl,
+      size: 0,
+      downloadCount: 0
+    });
+  }
+
+  return assets;
+}
+
+async function fetchReleasesFromNative(invoke: TauriInvoke): Promise<{ releases: NormalizedRelease[]; etag: string }> {
+  const xml = await invoke('fetch_release_feed');
+  const releases = parseAtomReleases(String(xml || ''));
+  if (releases.length === 0) throw updateError('NO_RELEASES', 'No stable releases');
+
+  const latest = releases[0];
+  if (latest?.tag) {
+    try {
+      const assetsHtml = await invoke('fetch_release_assets', { tag: latest.tag });
+      latest.assets = parseExpandedAssetsHtml(String(assetsHtml || ''));
+    } catch (error) {
+      console.warn('读取最新 Release 安装包列表失败，将回退到打开发布页', error);
+    }
+  }
+
+  return { releases, etag: '' };
+}
+
+async function requestReleases(force: boolean): Promise<{ releases: NormalizedRelease[]; etag: string }> {
   if (typeof fetch !== 'function') throw updateError('NETWORK', '当前环境不支持网络请求。');
 
   const controller = new AbortController();
   const timer = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28'
+  };
+  if (cachedEtag && cachedReleases.length > 0) {
+    headers['If-None-Match'] = cachedEtag;
+  }
+
   try {
     const response = await fetch(RELEASES_API_URL, {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28'
-      },
+      headers,
       cache: force ? 'no-cache' : 'default',
       signal: controller.signal
     });
+
+    if (response.status === 304 && cachedReleases.length > 0) {
+      return { releases: cachedReleases, etag: cachedEtag };
+    }
 
     await checkRateLimit(response);
     if (!response.ok) throw updateError('HTTP_ERROR', `GitHub 返回了 ${response.status}。`);
 
     const releases = normalizeReleases(await response.json());
     if (releases.length === 0) throw updateError('NO_RELEASES', 'No stable releases');
-    return releases;
+    const etag = response.headers.get('etag') || '';
+    return { releases, etag };
   } finally {
     globalThis.clearTimeout(timer);
   }
 }
 
+function shouldFallbackToNative(error: unknown) {
+  const detail = error as { name?: unknown; code?: unknown } | null | undefined;
+  if (!detail) return true;
+  if (detail.code === 'NO_RELEASES') return false;
+  if (detail.name === 'AbortError') return false;
+  return true;
+}
+
+async function requestReleasesWithFallback(force: boolean): Promise<{ releases: NormalizedRelease[]; etag: string }> {
+  const invoke = getTauriInvoke();
+  if (Date.now() < rateLimitUntil) {
+    if (invoke) return fetchReleasesFromNative(invoke);
+    throw updateError('RATE_LIMIT', 'GitHub API rate limit reached');
+  }
+
+  try {
+    return await requestReleases(force);
+  } catch (error) {
+    if (invoke && shouldFallbackToNative(error)) {
+      return fetchReleasesFromNative(invoke);
+    }
+    throw error;
+  }
+}
+
 export async function fetchStableReleases({ force = false }: { force?: boolean } = {}): Promise<NormalizedRelease[]> {
+  hydrateMemoryCacheFromStorage();
   const now = Date.now();
   if (!force && cachedReleases.length > 0 && now - cachedAt < CACHE_TTL) {
     return cachedReleases;
   }
   if (pendingRequest) return pendingRequest;
-  if (now < rateLimitUntil) throw updateError('RATE_LIMIT', 'GitHub API rate limit reached');
+  if (now < rateLimitUntil && !getTauriInvoke()) {
+    throw updateError('RATE_LIMIT', 'GitHub API rate limit reached');
+  }
 
-  pendingRequest = requestReleases(force)
-    .then(releases => {
+  pendingRequest = requestReleasesWithFallback(force)
+    .then(({ releases, etag }) => {
+      const updatedAt = Date.now();
       cachedReleases = releases;
-      cachedAt = Date.now();
+      cachedAt = updatedAt;
+      cachedEtag = etag;
+      writePersistedCache(releases, etag, updatedAt);
       return releases;
     })
     .finally(() => {

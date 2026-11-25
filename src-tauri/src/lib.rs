@@ -117,6 +117,8 @@ pub fn run() {
             update_downloader::download_update_asset,
             update_downloader::cancel_update_download,
             update_downloader::open_update_file,
+            update_downloader::fetch_release_feed,
+            update_downloader::fetch_release_assets,
             text_decoder::decode_text_bytes,
             mobi_parser::parse_mobi_container,
             cover_thumb::create_cover_thumbnail,

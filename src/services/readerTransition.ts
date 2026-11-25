@@ -39,7 +39,7 @@ export function playShelfToReaderSplash(source: HTMLElement, target: HTMLElement
 
   const sourceOpacity = source.style.opacity;
   const targetOpacity = target.style.opacity;
-  const timing = { duration: 320, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' } as const;
+  const timing = { duration: 420, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' } as const;
   const movement = flight.animate([
     { transform: `translate(${x}px, ${y}px) scale(${scale})` },
     { transform: 'translate(0, 0) scale(1)' }

@@ -902,7 +902,7 @@
               <span class="settings-row-value">GitHub</span>
               <MdIcon name="chevron_right" />
             </button>
-            <div class="settings-list-row">
+            <button type="button" class="settings-list-row" @click="openLicense">
               <span class="settings-row-icon">
                 <MdIcon name="info" />
               </span>
@@ -910,7 +910,8 @@
                 <b>{{ t('开源许可') }}</b>
               </span>
               <span class="settings-row-value">MIT License</span>
-            </div>
+              <MdIcon name="chevron_right" />
+            </button>
           </div>
           <p class="settings-detail-note">© Leo NING · AkisameRin</p>
           <p v-if="aboutLinkError" class="settings-detail-note" role="alert">{{ aboutLinkError }}</p>
@@ -1094,7 +1095,7 @@ import { buildStorageSegments, readDiskStorageStats } from '../services/storageS
 import type { DiskStorageStats } from '../services/storageStats.ts';
 import { formatBytes, isAndroid, isWindows } from '../services/platform.ts';
 import { openGitHubUrl } from '../services/external.ts';
-import { REPOSITORY_URL } from '../services/updates.ts';
+import { LICENSE_PAGE_URL, REPOSITORY_URL } from '../services/updates.ts';
 import {
   formatRuntimeLogSource,
   formatRuntimeLogTimestamp,
@@ -1417,14 +1418,22 @@ async function refreshStorage() {
   storageRevealing.value = true;
 }
 
-async function openRepository() {
+async function openAboutGitHubLink(url: string, logLabel: string) {
   aboutLinkError.value = '';
   try {
-    await openGitHubUrl(REPOSITORY_URL);
+    await openGitHubUrl(url);
   } catch (error) {
     aboutLinkError.value = t('无法打开系统浏览器，请稍后再试。');
-    console.warn('打开开源仓库失败', error);
+    console.warn(logLabel, error);
   }
+}
+
+function openRepository() {
+  return openAboutGitHubLink(REPOSITORY_URL, '打开开源仓库失败');
+}
+
+function openLicense() {
+  return openAboutGitHubLink(LICENSE_PAGE_URL, '打开开源许可失败');
 }
 
 

@@ -37,6 +37,8 @@ commands.allow = [
   "download_update_asset",
   "cancel_update_download",
   "open_update_file",
+  "fetch_release_feed",
+  "fetch_release_assets",
   "export_runtime_logs",
   "storage_stats",
 ]
