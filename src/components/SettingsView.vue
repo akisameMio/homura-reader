@@ -1,9 +1,16 @@
 <template>
-  <div ref="pageRef" class="settings-page" :class="{ 'has-detail': activeSection }">
-    <header class="settings-topbar" :style="isCompact ? { paddingTop: 'env(safe-area-inset-top)' } : null">
-      <div class="settings-topbar-inner" :class="{ 'is-log-searching': logSearchOpen }">
+  <div ref="pageRef" class="settings-page" :class="{
+    'has-detail': shownSection, 'md-bottom-nav-space': isCompact && !shownSection
+  }">
+    <header
+      :key="isCompact || isAndroid ? undefined : (shownSection ?? 'overview')"
+      class="settings-topbar"
+      :style="isCompact ? { paddingTop: 'env(safe-area-inset-top)' } : null"
+    >
+      <div class="settings-topbar-inner" :class="{ 'is-log-searching': shownSection === 'logs' && logSearchOpen }">
         <button
           v-if="activeSection"
+          v-show="shownSection"
           ref="backButtonRef"
           type="button"
           class="settings-back-button"
@@ -13,9 +20,9 @@
           <MdIcon name="chevron_left" />
         </button>
         <div class="settings-topbar-title">
-          <h1>{{ activeSection ? t(sectionTitles[activeSection]) : t('设置') }}</h1>
+          <h1>{{ shownSection ? t(sectionTitles[shownSection]) : t('设置') }}</h1>
         </div>
-        <div v-if="activeSection === 'logs'" class="settings-topbar-actions">
+        <div v-if="activeSection === 'logs'" v-show="shownSection" class="settings-topbar-actions">
           <div v-if="logSearchOpen" class="settings-log-search" role="search">
             <MdIcon name="search" :size="19" />
             <input
@@ -67,7 +74,7 @@
     <div v-if="isCompact && $slots.status" class="settings-import-status">
       <slot name="status"></slot>
     </div>
-    <div v-if="!activeSection" class="settings-grid">
+    <div v-if="!shownSection" class="settings-grid">
       <section class="settings-card settings-appearance" aria-labelledby="settings-appearance-title">
         <div class="appearance-content">
           <div class="settings-card-head">
@@ -381,7 +388,7 @@
         </button>
       </section>
     </div>
-    <div v-else class="settings-detail">
+    <div v-if="activeSection" v-show="shownSection" class="settings-detail">
       <template v-if="activeSection === 'appearance'">
         <div class="settings-detail-hero settings-surface-hero">
           <SettingsInterfacePreview />
@@ -1085,7 +1092,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import packageInfo from '../../package.json';
 import { createDemoManga, createDemoNovel } from '../services/demo.ts';
@@ -1122,7 +1129,8 @@ import {
 import { WEBTOON_FIT_LABELS } from '../stores/reader.ts';
 import { useUpdateStore } from '../stores/updates.ts';
 import { useViewport } from '../composables/useViewport.ts';
-import { useSettingsTransition } from '../composables/useSettingsTransition.ts';
+import { settingsSelectBackKey, useSettingsTransition } from '../composables/useSettingsTransition.ts';
+import type { NativeBackEvent } from '../composables/useAndroidBackExit.ts';
 import MdIcon from './MdIcon.vue';
 import MobileBottomSheet from './MobileBottomSheet.vue';
 import MdRange from './MdRange.vue';
@@ -1132,7 +1140,6 @@ import ThemeSwatchGrid from './ThemeSwatchGrid.vue';
 import SettingsInterfacePreview from './SettingsInterfacePreview.vue';
 import SettingsSelectRow from './SettingsSelectRow.vue';
 import SyncSettings from './SyncSettings.vue';
-import { scrollAppToTop } from '../services/utils.ts';
 import { useI18n } from '../composables/useI18n.ts';
 
 const { t, locale, localeOptions, setLocale } = useI18n();
@@ -1184,6 +1191,8 @@ const sectionTitles = {
 };
 type SettingsSection = keyof typeof sectionTitles;
 const activeSection = ref<SettingsSection | null>(null);
+const previewingBack = ref(false);
+const shownSection = computed(() => previewingBack.value ? null : activeSection.value);
 const logFilter = ref<RuntimeLogFilter>('all');
 const logsClearArmed = ref(false);
 let logsClearTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1196,12 +1205,12 @@ let logActionNoteTimer: ReturnType<typeof setTimeout> | null = null;
 const pageRef = shallowRef<HTMLElement | null>(null);
 const backButtonRef = shallowRef<HTMLButtonElement | null>(null);
 const sectionTransition = useSettingsTransition();
-const sectionHistory: {
-  section: SettingsSection | null;
-  scrollTop: number;
-  trigger: HTMLElement;
-  selector: string;
-}[] = [];
+const selectBack = shallowRef<(() => void) | null>(null);
+provide(settingsSelectBackKey, selectBack);
+let sectionOrigin: { scrollTop: number; selector: string } | null = null;
+let returnMotion: ReturnType<typeof sectionTransition.capture> = null;
+let backSample: { progress: number; time: number; touchX?: number } | null = null;
+let backVelocity = 0;
 const detailSurfaceOptions = ['auto', 'light', 'dark'].map(value => {
   const option = SURFACE_MODE_OPTIONS.find(item => item.value === value)!;
   return {
@@ -1442,43 +1451,85 @@ function settingsScroller() {
   return node && /auto|scroll/.test(getComputedStyle(node).overflowY) ? node : null;
 }
 
+function getSettingsScroll() {
+  return settingsScroller()?.scrollTop ?? window.scrollY;
+}
+
+function restoreSettingsScroll(top: number) {
+  (settingsScroller() ?? window).scrollTo({ top, behavior: 'instant' });
+}
+
 async function openSection(section: SettingsSection, event: MouseEvent) {
+  if (activeSection.value) return;
+  selectBack.value?.();
   const trigger = event.currentTarget as HTMLElement;
   const card = trigger.closest<HTMLElement>('.settings-card');
-  if (!await sectionTransition.bounce(card)) return;
-  const transition = sectionTransition.capture(pageRef.value, card);
-  sectionHistory.push({
-    section: activeSection.value,
-    scrollTop: settingsScroller()?.scrollTop ?? window.scrollY,
-    trigger,
-    selector: `.settings-${section} > .settings-card-open`
-  });
+  const transition = card ? sectionTransition.capture(pageRef.value, card) : null;
+  sectionOrigin = { scrollTop: getSettingsScroll(), selector: `.settings-${section} > .settings-card-open` };
   activeSection.value = section;
   emit('detail-change', true);
   await nextTick();
-  scrollAppToTop();
-  backButtonRef.value?.focus({ preventScroll: true });
+  restoreSettingsScroll(0);
   transition?.play();
   if (section === 'storage' && !storageLoading.value) refreshStorage();
+  await transition?.finished;
+  if (activeSection.value === section && !previewingBack.value) backButtonRef.value?.focus({ preventScroll: true });
+}
+
+function startSectionReturn() {
+  if (!activeSection.value || returnMotion) return returnMotion;
+  const detailScroll = getSettingsScroll();
+  const focused = document.activeElement as HTMLElement | null;
+  const detailFocus = pageRef.value?.contains(focused) ? focused : null;
+  const origin = sectionOrigin;
+  const findTrigger = () => origin ? pageRef.value?.querySelector<HTMLElement>(origin.selector) : null;
+  const restoreOverview = () => {
+    activeSection.value = null;
+    previewingBack.value = false;
+    sectionOrigin = null;
+    emit('detail-change', false);
+  };
+
+  const transition = sectionTransition.capture(pageRef.value, null, async commit => {
+    if (commit) restoreOverview();
+    else previewingBack.value = false;
+    await nextTick();
+    if (!commit) restoreSettingsScroll(detailScroll);
+  });
+  if (!transition) return null;
+  returnMotion = transition;
+  previewingBack.value = true;
+  void nextTick(() => {
+    if (returnMotion !== transition || !previewingBack.value) return;
+    restoreSettingsScroll(origin?.scrollTop ?? 0);
+    transition.play(findTrigger()?.closest<HTMLElement>('.settings-card'));
+  });
+  void transition.finished.then(() => {
+    if (returnMotion !== transition) return;
+    returnMotion = null;
+    // 卸载时无需恢复焦点。手势取消后回到原详情控件，提交后回到入口。
+    if (!pageRef.value?.isConnected) return;
+    if (!activeSection.value) findTrigger()?.focus({ preventScroll: true });
+    else if (!previewingBack.value) (detailFocus?.isConnected ? detailFocus : backButtonRef.value)?.focus({ preventScroll: true });
+  });
+  return transition;
 }
 
 async function showPreviousSection() {
-  if (actionBusy.value) return;
-  const transition = sectionTransition.capture(pageRef.value);
-  const previous = sectionHistory.pop();
-  activeSection.value = previous?.section ?? null;
-  emit('detail-change', !!activeSection.value);
+  if (actionBusy.value || !activeSection.value) return;
+  selectBack.value?.();
+  const transition = startSectionReturn();
+  if (transition) {
+    transition.settle(1);
+    return;
+  }
+  const origin = sectionOrigin;
+  activeSection.value = null;
+  sectionOrigin = null;
+  emit('detail-change', false);
   await nextTick();
-  const scroller = settingsScroller();
-  const scrollTop = previous?.scrollTop ?? 0;
-  if (scroller) scroller.scrollTo({ top: scrollTop, behavior: 'instant' });
-  else window.scrollTo({ top: scrollTop, behavior: 'instant' });
-  // 上一页由 v-if 重建时，重新定位入口，恢复焦点与原滚动位置。
-  const trigger = previous?.trigger.isConnected
-    ? previous.trigger
-    : previous ? document.querySelector<HTMLElement>(previous.selector) : null;
-  trigger?.focus({ preventScroll: true });
-  transition?.play(trigger?.closest<HTMLElement>('.settings-card'));
+  restoreSettingsScroll(origin?.scrollTop ?? 0);
+  if (origin) pageRef.value?.querySelector<HTMLElement>(origin.selector)?.focus({ preventScroll: true });
 }
 
 function dismissBack() {
@@ -1486,13 +1537,45 @@ function dismissBack() {
     closeDataDialog();
     return true;
   }
-  if (sectionTransition.dismissBounce()) return true;
+  if (selectBack.value) {
+    selectBack.value();
+    return true;
+  }
   if (!activeSection.value) return false;
   showPreviousSection();
   return true;
 }
 
-defineExpose({ dismissBack });
+function canUsePredictiveBack() {
+  return !!activeSection.value && !pendingAction.value && !actionBusy.value && !selectBack.value;
+}
+
+function onPredictiveBack(event: NativeBackEvent) {
+  const time = event.frameTimeMillis ?? performance.now();
+  if (event.phase === 'started') {
+    backSample = { progress: 0, time, touchX: event.touchX };
+    backVelocity = 0;
+    startSectionReturn();
+  } else if (event.phase === 'progressed') {
+    const progress = event.progress ?? 0;
+    returnMotion?.update(progress);
+    // 同一触点的系统补帧不覆盖手指实际移动时的速度。
+    if (backSample && time > backSample.time && (event.touchX === undefined || event.touchX !== backSample.touchX)) {
+      const elapsed = time - backSample.time;
+      backVelocity = elapsed <= 120 ? (progress - backSample.progress) * 1000 / elapsed : 0;
+      backSample = { progress, time, touchX: event.touchX };
+    }
+  } else {
+    const elapsed = backSample ? time - backSample.time : Infinity;
+    const velocity = elapsed >= 0 && elapsed <= 120 ? backVelocity : 0;
+    backSample = null;
+    backVelocity = 0;
+    if (returnMotion) returnMotion.settle(event.phase === 'invoked' ? 1 : 0, velocity);
+    else if (event.phase === 'invoked') dismissBack();
+  }
+}
+
+defineExpose({ dismissBack, canUsePredictiveBack, onPredictiveBack });
 
 function selectSurfaceMode(value: string, event: MouseEvent) {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -1557,10 +1640,6 @@ async function confirmDataAction() {
 function onDialogKeydown(event: KeyboardEvent) {
   if (reader.currentBook) return;
   if (!pendingAction.value) {
-    if (event.key === 'Escape' && sectionTransition.dismissBounce()) {
-      event.preventDefault();
-      return;
-    }
     if (event.key === 'Escape' && activeSection.value && !updates.changelogOpen && !updates.updateDialogOpen) {
       event.preventDefault();
       showPreviousSection();
@@ -1668,6 +1747,19 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(16px);
   -webkit-mask-image: linear-gradient(to bottom, var(--md-surface) 45%, transparent 100%);
   mask-image: linear-gradient(to bottom, var(--md-surface) 45%, transparent 100%);
+}
+
+/* 桌面详情顶栏与转场副本使用同一不透明表面，接手时不再采样背景或独立入场。 */
+@media (min-width: 900px) {
+  .has-detail .settings-topbar {
+    background: var(--md-surface-low);
+    animation: none;
+    transition: none;
+  }
+
+  .has-detail .settings-topbar::before {
+    content: none;
+  }
 }
 
 /* Android 转场临时停用背景采样；副本只保留静态外观，避免控件动画重新起播。 */
@@ -2465,6 +2557,17 @@ onBeforeUnmount(() => {
 .settings-card-open svg {
   flex: none;
   color: var(--md-on-surface-variant);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .settings-card:has(> .settings-card-open) {
+    transition: scale 100ms var(--md-ease-emphasized);
+  }
+
+  .settings-card:has(> .settings-card-open:active) {
+    scale: 0.985;
+    transition: none;
+  }
 }
 
 /* 保留整卡入口，独立控件置于点击层上方。 */

@@ -155,7 +155,7 @@ Error token 已在 `src/assets/styles/tokens.css` 的白昼 / 护眼 / 夜间三
 | 31 | 阅读器返回边缘触发区 | `.reader-back-edge` |
 | 35 | 阅读器底部常驻页脚 / 状态条 | `ReaderFooter.vue`（`.md-reader-footer`） |
 | 40 | 手机底部导航、遮罩、FAB、桌面灵动胶囊 | `#homura-mobile-nav-root`、`.md-scrim`、`.md-fab-pos` |
-| 45 | 阅读器预测式返回遮罩（专用） | `.reader-back-scrim` |
+| 45 | 阅读器预测式返回遮罩、设置容器变换 | `.reader-back-scrim`、`.settings-transition-layer` |
 | 50 | 阅读器本体、`.md-drawer` side/bottom sheet | `.md-drawer`、`ReaderModal.vue` |
 | 60 / 65 | 全窗拖拽导入遮罩 / 长按拖拽 ghost | `DragOverlay.vue`、`.md-touch-drag-ghost` |
 | 9999 / 10000 | 表面切换 reveal / 启动 Splash（专用） | `.surface-reveal`、`#homura-splash` |
@@ -277,7 +277,8 @@ Error token 已在 `src/assets/styles/tokens.css` 的白昼 / 护眼 / 夜间三
 设置页（`SettingsView.vue`）专项约束：
 
 - 页面使用 `surface-low`，设置卡片（`.settings-card`）使用 `surface` / `on-surface`，圆角 `34px`（窄屏 `28px`），投影用 `--md-shadow-color-soft`，不抬升卡片；书页示意（`.settings-book-stage`）衬底用 `primary-container` 且标记 `aria-hidden="true"`，仅作装饰。
-- 卡片进入二级页统一走 `useSettingsTransition()`：原卡片弹出后连续展开，返回时反向收缩；Android 转场使用静态圆角裁切并暂时停止顶栏模糊与副本内动画，副本仅保留屏内分组、屏外定高占位；展开直接复用真实页面，结束/取消/卸载前必须归还原 DOM 位置及样式。
+- 卡片进入二级页统一走 `useSettingsTransition()`：按压缩至 `0.985`，抬手后在根浮层用 `380ms` 展开。卡片和详情分段淡出、淡入，浮层同步插值圆角、表面色和遮罩。桌面容器在前 `60%` 完成底色过渡，详情从 `55%` 开始淡入并等比适配容器宽度；真实详情的不透明顶栏先就绪，再移除浮层。桌面按钮返回用 `255ms` 缓起曲线，剩余位移进入 `2px` 内即可落位。
+- 手机底栏保留挂载并随进度显隐；Android 14+ 返回手势直接驱动进度，松手速度沿用到最长 `265ms` 的收尾弹簧，取消时恢复详情滚动位置和焦点。转场期间 Android 暂停顶栏模糊和副本内动画，屏外分组保留定高占位。
 - 外观二级页复用 `ThemeSwatchGrid` `strip` 模式（承载容器声明 `container: theme-palette / inline-size`：可用宽度 `>=640px` 十列一行，不足时五列两行，不横向滚动；共享面板仍保持默认 `5 × 2`）。
 - 列表选择项复用 `SettingsSelectRow`：菜单 Teleport 到根节点并按视口避让，支持方向键、`Home`/`End`、`Escape`、`Tab` 与外部点击关闭，选择后恢复焦点并保留原始值类型（如单双页数字类型）。菜单展开前锁定背景滚动（桌面保留原滚动条并固定背景滚动位置），覆盖停驻与收缩全过程。动效由 `settingsSelectMotion.ts` 的 `0.7×` 物理弹簧驱动（展开 `ζ=0.58 / k=400` 回弹对齐，收起 `ζ=0.85 / k=500` 先下探拉成圆囊再向上合回）；`prefers-reduced-motion` 下直接落位。
 

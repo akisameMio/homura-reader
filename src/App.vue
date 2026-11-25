@@ -1,6 +1,7 @@
 <template>
   <!-- 手机底栏挂在阅读器预见式返回的 transform 容器外，避免长书架把 fixed 底栏带出视口 -->
-  <div id="homura-mobile-nav-root" :inert="readerOpening || !!reader.currentBook"></div>
+  <div id="homura-mobile-nav-root" :class="{ 'is-settings-detail': settingsDetailOpen }"
+    :inert="readerOpening || !!reader.currentBook || settingsDetailOpen"></div>
 
   <div
     class="library-back-layer flex min-h-0"
@@ -12,13 +13,11 @@
     :inert="readerOpening || !!reader.currentBook"
     @wheel="onLibraryWheel"
   >
-    <SideNav v-if="!isCompact || !settingsDetailOpen" :active="activeNav" @nav="onRailNav" />
+    <SideNav :active="activeNav" @nav="onRailNav" />
 
     <div
       class="library-main-column relative isolate flex-1 min-w-0 flex flex-col"
-      :class="[
-        isCompact && activeNav === 'settings' ? ['is-settings', !settingsDetailOpen ? 'md-bottom-nav-space' : ''] : ''
-      ]"
+      :class="{ 'is-settings': isCompact && activeNav === 'settings' }"
       data-app-scroll
     >
       <template v-if="activeNav === 'settings'">
@@ -104,7 +103,7 @@
     @revealed="finishReaderReveal"
   />
   <div v-if="reader.currentBook" class="reader-back-scrim md-scrim" aria-hidden="true"></div>
-  <ReaderModal :opening="readerOpening" @first-frame="onReaderFirstFrame" @cancel-opening="cancelReaderOpen" />
+  <ReaderModal :opening="readerOpening" :native-predictive-back-supported="nativePredictiveBackSupported" @first-frame="onReaderFirstFrame" @cancel-opening="cancelReaderOpen" />
   <UpdateDialog
     v-if="isCompact"
     :open="updates.updateDialogOpen"
@@ -435,7 +434,7 @@ const SPLASH_MIN_DURATION = 720;
 let previousUpdateBodyOverflow = '';
 let updateBodyLocked = false;
 
-useAndroidBackExit(reader, () => {
+const nativePredictiveBackSupported = useAndroidBackExit(reader, () => {
   // 加载页期间按返回 → 取消加载、退回书架（此时阅读器还没接管返回）
   if (readerOpening.value && !reader.currentBook) {
     cancelReaderOpen();
@@ -479,6 +478,11 @@ useAndroidBackExit(reader, () => {
   }
   if (shelf.activeCollectionId) { shelf.activeCollectionId = activeCollection.value?.parentId ?? null; return true; }
   return false;
+}, {
+  enabled: () => activeNav.value === 'settings' && !readerOpening.value
+    && !pendingShelfDialog.value && !pendingDuplicate.value && !updates.changelogOpen && !updates.updateDialogOpen
+    && !!settingsViewRef.value?.canUsePredictiveBack(),
+  handle: event => settingsViewRef.value?.onPredictiveBack(event)
 });
 
 watch(

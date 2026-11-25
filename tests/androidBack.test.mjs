@@ -97,3 +97,73 @@ test('Android 返回监听在书架与阅读器之间保持注册', async () => 
   await nextTick();
   assert.equal(removals, 1);
 });
+
+test('预见式返回只注册一个原生通道，按手势归属转发并保留常驻回退', async () => {
+  let nativeHandler;
+  let fallbackHandler;
+  let fallbackCalls = 0;
+  const commands = [];
+  window.__TAURI__ = {
+    app: { onBackButtonPress: async handler => { fallbackHandler = handler; } },
+    core: {
+      Channel: class { constructor(handler) { this.handler = handler; } },
+      async invoke(command, args) {
+        commands.push(command.split('|')[1]);
+        if (command.endsWith('|supported')) return { supported: true };
+        if (command.endsWith('|enable')) nativeHandler = args.handler.handler;
+      }
+    }
+  };
+  const { createApp, h, reactive, ref } = await import('vue');
+  const { registerReaderBackHandler, useAndroidBackExit } = await import('../src/composables/useAndroidBackExit.ts');
+  const reader = reactive({ currentBook: null });
+  const settings = ref(false);
+  const detailPhases = [];
+  const readerPhases = [];
+  const unregister = registerReaderBackHandler(() => {}, event => readerPhases.push(event.phase));
+  const app = createApp({
+    setup() {
+      useAndroidBackExit(reader, () => { fallbackCalls++; return true; }, {
+        enabled: () => settings.value,
+        handle: event => detailPhases.push(event.phase)
+      });
+      return () => h('div');
+    }
+  });
+  app.mount('#app');
+  const tick = () => new Promise(resolve => setImmediate(resolve));
+  try {
+    await tick();
+    assert.deepEqual(commands, ['supported']);
+    settings.value = true;
+    await tick();
+    assert.deepEqual(commands, ['supported', 'enable']);
+    fallbackHandler();
+    assert.equal(fallbackCalls, 1);
+
+    nativeHandler({ phase: 'started' });
+    nativeHandler({ phase: 'progressed', progress: 0.2 });
+    reader.currentBook = { id: 'book' };
+    await tick();
+    nativeHandler({ phase: 'invoked' });
+    assert.deepEqual(detailPhases, ['started', 'progressed', 'cancelled']);
+    assert.deepEqual(readerPhases, []);
+    nativeHandler({ phase: 'started' });
+    nativeHandler({ phase: 'invoked' });
+    assert.deepEqual(readerPhases, ['started', 'invoked']);
+    assert.deepEqual(commands, ['supported', 'enable']);
+
+    reader.currentBook = null;
+    await tick();
+    nativeHandler({ phase: 'started' });
+    settings.value = false;
+    await tick();
+    assert.deepEqual(commands, ['supported', 'enable'], '等待原手势结束再注销通道');
+    nativeHandler({ phase: 'cancelled' });
+    await tick();
+    assert.deepEqual(commands, ['supported', 'enable', 'disable']);
+  } finally {
+    app.unmount();
+    unregister();
+  }
+});

@@ -140,7 +140,7 @@ import PaginatedView from './PaginatedView.vue';
 import WebtoonView from './WebtoonView.vue';
 import { useI18n } from '../composables/useI18n.ts';
 
-const props = defineProps({ opening: Boolean });
+const props = defineProps({ opening: Boolean, nativePredictiveBackSupported: Boolean });
 const emit = defineEmits<{
   'first-frame': [book: Book, ready: boolean];
   'cancel-opening': [];
@@ -166,7 +166,6 @@ const {
   onPointerCancel: onBackPointerCancel,
   onPointerLostCapture: onBackPointerLostCapture,
   dismissWithPredictiveBack,
-  nativePredictiveBackSupported,
   readerDismissing
 } = useReaderBackDismiss(reader, ui, isOpening, cancelOpening);
 

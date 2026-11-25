@@ -27,7 +27,7 @@ Object.defineProperty(globalThis, 'performance', { configurable: true, value: { 
 globalThis.requestAnimationFrame = callback => { frames.set(++sequence, callback); return sequence; };
 globalThis.cancelAnimationFrame = id => frames.delete(id);
 
-const { createApp, h, nextTick } = await import('vue');
+const { createApp, h, nextTick, shallowRef } = await import('vue');
 const require = createRequire(import.meta.url);
 const source = await readFile(new URL('../src/components/SettingsSelectRow.vue', import.meta.url), 'utf8');
 const { descriptor } = parse(source);
@@ -37,15 +37,18 @@ compiled = compiled.replace("import MdIcon from './MdIcon.vue';", "const MdIcon 
 compiled = compiled.replaceAll("'../services/settingsSelectMotion.ts'", `'${new URL('../src/services/settingsSelectMotion.ts', import.meta.url).href}'`);
 compiled = compiled.replaceAll("'../services/settingsSelectScrollLock.ts'", `'${new URL('../src/services/settingsSelectScrollLock.ts', import.meta.url).href}'`);
 compiled = compiled.replaceAll("'../composables/useI18n.ts'", `'${new URL('../src/composables/useI18n.ts', import.meta.url).href}'`);
+compiled = compiled.replaceAll("'../composables/useSettingsTransition.ts'", `'${new URL('../src/composables/useSettingsTransition.ts', import.meta.url).href}'`);
 const { code } = await transform(compiled, { loader: 'ts', format: 'esm', target: 'esnext' });
 const { default: SettingsSelectRow } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 const { useI18n } = await import('../src/composables/useI18n.ts');
+const { settingsSelectBackKey } = await import('../src/composables/useSettingsTransition.ts');
 
-function mount() {
+function mount(selectBack) {
   viewport.width = 1440;
   const app = createApp({ render: () => h(SettingsSelectRow, {
     label: '翻页方式', modelValue: 'fade', options: [{ value: 'fade', label: '淡入' }, { value: 'slide', label: '滑动' }]
   }) });
+  if (selectBack) app.provide(settingsSelectBackKey, selectBack);
   app.mount('#app');
   return { app, trigger: document.querySelector('.settings-select-row') };
 }
@@ -110,6 +113,25 @@ test('锁滚动后异步到达的同尺寸视口事件不会关闭桌面菜单',
     assert.equal(trigger.getAttribute('aria-expanded'), 'false');
     assert.equal(document.querySelector('[role="listbox"]'), null);
     assert.equal(wheel(), false);
+  } finally {
+    app.unmount();
+  }
+});
+
+test('设置返回先关闭选择菜单并释放背景滚动锁', async () => {
+  const selectBack = shallowRef(null);
+  const { app, trigger } = mount(selectBack);
+  try {
+    trigger.click();
+    await nextTick();
+    assert.ok(document.querySelector('[role="listbox"]'));
+    assert.equal(wheel(), true);
+    selectBack.value();
+    await nextTick();
+    assert.equal(selectBack.value, null);
+    assert.equal(document.querySelector('[role="listbox"]'), null);
+    assert.equal(wheel(), false);
+    assert.equal(document.activeElement, trigger);
   } finally {
     app.unmount();
   }

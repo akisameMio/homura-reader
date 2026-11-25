@@ -57,11 +57,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, shallowRef, useId, watch, type PropType } from 'vue';
+import { computed, inject, nextTick, onBeforeUnmount, ref, shallowRef, useId, watch, type PropType } from 'vue';
 import MdIcon from './MdIcon.vue';
 import { createSettingsSelectMotion } from '../services/settingsSelectMotion.ts';
 import { lockSettingsSelectScroll } from '../services/settingsSelectScrollLock.ts';
 import { useI18n } from '../composables/useI18n.ts';
+import { settingsSelectBackKey } from '../composables/useSettingsTransition.ts';
 
 const { t } = useI18n();
 
@@ -73,6 +74,8 @@ const props = defineProps({
 });
 const emit = defineEmits(['update:modelValue']);
 const menuId = `settings-select-${useId()}`;
+const selectBack = inject(settingsSelectBackKey, null);
+const dismissFromSettings = () => close(true, true);
 const triggerRef = shallowRef<HTMLButtonElement | null>(null);
 const controlRef = shallowRef<HTMLSpanElement | null>(null);
 const menuRef = shallowRef<HTMLDivElement | null>(null);
@@ -93,9 +96,14 @@ const motion = createSettingsSelectMotion({
       menuVisible.value = false;
       removeViewportListeners();
       unlockScroll();
+      unregisterSelectBack();
     }
   }
 });
+
+function unregisterSelectBack() {
+  if (selectBack?.value === dismissFromSettings) selectBack.value = null;
+}
 
 function unlockScroll() {
   releaseScrollLock?.();
@@ -147,6 +155,7 @@ async function showMenu() {
   activeIndex.value = index;
   open.value = true;
   menuVisible.value = true;
+  if (selectBack) selectBack.value = dismissFromSettings;
   document.addEventListener('pointerdown', onOutsidePointer, true);
   document.addEventListener('focusin', onFocusIn);
   document.addEventListener('keydown', onDocumentKeydown, true);
@@ -251,6 +260,7 @@ onBeforeUnmount(() => {
   removeViewportListeners();
   motion.dispose();
   unlockScroll();
+  unregisterSelectBack();
 });
 </script>
 

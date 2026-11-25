@@ -7,8 +7,7 @@
    ========================================================================== */
 
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { isAndroid } from '../services/platform.ts';
-import { registerReaderBackHandler } from './useAndroidBackExit.ts';
+import { registerReaderBackHandler, type NativeBackEvent } from './useAndroidBackExit.ts';
 
 const COMMIT_RATIO = 0.28;
 const FLING_VELOCITY = 0.52;
@@ -47,19 +46,6 @@ interface BackGesture {
   axis: 'x' | null;
   active: boolean;
 }
-interface NativeBackEvent {
-  phase?: string;
-  progress?: number;
-}
-interface TauriChannelCtor {
-  new (handler: (event: NativeBackEvent) => void): unknown;
-}
-
-interface TauriCoreLike {
-  invoke: (cmd: string, args?: Record<string, unknown>) => Promise<{ supported?: boolean }>;
-  Channel?: TauriChannelCtor;
-}
-
 export function useReaderBackDismiss(
   reader: ReaderLike, ui: UiLike, opening = () => false, cancelOpening = () => {}
 ) {
@@ -72,9 +58,6 @@ export function useReaderBackDismiss(
   let pendingDirection = 1;
   let activeDirection = 1;
   let nativeMode: string | null = null;
-  let nativeChannel: unknown = null;
-  let nativeEnableToken = 0;
-  const nativePredictiveBackSupported = ref(false);
 
   function applyProgress(progress: number, direction = activeDirection) {
     const width = window.innerWidth || 375;
@@ -135,10 +118,7 @@ export function useReaderBackDismiss(
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduceMotion) {
       resetVisuals();
-      if (commit) {
-        disableNativePredictiveBack();
-        reader.closeReader();
-      }
+      if (commit) reader.closeReader();
       readerDismissing.value = false;
       settling = false;
       return;
@@ -152,8 +132,6 @@ export function useReaderBackDismiss(
     window.setTimeout(async () => {
       if (token !== settleToken) return;
       if (commit) {
-        // 先摘掉原生回调再关书，避免退出动画最后一帧被新的返回事件截胡
-        await disableNativePredictiveBack();
         reader.closeReader();
         await nextTick();
       }
@@ -332,91 +310,25 @@ export function useReaderBackDismiss(
     dismissWithPredictiveBack();
   }
 
-  function getTauriCore() {
-    return window.__TAURI__ && window.__TAURI__.core;
-  }
-
-  async function disableNativePredictiveBack() {
-    nativeEnableToken++;
-    nativeMode = null;
-    if (!nativeChannel) return;
-    nativeChannel = null;
-
-    const core = getTauriCore();
-    if (!core || typeof core.invoke !== 'function') return;
-    try {
-      await core.invoke('plugin:android-predictive-back|disable');
-    } catch (err) {
-      console.warn('[HOMURA] 关闭 Android 预见式返回失败', err);
-    }
-  }
-
-  async function enableNativePredictiveBack() {
-    if (!nativePredictiveBackSupported.value || nativeChannel || !reader.currentBook) return;
-    const core = getTauriCore() as TauriCoreLike | null;
-    if (!core || !core.Channel || typeof core.invoke !== 'function') return;
-
-    const token = ++nativeEnableToken;
-    const channel = new core.Channel(onNativeBackEvent);
-    nativeChannel = channel;
-    try {
-      await core.invoke('plugin:android-predictive-back|enable', { handler: channel });
-      // 注册期间阅读器可能已经关闭，迟到的 enable 必须自己撤销
-      if (token !== nativeEnableToken || !reader.currentBook) {
-        if (nativeChannel === channel) nativeChannel = null;
-        await core.invoke('plugin:android-predictive-back|disable').catch(() => {});
-      }
-    } catch (err) {
-      nativeChannel = null;
-      console.warn('[HOMURA] 启用 Android 预见式返回失败，回退到常驻返回监听', err);
-      nativePredictiveBackSupported.value = false;
-    }
-  }
-
-  async function initializeAndroidBack() {
-    if (!isAndroid) return;
-
-    const core = getTauriCore() as TauriCoreLike | null;
-    if (!core || !core.Channel || typeof core.invoke !== 'function') return;
-
-    try {
-      const result = await core.invoke('plugin:android-predictive-back|supported');
-      if (result && result.supported) {
-        nativePredictiveBackSupported.value = true;
-        await enableNativePredictiveBack();
-      }
-    } catch (err) {
-      console.warn('[HOMURA] 查询 Android 预见式返回能力失败，回退到常驻返回监听', err);
-    }
-  }
-
   watch(
     () => reader.currentBook,
-    book => {
+    () => {
+      nativeMode = null;
       settleToken++;
       gesture = null;
       readerDismissing.value = false;
       settling = false;
       resetVisuals();
-
-      if (!book) {
-        disableNativePredictiveBack();
-      } else if (nativePredictiveBackSupported.value) {
-        enableNativePredictiveBack();
-      }
     }
   );
 
   // 应用级返回监听始终存在，低版本及原生回调失效时由它转发到阅读器。
-  const unregisterReaderBackHandler = registerReaderBackHandler(onFallbackBack);
-  initializeAndroidBack();
+  const unregisterReaderBackHandler = registerReaderBackHandler(onFallbackBack, onNativeBackEvent);
 
   onBeforeUnmount(() => {
     settleToken++;
-    nativeEnableToken++;
     unregisterReaderBackHandler();
     cancelAnimationFrame(frameId);
-    disableNativePredictiveBack();
     document.documentElement.classList.remove('reader-back-settling');
   });
 
@@ -427,7 +339,6 @@ export function useReaderBackDismiss(
     onPointerCancel,
     onPointerLostCapture,
     dismissWithPredictiveBack,
-    nativePredictiveBackSupported,
     readerDismissing
   };
 }

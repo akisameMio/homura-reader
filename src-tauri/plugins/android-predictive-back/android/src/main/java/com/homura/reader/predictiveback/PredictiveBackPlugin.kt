@@ -91,12 +91,12 @@ class PredictiveBackPlugin(private val activity: Activity) : Plugin(activity) {
   ) {
     val payload = JSObject().apply {
       put("phase", phase)
+      put("frameTimeMillis", frameTimeMillis)
       if (!progress.isNaN()) {
         put("progress", progress.toDouble())
         put("swipeEdge", swipeEdge)
         put("touchX", touchX.toDouble())
         put("touchY", touchY.toDouble())
-        put("frameTimeMillis", frameTimeMillis)
       }
     }
     channel?.send(payload)
