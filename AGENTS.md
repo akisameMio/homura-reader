@@ -86,7 +86,7 @@ src/
 tests/                     70 个 .test.mjs（node:test + assert/strict + jsdom）
 scripts/                   6 个：check-dark-glow / free-dev-port / generate-icons / release-notes /
                            sync-android-icons / patch-android-manifest
-references/                6 份规范：md3-component-guide / tokens / ui-component-spec / desktop-island / bottom-sheet-spec / sync-protocol
+references/                5 份规范：md3-component-guide / tokens / desktop-island / bottom-sheet-spec / sync-protocol
 public/homura-boot.js      首帧前的同步引导脚本（CSP 禁止内联脚本，不能挪回 index.html）
 public/vendor/             开发环境运行时 Tailwind；生产构建转静态 CSS 并从 dist 删除
 public/pdfjs/              pdf.js 运行时资源，由 vite 插件生成，已 gitignore
@@ -191,8 +191,8 @@ docs/features.md           面向用户的功能细则（README 的详细补充�
 
 ### 5.5 参考
 
-- 新增或重做组件前，先读 [references/md3-component-guide.md](references/md3-component-guide.md)；里面有按钮、开关、分段控件、列表和抽屉的直接写法。新增 bottom sheet 还必须遵守 [references/bottom-sheet-spec.md](references/bottom-sheet-spec.md)。
-- Token 全表见 [references/tokens.md](references/tokens.md)，系统级布局说明见 [references/ui-component-spec.md](references/ui-component-spec.md)。
+- 新增或重做组件前，先读 [references/md3-component-guide.md](references/md3-component-guide.md)；里面包含设计基线、系统级布局、按钮/开关/分段控件/抽屉写法与验收清单。新增 bottom sheet 还必须遵守 [references/bottom-sheet-spec.md](references/bottom-sheet-spec.md)。
+- Token 全表与共享类字典见 [references/tokens.md](references/tokens.md)。
 - 桌面灵动胶囊的状态机、尺寸、分裂 / 合并动效与焦点规则见 [references/desktop-island.md](references/desktop-island.md)；实现是 `DesktopIsland.vue` + `ShelfDialogContent.vue` + `ImportProgressPanel.vue` + `UpdateIslandPanel.vue`。
 - 旧笔记 `.trae/skills/homura-md3-ui/SKILL.md` 只作补充；`.trae/` 被 gitignore，克隆仓库后可能不存在。与上述文档或当前 `src/` 冲突时，以当前代码和 `references/md3-component-guide.md` 为准。
 
