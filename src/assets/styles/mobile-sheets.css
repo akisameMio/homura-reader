@@ -174,7 +174,7 @@
 .md-mobile-sheet-field-meta { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; }
 .md-mobile-sheet-field-error { margin-top: 10px; color: var(--md-error); font-size: 12px; }
 @media (hover: hover) and (pointer: fine) {
-  button.md-mobile-sheet-row:hover { background: var(--md-surface-low); }
+  button.md-mobile-sheet-row:not([role="switch"]):hover { background: var(--md-surface-low); }
 }
 .mobile-update-notes { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.85; }
 .mobile-update-notes li + li { margin-top: 8px; }

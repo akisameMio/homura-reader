@@ -23,6 +23,8 @@ export interface SpringOptions {
   stiffness?: number;
   /** 阻尼比 ζ，1 = 临界阻尼（无过冲）。默认 1。 */
   damping?: number;
+  /** 模拟时钟的播放倍率，取正数。默认 1。 */
+  playbackRate?: number;
   /** 每次积分的最大时间步（秒），防止切后台回来后大步长炸开。默认 0.032。 */
   maxDt?: number;
   /** 位置收敛阈值，默认 0.002。 */
@@ -76,6 +78,7 @@ export function runSpring(
   opts: SpringOptions = {}
 ): () => void {
   const damping = opts.damping ?? 1;
+  const playbackRate = opts.playbackRate ?? 1;
   const maxDt = opts.maxDt ?? 0.032;
   const posEps = opts.posEpsilon ?? 0.002;
   const velEps = opts.velEpsilon ?? 0.02;
@@ -85,7 +88,7 @@ export function runSpring(
 
   const tick = (now: number) => {
     if (cancelled) return;
-    const dt = Math.min((now - lastT) / 1000, maxDt);
+    const dt = Math.min((now - lastT) * playbackRate / 1000, maxDt);
     lastT = now;
     stepAxes(axes, dt, damping);
     onStep();

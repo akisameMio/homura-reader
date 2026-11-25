@@ -3289,7 +3289,7 @@ button.settings-list-row {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  button.settings-list-row:hover {
+  button.settings-list-row:not([role="switch"]):hover {
     background: color-mix(in oklab, var(--md-primary) 4%, transparent);
   }
 

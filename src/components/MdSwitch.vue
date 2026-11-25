@@ -10,14 +10,19 @@
     @click="toggle"
   >
     <span class="md-switch-label"><slot /></span>
-    <span class="md-switch-track" aria-hidden="true">
-      <span class="md-switch-state-layer"></span>
-      <span class="md-switch-thumb"><i class="md-switch-knob"></i></span>
+    <span ref="track" class="md-switch-track" aria-hidden="true">
+      <span class="md-switch-thumb">
+        <span class="md-switch-state-layer"></span>
+        <span class="md-switch-knob"></span>
+      </span>
     </span>
   </button>
 </template>
 
 <script setup lang="ts">
+import { onBeforeUnmount, shallowRef, watch } from 'vue';
+import { makeAxis, prefersReducedMotion, runSpring, snapAxes } from '../services/spring.ts';
+
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   title: { type: String, default: '' },
@@ -25,6 +30,53 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:modelValue']);
+const track = shallowRef<HTMLElement | null>(null);
+const travel = makeAxis(Number(props.modelValue), 480);
+const expansion = makeAxis(0, 1200);
+const axes = [travel, expansion];
+let cancelSpring: (() => void) | undefined;
+
+watch(() => props.modelValue, checked => {
+  const element = track.value;
+  if (!element) return;
+
+  travel.target = Number(checked);
+  travel.stiffness = checked ? 480 : 620;
+
+  const settle = () => {
+    cancelSpring = undefined;
+    expansion.target = 0;
+    snapAxes(axes);
+    element.style.removeProperty('--switch-travel');
+    element.style.removeProperty('--switch-expansion');
+  };
+
+  if (prefersReducedMotion()) {
+    cancelSpring?.();
+    settle();
+    return;
+  }
+  if (cancelSpring) return;
+
+  const paint = () => {
+    const progress = Math.min(1, Math.max(0, travel.pos));
+    // 中段推高形变弹簧的目标值，滑块接近终点时仍有余势，再收回圆形。
+    expansion.target = 4 * progress * (1 - progress);
+    element.style.setProperty('--switch-travel', String(progress));
+    element.style.setProperty('--switch-expansion', String(Math.max(0, expansion.pos)));
+  };
+
+  paint();
+  cancelSpring = runSpring(axes, paint, settle, {
+    damping: 0.85,
+    playbackRate: 0.8,
+    maxDt: 0.024,
+    posEpsilon: 0.006,
+    velEpsilon: 0.16
+  });
+}, { flush: 'post' });
+
+onBeforeUnmount(() => cancelSpring?.());
 
 function toggle() {
   if (props.disabled) return;
@@ -56,92 +108,61 @@ function toggle() {
 }
 
 .md-switch-track {
-  --md-switch-state-color: var(--md-outline);
+  --switch-rest: 0;
+  --switch-progress: var(--switch-travel, var(--switch-rest));
+  --switch-bulge: var(--switch-expansion, 0);
+  --switch-on-weight: calc(var(--switch-progress) * 100%);
+  --switch-thumb-color: color-mix(in oklab, var(--md-on-primary) var(--switch-on-weight), var(--md-outline));
   position: relative;
   display: block;
   width: 52px;
   height: 32px;
   flex: none;
+  overflow: visible;
   border-radius: 999px;
-  background-color: var(--md-surface-highest);
-  box-shadow: inset 0 0 0 2px var(--md-outline);
-  transition:
-    background-color var(--md-duration-short, 200ms) var(--md-ease-decelerate, cubic-bezier(0.05, 0.7, 0.1, 1)),
-    box-shadow var(--md-duration-short, 200ms) var(--md-ease-decelerate, cubic-bezier(0.05, 0.7, 0.1, 1));
+  background-color: color-mix(in oklab, var(--md-primary) var(--switch-on-weight), var(--md-surface-highest));
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, transparent var(--switch-on-weight), var(--md-outline));
 }
 
 .md-switch-row.is-checked .md-switch-track {
-  --md-switch-state-color: var(--md-on-primary);
-  background-color: var(--md-primary);
-  box-shadow: inset 0 0 0 2px transparent;
+  --switch-rest: 1;
 }
 
-/* 40px 状态层跟随滑块中心，超出轨道的部分保持可见 */
-.md-switch-state-layer {
-  position: absolute;
-  z-index: 1;
-  top: 50%;
-  left: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background-color: var(--md-switch-state-color);
-  opacity: 0;
-  pointer-events: none;
-  transform: translate3d(-6px, -50%, 0);
-  transition:
-    opacity var(--md-duration-short, 200ms) var(--md-ease-decelerate, cubic-bezier(0.05, 0.7, 0.1, 1)),
-    background-color var(--md-duration-short, 200ms) var(--md-ease-decelerate, cubic-bezier(0.05, 0.7, 0.1, 1)),
-    transform var(--md-duration-medium, 280ms) var(--md-ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
-}
-
-.md-switch-row.is-checked .md-switch-state-layer {
-  transform: translate3d(16px, -50%, 0);
-}
-
-/* thumb 固定为 24px 容器，只负责位移；knob 用缩放表现 16 / 24 / 28px */
+/* 固定尺寸的滑块容器只做位移，放大时不改变布局或点击区域。 */
 .md-switch-thumb {
   position: absolute;
-  z-index: 2;
-  top: 4px;
-  left: 4px;
-  display: block;
+  top: 50%;
+  left: 2px;
   width: 24px;
   height: 24px;
-  transform: translate3d(-2px, 0, 0);
-  transition: transform var(--md-duration-medium, 280ms) var(--md-ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
-  will-change: transform;
+  pointer-events: none;
+  transform: translate3d(calc(22px * var(--switch-progress)), -50%, 0);
 }
 
-.md-switch-row.is-checked .md-switch-thumb {
-  transform: translate3d(20px, 0, 0);
+.md-switch-state-layer {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background-color: var(--switch-thumb-color);
+  opacity: 0;
+  transition: opacity var(--md-duration-short) var(--md-ease-decelerate);
 }
 
 .md-switch-knob {
+  --switch-circle-scale: calc((2 + var(--switch-progress)) / 3);
+  position: relative;
   display: block;
   width: 100%;
   height: 100%;
-  border-radius: 50%;
-  background-color: var(--md-outline);
-  transform: scale(0.6667);
-  transition:
-    transform var(--md-duration-medium, 280ms) var(--md-ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)),
-    background-color var(--md-duration-short, 200ms) var(--md-ease-decelerate, cubic-bezier(0.05, 0.7, 0.1, 1));
-}
-
-.md-switch-row.is-checked .md-switch-knob {
-  background-color: var(--md-on-primary);
-  transform: scale(1);
-}
-
-.md-switch-row:not(:disabled):active .md-switch-knob {
-  transform: scale(1.1667);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .md-switch-row:not(:disabled):hover .md-switch-state-layer {
-    opacity: 0.08;
-  }
+  border-radius: calc(50% - 12% * var(--switch-bulge));
+  background-color: var(--switch-thumb-color);
+  box-shadow: 0 3px 6px color-mix(in oklab, var(--md-shadow-color-soft) calc(72% * var(--switch-bulge)), transparent);
+  transform:
+    translateY(calc(-2px * var(--switch-bulge)))
+    scale(
+      calc(var(--switch-circle-scale) + 1.36 * var(--switch-bulge)),
+      calc(var(--switch-circle-scale) + 1.05 * var(--switch-bulge))
+    );
 }
 
 .md-switch-row:focus-visible {
@@ -159,10 +180,12 @@ function toggle() {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .md-switch-track,
-  .md-switch-state-layer,
-  .md-switch-thumb,
-  .md-switch-knob {
+  .md-switch-track {
+    --switch-progress: var(--switch-rest);
+    --switch-bulge: 0;
+  }
+
+  .md-switch-state-layer {
     transition: none;
   }
 }

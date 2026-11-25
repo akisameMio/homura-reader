@@ -1260,7 +1260,7 @@ onBeforeUnmount(() => {
     background: color-mix(in oklab, var(--md-primary-container) 92%, var(--md-on-primary-container));
   }
 
-  .island-body :deep(.island-menu-item:hover) {
+  .island-body :deep(.island-menu-item:not([role="switch"]):hover) {
     background: color-mix(in oklab, var(--md-primary-container) 46%, transparent);
   }
 }
