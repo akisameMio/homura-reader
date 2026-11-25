@@ -67,7 +67,7 @@
     </div>
   </Transition>
   <section ref="gridRef" class="md-shelf-grid" :aria-label="favoritesOnly ? t('收藏内容') : currentCollection ? t('书库：{0}', { 0: currentCollection.title }) : t('书架内容')">
-    <ContinueReading v-if="!favoritesOnly && !currentCollection && !selecting && featuredBooks.length" :books="featuredBooks" @open="$emit('open', $event)" />
+    <ContinueReading v-if="!favoritesOnly && !currentCollection && !selecting && featuredBooks.length" :books="featuredBooks" @open="openBook" />
     <CollectionCard v-for="collection in displayCollections" :key="collection.id" :collection="collection" :books="booksForCollection(collection)" :sort-key="sortKey" :touch-over="touchDrag.overId === collection.id" :selecting="selecting" :selected="selectedCollectionIds.includes(collection.id)" @open="openCollection" @toggle="toggleCollection" @move="moveDropped" />
     <BookCard v-for="book in renderedBooks" :key="book.id" :book="book" :progress="shelf.progressInfoFor(book.id) ?? undefined" :selecting="selecting" :selected="selectedIds.includes(book.id)" :dragging="touchDrag.active && touchDrag.ids.includes(book.id)" @open="openBook" @drag="onBookDrag" @touchstart="onBookTouchStart($event, book.id)" />
     <template v-if="!selecting">
@@ -222,8 +222,8 @@ function selectAll() {
   selectedIds.value = displayBooks.value.map(book => book.id);
   selectedCollectionIds.value = displayCollections.value.map(collection => collection.id);
 }
-function openBook(id: string) {
-  if (!selecting.value) return emit('open', id);
+function openBook(id: string, cover: HTMLElement | null) {
+  if (!selecting.value) return emit('open', id, cover);
   selectedIds.value = selectedIds.value.includes(id) ? selectedIds.value.filter(item => item !== id) : [...selectedIds.value, id];
 }
 

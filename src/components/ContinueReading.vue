@@ -9,7 +9,7 @@
     @click="onOpen"
   >
     <span class="content">
-      <span class="cover-shell" :data-book-cover-id="featured.book.id">
+      <span class="cover-shell" ref="coverEl">
         <img v-if="featured.book.cover" :src="featured.book.cover" class="cover-image" alt="" loading="lazy" decoding="async" draggable="false" />
         <span v-else class="cover-fallback" aria-hidden="true"><MdIcon name="auto_stories" /></span>
       </span>
@@ -62,8 +62,6 @@ import { computed, ref, shallowRef, watch, type PropType } from 'vue';
 import { useShelfStore } from '../stores/shelf.ts';
 import { resolveBookFormat } from '../services/utils.ts';
 import MdIcon from './MdIcon.vue';
-import { readBookCoverRect } from '../services/bookCover.ts';
-import { playShelfToReaderSplash } from '../services/readerTransition.ts';
 
 const emit = defineEmits(['open']);
 import type { Book } from '../types.ts';
@@ -94,13 +92,10 @@ const featured = computed(() => {
   return { book, progress: { index: 0, total, percent: 0, updatedAt: 0 } };
 });
 
-// 点击特色卡：若拿到封面起点矩形，就播共享元素飞行封面，再通知父级打开
+const coverEl = shallowRef<HTMLElement | null>(null);
+
 function onOpen() {
-  const item = featured.value;
-  if (!item) return;
-  const rect = readBookCoverRect(item.book.id);
-  if (rect) playShelfToReaderSplash({ rect, cover: item.book.cover || '', title: item.book.title });
-  emit('open', item.book.id);
+  if (featured.value) emit('open', featured.value.book.id, coverEl.value);
 }
 
 const typeLabel = computed(() => {

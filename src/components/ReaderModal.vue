@@ -4,6 +4,7 @@
     v-show="!!reader.currentBook"
     class="reader-dismiss-layer reader-surface fixed inset-0 bg-[var(--md-reader-paper)] z-50 flex flex-col transition-colors duration-200"
     :data-reader-mode="theme.readerSurfaceMode"
+    :inert="opening"
   >
     <div
       v-if="isCompact && !!reader.currentBook && !nativePredictiveBackSupported"
@@ -34,11 +35,17 @@
           <WebtoonView
             v-if="reader.layoutConfig.direction === 'vertical'"
             :key="'webtoon-' + reader.currentBook?.id"
+            @first-frame="onFirstFrame"
           />
           <template v-else>
-            <PaginatedView :key="'paginated-' + reader.currentBook?.type + '-' + reader.currentBook?.id" />
+            <PaginatedView
+              :key="'paginated-' + reader.currentBook?.type + '-' + reader.currentBook?.id"
+              :opening="opening"
+              @first-frame="onFirstFrame"
+            />
             <!-- 左右翻页箭头：跟手翻页之外给鼠标用户一个落点，悬停纸面时浮现 -->
             <button
+              v-if="!opening"
               type="button"
               class="reader-page-arrow is-prev"
               :class="{ 'is-dim': reader.atFirstPage && !reader.currentCollection }"
@@ -49,6 +56,7 @@
               <MdIcon name="chevron_left" />
             </button>
             <button
+              v-if="!opening"
               type="button"
               class="reader-page-arrow is-next"
               :class="{ 'is-dim': reader.atLastPage && !reader.currentCollection }"
@@ -72,7 +80,7 @@
         leave-to-class="-translate-y-2 opacity-0"
       >
         <ReaderTopBar
-          v-if="ui.readerChromeVisible"
+          v-if="reader.currentBook && !opening && ui.readerChromeVisible"
           @back="dismissWithPredictiveBack"
         />
       </Transition>
@@ -89,7 +97,7 @@
         leave-to-class="opacity-0"
       >
         <div
-          v-if="reader.openingBook || reader.openError"
+          v-if="!opening && (reader.openingBook || reader.openError)"
           class="md-reader-status"
           :role="reader.openError ? 'alert' : 'status'"
           :aria-live="reader.openError ? 'assertive' : 'polite'"
@@ -107,8 +115,8 @@
 /* ============================================================================
    HOMURA · 阅读器整屏遮罩
    ----------------------------------------------------------------------------
-   画布铺满窗口，顶部工具栏以浮层形式出现并自动隐藏，底部页脚常驻纸面；
-   鼠标靠近上边缘、点击画布或按 Esc 唤出顶栏，2.2 秒无操作淡出；
+   画布铺满窗口，初次进入隐藏工具栏；点击画布或按 Esc 唤出顶栏和页脚。
+   唤出后，顶栏 2.2 秒无操作淡出，也可由鼠标靠近上边缘再次唤出；
    触屏点中间区域切换顶栏，条漫模式轻点画布切换。
    设置与目录改为左右抽屉，不再占用顶栏。
    ========================================================================== */
@@ -122,6 +130,7 @@ import { useViewport } from '../composables/useViewport.ts';
 import { useShortcuts } from '../composables/useShortcuts.ts';
 import { useReaderBackDismiss } from '../composables/useReaderBackDismiss.ts';
 import { useVolumeKeys } from '../composables/useVolumeKeys.ts';
+import type { Book } from '../types.ts';
 import MdIcon from './MdIcon.vue';
 import ReaderTopBar from './ReaderTopBar.vue';
 import ReaderTocDrawer from './ReaderTocDrawer.vue';
@@ -131,6 +140,18 @@ import PaginatedView from './PaginatedView.vue';
 import WebtoonView from './WebtoonView.vue';
 import { useI18n } from '../composables/useI18n.ts';
 
+const props = defineProps({ opening: Boolean });
+const emit = defineEmits<{
+  'first-frame': [book: Book, ready: boolean];
+  'cancel-opening': [];
+}>();
+
+function onFirstFrame(book: Book, ready: boolean) {
+  emit('first-frame', book, ready);
+}
+
+const isOpening = () => props.opening;
+const cancelOpening = () => emit('cancel-opening');
 const { t } = useI18n();
 
 const reader = useReaderStore();
@@ -147,12 +168,12 @@ const {
   dismissWithPredictiveBack,
   nativePredictiveBackSupported,
   readerDismissing
-} = useReaderBackDismiss(reader, ui);
+} = useReaderBackDismiss(reader, ui, isOpening, cancelOpening);
 
 // 桌面：鼠标贴近上边缘唤出顶栏；顶栏可见时，移动鼠标会重新计时
 function onMouseMove(e: PointerEvent) {
   if (e.pointerType !== 'mouse' || e.buttons) return;
-  if (!reader.currentBook) return;
+  if (!reader.currentBook || props.opening || !ui.readerChromeEngaged) return;
   const nearEdge = e.clientY <= 88;
   if (nearEdge || ui.readerChromeVisible) ui.showChrome();
 }
@@ -267,14 +288,15 @@ watch([() => !!reader.currentBook, readerDismissing], ([active, dismissing]) => 
   theme.setReaderActive(active && !dismissing);
 }, { immediate: true, flush: 'sync' });
 
-// 阅读器是全屏遮罩，锁住底层书架页的滚动，避免右侧多出无用的长滚动条
+// 加载首帧即收起根滚动条，飞行落点与揭幕后的视口共用同一宽度。
+watch([() => !!reader.currentBook, isOpening], ([active, opening]) => {
+  setReaderScrollLock(active || opening);
+});
 
 watch(() => reader.currentBook?.id, id => {
   cancelVerticalGesture();
-  setReaderScrollLock(!!id);
   document.documentElement.classList.toggle('reader-active', !!id);
   ui.resetReaderUi();
-  if (id) ui.showChrome();
 });
 
 onBeforeUnmount(() => {
@@ -283,6 +305,6 @@ onBeforeUnmount(() => {
   document.documentElement.classList.remove('reader-active');
 });
 
-useShortcuts(reader, viewportRef, dismissWithPredictiveBack);
-useVolumeKeys(reader, ui);
+useShortcuts(reader, viewportRef, dismissWithPredictiveBack, isOpening, cancelOpening);
+useVolumeKeys(reader, ui, isOpening);
 </script>

@@ -1,54 +1,46 @@
 <template>
-  <!-- 书架 → 阅读器 加载页：封面居中 + MD3 不定长进度 + 异常重试 -->
-  <Transition
-    appear
-    @before-enter="theme.setReaderLoadingActive(true)"
-    @after-leave="theme.setReaderLoadingActive(false)"
-    enter-active-class="rlp-enter-active"
-    leave-active-class="rlp-leave-active"
-    enter-from-class="rlp-enter-from"
-    leave-to-class="rlp-leave-to"
+  <div
+    v-if="shown"
+    ref="rootEl"
+    class="rlp-root reader-surface fixed inset-0 z-[55]"
+    :class="{ 'is-leaving': leaving }"
+    :data-reader-mode="theme.readerSurfaceMode"
+    @wheel.prevent
   >
-    <div
-      v-if="shown"
-      class="rlp-root reader-surface fixed inset-0 z-[55] flex flex-col items-center justify-center px-8"
-      :class="{ 'is-leaving': leaving }"
-      :data-reader-mode="theme.readerSurfaceMode"
-      role="status"
-      :aria-busy="phase === 'loading'"
-      aria-live="polite"
-    >
+    <div class="rlp-surface" @animationend.self="finishReveal">
       <template v-if="phase !== 'error'">
-        <div ref="coverEl" class="rlp-cover" :class="{ 'is-art': !cover }">
-          <img v-if="cover" :src="cover" alt="" draggable="false" />
-          <template v-else>
-            <span class="rlp-art-word">HOMURA</span>
-            <span class="rlp-art-title">{{ title }}</span>
-          </template>
+        <div class="rlp-cover-shadow">
+          <div ref="coverEl" class="rlp-cover" :class="{ 'is-art': !cover }" :style="{ '--rlp-cover-ratio': coverRatio }">
+            <img v-if="cover" :src="cover" alt="" draggable="false" @load="onCoverLoad" />
+            <template v-else>
+              <span class="rlp-art-word">HOMURA</span>
+              <span class="rlp-art-title">{{ title }}</span>
+            </template>
+          </div>
         </div>
-        <div class="rlp-meta">
+        <div class="rlp-meta" role="status" aria-live="polite">
           <p class="rlp-title">{{ title }}</p>
-          <p class="rlp-status font-mono">{{ t(statusText) }}</p>
+          <p class="rlp-status font-mono">{{ t(status) }}</p>
+          <div class="rlp-bar" aria-hidden="true"><i :class="{ 'is-rendering': rendering }"></i></div>
         </div>
-        <div class="rlp-bar" aria-hidden="true"><i></i></div>
-        <p class="rlp-hint font-mono">{{ t('加载内容与排版数据') }}</p>
       </template>
 
       <template v-else>
         <div class="rlp-err-icon" aria-hidden="true">!</div>
-        <p class="rlp-err-msg">{{ message }}</p>
+        <p class="rlp-err-msg" role="alert">{{ message }}</p>
         <button type="button" class="rlp-retry md-hit-target" @click="$emit('retry')">{{ t('重新加载') }}</button>
         <button v-if="canRelink" type="button" class="rlp-back md-hit-target" @click="$emit('relink')">{{ t('重新定位原文件') }}</button>
         <button type="button" class="rlp-back font-mono" @click="$emit('cancel')">{{ t('返回书架') }}</button>
       </template>
     </div>
-  </Transition>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import type { PropType } from 'vue';
-import { makeAxis, runSpring, prefersReducedMotion } from '../services/spring.ts';
+import { prefersReducedMotion } from '../services/spring.ts';
+import { playShelfToReaderSplash } from '../services/readerTransition.ts';
 import { useI18n } from '../composables/useI18n.ts';
 import { useThemeStore } from '../stores/theme.ts';
 
@@ -57,6 +49,8 @@ const theme = useThemeStore();
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
+  reveal: { type: Boolean, default: false },
+  rendering: { type: Boolean, default: false },
   phase: { type: String as PropType<'loading' | 'error'>, default: 'loading' },
   title: { type: String, default: '' },
   cover: { type: String, default: '' },
@@ -64,107 +58,102 @@ const props = defineProps({
   message: { type: String, default: '无法加载这本书，请重试。' }
 });
 
-defineEmits(['retry', 'cancel', 'relink']);
-
-const STEPS = ['正在解析内容…', '构建分页…', '校准排版…'];
-const step = ref(0);
-let timer: ReturnType<typeof setInterval> | null = null;
-
-function startTicker() {
-  stopTicker();
-  step.value = 0;
-  timer = setInterval(() => {
-    if (step.value < STEPS.length - 1) step.value += 1;
-  }, 640);
-}
-function stopTicker() {
-  if (timer) { clearInterval(timer); timer = null; }
-}
-
-const statusText = computed(() => props.phase === 'loading' ? t(STEPS[step.value]) : '');
-
-// shown 控制 v-if 挂载；leaving 标记正在播离场弹簧（此期间根背景同步淡出）。
-// 用内部状态而非直接绑 props.visible，是为了在离场弹簧跑完后再卸载，让封面展开消散演完。
-const shown = ref(props.visible);
+const emit = defineEmits(['retry', 'cancel', 'relink', 'revealed']);
+const status = computed(() => props.rendering ? '正在准备首屏…' : '正在解析内容…');
+const shown = ref(false);
 const leaving = ref(false);
-const coverEl = ref<HTMLElement | null>(null);
-let cancelLeaveSpring: (() => void) | null = null;
-let leaveTimer: number | null = null;
+const rootEl = shallowRef<HTMLElement | null>(null);
+const coverEl = shallowRef<HTMLElement | null>(null);
+const coverRatio = ref(3 / 4);
+let flight: ReturnType<typeof playShelfToReaderSplash> = null;
+let revealTimer: number | undefined;
 
-function cancelLeave() {
-  if (cancelLeaveSpring) { cancelLeaveSpring(); cancelLeaveSpring = null; }
-  if (leaveTimer !== null) { window.clearTimeout(leaveTimer); leaveTimer = null; }
+function onCoverLoad(event: Event) {
+  const image = event.currentTarget as HTMLImageElement;
+  if (image.naturalHeight) coverRatio.value = image.naturalWidth / image.naturalHeight;
 }
 
-// 离场弹簧：封面 scale 1 → 3.8、opacity 1 → 0（ζ=1 临界阻尼，无过冲），
-// 同时根背景随 is-leaving 类 CSS 淡出。弹簧收敛后再真正卸载组件。
-function playLeaveSpring() {
-  const el = coverEl.value;
-  const reduce = prefersReducedMotion();
-  const finish = () => {
-    leaveTimer = null;
-    leaving.value = false;
-    shown.value = false;
-    if (el) el.style.cssText = '';
-  };
-  if (!el || reduce || typeof window === 'undefined' || !window.requestAnimationFrame) {
-    // 减少动效 / 无 DOM：直接淡出卸载
-    leaving.value = true;
-    leaveTimer = window.setTimeout(finish, reduce ? 0 : 200);
-    return;
+async function flyCoverFrom(source?: HTMLElement | null) {
+  if (!source || prefersReducedMotion()) return;
+  const image = source.querySelector('img');
+  if (image) {
+    if (!image.naturalHeight) return;
+    coverRatio.value = image.naturalWidth / image.naturalHeight;
   }
-  leaving.value = true;
-  const stiffness = 160;
-  const axS = makeAxis(1, stiffness);   // scale
-  const axO = makeAxis(1, stiffness);   // opacity
-  axS.target = 3.8;
-  axO.target = 0;
-  const axes = [axS, axO];
-  const apply = () => {
-    el.style.transform = `translateY(-2px) scale(${Math.max(1, axS.pos).toFixed(4)})`;
-    el.style.opacity = Math.max(0, Math.min(1, axO.pos)).toFixed(3);
-    el.style.filter = `blur(${(Math.max(0, axS.pos - 1) / 2.8 * 10).toFixed(2)}px)`;
-  };
-  cancelLeaveSpring = runSpring(axes, apply, () => { cancelLeaveSpring = null; finish(); }, { damping: 1, posEpsilon: 0.01, velEpsilon: 0.05 });
+  await nextTick();
+  if (!props.visible || props.phase !== 'loading' || !rootEl.value || !coverEl.value) return;
+  flight = playShelfToReaderSplash(source, coverEl.value, rootEl.value);
+  await flight?.finished;
+  flight = null;
 }
 
-watch(() => props.visible, (visible) => {
+defineExpose({ flyCoverFrom });
+
+function hide() {
+  window.clearTimeout(revealTimer);
+  leaving.value = false;
+  shown.value = false;
+  theme.setReaderLoadingActive(false);
+}
+
+function finishReveal() {
+  if (!leaving.value || props.visible) return;
+  hide();
+  emit('revealed');
+}
+
+watch(() => [props.visible, props.reveal, props.phase] as const, ([visible, reveal, phase]) => {
+  window.clearTimeout(revealTimer);
+  if (!visible || phase === 'error') flight?.cancel();
   if (visible) {
-    // 入场：取消可能残留的离场弹簧，直接挂载
-    cancelLeave();
     leaving.value = false;
     shown.value = true;
-    if (coverEl.value) coverEl.value.style.cssText = '';
+    theme.setReaderLoadingActive(true);
+  } else if (shown.value && reveal && !prefersReducedMotion()) {
+    leaving.value = true;
+    // 动画事件不可用时也能结束揭幕。
+    revealTimer = window.setTimeout(finishReveal, 360);
   } else if (shown.value) {
-    playLeaveSpring();
+    hide();
+    if (reveal) emit('revealed');
   }
-});
-
-watch(() => [props.visible, props.phase] as const, ([visible, phase]) => {
-  if (visible && phase === 'loading') startTicker();
-  else stopTicker();
 }, { immediate: true });
 
+watch(() => props.cover, () => { coverRatio.value = 3 / 4; });
+
 onBeforeUnmount(() => {
-  stopTicker();
-  cancelLeave();
-  theme.setReaderLoadingActive(false);
+  flight?.cancel();
+  hide();
 });
 </script>
 
 <style scoped>
 .rlp-root {
-  background: var(--md-reader-paper);
-  color: var(--md-reader-ink);
+  --rlp-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+.rlp-surface {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 24px;
+  padding: 24px 32px;
+  background: color-mix(in oklab, var(--md-reader-paper) 88%, var(--md-surface-low));
+  color: var(--md-reader-ink);
+}
+.rlp-cover-shadow {
+  filter: drop-shadow(0 7px 15px color-mix(in oklab, var(--md-shadow-color-soft) 22%, transparent));
 }
 .rlp-cover {
-  /* 与 readerTransition 的 TARGET_COVER_WIDTH / min(176px, 42vw) 保持一致 */
-  width: min(176px, 42vw);
-  aspect-ratio: 3 / 4;
+  width: min(176px, 42vw, calc(40dvh * var(--rlp-cover-ratio)));
+  aspect-ratio: var(--rlp-cover-ratio);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: var(--md-elevation-card-soft);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -177,7 +166,7 @@ onBeforeUnmount(() => {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 .rlp-cover.is-art {
   background: linear-gradient(160deg, var(--md-primary), color-mix(in oklab, var(--md-primary) 52%, var(--md-tertiary)));
@@ -200,7 +189,7 @@ onBeforeUnmount(() => {
 }
 .rlp-meta {
   text-align: center;
-  max-width: 248px;
+  width: min(100%, 248px);
 }
 .rlp-title {
   font-size: 17px;
@@ -211,6 +200,7 @@ onBeforeUnmount(() => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  overflow-wrap: anywhere;
 }
 .rlp-status {
   font-size: 12px;
@@ -218,33 +208,45 @@ onBeforeUnmount(() => {
   margin: 0;
 }
 .rlp-bar {
-  width: 148px;
+  width: min(148px, 100%);
   height: 3px;
+  margin: 16px auto 0;
   border-radius: 999px;
   background: var(--md-reader-rule);
   overflow: hidden;
-  position: relative;
 }
 .rlp-bar i {
-  position: absolute;
-  left: -36%;
-  top: 0;
+  display: block;
   height: 100%;
-  width: 34%;
-  border-radius: 999px;
+  border-radius: inherit;
   background: var(--md-primary);
-  animation: rlp-indet 1.15s var(--md-ease-emphasized) infinite;
+  transform-origin: left center;
+  transform: scaleX(0.28);
+  transition: transform 200ms var(--rlp-ease);
 }
-@keyframes rlp-indet {
-  0% { left: -36%; width: 30%; }
-  55% { width: 46%; }
-  100% { left: 100%; width: 26%; }
+.rlp-bar i.is-rendering { transform: scaleX(0.68); }
+.rlp-root.is-leaving .rlp-bar i {
+  transform: scaleX(1);
+  transition-duration: 32ms;
 }
-.rlp-hint {
-  font-size: 11px;
-  color: var(--md-reader-ink-soft);
-  opacity: 0.8;
-  margin: 0;
+/* 封面先淡出，揭幕时首屏即使也是封面，也只会出现一个构图。 */
+.rlp-root.is-leaving .rlp-cover-shadow {
+  animation: rlp-cover-out 60ms var(--rlp-ease) 20ms both;
+}
+.rlp-root.is-leaving .rlp-meta {
+  animation: rlp-meta-out 68ms var(--rlp-ease) 32ms both;
+}
+.rlp-root.is-leaving .rlp-surface {
+  animation: rlp-reveal 240ms var(--rlp-ease) 80ms both;
+}
+@keyframes rlp-cover-out {
+  to { opacity: 0; }
+}
+@keyframes rlp-meta-out {
+  to { opacity: 0; transform: translateY(-7px); }
+}
+@keyframes rlp-reveal {
+  to { opacity: 0; transform: scale(1.05); }
 }
 .rlp-err-icon {
   width: 46px;
@@ -285,25 +287,11 @@ onBeforeUnmount(() => {
   padding: 6px 10px;
 }
 
-.rlp-enter-active { transition: opacity 260ms var(--md-ease-emphasized); }
-.rlp-leave-active { transition: opacity 520ms var(--md-ease-emphasized); }
-.rlp-enter-from, .rlp-leave-to { opacity: 0; }
-
-/* 离场：整页背景淡出，居中的封面由弹簧（ζ=1 临界阻尼）逐帧驱动展开消散，
-   逐帧 style 由 playLeaveSpring 写入，这里只管背景与零碎元素的收尾。 */
-.rlp-root.is-leaving { transition: opacity 520ms var(--md-ease-emphasized); opacity: 0; }
-.rlp-cover { transform-origin: center center; will-change: transform, opacity, filter; }
-/* 文字、进度条与提示先行淡出，避免放大时露出底下的零碎元素 */
-.rlp-root.is-leaving .rlp-meta,
-.rlp-root.is-leaving .rlp-bar,
-.rlp-root.is-leaving .rlp-hint {
-  transition: opacity 180ms var(--md-ease-emphasized);
-  opacity: 0;
-}
 
 @media (prefers-reduced-motion: reduce) {
-  .rlp-enter-active, .rlp-leave-active { transition-duration: 0.01ms; }
-  .rlp-root.is-leaving { transition-duration: 0.01ms; }
-  .rlp-bar i { animation-duration: 2s; }
+  .rlp-bar i, .rlp-retry { transition: none; }
+  .rlp-root.is-leaving .rlp-cover-shadow,
+  .rlp-root.is-leaving .rlp-meta,
+  .rlp-root.is-leaving .rlp-surface { animation: none; }
 }
 </style>

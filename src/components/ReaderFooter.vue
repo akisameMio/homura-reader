@@ -1,6 +1,7 @@
 <template>
   <footer
     v-if="reader.currentBook"
+    v-show="ui.readerChromeEngaged"
     class="md-reader-footer"
     :aria-label="t('阅读进度')"
     :style="{ '--reader-footer-progress': `${progress}%` }"
@@ -205,6 +206,10 @@ watch(() => reader.currentIndex, value => {
     pageCountTimer = null;
   }, 1200);
   if (!scrubbing.value) sliderValue.value = Math.min(value, maxIndex.value);
+});
+
+watch(() => ui.readerChromeVisible, visible => {
+  if (visible) trackVisible.value = true;
 });
 
 watch(maxIndex, value => {

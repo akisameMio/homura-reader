@@ -1,7 +1,7 @@
 <template>
   <article class="md-shelf-card relative min-w-0 self-start" :class="{ 'is-touch-dragging': dragging }" draggable="true" @dragstart="$emit('drag', $event, book.id)" @contextmenu.prevent>
     <button type="button" class="md-shelf-open absolute inset-0 z-10" :aria-label="selecting ? t('选择书本：{0}', { 0: book.title }) : t('阅读：{0}', { 0: book.title })" :aria-pressed="selecting ? selected : undefined" @click="onOpen"></button>
-    <div class="md-shelf-cover" :class="{ 'is-selected': selected }" :data-book-cover-id="selecting ? undefined : book.id">
+    <div class="md-shelf-cover" :class="{ 'is-selected': selected }" ref="coverEl">
       <img
         v-if="book.cover"
         :src="book.cover"
@@ -38,12 +38,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, shallowRef } from 'vue';
 import type { PropType } from 'vue';
 import type { Book } from '../types.ts';
 import { resolveBookFormat } from '../services/utils.ts';
-import { readBookCoverRect } from '../services/bookCover.ts';
-import { playShelfToReaderSplash } from '../services/readerTransition.ts';
 import MdIcon from './MdIcon.vue';
 import { useI18n } from '../composables/useI18n.ts';
 
@@ -59,14 +57,10 @@ const props = defineProps({
 
 const emit = defineEmits(['open', 'drag']);
 
-// 点击封面：若拿到起点矩形，就让飞行封面从卡片位置展开（共享元素感），
-// 同时立刻通知父级开始 openBook；真实加载进度由 ReaderLoadingPage 承接。
+const coverEl = shallowRef<HTMLElement | null>(null);
+
 function onOpen() {
-  if (!props.selecting) {
-    const rect = readBookCoverRect(props.book.id);
-    if (rect) playShelfToReaderSplash({ rect, cover: props.book.cover || '', title: props.book.title });
-  }
-  emit('open', props.book.id);
+  emit('open', props.book.id, coverEl.value);
 }
 
 const badgeText = computed(() => {

@@ -8,7 +8,7 @@
     leave-from-class="opacity-100"
     leave-to-class="opacity-0"
   >
-    <div v-if="active" class="fixed inset-0 z-[60] pointer-events-none bg-[var(--bg-canvas)] flex items-center justify-center p-8">
+    <div v-if="active && !suppressed" class="fixed inset-0 z-[60] pointer-events-none bg-[var(--bg-canvas)] flex items-center justify-center p-8">
       <div class="w-full max-w-lg rounded-2xl border-2 border-dashed border-[var(--brand-primary)] bg-[var(--bg-card)] px-8 py-10 flex flex-col items-center text-center gap-3 shadow-[0_18px_40px_-18px_color-mix(in_oklab,var(--md-shadow-color-soft)_46%,transparent)]">
         <img
           :src="logoUrl"
@@ -28,6 +28,8 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { useImporter } from '../composables/useImporter.ts';
 import { canDragImport } from '../services/platform.ts';
 import { useI18n } from '../composables/useI18n.ts';
+
+defineProps({ suppressed: Boolean });
 
 const { t } = useI18n();
 const logoUrl = import.meta.env.BASE_URL + 'favicon.png';

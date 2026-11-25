@@ -13,15 +13,14 @@ Object.assign(globalThis, {
   Element: window.Element, HTMLElement: window.HTMLElement, SVGElement: window.SVGElement,
   getComputedStyle: window.getComputedStyle.bind(window)
 });
+globalThis.requestAnimationFrame = window.requestAnimationFrame = () => 1;
+globalThis.cancelAnimationFrame = window.cancelAnimationFrame = () => {};
 let reducedMotion = false;
 window.matchMedia = query => ({ matches: query.includes('prefers-reduced-motion') && reducedMotion, addEventListener() {}, removeEventListener() {} });
-let frameId = 0;
-const frames = new Map();
-globalThis.requestAnimationFrame = window.requestAnimationFrame = callback => { frames.set(++frameId, callback); return frameId; };
-globalThis.cancelAnimationFrame = window.cancelAnimationFrame = id => frames.delete(id);
 const { createApp, h, reactive, nextTick } = await import('vue');
 const { createPinia, disposePinia } = await import('pinia');
 const { useThemeStore } = await import('../src/stores/theme.ts');
+const { playShelfToReaderSplash } = await import('../src/services/readerTransition.ts');
 const require = createRequire(import.meta.url);
 const source = await readFile(new URL('../src/components/ReaderLoadingPage.vue', import.meta.url), 'utf8');
 const tokens = await readFile(new URL('../src/assets/styles/tokens.css', import.meta.url), 'utf8');
@@ -34,26 +33,14 @@ compiled = compiled.replace(/from '(\.\.\/[^']+\.ts)'/g, (_, path) => `from '${n
 const { code } = await transform(compiled, { loader: 'ts', format: 'esm', target: 'esnext' });
 const { default: ReaderLoadingPage } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 
-async function settle() {
-  let now = performance.now();
-  for (let pass = 0; pass < 2; pass++) {
-    for (let i = 0; i < 240; i++) {
-      await nextTick();
-      if (!frames.size) break;
-      const pending = [...frames.values()];
-      frames.clear();
-      now += 16;
-      for (const callback of pending) callback(now);
-    }
-    await new Promise(resolve => setTimeout(resolve, 20));
-    await nextTick();
-  }
+function finishAnimation() {
+  document.querySelector('.rlp-surface').dispatchEvent(new window.Event('animationend'));
+  return nextTick();
 }
 
 async function fixture(run, { paper = 'parchment', mode = 'light', reduced = false } = {}) {
   reducedMotion = reduced;
   localStorage.clear();
-  frames.clear();
   const chrome = [];
   window.__TAURI__ = { window: { getCurrentWindow: () => ({
     setTheme: async value => chrome.push(['theme', value]),
@@ -64,12 +51,12 @@ async function fixture(run, { paper = 'parchment', mode = 'light', reduced = fal
   theme.setSurfaceMode(mode, true);
   theme.setPureBlackMode(mode === 'dark');
   theme.setReaderSurfaceMode(paper);
-  const props = reactive({ visible: false, phase: 'loading', title: '测试书籍', cover: '' });
+  const props = reactive({ visible: false, reveal: false, phase: 'loading', title: '测试书籍', cover: '' });
   const app = createApp({ render: () => h(ReaderLoadingPage, props) });
   app.use(pinia);
   app.mount('#app');
   try { await run({ theme, chrome, props, app }); }
-  finally { if (app._instance) app.unmount(); disposePinia(pinia); frames.clear(); }
+  finally { if (app._instance) app.unmount(); disposePinia(pinia); }
 }
 
 test('加载页出现即同步纸面和原生标题栏，数据提前就绪不会再改变背景', async () => {
@@ -84,8 +71,9 @@ test('加载页出现即同步纸面和原生标题栏，数据提前就绪不�
         assert.deepEqual(chrome.slice(-2), [['theme', 'light'], ['canvas', paperColors[token]]]);
         theme.setReaderActive(true);
         assert.equal(document.getElementById('homuraThemeColor').content, paperColors[token]);
+        props.reveal = true;
         props.visible = false;
-        await settle();
+        await nextTick();
         assert.equal(document.querySelector('.rlp-root'), null);
         assert.deepEqual(chrome.at(-1), ['canvas', paperColors[token]]);
         theme.setReaderActive(false);
@@ -95,7 +83,7 @@ test('加载页出现即同步纸面和原生标题栏，数据提前就绪不�
   }
 });
 
-test('加载错误、切换纸面和取消期间仍跟随加载页，离场后恢复全局外观', () => fixture(async ({ theme, chrome, props }) => {
+test('加载错误期间跟随阅读纸面，取消后恢复全局外观', () => fixture(async ({ theme, chrome, props }) => {
   props.visible = true;
   await nextTick();
   props.phase = 'error';
@@ -106,9 +94,6 @@ test('加载错误、切换纸面和取消期间仍跟随加载页，离场后�
   assert.deepEqual(chrome.at(-1), ['canvas', paperColors['--md-reader-green-paper']]);
   props.visible = false;
   await nextTick();
-  assert.deepEqual(chrome.at(-1), ['canvas', paperColors['--md-reader-green-paper']]);
-  await new Promise(resolve => setTimeout(resolve, 210));
-  await settle();
   assert.equal(document.querySelector('.rlp-root'), null);
   assert.deepEqual(chrome.slice(-2), [['theme', 'dark'], ['canvas', '#000000']]);
 }, { mode: 'dark' }));
@@ -119,7 +104,7 @@ test('减少动效时快速重新打开加载页不会被旧离场定时器关�
   props.visible = false;
   await nextTick();
   props.visible = true;
-  await settle();
+  await nextTick();
   assert.ok(document.querySelector('.rlp-root'));
   theme.setReaderSurfaceMode('settings');
   assert.deepEqual(chrome.at(-1), ['canvas', '#000000']);
@@ -130,19 +115,65 @@ test('减少动效时快速重新打开加载页不会被旧离场定时器关�
 }, { mode: 'dark', reduced: true }));
 
 
-test('封面弹簧离场被重新打开打断时持续保留纸面，完成取消后才恢复书架颜色', () => fixture(async ({ chrome, props }) => {
-  props.cover = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>';
+test('揭幕被重新打开打断时保持遮罩和纸面，完成后恢复书架颜色', () => fixture(async ({ chrome, props }) => {
   props.visible = true;
-  await settle();
+  await nextTick();
+  props.reveal = true;
   props.visible = false;
   await nextTick();
   assert.ok(document.querySelector('.rlp-root.is-leaving'));
   props.visible = true;
-  await settle();
+  props.reveal = false;
+  await nextTick();
+  await finishAnimation();
   assert.ok(document.querySelector('.rlp-root:not(.is-leaving)'));
   assert.deepEqual(chrome.at(-1), ['canvas', paperColors['--md-parchment-paper']]);
+  props.reveal = true;
   props.visible = false;
-  await settle();
+  await nextTick();
+  assert.ok(document.querySelector('.rlp-root.is-leaving'));
+  await finishAnimation();
   assert.equal(document.querySelector('.rlp-root'), null);
   assert.deepEqual(chrome.at(-1), ['canvas', '#F8FAFC']);
 }));
+
+test('飞行封面独占绘制，落位或取消时同步交还两端', async () => {
+  reducedMotion = false;
+  const source = document.createElement('div');
+  const layer = document.createElement('div');
+  const shadow = document.createElement('div');
+  const target = document.createElement('div');
+  shadow.append(target);
+  layer.append(shadow);
+  document.body.append(source, layer);
+  source.getBoundingClientRect = () => ({ left: 10, top: 20, width: 90, height: 120 });
+  target.getBoundingClientRect = () => ({ left: 160, top: 200, width: 160, height: 160 });
+  const animate = window.HTMLElement.prototype.animate;
+  const animations = [];
+  window.HTMLElement.prototype.animate = function (keyframes) {
+    let finish;
+    const finished = new Promise(resolve => { finish = resolve; });
+    animations.push({ keyframes, finish });
+    return { finished, cancel: finish };
+  };
+  try {
+    for (const cancelled of [false, true]) {
+      const flight = playShelfToReaderSplash(source, target, layer);
+      assert.equal(source.style.opacity, '0');
+      assert.equal(target.style.opacity, '0');
+      assert.equal(layer.querySelectorAll('.rlp-flying-cover').length, 1);
+      assert.equal(animations.at(-2).keyframes[1].transform, 'translate(0, 0) scale(1)');
+      assert.equal(animations.at(-1).keyframes[1].clipPath, 'inset(0px 0px round 0px)');
+      if (cancelled) flight.cancel();
+      else animations.at(-2).finish();
+      await flight.finished;
+      assert.equal(layer.querySelector('.rlp-flying-cover'), null);
+      assert.equal(source.style.opacity, '');
+      assert.equal(target.style.opacity, '');
+    }
+  } finally {
+    window.HTMLElement.prototype.animate = animate;
+    source.remove();
+    layer.remove();
+  }
+});

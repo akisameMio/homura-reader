@@ -1,6 +1,6 @@
 <template>
   <!-- 手机底栏挂在阅读器预见式返回的 transform 容器外，避免长书架把 fixed 底栏带出视口 -->
-  <div id="homura-mobile-nav-root" :inert="!!reader.currentBook"></div>
+  <div id="homura-mobile-nav-root" :inert="readerOpening || !!reader.currentBook"></div>
 
   <div
     class="library-back-layer flex min-h-0"
@@ -9,7 +9,7 @@
       'has-contained-shelf-scroll': containedShelfScroll,
       'flex-1': !containedShelfScroll
     }"
-    :inert="!!reader.currentBook"
+    :inert="readerOpening || !!reader.currentBook"
     @wheel="onLibraryWheel"
   >
     <SideNav v-if="!isCompact || !settingsDetailOpen" :active="activeNav" @nav="onRailNav" />
@@ -71,7 +71,7 @@
 
   <DesktopIsland
     v-if="desktopIslandVisible"
-    :inert="!!reader.currentBook"
+    :inert="readerOpening || !!reader.currentBook"
     :active-nav="activeNav"
     v-model:menu-open="importMenuOpen"
     v-model:import-in-place="importInPlace"
@@ -87,20 +87,24 @@
 
   <AppearanceSheet v-model:open="appearanceOpen" />
   <ImportProgressSheet v-if="isCompact" @retry="retryFailedImport" />
-  <DragOverlay />
+  <DragOverlay :suppressed="readerOpening" />
   <ReaderLoadingPage
-    :visible="readerLoadingVisible"
+    ref="readerLoadingRef"
+    :visible="readerPhase === 'loading'"
+    :reveal="readerPhase === 'reveal'"
+    :rendering="!!reader.currentBook"
     :phase="readerLoadingPhase"
     :title="readerLoadingBook?.title || ''"
     :cover="readerLoadingBook?.cover || ''"
-    :message="relinkError || reader.openError || t('无法加载这本书，请重试。')"
+    :message="relinkError || readerLoadingError || t('无法加载这本书，请重试。')"
     :can-relink="canUseNativeImport() && !readerLoadingBook?.remote && !relinking"
     @retry="retryReaderOpen"
     @relink="relinkReaderBook"
     @cancel="cancelReaderOpen"
+    @revealed="finishReaderReveal"
   />
   <div v-if="reader.currentBook" class="reader-back-scrim md-scrim" aria-hidden="true"></div>
-  <ReaderModal />
+  <ReaderModal :opening="readerOpening" @first-frame="onReaderFirstFrame" @cancel-opening="cancelReaderOpen" />
   <UpdateDialog
     v-if="isCompact"
     :open="updates.updateDialogOpen"
@@ -144,7 +148,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, shallowRef, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useThemeStore } from './stores/theme.ts';
 import { useShelfStore } from './stores/shelf.ts';
 import { useReaderStore } from './stores/reader.ts';
@@ -237,55 +241,21 @@ const settingsDetailOpen = ref(false);
 
 useScrollBounce(libraryScrollRef);
 
-// ── 书架 → 阅读器 转场状态机 ──────────────────────────────────────────
-// 'shelf' 书架 / 'loading' 加载页 / 'reader' 阅读器。
-// 加载成功后立刻置 'reader' 并用 v-if 卸载加载页组件，返回监听只认 'reader'，
-// 因此安卓返回会直接退回书架，不会回到加载页（返回栈里已无加载页）。
-const readerPhase = ref('shelf'); // 'shelf' | 'loading' | 'reader'
+// 遮罩挂载后才打开书籍，等封面落位和首屏渲染都结束后再揭幕。
+const readerPhase = ref('shelf');
+const readerOpening = computed(() => readerPhase.value === 'loading' || readerPhase.value === 'reveal');
+const readerLoadingRef = shallowRef(null);
 const readerLoadingBook = shallowRef(null);
+const readerLoadingError = ref('');
+const readerLoadingPhase = computed(() => readerLoadingError.value ? 'error' : 'loading');
+const READER_OPEN_TIMEOUT = 15000;
+let loadingGuardTimer;
+let readerOpenRequest = 0;
+let readerFirstFrameReady = false;
+let readerFlightComplete = false;
 
 function bookById(id) { return shelf.library.find(item => item.id === id) || null; }
 
-const INLINE_LOADING_TIMEOUT = 15000;
-// 加载页最短展示时长：本地解析常常几十毫秒就返回，太短会看不到转场。
-// 保证封面飞入、封面居中、进度条至少演完一轮，再淡入阅读器（含自身淡出约需 ~600ms）。
-const LOADING_MIN_VISIBLE = 900;
-// 独立的「最短可见」计时 Promise：在加载页真正显示（visible=true 的下一帧）时挂起，
-// 数据就绪后无论 openBook 返回多快，都先 await 它补齐，保证加载页演满。
-// 不依赖 openBook 返回时机算差值——桌面端解析/原生通道过快时也能稳定兜住。
-let loadingMinTimer = null;
-let loadingMinResolve = null;
-function startLoadingMinTimer() {
-  abortLoadingMinTimer();
-  return new Promise(resolve => {
-    loadingMinResolve = resolve;
-    loadingMinTimer = setTimeout(() => {
-      loadingMinTimer = null;
-      loadingMinResolve = null;
-      resolve();
-    }, LOADING_MIN_VISIBLE);
-  });
-}
-function abortLoadingMinTimer() {
-  if (loadingMinTimer) { clearTimeout(loadingMinTimer); loadingMinTimer = null; }
-  if (loadingMinResolve) { const r = loadingMinResolve; loadingMinResolve = null; r(); }
-}
-let loadingGuardTimer = null;
-function armLoadingGuard() {
-  clearLoadingGuard();
-  loadingGuardTimer = setTimeout(() => {
-    if (readerPhase.value === 'loading') {
-      readerLoadingVisible.value = false;
-      readerPhase.value = 'shelf';
-    }
-  }, INLINE_LOADING_TIMEOUT);
-}
-function clearLoadingGuard() {
-  if (loadingGuardTimer) { clearTimeout(loadingGuardTimer); loadingGuardTimer = null; }
-}
-
-const readerLoadingVisible = ref(false);
-const readerLoadingPhase = computed(() => (reader.openError ? 'error' : 'loading'));
 const relinkError = ref('');
 const relinking = ref(false);
 
@@ -330,67 +300,95 @@ async function manageBookStorage(id) {
   }
 }
 
-// 真正的打开动作：带转场的封装，是书架 open 事件的唯一入口
-async function openBookWithTransition(id) {
-  relinkError.value = '';
+function clearLoadingGuard() {
+  window.clearTimeout(loadingGuardTimer);
+}
+
+function failReaderOpen(message) {
+  readerOpenRequest++;
+  clearLoadingGuard();
+  readerLoadingError.value = message || t('无法加载这本书，请重试。');
+  if (reader.currentBook || reader.openingBook) reader.closeReader();
+}
+
+function maybeRevealReader() {
+  if (readerPhase.value !== 'loading' || readerLoadingError.value || !reader.currentBook) return;
+  if (!readerFirstFrameReady || !readerFlightComplete) return;
+  clearLoadingGuard();
+  readerPhase.value = 'reveal';
+}
+
+function onReaderFirstFrame(book, ready) {
+  if (readerPhase.value !== 'loading' || readerLoadingError.value || book !== reader.currentBook) return;
+  if (!ready || reader.openError) {
+    failReaderOpen(reader.openError);
+    return;
+  }
+  readerFirstFrameReady = true;
+  maybeRevealReader();
+}
+
+function finishReaderReveal() {
+  if (readerPhase.value !== 'reveal') return;
+  readerPhase.value = 'reader';
+  readerLoadingBook.value = null;
+}
+
+async function openBookWithTransition(id, coverSource) {
+  if (readerOpening.value || reader.currentBook) return;
   const book = bookById(id);
-  if (!book) { await reader.openBook(id); return; }
+  if (!book) return;
   readerLoadingBook.value = book;
-  readerPhase.value = 'loading';
-  readerLoadingVisible.value = true;
-  const minVisible = startLoadingMinTimer();
-  armLoadingGuard();
-  try {
-    await reader.openBook(id);
-  } catch (err) {
-    // openBook 内部一般已把错误写进 openError；这里兜住意外抛出，避免 timer 泄漏。
-    console.warn('[HOMURA] 打开书籍失败', err);
-  }
-  clearLoadingGuard();
-  if (reader.currentBook && !reader.openError) {
-    // 数据已就绪：先补齐最短展示时长，让加载页体面演完，再卸载加载页 → 阅读器淡入。
-    // await 独立计时器，不依赖 openBook 返回快慢（桌面端过快也能兜住）。
-    await minVisible;
-    if (readerPhase.value !== 'loading') return; // 期间被返回/新点击打断
-    readerPhase.value = 'reader';
-    readerLoadingVisible.value = false;
-  } else {
-    abortLoadingMinTimer();
-  }
-  // 失败时保留加载页显示错误态，交由用户重试或返回。
+  await loadReaderBook(coverSource);
 }
 
-// 加载页「重试」：再跑一次同一本书
-async function retryReaderOpen() {
-  relinkError.value = '';
+async function loadReaderBook(coverSource) {
   const book = readerLoadingBook.value;
-  if (!book) { readerPhase.value = 'shelf'; readerLoadingVisible.value = false; return; }
-  const minVisible = startLoadingMinTimer();
-  armLoadingGuard();
-  try {
-    await reader.openBook(book.id);
-  } catch (err) {
-    console.warn('[HOMURA] 重新加载书籍失败', err);
-  }
+  if (!book) return;
+  const request = ++readerOpenRequest;
   clearLoadingGuard();
-  if (reader.currentBook && !reader.openError) {
-    await minVisible;
-    if (readerPhase.value !== 'loading') return;
-    readerPhase.value = 'reader';
-    readerLoadingVisible.value = false;
-  } else {
-    abortLoadingMinTimer();
+  relinkError.value = '';
+  readerLoadingError.value = '';
+  readerFirstFrameReady = false;
+  readerFlightComplete = false;
+  readerPhase.value = 'loading';
+  loadingGuardTimer = window.setTimeout(() => failReaderOpen(), READER_OPEN_TIMEOUT);
+  try {
+    await nextTick();
+    if (request !== readerOpenRequest) return;
+    const flight = readerLoadingRef.value?.flyCoverFrom(coverSource);
+    // 让遮罩先实际绘制一帧，冷启动同步分页时也不会继续停留在书架。
+    if (!document.hidden) {
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+    if (request !== readerOpenRequest) return;
+    const [opened] = await Promise.all([reader.openBook(book.id), flight]);
+    if (request !== readerOpenRequest) return;
+    if (!opened || reader.openError) {
+      failReaderOpen(reader.openError);
+      return;
+    }
+    readerFlightComplete = true;
+    maybeRevealReader();
+  } catch (err) {
+    if (request !== readerOpenRequest) return;
+    console.warn('[HOMURA] 打开书籍失败', err);
+    failReaderOpen(reader.openError);
   }
 }
 
-// 加载页「返回书架」：清干净回到书架
+function retryReaderOpen() {
+  if (readerLoadingError.value) return loadReaderBook();
+}
+
 function cancelReaderOpen() {
+  readerOpenRequest++;
   clearLoadingGuard();
-  abortLoadingMinTimer();
-  readerLoadingVisible.value = false;
   readerPhase.value = 'shelf';
   readerLoadingBook.value = null;
-  reader.clearOpenError();
+  readerLoadingError.value = '';
+  if (reader.currentBook || reader.openingBook) reader.closeReader();
+  else reader.clearOpenError();
 }
 
 // 书架视图状态
@@ -439,7 +437,7 @@ let updateBodyLocked = false;
 
 useAndroidBackExit(reader, () => {
   // 加载页期间按返回 → 取消加载、退回书架（此时阅读器还没接管返回）
-  if (readerPhase.value === 'loading' && !reader.currentBook) {
+  if (readerOpening.value && !reader.currentBook) {
     cancelReaderOpen();
     return true;
   }
@@ -518,11 +516,7 @@ watch(() => reader.currentBook, book => {
     shelfFilterOpen.value = false;
     return;
   }
-  // 阅读器被关掉后，转场状态机与加载页一并归零，下次从书架重新开始
-  if (readerPhase.value === 'reader') {
-    readerPhase.value = 'shelf';
-    readerLoadingBook.value = null;
-  }
+  if (readerPhase.value === 'reader') readerPhase.value = 'shelf';
 });
 
 function backToImportMenu() {
@@ -771,6 +765,8 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  readerOpenRequest++;
+  clearLoadingGuard();
   window.removeEventListener('keydown', onFullscreenKeydown);
   if (updateBodyLocked) document.body.style.overflow = previousUpdateBodyOverflow;
 });

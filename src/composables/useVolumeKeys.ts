@@ -32,7 +32,7 @@ function getTauriCore() {
   return (window.__TAURI__ && window.__TAURI__.core) as TauriCoreLike | null;
 }
 
-export function useVolumeKeys(reader: ReaderStore, ui: UiStore) {
+export function useVolumeKeys(reader: ReaderStore, ui: UiStore, opening: () => boolean) {
   const settings = useSettingsStore();
   let channel: unknown = null;
   let enableToken = 0;
@@ -47,14 +47,14 @@ export function useVolumeKeys(reader: ReaderStore, ui: UiStore) {
   }
 
   function onVolumeKey(event: VolumeKeyEvent) {
-    if (!reader.currentBook || reader.openingBook) return;
+    if (!reader.currentBook || reader.openingBook || opening()) return;
     if (ui.readerDrawerOpen) return;
     if (event && event.direction === 'prev') reader.goPrevPage();
     else reader.goNextPage();
   }
 
   function shouldListen() {
-    return isAndroid && settings.volumeKeysTurnPage && !!reader.currentBook && !ui.readerDrawerOpen;
+    return isAndroid && settings.volumeKeysTurnPage && !!reader.currentBook && !ui.readerDrawerOpen && !opening();
   }
 
   async function enable() {

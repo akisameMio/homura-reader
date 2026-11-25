@@ -11,10 +11,20 @@ import type { useReaderStore } from '../stores/reader.ts';
 
 type ReaderStore = ReturnType<typeof useReaderStore>;
 
-export function useShortcuts(reader: ReaderStore, viewportRef: Ref<HTMLElement | null>, dismissWithPredictiveBack: () => void) {
+export function useShortcuts(
+  reader: ReaderStore, viewportRef: Ref<HTMLElement | null>, dismissWithPredictiveBack: () => void,
+  opening: () => boolean, cancelOpening: () => void
+) {
   const ui = useUiStore();
 
   function onKeydown(e: KeyboardEvent) {
+    if (opening()) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelOpening();
+      }
+      return;
+    }
     const target = e.target as HTMLElement | null;
     if (target && ['INPUT', 'TEXTAREA'].includes(target.tagName)) return;
 

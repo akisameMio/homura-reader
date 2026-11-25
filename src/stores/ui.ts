@@ -10,7 +10,8 @@ import { ref, computed } from 'vue';
 const AUTO_HIDE_DELAY = 2200;
 
 export const useUiStore = defineStore('ui', () => {
-  const readerChromeVisible = ref(true);
+  const readerChromeVisible = ref(false);
+  const readerChromeEngaged = ref(false);
   const settingsOpen = ref(false);
   const tocOpen = ref(false);
   // 字体浮层：贴顶栏的小菜单，打开期间等同抽屉，钉住工具栏并收起箭头
@@ -31,6 +32,7 @@ export const useUiStore = defineStore('ui', () => {
 
   // 唤出工具栏：立即显示，并重新计时
   function showChrome() {
+    readerChromeEngaged.value = true;
     readerChromeVisible.value = true;
     clearHideTimer();
     if (!readerDrawerOpen.value && !chromePinned.value) {
@@ -115,7 +117,8 @@ export const useUiStore = defineStore('ui', () => {
     clearHideTimer();
     settingsOpen.value = false;
     tocOpen.value = false;
-    readerChromeVisible.value = true;
+    readerChromeVisible.value = false;
+    readerChromeEngaged.value = false;
   }
 
   // 全屏：Tauri 下走原生窗口全屏（WebView2 不接管网页全屏），浏览器调试环境回退 Fullscreen API
@@ -151,6 +154,7 @@ export const useUiStore = defineStore('ui', () => {
 
   return {
     readerChromeVisible,
+    readerChromeEngaged,
     settingsOpen,
     tocOpen,
     readerDrawerOpen,

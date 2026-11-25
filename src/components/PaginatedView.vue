@@ -87,7 +87,7 @@ import { pageTurnTarget, type TurnSide } from '../services/pageTurnGeometry.ts';
 import { prefersReducedMotion } from '../services/spring.ts';
 import NovelCard from './NovelCard.vue';
 import ReaderFooter from './ReaderFooter.vue';
-import type { ReaderPage } from '../types.ts';
+import type { Book, ReaderPage } from '../types.ts';
 
 interface SlotVM {
   mode: 'single' | 'double';
@@ -101,6 +101,8 @@ interface SlotVM {
   total: number;
 }
 
+const props = defineProps({ opening: Boolean });
+const emit = defineEmits<{ 'first-frame': [book: Book, ready: boolean] }>();
 const reader = useReaderStore();
 const theme = useThemeStore();
 const ui = useUiStore();
@@ -224,24 +226,23 @@ async function populateBufferSlot(slotIndex: number, pair: ReaderPage[], total: 
   await nextTick();
   clearSlotImages(slotIndex, vm.mode === 'single' ? ['single'] : ['left', 'right']);
 
-  if (isManga.value) {
-    if (vm.mode === 'single') {
-      await decodePageImage(imgEls[slotIndex].single!, vm.single!.itemRef as MangaPageItem);
-    } else {
-      await Promise.all([
-        decodePageImage(imgEls[slotIndex].left!, vm.left!.itemRef as MangaPageItem),
-        decodePageImage(imgEls[slotIndex].right!, vm.right!.itemRef as MangaPageItem)
-      ]);
-    }
-  }
+  if (!isManga.value) return true;
+  const images = imgEls[slotIndex];
+  const decode = async (image: HTMLImageElement, page: ReaderPage) => {
+    const decoded = await decodePageImage(image, page.itemRef as MangaPageItem);
+    return decoded && image.naturalWidth > 0;
+  };
+  if (vm.mode === 'single') return decode(images.single!, vm.single!);
+  const decoded = await Promise.all([decode(images.left!, vm.left!), decode(images.right!, vm.right!)]);
+  return decoded.every(Boolean);
 }
 
 // 解码与 Vue patch 串行进入同一备用槽，旧请求不能在新请求完成后改写 img.src。
-function prepareSlot(slot: number, pair: ReaderPage[], total: number, valid: () => boolean) {
+function prepareSlot(slot: number, pair: ReaderPage[], total: number, valid: () => boolean, requireImages = false) {
   const task = bufferQueue.then(async () => {
     if (!valid()) return false;
-    await populateBufferSlot(slot, pair, total);
-    return valid();
+    const decoded = await populateBufferSlot(slot, pair, total);
+    return valid() && (!requireImages || decoded);
   });
   bufferQueue = task.catch(() => {});
   return task;
@@ -314,7 +315,8 @@ function paperTurnPageNumbers(outgoingSlot: number, incomingSlot: number) {
 }
 
 async function renderReaderViewport(transitionDir = 'fade') {
-  if (!reader.currentBook) return;
+  const book = reader.currentBook;
+  if (!book) return;
   const myToken = ++reader.renderToken;
   const targetIndex = reader.currentIndex;
   const forward = targetIndex > displayedIndex;
@@ -328,7 +330,7 @@ async function renderReaderViewport(transitionDir = 'fade') {
     drag.pointerId = null;
     stopPaperTurn();
   }
-  const valid = () => myToken === reader.renderToken && !!reader.currentBook;
+  const valid = () => myToken === reader.renderToken && reader.currentBook === book;
   const total = reader.activePages.length;
   reader.sliderValue = targetIndex;
   reader.touchProgress();
@@ -336,11 +338,17 @@ async function renderReaderViewport(transitionDir = 'fade') {
   reader.pageIndicator = `${pair.map(p => p.pageNumber).join('-')} / ${total}`;
   try {
     if (!initialized) {
-      if (!await prepareSlot(0, pair, total, valid)) return;
+      const ready = await prepareSlot(0, pair, total, valid, props.opening);
+      if (!valid()) return;
+      if (!ready) {
+        emit('first-frame', book, false);
+        return;
+      }
       initialized = true;
       displayedIndex = targetIndex;
       reader.activeBufferSlot = 0;
       showSlot(0);
+      emit('first-frame', book, true);
       scheduleIdlePreload();
       return;
     }
@@ -381,6 +389,7 @@ async function renderReaderViewport(transitionDir = 'fade') {
     if (!valid()) return;
     console.warn('翻页准备失败', error);
     stopPaperTurn();
+    if (!initialized) emit('first-frame', book, false);
   } finally {
     if (pendingRender === myToken) pendingRender = 0;
   }

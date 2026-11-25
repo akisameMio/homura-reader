@@ -60,7 +60,9 @@ interface TauriCoreLike {
   Channel?: TauriChannelCtor;
 }
 
-export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
+export function useReaderBackDismiss(
+  reader: ReaderLike, ui: UiLike, opening = () => false, cancelOpening = () => {}
+) {
   let gesture: BackGesture | null = null;
   let settling = false;
   const readerDismissing = ref(false);
@@ -107,33 +109,7 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
     pendingDirection = 1;
     activeDirection = 1;
     document.documentElement.classList.remove('reader-back-settling');
-    document.documentElement.classList.remove('reader-back-entering');
     applyProgress(0, activeDirection);
-  }
-
-  function playEnter() {
-    if (!reader.currentBook) return;
-    readerDismissing.value = false;
-    const token = ++settleToken;
-    const reduceMotion = window.matchMedia
-      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduceMotion) {
-      resetVisuals();
-      settling = false;
-      return;
-    }
-
-    settling = true;
-    cancelAnimationFrame(frameId);
-    frameId = 0;
-    resetVisuals();
-    document.documentElement.classList.add('reader-back-entering');
-
-    window.setTimeout(() => {
-      if (token !== settleToken) return;
-      document.documentElement.classList.remove('reader-back-entering');
-      settling = false;
-    }, SETTLE_DURATION);
   }
 
   function releasePointer(e: PointerEvent) {
@@ -170,7 +146,6 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
 
     cancelAnimationFrame(frameId);
     frameId = 0;
-    document.documentElement.classList.remove('reader-back-entering');
     document.documentElement.classList.add('reader-back-settling');
     applyProgress(commit ? 1 : 0, activeDirection);
 
@@ -271,6 +246,7 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
 
   function dismissWithPredictiveBack() {
     if (!reader.currentBook || settling) return;
+    if (opening()) { cancelOpening(); return; }
     activeDirection = 1;
     settle(true);
   }
@@ -288,6 +264,10 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
   function onNativeBackEvent(event: NativeBackEvent) {
     if (!reader.currentBook) return;
     const phase = event && event.phase;
+    if (opening()) {
+      if (phase === 'invoked') cancelOpening();
+      return;
+    }
 
     if (phase === 'started') {
       if (settling) {
@@ -295,7 +275,6 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
         settleToken++;
         settling = false;
         document.documentElement.classList.remove('reader-back-settling');
-        document.documentElement.classList.remove('reader-back-entering');
       }
       // 左右全面屏返回统一向右退场，保持从两侧触发时的视觉方向一致。
       activeDirection = READER_BACK_DIRECTION;
@@ -309,7 +288,6 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
       cancelAnimationFrame(frameId);
       frameId = 0;
       document.documentElement.classList.remove('reader-back-settling');
-      document.documentElement.classList.remove('reader-back-entering');
       applyProgress(0, activeDirection);
       return;
     }
@@ -414,13 +392,12 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
 
   watch(
     () => reader.currentBook,
-    (book, previousBook) => {
+    book => {
       settleToken++;
       gesture = null;
       readerDismissing.value = false;
       settling = false;
-      if (book && !previousBook) playEnter();
-      else resetVisuals();
+      resetVisuals();
 
       if (!book) {
         disableNativePredictiveBack();
@@ -441,7 +418,6 @@ export function useReaderBackDismiss(reader: ReaderLike, ui: UiLike) {
     cancelAnimationFrame(frameId);
     disableNativePredictiveBack();
     document.documentElement.classList.remove('reader-back-settling');
-    document.documentElement.classList.remove('reader-back-entering');
   });
 
   return {

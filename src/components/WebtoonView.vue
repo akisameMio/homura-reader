@@ -73,7 +73,7 @@ import { useReaderStore } from '../stores/reader.ts';
 import { decodePageImage, releaseDistantPageUrls, type MangaPageItem } from '../services/pagination.ts';
 import { resolveProseStyle } from '../services/readerLayout.ts';
 import { logRuntimeOperation } from '../services/runtimeLogs.ts';
-import type { ReaderPage } from '../types.ts';
+import type { Book, ReaderPage } from '../types.ts';
 import ReaderFooter from './ReaderFooter.vue';
 import { useI18n } from '../composables/useI18n.ts';
 
@@ -89,6 +89,7 @@ const NOVEL_SCROLL_WIDTHS: Record<string, string> = {
   wide: 'min(100%, 1024px)'
 };
 
+const emit = defineEmits<{ 'first-frame': [book: Book, ready: boolean] }>();
 const reader = useReaderStore();
 function onContentLink(event: MouseEvent) {
   const link = (event.target as Element)?.closest<HTMLAnchorElement>('a[href]');
@@ -209,6 +210,14 @@ function releaseImageElement(imgEl: HTMLImageElement) {
   }
 }
 
+let firstFrameReported = false;
+
+function reportFirstFrame(ready: boolean) {
+  if (firstFrameReported || !mountedBook || disposed || reader.currentBook !== mountedBook) return;
+  firstFrameReported = true;
+  emit('first-frame', mountedBook, ready);
+}
+
 function restoreImageElement(imgEl: HTMLImageElement) {
   const wrapper = imgEl?.parentElement;
   if (wrapper?.dataset.placeholderHeight) {
@@ -278,13 +287,16 @@ function pumpMangaDecodeQueue() {
       .then(ok => {
         if (disposed || reader.currentBook?.id !== mountedBookId) return;
         if (mangaDecoding.get(best.index) !== token) return;
-        if (ok) {
+        const ready = ok && best.imgEl.naturalWidth > 0;
+        if (ready) {
           mangaLoadedIndexes.add(best.index);
           restoreImageElement(best.imgEl);
         }
+        if (best.index === initialMangaIndex) reportFirstFrame(ready);
       })
       .catch(err => {
         if (!disposed) console.warn('[HOMURA] 条漫页面解码失败', best.index, err);
+        if (best.index === initialMangaIndex && mangaDecoding.get(best.index) === token) reportFirstFrame(false);
       })
       .finally(() => {
         if (disposed) return;
@@ -659,6 +671,7 @@ onMounted(() => {
     // 条漫恢复进度时先把容器滚到目标页，再建立观察器，避免启动时抢解第一页。
     if (initialMangaIndex > 0) scrollToSection(initialMangaIndex, 'auto');
     mangaImages = Array.from(scrollRoot.value!.querySelectorAll('img[data-lazy-index]'));
+    enqueueMangaDecode(initialMangaIndex);
     reader.webtoonObserver = new IntersectionObserver(entries => {
       entries.forEach(entry => {
         if (disposed || reader.currentBook?.id !== mountedBookId) return;
@@ -694,6 +707,7 @@ onMounted(() => {
     syncNovelScrollPosition();
     syncScrollBounds();
   }
+  if (!isManga.value) reportFirstFrame(true);
 });
 
 watch(
