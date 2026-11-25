@@ -460,7 +460,7 @@ function onSheetKeydown(event: KeyboardEvent) {
 .reader-settings-hint { margin-top: 8px; color: var(--md-on-surface-variant); font-size: 11px; line-height: 1.7; }
 .reader-settings-selects :deep(.settings-select-row) { min-height: 60px; padding: 16px 18px; gap: 8px; }
 .reader-settings-selects :deep(.settings-select-label) { font-size: 13px; }
-.reader-settings-selects :deep(.settings-select-value) { font-size: 12px; }
+.reader-settings-selects :deep(.settings-select-control) { font-size: 12px; }
 .reader-settings-selects :deep(.settings-select-row > svg) { width: 18px; height: 18px; }
 .reader-settings-selects :deep(.settings-select-row + .settings-select-row)::before,
 .reader-settings-row + .reader-settings-row::before {
@@ -487,7 +487,7 @@ function onSheetKeydown(event: KeyboardEvent) {
   content: '';
 }
 .reader-settings-scroll-fit :deep(.settings-select-label) { font-size: 13px; }
-.reader-settings-scroll-fit :deep(.settings-select-value) { font-size: 12px; }
+.reader-settings-scroll-fit :deep(.settings-select-control) { font-size: 12px; }
 .reader-settings-scroll-fit :deep(.settings-select-row > svg) { width: 18px; height: 18px; }
 .reader-settings-control-label { font-size: 13px; font-weight: 600; }
 .reader-settings-segment { margin-top: 12px; --md-segmented-bg: var(--md-surface-low); }

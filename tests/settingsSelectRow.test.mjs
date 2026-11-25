@@ -175,6 +175,32 @@ test('菜单打开时卸载组件会释放滚动锁和动画', async () => {
   assert.equal(document.documentElement.style.overflow, '');
 });
 
+test('紧凑布局锁滚动时不为原本无槽位的滚动容器新增槽位', async () => {
+  const originalWidth = window.innerWidth;
+  window.innerWidth = 390;
+  const { app, trigger } = mount();
+  const scroller = trigger.parentElement;
+  scroller.style.overflowY = 'auto';
+  scroller.style.scrollbarGutter = 'auto';
+  Object.defineProperties(scroller, {
+    offsetWidth: { configurable: true, value: 390 },
+    clientWidth: { configurable: true, value: 390 }
+  });
+  try {
+    trigger.click();
+    await nextTick();
+    assert.equal(scroller.style.overflowY, 'hidden');
+    assert.equal(scroller.style.scrollbarGutter, 'auto');
+    assert.equal(wheel(), true);
+  } finally {
+    app.unmount();
+    scroller.removeAttribute('style');
+    delete scroller.offsetWidth;
+    delete scroller.clientWidth;
+    window.innerWidth = originalWidth;
+  }
+});
+
 
 test('桌面锁滚动保留滚动条，拖动和焦点滚动不能改变背景位置', async () => {
   const root = document.documentElement;

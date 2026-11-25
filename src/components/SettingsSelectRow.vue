@@ -3,7 +3,6 @@
     ref="triggerRef"
     type="button"
     class="settings-select-row"
-    :class="{ 'is-open': menuVisible }"
     :disabled="disabled"
     aria-haspopup="listbox"
     :aria-expanded="open"
@@ -23,18 +22,27 @@
     <Teleport to="body">
       <div
         v-if="menuVisible"
-        :id="menuId"
         ref="menuRef"
         class="settings-select-menu"
         :class="{ 'is-closing': !open }"
-        :aria-hidden="!open"
-        :inert="!open"
-        role="listbox"
-        :aria-label="t(label)"
-        :style="menuStyle"
-        @keydown="onMenuKeydown"
       >
-        <div ref="menuContentRef" class="settings-select-menu-content">
+        <span ref="menuPillRef" class="settings-select-menu-pill" aria-hidden="true">
+          <span class="settings-select-value">{{ t(selectedLabel) }}</span>
+          <span class="settings-select-arrows">
+            <MdIcon name="expand_more" :size="14" />
+            <MdIcon name="expand_more" :size="14" />
+          </span>
+        </span>
+        <div
+          :id="menuId"
+          ref="menuListRef"
+          class="settings-select-menu-list"
+          :aria-hidden="!open"
+          :inert="!open"
+          role="listbox"
+          :aria-label="t(label)"
+          @keydown="onMenuKeydown"
+        >
           <button
             v-for="(option, index) in options"
             :key="option.value"
@@ -79,18 +87,19 @@ const dismissFromSettings = () => close(true, true);
 const triggerRef = shallowRef<HTMLButtonElement | null>(null);
 const controlRef = shallowRef<HTMLSpanElement | null>(null);
 const menuRef = shallowRef<HTMLDivElement | null>(null);
-const menuContentRef = shallowRef<HTMLDivElement | null>(null);
+const menuPillRef = shallowRef<HTMLSpanElement | null>(null);
+const menuListRef = shallowRef<HTMLDivElement | null>(null);
 const open = ref(false);
 const menuVisible = ref(false);
 const activeIndex = ref(0);
-const menuStyle = ref({ left: '0px', top: '0px', width: '224px', maxHeight: '320px' });
 const selectedLabel = computed(() => props.options.find(option => option.value === props.modelValue)?.label || '');
 let releaseScrollLock: (() => void) | null = null;
 let menuViewport = '';
 const motion = createSettingsSelectMotion({
   control: () => controlRef.value,
   menu: () => menuRef.value,
-  content: () => menuContentRef.value,
+  pill: () => menuPillRef.value,
+  list: () => menuListRef.value,
   onClosed: () => {
     if (!open.value) {
       menuVisible.value = false;
@@ -112,7 +121,7 @@ function unlockScroll() {
 
 function focusOption(index: number) {
   activeIndex.value = index;
-  const menu = menuRef.value;
+  const menu = menuListRef.value;
   const option = menu?.querySelectorAll<HTMLButtonElement>('[role="option"]')[index];
   if (!menu || !option) return;
   option.focus({ preventScroll: true });
@@ -133,24 +142,8 @@ async function showMenu() {
   if (props.disabled || !props.options.length || !triggerRef.value) return;
   // 收缩途中重开沿用同一把锁，直到卡片完全归位才释放。
   releaseScrollLock ??= lockSettingsSelectScroll(triggerRef.value, () => open.value ? menuRef.value : null);
-  // 菜单传送到根节点，避免设置卡片与抽屉的滚动容器裁切。
-  const rect = (controlRef.value || triggerRef.value).getBoundingClientRect();
   const viewport = window.visualViewport;
-  const viewportLeft = viewport?.offsetLeft ?? 0;
-  const viewportTop = viewport?.offsetTop ?? 0;
-  const width = Math.min(224, (viewport?.width ?? window.innerWidth) - 24);
-  const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
   const index = Math.max(0, props.options.findIndex(option => option.value === props.modelValue));
-  const desiredHeight = Math.min(320, props.options.length * 56 + 16);
-  const maxHeight = Math.min(desiredHeight, viewportBottom - viewportTop - 24);
-  // 停驻时让选中项与胶囊对齐；下探由物理轨迹承担，不占用最终布局。
-  const selectedTop = rect.top + (rect.height - 56) / 2 - 8 - index * 56;
-  const left = Math.max(viewportLeft + 12, Math.min(rect.right - width, viewportLeft + (viewport?.width ?? window.innerWidth) - width - 12));
-  const top = Math.max(viewportTop + 12, Math.min(selectedTop, viewportBottom - maxHeight - 12));
-  // 反向重开时沿用原锚点，不能用新的布局位置覆盖正在运动的姿态。
-  if (!menuVisible.value) {
-    menuStyle.value = { left: `${left}px`, top: `${top}px`, width: `${width}px`, maxHeight: `${maxHeight}px` };
-  }
   menuViewport = viewportGeometry();
   activeIndex.value = index;
   open.value = true;
@@ -164,8 +157,8 @@ async function showMenu() {
   viewport?.addEventListener('scroll', onViewportChange);
   await nextTick();
   if (open.value) {
+    motion.setOpen(true, props.options.length);
     focusOption(index);
-    motion.setOpen(true);
   }
 }
 
@@ -182,10 +175,17 @@ function removeViewportListeners() {
 }
 
 function close(restoreFocus = false, immediate = false) {
+  if (!open.value && !immediate) return;
   open.value = false;
   removeListeners();
-  motion.setOpen(false, immediate);
   if (restoreFocus) triggerRef.value?.focus({ preventScroll: true });
+  if (immediate) motion.setOpen(false, props.options.length, true);
+  else {
+    // 提交新选项后再量胶囊，新文案改变宽度时也能精确归位。
+    void nextTick(() => {
+      if (!open.value && menuVisible.value) motion.setOpen(false, props.options.length);
+    });
+  }
 }
 
 function toggle() {
@@ -288,19 +288,24 @@ onBeforeUnmount(() => {
 }
 
 .settings-select-value {
-  font-size: 13px;
   color: var(--md-on-surface-variant);
 }
 
-.settings-select-control {
+.settings-select-control,
+.settings-select-menu-pill {
   display: inline-flex;
   align-items: center;
   flex: none;
   gap: 8px;
-  margin: -6px -10px -6px 0;
   padding: 6px 10px;
+  font-size: 13px;
+}
+
+.settings-select-control {
+  --settings-select-control-surface: transparent;
+  margin: -6px -10px -6px 0;
   border-radius: 999px;
-  background: transparent;
+  background: var(--settings-select-control-surface);
   transition: background-color 50ms cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -317,9 +322,8 @@ onBeforeUnmount(() => {
   margin-bottom: -4px;
 }
 
-.settings-select-row.is-open .settings-select-control,
 .settings-select-row:focus-visible .settings-select-control {
-  background: var(--md-surface-high);
+  --settings-select-control-surface: var(--md-surface-high);
   transition-duration: 200ms;
 }
 
@@ -338,21 +342,32 @@ onBeforeUnmount(() => {
   position: fixed;
   z-index: 50;
   box-sizing: border-box;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 8px;
-  border-radius: 28px;
-  background: var(--md-select-menu-surface);
+  overflow: hidden;
+  overflow: clip;
   color: var(--md-on-surface);
-  box-shadow: 0 8px 32px color-mix(in oklab, var(--md-shadow-color-soft) 24%, transparent);
-  transform-origin: right top;
+  --settings-select-menu-elevation: 0;
+  box-shadow: 0 calc(8px * var(--settings-select-menu-elevation)) calc(32px * var(--settings-select-menu-elevation))
+    color-mix(in oklab, var(--md-shadow-color-soft) calc(24% * var(--settings-select-menu-elevation)), transparent);
   opacity: 0;
-  scrollbar-width: thin;
 }
 
-.settings-select-menu-content {
-  transform-origin: right top;
+.settings-select-menu-pill,
+.settings-select-menu-list {
+  position: absolute;
+  top: 0;
+  right: 0;
+  box-sizing: border-box;
+}
+
+.settings-select-menu-pill {
+  pointer-events: none;
+}
+
+.settings-select-menu-list {
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  padding: 8px;
+  scrollbar-width: thin;
 }
 
 .settings-select-option {
@@ -387,7 +402,7 @@ onBeforeUnmount(() => {
 
 @media (hover: hover) {
   .settings-select-row:hover:not(:disabled) .settings-select-control {
-    background: var(--md-surface-high);
+    --settings-select-control-surface: var(--md-surface-high);
     transition-duration: 200ms;
   }
 
@@ -421,7 +436,7 @@ onBeforeUnmount(() => {
     font-size: 15px;
   }
 
-  .settings-select-value {
+  .settings-select-control {
     font-size: 12px;
   }
 }

@@ -2,41 +2,55 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSettingsSelectMotion } from '../src/services/settingsSelectMotion.ts';
 
-function fixture(run, reduced = false) {
-  const names = ['window', 'performance', 'requestAnimationFrame', 'cancelAnimationFrame'];
+function fixture(run) {
+  const names = ['window', 'getComputedStyle', 'performance', 'requestAnimationFrame', 'cancelAnimationFrame'];
   const previous = new Map(names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
   const frames = new Map();
   const listeners = new Set();
-  let now = 0;
-  let sequence = 0;
-  let closed = 0;
   const media = {
-    matches: reduced,
+    matches: false,
     addEventListener(_event, listener) { listeners.add(listener); },
     removeEventListener(_event, listener) { listeners.delete(listener); }
   };
+  let now = 0;
+  let sequence = 0;
+  let closed = 0;
+  const viewport = { width: 1000, height: 600, offsetLeft: 0, offsetTop: 0 };
   Object.defineProperties(globalThis, {
-    window: { configurable: true, value: { matchMedia: () => media } },
+    window: { configurable: true, value: { visualViewport: viewport, matchMedia: () => media } },
+    getComputedStyle: { configurable: true, value: element => element.style },
     performance: { configurable: true, value: { now: () => now } },
     requestAnimationFrame: { configurable: true, value: callback => { frames.set(++sequence, callback); return sequence; } },
     cancelAnimationFrame: { configurable: true, value: id => frames.delete(id) }
   });
-  const control = { style: { transform: '', opacity: '', willChange: '' }, getBoundingClientRect: () => ({ right: 800, top: 212, width: 96, height: 36 }) };
-  const menu = { style: {}, offsetLeft: 568, offsetTop: 194, offsetWidth: 224, offsetHeight: 240 };
-  const content = { style: {} };
-  const motion = createSettingsSelectMotion({ control: () => control, menu: () => menu, content: () => content, onClosed: () => closed++ });
-  const step = (ms = 1000 / 120) => {
+  const element = (properties = {}) => ({
+    style: {
+      ...properties,
+      setProperty(name, value) { this[name] = value; },
+      getPropertyValue(name) { return this[name] ?? ''; }
+    }
+  });
+  const bounds = { left: 703.75, top: 212.25, right: 800, bottom: 248.25, width: 96.25, height: 36 };
+  const control = {
+    ...element({ borderTopRightRadius: '999px', backgroundColor: 'transparent' }),
+    getBoundingClientRect: () => bounds
+  };
+  const menu = element();
+  const list = element();
+  const pill = element();
+  const motion = createSettingsSelectMotion({
+    control: () => control, menu: () => menu, list: () => list, pill: () => pill, onClosed: () => closed++
+  });
+  const step = ms => {
     now += ms;
     const pending = [...frames.values()];
     frames.clear();
     pending.forEach(callback => callback(now));
-    assert.ok(frames.size <= 1, '菜单只保留一条物理更新循环');
+    assert.ok(frames.size <= 1);
   };
-  const advance = (ms, frameMs = 1000 / 120) => {
-    for (let elapsed = 0; elapsed < ms; elapsed += frameMs) step(frameMs);
-  };
+  const setOpen = (open, immediate = false) => motion.setOpen(open, 4, immediate);
   try {
-    run({ motion, control, menu, content, step, advance, frames, listeners, media, closed: () => closed });
+    run({ motion, setOpen, control, menu, list, pill, viewport, bounds, step, frames, listeners, media, closed: () => closed });
   } finally {
     motion.dispose();
     for (const [name, descriptor] of previous) {
@@ -46,156 +60,150 @@ function fixture(run, reduced = false) {
   }
 }
 
-function controlPose(control) {
-  const transform = control.style.transform || '';
-  const translate = transform.match(/translate3d\(([^p]+)px, ([^p]+)px/);
-  const scale = transform.match(/scale\(([^,]+), ([^)]+)\)/);
-  return { x: Number(translate?.[1] || 0), y: Number(translate?.[2] || 0), sx: Number(scale?.[1] || 1), sy: Number(scale?.[2] || 1) };
+function edges(menu) {
+  const { left, top, width, height } = menu.style;
+  return [parseFloat(left), parseFloat(top), parseFloat(left) + parseFloat(width), parseFloat(top) + parseFloat(height)];
 }
 
-function menuProgress(menu, content) {
-  return (controlPose(menu).sx * controlPose(content).sx - 0.96) / 0.04;
-}
-
-test('菜单从胶囊向左下拉出再回弹，带过冲、形变和文字模糊', () => fixture(({ motion, control, menu, content, step, advance, frames }) => {
-  motion.setOpen(true);
-  const initial = controlPose(menu);
-  assert.equal(initial.x, 8);
-  assert.equal(initial.y, 18);
-  assert.equal(initial.sx, 96 / 224);
-  assert.equal(initial.sy, 36 / 240);
-  let progressPeak = 0;
-  let stretchPeak = 1;
-  let squashMin = 1;
-  let hadBlur = false;
-  let dropPeak = 0;
-  let driftMin = 8;
-  for (let frame = 0; frame < 160; frame++) {
-    step();
-    const progress = menuProgress(menu, content);
-    const pose = controlPose(menu);
-    hadBlur ||= Boolean(content.style.filter);
-    dropPeak = Math.max(dropPeak, pose.y);
-    driftMin = Math.min(driftMin, pose.x);
-    const ink = controlPose(content);
-    assert.ok(Math.abs(ink.sx * pose.sx - (0.96 + 0.04 * progress)) < 1e-10, '文字补偿外壳的横向挤压');
-    assert.ok(Math.abs(ink.sy * pose.sy - (0.96 + 0.04 * progress)) < 1e-10, '文字补偿外壳的纵向挤压');
-    const stretch = pose.sx / (96 / 224 + (1 - 96 / 224) * progress);
-    const squash = pose.sy / (36 / 240 + (1 - 36 / 240) * progress);
-    progressPeak = Math.max(progressPeak, progress);
-    stretchPeak = Math.max(stretchPeak, stretch);
-    squashMin = Math.min(squashMin, squash);
-    assert.ok(Number(menu.style.opacity) >= 0 && Number(menu.style.opacity) <= 1);
-    assert.equal(control.style.transform, '', '展开阶段胶囊保持静止');
+test('菜单从胶囊精确起步，沿固定右上角单调展开和收回', () => fixture(({ setOpen, control, menu, step, frames, closed }) => {
+  const collapsed = [703.75, 212.25, 800, 248.25];
+  setOpen(true);
+  assert.deepEqual(edges(menu), collapsed);
+  assert.equal(menu.style.borderRadius, '18px');
+  assert.equal(menu.style.backgroundColor, 'transparent');
+  assert.equal(menu.style.opacity, '1');
+  let previous = collapsed;
+  for (let i = 0; i < 28; i++) {
+    step(10);
+    const current = edges(menu);
+    assert.ok(current[0] <= previous[0] && current[3] >= previous[3]);
+    assert.deepEqual(current.slice(1, 3), collapsed.slice(1, 3));
+    assert.equal(control.style.opacity, '0');
+    previous = current;
   }
-  assert.ok(hadBlur);
-  assert.ok(dropPeak > 70, '先向下拉出再回弹到停驻位置');
-  assert.ok(driftMin < -10, '展开中段向左偏移');
-  assert.ok(progressPeak > 1.05 && progressPeak < 1.15, String(progressPeak));
-  assert.ok(Math.abs(stretchPeak - 1.08) < 1e-10);
-  assert.ok(Math.abs(squashMin - 0.95) < 1e-10);
-  advance(1000);
-  assert.deepEqual(controlPose(menu), { x: 0, y: 0, sx: 1, sy: 1 });
-  assert.equal(content.style.filter, '');
-  assert.equal(content.style.opacity, '1');
-  assert.equal(control.style.opacity, '0');
-  assert.equal(frames.size, 0);
-}));
+  assert.deepEqual(edges(menu), [576, 212.25, 800, 452.25]);
+  assert.equal(menu.style.borderRadius, '24px');
+  assert.equal(menu.style.backgroundColor, 'var(--md-select-menu-surface)');
+  assert.equal(menu.style['--settings-select-menu-elevation'], '1');
 
-test('关闭先下探成圆囊再合回胶囊，胶囊仅淡入淡出且不形变', () => fixture(({ motion, control, menu, step, advance, frames, closed }) => {
-  const initialControlStyle = { ...control.style };
-  motion.setOpen(true);
-  advance(1500);
-  motion.setOpen(false);
-  step();
-  assert.ok(controlPose(menu).y > 0, '收起先下探');
-  let dropPeak = 0;
-  for (let frame = 0; frame < 200; frame++) {
-    step();
-    dropPeak = Math.max(dropPeak, controlPose(menu).y);
-    assert.equal(control.style.transform, '', '胶囊不位移、不挤压');
+  setOpen(false);
+  for (let i = 0; i < 21; i++) {
+    step(10);
+    const current = edges(menu);
+    assert.ok(current[0] >= previous[0] && current[3] <= previous[3]);
+    assert.deepEqual(current.slice(1, 3), collapsed.slice(1, 3));
+    assert.equal(control.style.opacity, '0');
+    previous = current;
   }
-  assert.ok(dropPeak > 70, '下垂卡片随后向上合回');
-  assert.deepEqual(control.style, initialControlStyle);
-  const final = controlPose(menu);
-  assert.equal(menu.offsetTop + final.y, 212, '缩回顶部匹配胶囊顶部');
-  assert.equal(menu.offsetLeft + menu.offsetWidth + final.x, 800, '缩回右侧匹配胶囊右侧');
-  assert.equal(menu.offsetWidth * final.sx, 96);
-  assert.equal(menu.offsetHeight * final.sy, 36);
-  assert.equal(Number(menu.style.opacity), 0);
+  step(10);
+  assert.deepEqual(edges(menu), collapsed);
+  assert.equal(menu.style.opacity, '0');
+  assert.equal(control.style.opacity, '');
   assert.equal(frames.size, 0);
   assert.equal(closed(), 1);
 }));
 
-test('菜单反向保留当前位置和速度，连续重开时胶囊仍保持静止', () => fixture(({ motion, control, menu, content, step, advance, closed }) => {
-  motion.setOpen(true);
-  advance(50);
-  const beforeClose = menu.style.transform;
-  const openingPosition = menuProgress(menu, content);
-  motion.setOpen(false);
-  assert.equal(menu.style.transform, beforeClose);
-  step(1);
-  assert.ok(menuProgress(menu, content) > openingPosition, '关闭首帧继承原展开速度');
-  advance(90);
-  const beforeOpen = menu.style.transform;
-  const closingPosition = menuProgress(menu, content);
-  motion.setOpen(true);
-  assert.equal(menu.style.transform, beforeOpen);
-  step(1);
-  assert.ok(menuProgress(menu, content) < closingPosition, '重开首帧继承原收缩速度');
-  advance(1500);
-  motion.setOpen(false);
-  advance(100);
-  const menuPose = menu.style.transform;
-  motion.setOpen(true);
-  assert.equal(control.style.transform, '');
-  assert.equal(menu.style.transform, menuPose);
-  advance(1500);
+test('文字与箭头在同一个外壳内按开合阶段交叉淡化', () => fixture(({ setOpen, pill, list, step }) => {
+  setOpen(true);
+  assert.equal(pill.style.filter, 'blur(0px)');
+  assert.equal(list.style.opacity, '0');
+  step(35);
+  assert.equal(pill.style.opacity, '0.5');
+  assert.equal(pill.style.filter, 'blur(3px)');
+  step(35);
+  assert.equal(pill.style.opacity, '0');
+  step(70);
+  assert.equal(list.style.opacity, '0.5');
+  assert.equal(list.style.filter, 'blur(3px)');
+  step(70);
+  assert.equal(list.style.opacity, '1');
+  step(70);
+
+  setOpen(false);
+  step(66);
+  assert.equal(list.style.opacity, '0');
+  step(55);
+  assert.equal(pill.style.opacity, '0');
+  step(33);
+  assert.ok(Number(pill.style.opacity) > 0);
+  step(66);
+  assert.equal(pill.style.opacity, '1');
+  assert.equal(pill.style.filter, 'blur(0px)');
+}));
+
+test('视口底部空间不足时向上放置，仍沿直线收回', () => fixture(({ setOpen, menu, list, viewport, step }) => {
+  viewport.height = 260;
+  setOpen(true);
+  step(280);
+  assert.equal(list.style.height, '128px');
+  assert.deepEqual(edges(menu), [576, 120, 800, 248]);
+  setOpen(false);
+  step(110);
+  assert.ok(edges(menu)[1] > 120 && edges(menu)[1] < 212.25);
+  step(110);
+  assert.deepEqual(edges(menu), [703.75, 212.25, 800, 248.25]);
+}));
+
+test('反向时沿用当前边界和内容透明度，下一帧直接朝新目标移动', () => fixture(({ setOpen, control, menu, list, step, closed }) => {
+  setOpen(true);
+  step(120);
+  const opening = edges(menu);
+  const opacity = list.style.opacity;
+  setOpen(false);
+  assert.deepEqual(edges(menu), opening);
+  assert.equal(list.style.opacity, opacity);
+  step(16);
+  const closing = edges(menu);
+  assert.ok(closing[0] > opening[0]);
+  setOpen(true);
+  assert.deepEqual(edges(menu), closing);
+  step(16);
+  assert.ok(edges(menu)[0] < closing[0]);
+  step(280);
   assert.equal(closed(), 0);
-  assert.equal(control.style.transform, '');
+  assert.equal(control.style.opacity, '0');
 }));
 
-test('快速连续切换不重复发帧，低帧率下仍可收束且只回收一次', () => fixture(({ motion, control, advance, frames, closed }) => {
+test('收起时使用新选项的胶囊边界和底色', () => fixture(({ setOpen, bounds, control, menu, pill, step }) => {
+  setOpen(true);
+  step(280);
+  bounds.left = 690;
+  bounds.width = 110;
+  control.style['--settings-select-control-surface'] = 'var(--md-surface-high)';
+  setOpen(false);
+  assert.equal(pill.style.width, '110px');
+  step(220);
+  assert.deepEqual(edges(menu), [690, 212.25, 800, 248.25]);
+  assert.equal(menu.style.backgroundColor, 'var(--md-surface-high)');
+}));
+
+test('快速切换、减少动态效果和卸载都会清理待执行的帧', () => fixture(({ motion, setOpen, control, menu, step, media, listeners, frames, closed }) => {
   for (let click = 0; click < 20; click++) {
-    motion.setOpen(click % 2 === 0);
-    advance(32, 32);
+    setOpen(click % 2 === 0);
+    step(32);
   }
-  advance(2500, 32);
+  step(280);
   assert.equal(frames.size, 0);
   assert.equal(closed(), 1);
-  assert.equal(control.style.transform, '');
-}));
 
-test('减少动态效果时跳过弹射，中途启用也立即落位', () => fixture(({ motion, control, menu, step, media, listeners, frames, closed }) => {
-  motion.setOpen(true);
-  step();
+  setOpen(true);
+  step(30);
   media.matches = true;
   listeners.forEach(listener => listener());
-  assert.equal(control.style.transform, '');
-  assert.deepEqual(controlPose(menu), { x: 0, y: 0, sx: 1, sy: 1 });
-  assert.equal(Number(menu.style.opacity), 1);
+  assert.deepEqual(edges(menu), [576, 212.25, 800, 452.25]);
   assert.equal(frames.size, 0);
-  motion.setOpen(false);
-  assert.equal(control.style.transform, '');
-  assert.equal(closed(), 1);
-  motion.dispose();
-  assert.equal(listeners.size, 0);
-}));
+  setOpen(false);
+  assert.equal(closed(), 2);
+  assert.equal(control.style.opacity, '');
 
-test('立即关闭与卸载取消残余物理帧，不改变胶囊姿态', () => fixture(({ motion, control, advance, frames, listeners, closed }) => {
-  motion.setOpen(true);
-  advance(50);
-  motion.setOpen(false, true);
-  assert.equal(closed(), 1);
+  media.matches = false;
+  setOpen(true);
+  setOpen(false, true);
+  assert.equal(closed(), 3);
   assert.equal(frames.size, 0);
-  assert.equal(control.style.transform, '');
-  motion.setOpen(true);
-  advance(50);
+  setOpen(true);
   motion.dispose();
-  assert.equal(control.style.transform, '');
-  assert.equal(control.style.willChange, '');
+  assert.equal(control.style.opacity, '');
   assert.equal(frames.size, 0);
   assert.equal(listeners.size, 0);
-  advance(1500);
-  assert.equal(closed(), 1);
 }));

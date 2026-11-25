@@ -43,7 +43,8 @@ function restoreScrollPosition(event: Event) {
 
 export function lockSettingsSelectScroll(trigger: HTMLElement, getMenu: () => HTMLElement | null) {
   const desktop = window.innerWidth >= 900;
-  const targets = new Set<HTMLElement>([document.documentElement]);
+  const root = document.documentElement;
+  const targets = new Set<HTMLElement>([root]);
   for (let element = trigger.parentElement; element; element = element.parentElement) {
     // body 不能变成新的滚动容器，否则会改变背景 sticky 元素的参照。
     if (element === document.body) continue;
@@ -70,7 +71,13 @@ export function lockSettingsSelectScroll(trigger: HTMLElement, getMenu: () => HT
     element.style.setProperty('scroll-behavior', 'auto');
     // 桌面保留原滚动条；拖动滚动条或焦点引起的位移由捕获监听归位。
     if (!desktop) {
-      element.style.setProperty('scrollbar-gutter', 'stable');
+      const style = getComputedStyle(element);
+      const gutter = element === root ? window.innerWidth - root.clientWidth
+        : element.offsetWidth - element.clientWidth - parseFloat(style.borderLeftWidth || '0') - parseFloat(style.borderRightWidth || '0');
+      // 仅保留已经占位的滚动槽，避免锁定时改变抽屉内的布局宽度。
+      if (gutter > 1 && style.scrollbarGutter === 'auto') {
+        element.style.setProperty('scrollbar-gutter', 'stable');
+      }
       element.style.setProperty('overflow-x', 'hidden');
       element.style.setProperty('overflow-y', 'hidden');
     }
