@@ -289,7 +289,6 @@
         >
           <span class="settings-value-copy">
             <b>{{ t('导入时询问创建书库') }}</b>
-            <span>{{ t('导入多本作品时，按目录询问') }}</span>
           </span>
         </MdSwitch>
         <button
@@ -315,7 +314,6 @@
         >
           <span class="settings-value-copy">
             <b>{{ t('日志捕获') }}</b>
-            <span>{{ t('记录用户操作、运行信息与异常') }}</span>
           </span>
         </MdSwitch>
         <div class="settings-log-summary">
@@ -410,7 +408,6 @@
               <SettingsInterfacePreview :mode="option.value" thumbnail />
               <span class="settings-value-copy">
                 <b>{{ t(option.label) }}</b>
-                <span>{{ t(option.description) }}</span>
               </span>
               <MdIcon v-if="theme.surfaceMode === option.value" name="check" class="settings-row-check" />
             </button>
@@ -509,7 +506,6 @@
             >
               <span class="settings-value-copy">
                 <b>{{ t('首页单排') }}</b>
-                <span>{{ t('让后续跨页大图保持对齐') }}</span>
               </span>
             </MdSwitch>
             <MdSwitch
@@ -520,7 +516,6 @@
             >
               <span class="settings-value-copy">
                 <b>{{ t('竖排文字') }}</b>
-                <span>{{ t('文字从上往下，各列从右往左') }}</span>
               </span>
             </MdSwitch>
           </div>
@@ -581,7 +576,6 @@
             >
               <span class="settings-value-copy">
                 <b>{{ t('用音量键翻页') }}</b>
-                <span>{{ t('音量加键上一页、音量减键下一页') }}</span>
               </span>
             </MdSwitch>
           </div>
@@ -670,7 +664,6 @@
             >
               <span class="settings-value-copy">
                 <b>{{ t('自动转存常读作品') }}</b>
-                <span>{{ t('根据阅读频率与冷打开耗时，生成可回收的 HOMURA 阅读存档。') }}</span>
               </span>
             </MdSwitch>
             <div class="settings-detail-font">
@@ -797,7 +790,6 @@
             >
               <span class="settings-value-copy">
                 <b>{{ t('日志捕获') }}</b>
-                <span>{{ t('记录应用运行期间的日志') }}</span>
               </span>
             </MdSwitch>
           </div>
@@ -951,7 +943,6 @@
             >
               <span class="settings-value-copy">
                 <b>{{ t('导入时询问创建书库') }}</b>
-                <span>{{ t('导入多本作品时，按目录询问') }}</span>
               </span>
             </MdSwitch>
           </div>
@@ -971,7 +962,6 @@
             >
               <span class="settings-value-copy">
                 <b>{{ t('启动时静默检查更新') }}</b>
-                <span>{{ t('启动时请求官方稳定版更新信息') }}</span>
               </span>
             </MdSwitch>
             <MdSwitch
@@ -982,7 +972,6 @@
             >
               <span class="settings-value-copy">
                 <b>{{ t('强制显示全屏组件') }}</b>
-                <span>{{ isWindows ? t('Windows 默认显示') : t('在非 Windows 系统也显示全屏入口') }}</span>
               </span>
             </MdSwitch>
           </div>
@@ -997,7 +986,6 @@
               </span>
               <span class="settings-value-copy">
                 <b>{{ t('示例漫画') }}</b>
-                <span>{{ t('6 页分镜样张，检查单双页、日漫方向与滚动阅读。') }}</span>
               </span>
               <button type="button" class="settings-text-button" @click="addDemoManga">{{ t('添加漫画') }}</button>
             </div>
@@ -1007,7 +995,6 @@
               </span>
               <span class="settings-value-copy">
                 <b>{{ t('示例小说') }}</b>
-                <span>{{ t('2 章 EPUB 样张，检查字号、分页与进度恢复。') }}</span>
               </span>
               <button type="button" class="settings-text-button" @click="addDemoNovel">{{ t('添加小说') }}</button>
             </div>
@@ -1100,7 +1087,7 @@ import { HomuraStore } from '../services/storage.ts';
 import { canUseNativeStorage } from '../services/nativeStorage.ts';
 import { buildStorageSegments, readDiskStorageStats } from '../services/storageStats.ts';
 import type { DiskStorageStats } from '../services/storageStats.ts';
-import { formatBytes, isAndroid, isWindows } from '../services/platform.ts';
+import { formatBytes, isAndroid } from '../services/platform.ts';
 import { openGitHubUrl } from '../services/external.ts';
 import { LICENSE_PAGE_URL, REPOSITORY_URL } from '../services/updates.ts';
 import {
@@ -1215,8 +1202,7 @@ const detailSurfaceOptions = ['auto', 'light', 'dark'].map(value => {
   const option = SURFACE_MODE_OPTIONS.find(item => item.value === value)!;
   return {
     ...option,
-    label: value === 'auto' ? '跟随系统' : option.label,
-    description: value === 'auto' ? '自动适应系统的深浅色' : value === 'light' ? '明亮、清爽的阅读界面' : '柔和低光，留给安静的夜晚'
+    label: value === 'auto' ? '跟随系统' : option.label
   };
 });
 const pureBlackOptions = [
@@ -2546,7 +2532,6 @@ onBeforeUnmount(() => {
   min-height: 44px;
   margin: auto 0 -8px;
   padding-top: 4px;
-  border-top: 0.5px solid var(--md-outline-variant);
   color: var(--md-primary);
   font-size: 13px;
   font-weight: 550;

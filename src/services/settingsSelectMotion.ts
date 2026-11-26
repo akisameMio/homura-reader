@@ -9,6 +9,7 @@ interface SelectMotionElements {
   menu: () => HTMLElement | null;
   pill: () => HTMLElement | null;
   list: () => HTMLElement | null;
+  options: () => HTMLElement | null;
   onClosed: () => void;
 }
 
@@ -17,6 +18,10 @@ interface Bounds {
   top: number;
   right: number;
   bottom: number;
+}
+
+interface MenuBounds extends Bounds {
+  opensUp: boolean;
 }
 
 interface Pose extends Bounds {
@@ -31,9 +36,11 @@ const MENU_WIDTH = 224;
 const MENU_RADIUS = 24;
 const MENU_MAX_HEIGHT = 320;
 const OPTION_HEIGHT = 56;
-const MENU_PADDING = 16;
+const MENU_PADDING = 22;
+const MIN_BLUR = 0.5;
+const MAX_BLUR = 6;
 
-function expandedBounds(pill: Bounds, optionCount: number): Bounds {
+function expandedBounds(pill: Bounds, optionCount: number): MenuBounds {
   const viewport = window.visualViewport;
   const leftLimit = (viewport?.offsetLeft ?? 0) + VIEWPORT_INSET;
   const topLimit = (viewport?.offsetTop ?? 0) + VIEWPORT_INSET;
@@ -43,12 +50,15 @@ function expandedBounds(pill: Bounds, optionCount: number): Bounds {
   const right = Math.min(pill.right, rightLimit);
   const left = Math.max(leftLimit, right - Math.max(MENU_WIDTH, pill.right - pill.left));
 
-  // 下方至少留出一整行才保持原上沿。靠近视口底部时向上让出滚动空间。
+  // 下方放不下一整行时，优先沿胶囊下沿向上展开。
   const spaceBelow = bottomLimit - pill.top;
-  const top = Math.max(topLimit, spaceBelow >= OPTION_HEIGHT + MENU_PADDING
-    ? pill.top
-    : Math.min(pill.top, bottomLimit - Math.min(height, 2 * OPTION_HEIGHT + MENU_PADDING)));
-  return { left, top, right, bottom: Math.min(bottomLimit, top + height) };
+  const opensUp = spaceBelow < OPTION_HEIGHT + MENU_PADDING && pill.bottom - topLimit > spaceBelow;
+  if (opensUp) {
+    const bottom = Math.min(pill.bottom, bottomLimit + VIEWPORT_INSET);
+    return { left, top: Math.max(topLimit, bottom - height), right, bottom, opensUp };
+  }
+  const top = Math.max(topLimit, pill.top);
+  return { left, top, right, bottom: Math.min(bottomLimit, top + height), opensUp };
 }
 
 function mix(from: number, to: number, progress: number) {
@@ -60,9 +70,16 @@ function fade(progress: number, start: number, end: number) {
   return value * value * (3 - 2 * value);
 }
 
+function drawInk(element: HTMLElement, opacity: number) {
+  const blur = MAX_BLUR * (1 - opacity);
+  element.style.opacity = String(opacity);
+  // CSS filter: blur() 的边缘采样为透明（decal），低半径直接绕过滤镜。
+  element.style.filter = opacity > 0 && blur >= MIN_BLUR ? `blur(${blur}px)` : 'none';
+}
+
 export function createSettingsSelectMotion(elements: SelectMotionElements) {
   const motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-  let expanded: Bounds | null = null;
+  let expanded: MenuBounds | null = null;
   let current: Pose | null = null;
   let targetOpen = false;
   let frame = 0;
@@ -90,11 +107,12 @@ export function createSettingsSelectMotion(elements: SelectMotionElements) {
     const menu = elements.menu();
     const pill = elements.pill();
     const list = elements.list();
+    const options = elements.options();
     if (!open && (immediate || motionQuery?.matches || !current)) {
       closeMenu();
       return;
     }
-    if (!control || !menu || !pill || !list || (current && targetOpen === open)) return;
+    if (!control || !menu || !pill || !list || !options || (current && targetOpen === open)) return;
 
     cancel();
     targetOpen = open;
@@ -115,11 +133,15 @@ export function createSettingsSelectMotion(elements: SelectMotionElements) {
     pill.style.width = `${rect.width}px`;
     pill.style.height = `${rect.height}px`;
     pill.style.font = style.font;
+    pill.style.top = expanded.opensUp ? 'auto' : '0px';
+    pill.style.bottom = expanded.opensUp ? '0px' : 'auto';
     list.style.width = `${expanded.right - expanded.left}px`;
     list.style.height = `${expanded.bottom - expanded.top}px`;
+    list.classList.remove('is-settled');
 
     const draw = (time: number) => {
-      const progress = 1 - (1 - time) ** 3;
+      // 收起首帧的斜率降到 1，靠近胶囊时仍逐步减速到零。
+      const progress = 1 - (1 - time) ** 3 * (open ? 1 : 1 + 2 * time);
       const pose = {
         left: mix(from.left, to.left, progress),
         top: mix(from.top, to.top, progress),
@@ -127,7 +149,7 @@ export function createSettingsSelectMotion(elements: SelectMotionElements) {
         bottom: mix(from.bottom, to.bottom, progress),
         radius: mix(from.radius, to.radius, progress),
         elevation: mix(from.elevation, to.elevation, progress),
-        pillOpacity: mix(from.pillOpacity, to.pillOpacity, open ? fade(time, 0, 0.25) : fade(time, 0.55, 1)),
+        pillOpacity: mix(from.pillOpacity, to.pillOpacity, open ? fade(time, 0, 0.25) : fade(time, 0.45, 1)),
         listOpacity: mix(from.listOpacity, to.listOpacity, open ? fade(time, 0.25, 0.75) : fade(time, 0, 0.3))
       };
       current = pose;
@@ -139,16 +161,15 @@ export function createSettingsSelectMotion(elements: SelectMotionElements) {
       menu.style.setProperty('--settings-select-menu-elevation', String(pose.elevation));
       menu.style.backgroundColor = time === 0 ? fromColor : time === 1 ? toColor
         : `color-mix(in oklab, ${fromColor} ${(1 - progress) * 100}%, ${toColor})`;
-      pill.style.opacity = String(pose.pillOpacity);
-      pill.style.filter = `blur(${6 * (1 - pose.pillOpacity)}px)`;
-      list.style.opacity = String(pose.listOpacity);
-      list.style.filter = `blur(${6 * (1 - pose.listOpacity)}px)`;
+      drawInk(pill, pose.pillOpacity);
+      drawInk(options, pose.listOpacity);
     };
 
     finish = () => {
       cancel();
       draw(1);
-      if (!open) closeMenu();
+      if (open) list.classList.add('is-settled');
+      else closeMenu();
     };
 
     draw(0);

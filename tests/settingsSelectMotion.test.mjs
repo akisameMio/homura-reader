@@ -36,10 +36,20 @@ function fixture(run) {
     getBoundingClientRect: () => bounds
   };
   const menu = element();
-  const list = element();
+  const classes = new Set();
+  const list = {
+    ...element(),
+    classList: {
+      add: name => classes.add(name),
+      remove: name => classes.delete(name),
+      contains: name => classes.has(name)
+    }
+  };
   const pill = element();
+  const options = element();
   const motion = createSettingsSelectMotion({
-    control: () => control, menu: () => menu, list: () => list, pill: () => pill, onClosed: () => closed++
+    control: () => control, menu: () => menu, list: () => list, pill: () => pill,
+    options: () => options, onClosed: () => closed++
   });
   const step = ms => {
     now += ms;
@@ -50,7 +60,7 @@ function fixture(run) {
   };
   const setOpen = (open, immediate = false) => motion.setOpen(open, 4, immediate);
   try {
-    run({ motion, setOpen, control, menu, list, pill, viewport, bounds, step, frames, listeners, media, closed: () => closed });
+    run({ motion, setOpen, control, menu, list, pill, options, viewport, bounds, step, frames, listeners, media, closed: () => closed });
   } finally {
     motion.dispose();
     for (const [name, descriptor] of previous) {
@@ -81,7 +91,7 @@ test('菜单从胶囊精确起步，沿固定右上角单调展开和收回', ()
     assert.equal(control.style.opacity, '0');
     previous = current;
   }
-  assert.deepEqual(edges(menu), [576, 212.25, 800, 452.25]);
+  assert.deepEqual(edges(menu), [576, 212.25, 800, 458.25]);
   assert.equal(menu.style.borderRadius, '24px');
   assert.equal(menu.style.backgroundColor, 'var(--md-select-menu-surface)');
   assert.equal(menu.style['--settings-select-menu-elevation'], '1');
@@ -103,55 +113,81 @@ test('菜单从胶囊精确起步，沿固定右上角单调展开和收回', ()
   assert.equal(closed(), 1);
 }));
 
-test('文字与箭头在同一个外壳内按开合阶段交叉淡化', () => fixture(({ setOpen, pill, list, step }) => {
+test('文字与箭头按开合阶段交叉淡化，跳过低于 0.5px 的模糊节点', () => fixture(({ setOpen, pill, options, step }) => {
   setOpen(true);
-  assert.equal(pill.style.filter, 'blur(0px)');
-  assert.equal(list.style.opacity, '0');
-  step(35);
+  assert.equal(pill.style.filter, 'none');
+  assert.equal(options.style.opacity, '0');
+  step(10);
+  assert.ok(Number(pill.style.opacity) < 1);
+  assert.equal(pill.style.filter, 'none');
+  step(25);
   assert.equal(pill.style.opacity, '0.5');
   assert.equal(pill.style.filter, 'blur(3px)');
   step(35);
   assert.equal(pill.style.opacity, '0');
   step(70);
-  assert.equal(list.style.opacity, '0.5');
-  assert.equal(list.style.filter, 'blur(3px)');
+  assert.equal(options.style.opacity, '0.5');
+  assert.equal(options.style.filter, 'blur(3px)');
   step(70);
-  assert.equal(list.style.opacity, '1');
+  assert.equal(options.style.opacity, '1');
   step(70);
 
   setOpen(false);
   step(66);
-  assert.equal(list.style.opacity, '0');
-  step(55);
-  assert.equal(pill.style.opacity, '0');
+  assert.equal(options.style.opacity, '0');
   step(33);
+  assert.equal(pill.style.opacity, '0');
+  step(11);
   assert.ok(Number(pill.style.opacity) > 0);
-  step(66);
+  step(100);
+  assert.ok(Number(pill.style.opacity) < 1);
+  assert.equal(pill.style.filter, 'none');
+  step(10);
   assert.equal(pill.style.opacity, '1');
-  assert.equal(pill.style.filter, 'blur(0px)');
+  assert.equal(pill.style.filter, 'none');
 }));
 
-test('视口底部空间不足时向上放置，仍沿直线收回', () => fixture(({ setOpen, menu, list, viewport, step }) => {
-  viewport.height = 260;
+test('视口底部空间不足时胶囊文字与外壳一起锁定右下角', () => fixture(({ setOpen, menu, list, pill, viewport, step }) => {
+  viewport.height = 270;
   setOpen(true);
-  step(280);
-  assert.equal(list.style.height, '128px');
-  assert.deepEqual(edges(menu), [576, 120, 800, 248]);
+  step(35);
+  assert.equal(pill.style.top, 'auto');
+  assert.equal(pill.style.bottom, '0px');
+  assert.equal(edges(menu)[3], 248.25);
+  assert.ok(edges(menu)[1] < 212.25);
+  step(245);
+  assert.equal(list.style.height, '236.25px');
+  assert.deepEqual(edges(menu), [576, 12, 800, 248.25]);
   setOpen(false);
   step(110);
-  assert.ok(edges(menu)[1] > 120 && edges(menu)[1] < 212.25);
+  assert.ok(edges(menu)[1] > 12 && edges(menu)[1] < 212.25);
+  assert.equal(edges(menu)[3], 248.25);
   step(110);
   assert.deepEqual(edges(menu), [703.75, 212.25, 800, 248.25]);
 }));
 
-test('反向时沿用当前边界和内容透明度，下一帧直接朝新目标移动', () => fixture(({ setOpen, control, menu, list, step, closed }) => {
+test('仅完全展开后显示滚动条，收起首帧的高度变化小于剩余行程十分之一', () => fixture(({ setOpen, menu, list, step }) => {
+  setOpen(true);
+  step(279);
+  assert.equal(list.classList.contains('is-settled'), false);
+  step(1);
+  assert.equal(list.classList.contains('is-settled'), true);
+  const openedBottom = edges(menu)[3];
+  setOpen(false);
+  assert.equal(list.classList.contains('is-settled'), false);
+  step(1000 / 60);
+  assert.ok((openedBottom - edges(menu)[3]) / (openedBottom - 248.25) < 0.1);
+  assert.equal(list.style.filter, undefined);
+}));
+
+test('反向时沿用当前边界和内容透明度，下一帧直接朝新目标移动', () => fixture(({ setOpen, control, menu, options, step, closed }) => {
   setOpen(true);
   step(120);
   const opening = edges(menu);
-  const opacity = list.style.opacity;
+  const opacity = options.style.opacity;
   setOpen(false);
   assert.deepEqual(edges(menu), opening);
-  assert.equal(list.style.opacity, opacity);
+  assert.equal(options.style.opacity, opacity);
   step(16);
   const closing = edges(menu);
   assert.ok(closing[0] > opening[0]);
@@ -190,7 +226,7 @@ test('快速切换、减少动态效果和卸载都会清理待执行的帧', ()
   step(30);
   media.matches = true;
   listeners.forEach(listener => listener());
-  assert.deepEqual(edges(menu), [576, 212.25, 800, 452.25]);
+  assert.deepEqual(edges(menu), [576, 212.25, 800, 458.25]);
   assert.equal(frames.size, 0);
   setOpen(false);
   assert.equal(closed(), 2);

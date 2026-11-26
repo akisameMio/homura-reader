@@ -43,21 +43,23 @@
           :aria-label="t(label)"
           @keydown="onMenuKeydown"
         >
-          <button
-            v-for="(option, index) in options"
-            :key="option.value"
-            type="button"
-            class="settings-select-option"
-            :class="{ 'is-selected': option.value === modelValue }"
-            role="option"
-            :aria-selected="option.value === modelValue"
-            :tabindex="index === activeIndex ? 0 : -1"
-            @focus="activeIndex = index"
-            @click="select(option.value)"
-          >
-            <span>{{ t(option.label) }}</span>
-            <MdIcon v-if="option.value === modelValue" name="check" :size="21" />
-          </button>
+          <div ref="menuOptionsRef" class="settings-select-menu-options">
+            <button
+              v-for="(option, index) in options"
+              :key="option.value"
+              type="button"
+              class="settings-select-option"
+              :class="{ 'is-selected': option.value === modelValue }"
+              role="option"
+              :aria-selected="option.value === modelValue"
+              :tabindex="index === activeIndex ? 0 : -1"
+              @focus="activeIndex = index"
+              @click="select(option.value)"
+            >
+              <span>{{ t(option.label) }}</span>
+              <MdIcon v-if="option.value === modelValue" name="check" :size="21" />
+            </button>
+          </div>
         </div>
       </div>
     </Teleport>
@@ -89,6 +91,7 @@ const controlRef = shallowRef<HTMLSpanElement | null>(null);
 const menuRef = shallowRef<HTMLDivElement | null>(null);
 const menuPillRef = shallowRef<HTMLSpanElement | null>(null);
 const menuListRef = shallowRef<HTMLDivElement | null>(null);
+const menuOptionsRef = shallowRef<HTMLDivElement | null>(null);
 const open = ref(false);
 const menuVisible = ref(false);
 const activeIndex = ref(0);
@@ -100,6 +103,7 @@ const motion = createSettingsSelectMotion({
   menu: () => menuRef.value,
   pill: () => menuPillRef.value,
   list: () => menuListRef.value,
+  options: () => menuOptionsRef.value,
   onClosed: () => {
     if (!open.value) {
       menuVisible.value = false;
@@ -265,6 +269,12 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+@property --settings-select-scrollbar-opacity {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
 .settings-select-row {
   position: relative;
   display: flex;
@@ -364,10 +374,42 @@ onBeforeUnmount(() => {
 }
 
 .settings-select-menu-list {
+  --settings-select-scrollbar-opacity: 0;
+  --settings-select-scrollbar-color: color-mix(in oklab, var(--md-on-surface-variant)
+    calc(28% * var(--settings-select-scrollbar-opacity)), transparent);
   overflow: hidden auto;
   overscroll-behavior: contain;
-  padding: 8px;
+  border: solid transparent;
+  border-width: 8px 8px 8px 0;
   scrollbar-width: thin;
+  scrollbar-color: var(--settings-select-scrollbar-color) transparent;
+}
+
+.settings-select-menu-list.is-settled {
+  --settings-select-scrollbar-opacity: 1;
+  transition: --settings-select-scrollbar-opacity 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+@supports selector(::-webkit-scrollbar) {
+  .settings-select-menu-list {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+
+  .settings-select-menu-list::-webkit-scrollbar {
+    display: block;
+    width: 4px;
+  }
+
+  .settings-select-menu-list::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: var(--settings-select-scrollbar-color);
+  }
+}
+
+/* 给模糊后的文字和选中态留出透明边缘，不把滚动条纳入滤镜。 */
+.settings-select-menu-options {
+  padding: 3px 3px 3px 8px;
 }
 
 .settings-select-option {
@@ -421,7 +463,8 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .settings-select-control,
-  .settings-select-option {
+  .settings-select-option,
+  .settings-select-menu-list.is-settled {
     transition: none;
   }
 }
