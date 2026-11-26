@@ -34,7 +34,10 @@ async function compile(name, replacements = []) {
 }
 
 const iconStub = ["import MdIcon from './MdIcon.vue';", 'const MdIcon = { render: () => null };'];
-const header = await compile('ReaderDrawerHeader', [iconStub]);
+const iconButton = await compile('MdIconButton', [
+  ["'../services/spring.ts'", `'${new URL('../src/services/spring.ts', import.meta.url).href}'`]
+]);
+const header = await compile('ReaderDrawerHeader', [iconStub, ["'./MdIconButton.vue'", `'${iconButton}'`]]);
 const tabs = await compile('ReaderDrawerTabs');
 const drawer = await compile('ReaderTocDrawer', [
   iconStub,

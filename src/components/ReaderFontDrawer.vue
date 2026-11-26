@@ -41,7 +41,7 @@
         @drag-cancel="onSheetDragCancel"
       >
         <template #status>
-          <button type="button" class="reader-font-tool" :title="t('搜索字体')" :aria-label="t('搜索字体')" @click="fontSearchInput?.focus()"><MdIcon name="search" /></button>
+          <MdIconButton type="button" preserve-user-activation class="reader-font-tool" :title="t('搜索字体')" :aria-label="t('搜索字体')" @click="fontSearchInput?.focus()"><MdIcon name="search" /></MdIconButton>
         </template>
       </ReaderDrawerHeader>
       <div class="md-drawer-body reader-font-body" role="group" :aria-label="t('选择正文字体')">
@@ -75,7 +75,7 @@
         <div class="reader-font-search">
           <MdIcon name="search" :size="20" />
           <input ref="fontSearchInput" v-model="fontQuery" type="search" :placeholder="t('搜索字体')" :aria-label="t('搜索可用字体')" autocomplete="off" />
-          <button v-if="fontQuery" type="button" class="reader-font-clear" :aria-label="t('清除字体搜索')" @click="clearFontSearch"><MdIcon name="close" :size="18" /></button>
+          <MdIconButton v-if="fontQuery" type="button" preserve-user-activation class="reader-font-clear" :aria-label="t('清除字体搜索')" @click="clearFontSearch"><MdIcon name="close" :size="18" /></MdIconButton>
         </div>
       </div>
     </aside>
@@ -92,6 +92,7 @@ import { useSheetDrag } from '../composables/useSheetDrag.ts';
 import { useSheetSpring } from '../composables/useSheetSpring.ts';
 import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
 import MdIcon from './MdIcon.vue';
+import MdIconButton from './MdIconButton.vue';
 import { useI18n } from '../composables/useI18n.ts';
 
 const { t } = useI18n();
@@ -204,7 +205,7 @@ function onFontMenuKeydown(event: KeyboardEvent) {
   padding-bottom: 0;
   background: color-mix(in oklab, var(--md-surface-container) 65%, var(--md-surface-low));
 }
-.reader-font-tool { display: grid; width: 48px; height: 48px; flex: none; place-items: center; border-radius: 50%; background: var(--md-surface); color: var(--md-on-surface); }
+.reader-font-tool { --icon-button-background: var(--md-surface); display: grid; width: 48px; height: 48px; flex: none; place-items: center; border-radius: 50%; color: var(--md-on-surface); }
 @media (max-width: 899px) {
   .reader-font-drawer { height: 78dvh; }
 }
@@ -227,6 +228,6 @@ function onFontMenuKeydown(event: KeyboardEvent) {
 .reader-font-tool:focus-visible, .reader-font-clear:focus-visible { outline: 2px solid var(--md-primary); outline-offset: -3px; }
 .reader-font-empty { padding: 24px 16px; border-radius: 24px; background: var(--md-surface); color: var(--md-on-surface-variant); font-size: 13px; line-height: 1.7; text-align: center; }
 @media (hover: hover) and (pointer: fine) {
-  .reader-font-option:hover, .reader-font-tool:hover, .reader-font-clear:hover { background: color-mix(in oklab, var(--md-surface) 92%, var(--md-on-surface)); }
+  .reader-font-option:hover { background: color-mix(in oklab, var(--md-surface) 92%, var(--md-on-surface)); }
 }
 </style>

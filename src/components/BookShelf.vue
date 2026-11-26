@@ -9,8 +9,8 @@
     </div>
   </Transition>
   <div v-if="currentCollection" class="relative mx-4 min-[900px]:mx-7 mt-2 flex items-center gap-2">
-    <button
-      class="shelf-back-button w-11 h-11 shrink-0 rounded-full grid place-items-center bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)] transition-colors duration-200"
+    <MdIconButton
+      class="shelf-back-button w-11 h-11 shrink-0 rounded-full grid place-items-center text-[var(--md-on-secondary-container)]"
       :class="{ 'is-drop-target': touchDrag.home }"
       data-shelf-home
       :title="backLabel"
@@ -20,7 +20,7 @@
       @drop="onRootDrop"
     >
       <MdIcon name="chevron_left" class="w-5 h-5" />
-    </button>
+    </MdIconButton>
     <div class="relative h-11 flex-1 min-w-0">
       <Transition name="shelf-select">
         <button v-if="!selecting" key="select" type="button" class="absolute right-0 top-0 md-library-text-button" :disabled="!displayBooks.length && !displayCollections.length" @click="toggleSelection">{{ t('选择') }}</button>
@@ -101,6 +101,7 @@ import BookCard from './BookCard.vue';
 import ContinueReading from './ContinueReading.vue';
 import CollectionCard from './CollectionCard.vue';
 import MdIcon from './MdIcon.vue';
+import MdIconButton from './MdIconButton.vue';
 import ShelfBatchBar from './ShelfBatchBar.vue';
 import type { Book, Collection } from '../types.ts';
 import { useI18n } from '../composables/useI18n.ts';
@@ -678,11 +679,11 @@ onBeforeUnmount(() => {
   top: 0;
   pointer-events: none;
 }
-.shelf-back-button:hover {
-  background: color-mix(in oklab, var(--md-secondary-container) 92%, var(--md-on-secondary-container));
+.shelf-back-button {
+  --icon-button-background: var(--md-secondary-container);
 }
 .shelf-back-button.is-drop-target {
-  background: var(--md-primary-container);
+  --icon-button-background: var(--md-primary-container);
   color: var(--md-on-primary-container);
 }
 @media (prefers-reduced-motion: reduce) {

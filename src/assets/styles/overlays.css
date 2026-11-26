@@ -91,7 +91,6 @@
       background: transparent;
       color: var(--md-on-surface);
       transition:
-        background-color var(--md-duration-short) var(--md-ease-emphasized),
         color var(--md-duration-short) var(--md-ease-emphasized),
         opacity var(--md-duration-short) var(--md-ease-emphasized);
     }
@@ -108,10 +107,10 @@
       height: 24px;
     }
     .md-icon-button.is-outlined {
-      box-shadow: inset 0 0 0 1px var(--md-outline-variant);
+      --icon-button-shadow: inset 0 0 0 1px var(--md-outline-variant);
     }
     .md-icon-button.is-filled {
-      background: var(--md-primary);
+      --icon-button-background: var(--md-primary);
       color: var(--md-on-primary);
     }
     .md-icon-button.is-favorite {
@@ -121,21 +120,6 @@
       opacity: 0.38;
       cursor: default;
     }
-    @media (hover: hover) and (pointer: fine) {
-      .md-icon-button:hover:not(:disabled):not(.is-filled) {
-        background: color-mix(in oklab, var(--md-on-surface) 8%, transparent);
-      }
-      .md-icon-button.is-filled:hover:not(:disabled) {
-        background: color-mix(in oklab, var(--md-primary) 92%, var(--md-on-primary));
-      }
-    }
-    .md-icon-button:active:not(:disabled):not(.is-filled) {
-      background: color-mix(in oklab, var(--md-on-surface) 12%, transparent);
-    }
-    .md-icon-button.is-filled:active:not(:disabled) {
-      background: color-mix(in oklab, var(--md-primary) 86%, var(--md-on-primary));
-    }
-
     /* 阅读器书眉：通栏平铺在纸面上，不抢正文的注意力 */
     .md-reader-topbar {
       position: absolute;
@@ -157,7 +141,7 @@
       grid-column: 1;
       min-width: 0;
       align-items: center;
-      gap: 2px;
+      gap: 5px;
     }
     /* 书眉在窄屏会隐藏，显式定位两端，别让剩下的两栏被自动排进中间 */
     .md-reader-topbar-side.is-end {
@@ -167,15 +151,12 @@
     .md-reader-topbar-group {
       display: flex;
       align-items: center;
+      gap: 5px;
       margin-left: 0;
       padding: 4px;
       border-radius: 999px;
       background: color-mix(in oklab, var(--md-reader-ink) 6%, transparent);
       box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--md-reader-ink) 7%, transparent);
-    }
-    .md-reader-topbar-group .md-icon-button {
-      width: 36px;
-      height: 36px;
     }
     /* 顶栏图标比常规按钮收一档，保持书眉轻盈 */
     .md-reader-topbar .md-icon-button {
@@ -211,19 +192,9 @@
       width: 40px;
       padding: 0;
       border-radius: 999px;
-      background: transparent;
     }
     .md-reader-topbar .md-reader-type-button.is-active {
       color: var(--md-primary);
-      background: transparent;
-    }
-    @media (hover: hover) and (pointer: fine) {
-      .md-reader-topbar .md-icon-button:hover:not(:disabled):not(.is-filled) {
-        background: color-mix(in oklab, var(--md-reader-ink) 8%, transparent);
-      }
-    }
-    .md-reader-topbar .md-icon-button:active:not(:disabled):not(.is-filled) {
-      background: color-mix(in oklab, var(--md-reader-ink) 12%, transparent);
     }
 
     /* 阅读器底栏：页脚直接浮在纸面上，不铺底、不描边，避免和正文分成两块 */
@@ -609,7 +580,11 @@
         width: 36px;
         height: 36px;
       }
+      .md-reader-topbar-side {
+        gap: 9px;
+      }
       .md-reader-topbar-group {
+        gap: 13px;
         padding: 3px;
       }
       .md-reader-topbar-group .md-icon-button {

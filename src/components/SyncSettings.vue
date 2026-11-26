@@ -13,7 +13,7 @@
       </div>
     </section>
     <MobileBottomSheet :open="editorOpen" desktop-side :title="t('WebDAV 配置')" title-id="webdav-config-title" :busy="busy" @close="editorOpen = false" @cancel="editorOpen = false" @closed="finishEditor">
-      <template #status><button type="submit" form="webdav-connection-form" class="md-icon-button connection-confirm" :disabled="busy || !draft.url.trim()" :aria-label="t('保存设置')"><MdIcon name="check" /></button></template>
+      <template #status><MdIconButton type="submit" form="webdav-connection-form" class="md-icon-button connection-confirm" :disabled="busy || !draft.url.trim()" :aria-label="t('保存设置')"><MdIcon name="check" /></MdIconButton></template>
     <form id="webdav-connection-form" class="sync-form" @submit.prevent="save">
       <section class="sync-group" aria-labelledby="sync-connection-title">
         <h2 id="sync-connection-title">{{ t('WebDAV 连接') }}</h2>
@@ -67,14 +67,14 @@
             />
             <span class="sync-field-end">
               <span class="sync-field-state">{{ t('可选') }}</span>
-              <button
+              <MdIconButton
                 type="button"
-                class="sync-password-toggle md-hit-target"
+                class="sync-password-toggle"
                 :aria-label="passwordVisible ? t('隐藏密码') : t('显示密码')"
                 :aria-pressed="passwordVisible"
                 :disabled="busy"
                 @click="passwordVisible = !passwordVisible"
-              ><MdIcon :name="passwordVisible ? 'visibility_off' : 'visibility'" /></button>
+              ><MdIcon :name="passwordVisible ? 'visibility_off' : 'visibility'" /></MdIconButton>
             </span>
           </div>
         </div>
@@ -137,6 +137,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useSyncStore } from '../stores/sync.ts';
 import { useI18n } from '../composables/useI18n.ts';
 import MdIcon from './MdIcon.vue';
+import MdIconButton from './MdIconButton.vue';
 import MdInfoHint from './MdInfoHint.vue';
 import MdSwitch from './MdSwitch.vue';
 import MobileBottomSheet from './MobileBottomSheet.vue';
@@ -296,7 +297,7 @@ async function disconnect() {
 .connection-dot.is-connected { background: var(--md-primary); }
 .connection-dot.is-failed { background: var(--md-error); }
 .connection-delete { background: var(--md-surface); color: var(--md-error); border: 0; display: block; width: 100%; padding: 20px; text-align: left; margin-top: 24px; }
-.connection-confirm { background: var(--md-surface); }
+.connection-confirm { --icon-button-background: var(--md-surface); }
 .sync-form .sync-group > h2 { display: none; }
 .sync-form .sync-field { grid-template-columns: 62px minmax(0, 1fr) auto; gap: 8px; padding: 14px 18px; }
 .sync-form .sync-field input { text-align: right; font-size: 16px; }
@@ -323,7 +324,6 @@ async function disconnect() {
 .sync-field-state { color: var(--md-on-surface-variant); font-size: 15px; font-weight: 450; white-space: nowrap; }
 .sync-field-end { display: flex; grid-column: 3; grid-row: 1; align-items: center; gap: 12px; }
 .sync-password-toggle { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--md-on-surface-variant); cursor: pointer; }
-.sync-password-toggle:hover { background: color-mix(in oklab, var(--md-on-surface) 8%, transparent); }
 .sync-password-toggle:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 1px; }
 .sync-password-toggle:disabled { opacity: .38; cursor: default; }
 .sync-password-toggle :deep(svg) { width: 22px; height: 22px; }

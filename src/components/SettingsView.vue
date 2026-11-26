@@ -4,11 +4,11 @@
   }">
     <header
       :key="isCompact || isAndroid ? undefined : (shownSection ?? 'overview')"
-      class="settings-topbar"
+      class="settings-topbar md-topbar-fade"
       :style="isCompact ? { paddingTop: 'env(safe-area-inset-top)' } : null"
     >
       <div class="settings-topbar-inner" :class="{ 'is-log-searching': shownSection === 'logs' && logSearchOpen }">
-        <button
+        <MdIconButton
           v-if="activeSection"
           v-show="shownSection"
           ref="backButtonRef"
@@ -18,7 +18,7 @@
           @click="showPreviousSection"
         >
           <MdIcon name="chevron_left" />
-        </button>
+        </MdIconButton>
         <div class="settings-topbar-title">
           <h1>{{ shownSection ? t(sectionTitles[shownSection]) : t('设置') }}</h1>
         </div>
@@ -37,7 +37,7 @@
               :aria-label="t('搜索日志')"
               @keydown.esc.stop="closeLogSearch"
             />
-            <button
+            <MdIconButton
               type="button"
               class="settings-log-search-close"
               :aria-label="t('关闭搜索')"
@@ -45,20 +45,22 @@
               @click="closeLogSearch"
             >
               <MdIcon name="close" :size="18" />
-            </button>
+            </MdIconButton>
           </div>
           <div v-else class="settings-log-actions">
-            <button
+            <MdIconButton
               type="button"
+              preserve-user-activation
               class="settings-log-action"
               :aria-label="t('搜索日志')"
               :title="t('搜索日志')"
               @click="openLogSearch"
             >
               <MdIcon name="search" :size="22" />
-            </button>
-            <button
+            </MdIconButton>
+            <MdIconButton
               type="button"
+              preserve-user-activation
               class="settings-log-action"
               :aria-label="t('导出日志')"
               :title="t('导出日志')"
@@ -66,7 +68,7 @@
               @click="exportLogs"
             >
               <MdIcon name="ios_share" :size="22" />
-            </button>
+            </MdIconButton>
           </div>
         </div>
       </div>
@@ -168,7 +170,7 @@
             <MdIcon name="database" />
             {{ t('存储与数据') }}
           </h2>
-          <button
+          <MdIconButton
             type="button"
             class="settings-icon-button"
             :title="t('刷新存储用量')"
@@ -177,7 +179,7 @@
             @click="refreshStorage"
           >
             <MdIcon name="update" />
-          </button>
+          </MdIconButton>
         </div>
         <template v-if="diskSegments">
           <div class="storage-summary">
@@ -544,7 +546,7 @@
                 <b>{{ readerDefaults.fontSize }} px</b>
               </div>
               <div class="font-size-control">
-                <button
+                <MdIconButton
                   type="button"
                   class="settings-icon-button"
                   :title="t('减小字号')"
@@ -553,7 +555,7 @@
                   @click="changeDefaultFont(-2)"
                 >
                   <MdIcon name="remove" />
-                </button>
+                </MdIconButton>
                 <MdRange
                   class="settings-range"
                   :model-value="readerDefaults.fontSize"
@@ -563,7 +565,7 @@
                   :aria-label="t('默认字号')"
                   @update:model-value="setFontSize"
                 />
-                <button
+                <MdIconButton
                   type="button"
                   class="settings-icon-button"
                   :title="t('增大字号')"
@@ -572,7 +574,7 @@
                   @click="changeDefaultFont(2)"
                 >
                   <MdIcon name="add" />
-                </button>
+                </MdIconButton>
               </div>
             </div>
             <SettingsSelectRow
@@ -600,7 +602,7 @@
         <div class="settings-detail-hero settings-storage-hero">
           <div class="settings-storage-hero-head">
             <span>{{ t('本机存储用量') }}</span>
-            <button
+            <MdIconButton
               type="button"
               class="settings-icon-button"
               :title="t('刷新存储用量')"
@@ -609,7 +611,7 @@
               @click="refreshStorage"
             >
               <MdIcon name="update" />
-            </button>
+            </MdIconButton>
           </div>
           <template v-if="diskSegments">
             <strong class="storage-number">{{ formatBytes(diskSegments.appBytes) }}</strong>
@@ -1124,6 +1126,7 @@ import { useViewport } from '../composables/useViewport.ts';
 import { settingsSelectBackKey, useSettingsTransition } from '../composables/useSettingsTransition.ts';
 import type { NativeBackEvent } from '../composables/useAndroidBackExit.ts';
 import MdIcon from './MdIcon.vue';
+import MdIconButton from './MdIconButton.vue';
 import MdInfoHint from './MdInfoHint.vue';
 import MobileBottomSheet from './MobileBottomSheet.vue';
 import MdRange from './MdRange.vue';
@@ -1197,7 +1200,7 @@ const logExporting = ref(false);
 const logActionNote = ref('');
 let logActionNoteTimer: ReturnType<typeof setTimeout> | null = null;
 const pageRef = shallowRef<HTMLElement | null>(null);
-const backButtonRef = shallowRef<HTMLButtonElement | null>(null);
+const backButtonRef = shallowRef<InstanceType<typeof MdIconButton> | null>(null);
 const sectionTransition = useSettingsTransition();
 const selectBack = shallowRef<(() => void) | null>(null);
 provide(settingsSelectBackKey, selectBack);
@@ -1474,7 +1477,7 @@ async function openSection(section: SettingsSection, event: MouseEvent) {
   transition?.play();
   if (section === 'storage' && !storageLoading.value) refreshStorage();
   await transition?.finished;
-  if (activeSection.value === section && !previewingBack.value) backButtonRef.value?.focus({ preventScroll: true });
+  if (activeSection.value === section && !previewingBack.value) backButtonRef.value?.button?.focus({ preventScroll: true });
 }
 
 function startSectionReturn() {
@@ -1511,7 +1514,7 @@ function startSectionReturn() {
     // 卸载时无需恢复焦点。手势取消后回到原详情控件，提交后回到入口。
     if (!pageRef.value?.isConnected) return;
     if (!activeSection.value) findTrigger()?.focus({ preventScroll: true });
-    else if (!previewingBack.value) (detailFocus?.isConnected ? detailFocus : backButtonRef.value)?.focus({ preventScroll: true });
+    else if (!previewingBack.value) (detailFocus?.isConnected ? detailFocus : backButtonRef.value?.button)?.focus({ preventScroll: true });
   });
   return transition;
 }
@@ -1729,25 +1732,6 @@ onBeforeUnmount(() => {
   z-index: 20;
   background: transparent;
   pointer-events: none;
-}
-
-/* 模糊层独立淡出，标题保持清晰，卡片在顶栏下方仍可点击。 */
-.settings-topbar::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 -12px;
-  z-index: -1;
-  pointer-events: none;
-  background: linear-gradient(
-    to bottom,
-    color-mix(in oklab, var(--md-surface-low) 72%, transparent),
-    color-mix(in oklab, var(--md-surface-low) 32%, transparent) 65%,
-    transparent
-  );
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
-  -webkit-mask-image: linear-gradient(to bottom, var(--md-surface) 45%, transparent 100%);
-  mask-image: linear-gradient(to bottom, var(--md-surface) 45%, transparent 100%);
 }
 
 /* 桌面详情顶栏与转场副本使用同一不透明表面，接手时不再采样背景或独立入场。 */
@@ -2408,13 +2392,13 @@ onBeforeUnmount(() => {
 }
 
 @container settings (max-width: 399px) {
-  .settings-grid :deep(.md-segmented.has-many-options .md-segmented-option svg) {
+  .settings-grid :deep(.md-segmented.has-many-options .md-segmented-option .md-icon-button-face) {
     display: none;
   }
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .settings-icon-button:not(:disabled):hover, .settings-text-button:not(:disabled):hover {
+  .settings-text-button:not(:disabled):hover {
     background: var(--md-surface-container);
   }
 
@@ -2617,13 +2601,13 @@ onBeforeUnmount(() => {
 }
 
 .settings-back-button {
+  --icon-button-background: var(--md-surface);
   display: grid;
   place-items: center;
   flex: none;
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--md-surface);
   color: var(--md-on-surface);
   cursor: pointer;
   pointer-events: auto;
@@ -3325,10 +3309,6 @@ button.settings-list-row {
   button.settings-list-row:not([role="switch"]):hover {
     background: color-mix(in oklab, var(--md-primary) 4%, transparent);
   }
-
-  .settings-back-button:hover {
-    background: var(--md-surface-high);
-  }
 }
 
 @container settings (max-width: 699px) {
@@ -3349,6 +3329,7 @@ button.settings-list-row {
   }
 
   .settings-log-actions {
+    gap: 3px;
     padding: 2px;
   }
 

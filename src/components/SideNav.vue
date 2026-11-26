@@ -8,6 +8,16 @@
     <div class="sidenav-head">
       <button
         type="button"
+        class="sidenav-brand"
+        :title="t('HOMURA · 返回主页')"
+        :aria-label="t('HOMURA，返回主页')"
+        @click="select('shelf')"
+      >
+        <img :src="logoUrl" alt="" draggable="false" />
+        <span class="sidenav-wordmark" aria-hidden="true">HOMURA</span>
+      </button>
+
+      <MdIconButton
         class="sidenav-icon-btn"
         :title="collapsed ? t('展开侧栏') : t('折叠侧栏')"
         :aria-label="collapsed ? t('展开侧栏') : t('折叠侧栏')"
@@ -15,17 +25,7 @@
         @click="toggleSidebar"
       >
         <MdIcon :name="collapsed ? 'menu' : 'menu_open'" />
-      </button>
-
-      <button
-        type="button"
-        class="sidenav-avatar"
-        :title="t('HOMURA · 返回主页')"
-        :aria-label="t('HOMURA，返回主页')"
-        @click="select('shelf')"
-      >
-        <img :src="logoUrl" alt="" draggable="false" />
-      </button>
+      </MdIconButton>
     </div>
 
     <nav ref="desktopNavRef" class="sidenav-list" :aria-label="t('主导航')">
@@ -42,15 +42,15 @@
         class="sidenav-item"
         :class="{ 'is-active': active === item.key }"
         :title="t(item.label)"
+        :aria-label="t(item.label)"
         :aria-current="active === item.key ? 'page' : undefined"
         @click="select(item.key)"
       >
         <MdIcon :name="item.icon" :filled="active === item.key" />
-        <span class="sidenav-label sidenav-label-wide">{{ t(item.label) }}</span>
+        <span class="sidenav-label sidenav-label-wide" aria-hidden="true">{{ t(item.label) }}</span>
         <span class="sidenav-label sidenav-label-compact" aria-hidden="true">{{ t(item.label) }}</span>
       </button>
     </nav>
-
   </aside>
 
   <!-- 手机：悬浮胶囊底栏 -->
@@ -88,6 +88,7 @@
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { useViewport } from '../composables/useViewport.ts';
 import MdIcon from './MdIcon.vue';
+import MdIconButton from './MdIconButton.vue';
 import { useI18n } from '../composables/useI18n.ts';
 
 const { t } = useI18n();
@@ -439,6 +440,8 @@ onBeforeUnmount(() => {
 <style scoped>
   /* ---------------- 桌面：浮动侧栏 ---------------- */
   .sidenav {
+    --sidenav-row-height: 52px;
+    --sidenav-move: 280ms var(--md-ease-emphasized);
     position: sticky;
     top: 16px;
     z-index: 30;
@@ -450,108 +453,124 @@ onBeforeUnmount(() => {
     padding: 12px;
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scroll-padding-block: 12px;
     border-radius: 28px;
     background: var(--md-surface-low);
     box-shadow:
       0 0 0 1px color-mix(in oklab, var(--md-outline-variant) 56%, transparent),
       0 14px 34px -20px color-mix(in oklab, var(--md-shadow-color-soft) 55%, transparent);
     transition:
-      flex-basis 280ms cubic-bezier(0.2, 0, 0, 1),
-      width 280ms cubic-bezier(0.2, 0, 0, 1),
-      padding 280ms cubic-bezier(0.2, 0, 0, 1);
+      flex-basis var(--sidenav-move),
+      width var(--sidenav-move),
+      padding var(--sidenav-move);
   }
 
   .sidenav.is-collapsed {
     flex-basis: 104px;
     width: 104px;
     padding: 12px 8px;
-    align-items: center;
   }
 
   .sidenav-head {
     position: relative;
-    flex: 0 0 auto;
-    width: 100%;
-    height: 68px;
-    transition: height 280ms cubic-bezier(0.2, 0, 0, 1);
+    flex: none;
+    height: 64px;
+    transition: height var(--sidenav-move);
   }
 
   .sidenav.is-collapsed .sidenav-head {
-    height: 118px;
+    height: 116px;
   }
 
-  .sidenav-icon-btn,
-  .sidenav-avatar {
+  .sidenav-brand,
+  .sidenav-icon-btn {
     position: absolute;
     top: 4px;
+    height: 44px;
+  }
+
+  .sidenav-brand {
+    inset-inline-start: 4px;
+    width: calc(100% - 60px);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 16px;
+    color: var(--md-on-surface);
+    overflow: clip;
+    transition:
+      inset-inline-start var(--sidenav-move),
+      width var(--sidenav-move),
+      background-color var(--md-duration-short) var(--md-ease-emphasized);
+  }
+
+  .sidenav-brand img {
+    flex: none;
     width: 44px;
     height: 44px;
-    border-radius: 14px;
-    display: grid;
-    place-items: center;
-    color: var(--md-on-surface);
-    transition:
-      background-color 200ms cubic-bezier(0.2, 0, 0, 1),
-      transform 280ms cubic-bezier(0.2, 0, 0, 1),
-      top 280ms cubic-bezier(0.2, 0, 0, 1);
+    border-radius: inherit;
+    object-fit: cover;
+  }
+
+  .sidenav-wordmark {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    transition: opacity 100ms var(--md-ease-emphasized) 100ms;
   }
 
   .sidenav-icon-btn {
-    left: 6px;
-    border-radius: 999px;
+    inset-inline-end: 4px;
+    width: 44px;
+    border-radius: 50%;
+    color: var(--md-on-surface-variant);
+    transition:
+      top var(--sidenav-move),
+      inset-inline-end var(--sidenav-move);
   }
 
-  .sidenav-avatar {
-    left: calc(50% - 24px);
-    width: 48px;
-    height: 48px;
-    border-radius: 16px;
+  .sidenav.is-collapsed .sidenav-brand {
+    inset-inline-start: calc(50% - 22px);
+    width: 44px;
+  }
+
+  .sidenav.is-collapsed .sidenav-wordmark {
+    opacity: 0;
+    transition: opacity 80ms var(--md-ease-emphasized);
   }
 
   .sidenav.is-collapsed .sidenav-icon-btn {
-    transform: translateX(16px);
+    top: 56px;
+    inset-inline-end: calc(50% - 22px);
   }
 
-  .sidenav.is-collapsed .sidenav-avatar {
-    top: 62px;
-  }
+  @media (hover: hover) and (pointer: fine) {
+    .sidenav-brand:hover {
+      background: var(--md-surface-container);
+    }
 
-  .sidenav-icon-btn svg {
-    width: 24px;
-    height: 24px;
-  }
-
-  .sidenav-icon-btn:hover {
-    background: color-mix(in oklab, var(--md-surface-low) 65%, transparent);
-  }
-
-  .sidenav-avatar {
-    overflow: hidden;
-  }
-
-  .sidenav-avatar img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+    .sidenav-icon-btn:hover {
+      --icon-button-background: var(--md-surface-container);
+    }
   }
 
   .sidenav-list {
     position: relative;
+    flex: none;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    width: 100%;
+    gap: 4px;
   }
 
   .sidenav-indicator {
     position: absolute;
     top: 0;
-    left: 0;
+    inset-inline: 0;
     z-index: 0;
-    width: 100%;
-    height: 56px;
-    border-radius: 30px;
+    height: var(--sidenav-row-height);
+    border-radius: 999px;
     background: var(--md-secondary-container);
     opacity: 0;
     pointer-events: none;
@@ -568,59 +587,62 @@ onBeforeUnmount(() => {
     position: relative;
     z-index: 1;
     width: 100%;
-    height: 56px;
-    border-radius: 30px;
+    height: var(--sidenav-row-height);
+    border-radius: 999px;
     background: transparent;
     font-weight: 600;
     color: var(--md-on-surface);
     transition:
-      background-color 200ms cubic-bezier(0.2, 0, 0, 1),
-      color 200ms cubic-bezier(0.2, 0, 0, 1);
+      background-color var(--md-duration-short) var(--md-ease-emphasized),
+      color var(--md-duration-short) var(--md-ease-emphasized);
   }
 
   .sidenav-item svg {
     position: absolute;
     top: calc(50% - 10px);
-    left: 17px;
+    inset-inline-start: 16px;
     width: 20px;
     height: 20px;
     transition:
-      top 280ms cubic-bezier(0.2, 0, 0, 1),
-      left 280ms cubic-bezier(0.2, 0, 0, 1);
+      top var(--sidenav-move),
+      inset-inline-start var(--sidenav-move);
   }
 
   .sidenav-label {
     position: absolute;
     line-height: 1.2;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
   }
 
   .sidenav-label-wide {
     top: 50%;
-    left: 54px;
+    inset-inline: 56px 16px;
+    text-align: start;
     transform: translateY(-50%);
     font-size: 13px;
     opacity: 1;
-    transition: opacity 100ms cubic-bezier(0.2, 0, 0, 1) 40ms;
+    transition: opacity 100ms var(--md-ease-emphasized) 40ms;
   }
 
   .sidenav-label-compact {
-    top: 35px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 32px;
+    inset-inline: 8px;
     font-size: 11px;
     opacity: 0;
-    transition: opacity 80ms cubic-bezier(0.2, 0, 0, 1);
+    transition: opacity 80ms var(--md-ease-emphasized);
   }
 
   .sidenav.is-collapsed .sidenav-label-wide {
     opacity: 0;
-    transition: opacity 80ms cubic-bezier(0.2, 0, 0, 1);
+    transition: opacity 80ms var(--md-ease-emphasized);
   }
 
   .sidenav.is-collapsed .sidenav-label-compact {
     opacity: 1;
-    transition: opacity 100ms cubic-bezier(0.2, 0, 0, 1) 40ms;
+    transition: opacity 100ms var(--md-ease-emphasized) 40ms;
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -634,20 +656,22 @@ onBeforeUnmount(() => {
     color: var(--md-on-secondary-container);
   }
 
-  .sidenav.is-collapsed .sidenav-item {
-    height: 56px;
+  .sidenav-brand:active,
+  .sidenav-item:not(.is-active):active {
+    background: var(--md-surface-high);
   }
 
   .sidenav.is-collapsed .sidenav-item svg {
-    top: 9px;
-    left: calc(50% - 10px);
+    top: 8px;
+    inset-inline-start: calc(50% - 10px);
   }
 
   @media (prefers-reduced-motion: reduce) {
     .sidenav,
     .sidenav-head,
+    .sidenav-brand,
+    .sidenav-wordmark,
     .sidenav-icon-btn,
-    .sidenav-avatar,
     .sidenav-indicator.is-ready,
     .sidenav-item,
     .sidenav-item svg,

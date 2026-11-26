@@ -25,7 +25,7 @@
 | 页面主行动 | `.md-filled-button` / 书架扩展 FAB | 自造渐变按钮、一屏多个实心主按钮 |
 | 次要行动 | `.md-tonal-button` | 再定义一个近似色容器 |
 | 低强调行动 | `.md-text-button` | 用链接伪装按钮 |
-| 只有图标的工具按钮 | `.md-icon-button` + `MdIcon.vue` | 小于 44px 命中区、`div @click` |
+| 只有图标的工具按钮 | `MdIconButton.vue` + `MdIcon.vue` | 小于 44px 命中区、`div @click` |
 | 二到四个互斥选项 | `MdSegmentedControl.vue` | 手写一排不同圆角的按钮 |
 | 布尔开关 | `MdSwitch.vue` | 自绘 checkbox 或点整行文字冒充开关 |
 | 进度 / 字号滑条 | `MdRange.vue` + `.md-range` | 原生蓝轨道、圆形小拇指、另写 range 皮肤 |
@@ -184,19 +184,21 @@ Error token 已在 `src/assets/styles/tokens.css` 的白昼 / 护眼 / 夜间三
 ### 3.2 图标按钮
 
 ```html
-<button
-  type="button"
+<MdIconButton
   class="md-icon-button"
   title="关闭目录"
   aria-label="关闭目录"
+  @click="close"
 >
   <MdIcon name="close" />
-</button>
+</MdIconButton>
 ```
 
 - 基础态透明底；`is-outlined` 加 1px `outline-variant`；`is-filled` 用于当前方向、主行动或明确选中态；`is-favorite` 用于收藏。
 - 图标统一走 `MdIcon.vue`（Material Symbols 24dp 网格）；选中态改用 `:filled="true"`，不自制实心/描边两套几何。
-- 按钮内默认 `24px`，菜单 `20px`，筛选 chip `18px`，行内状态 `16px`；视觉尺寸小于 `44px` 时挂 `.md-hit-target`。
+- 按钮内默认 `24px`，菜单 `20px`，筛选 chip `18px`，行内状态 `16px`。`MdIconButton` 内置 `44px` 最小命中区，相邻小按钮的中心至少间隔 `44px`。
+- 底板用 `--icon-button-background`，描边与投影用 `--icon-button-shadow`。组件统一缩放底板和图标，键盘焦点描边留在原生按钮上。
+- 需要在原生点击事件中唤起软键盘或进入浏览器全屏时，传 `preserve-user-activation`。
 - 只用图标时 `title` 与 `aria-label` 至少有一个，同时存在时文案一致；`MdIcon` 已设 `aria-hidden="true"`，不要给图标本身补可访问名称。
 - 触发模态抽屉/对话框的按钮设置 `aria-haspopup="dialog"` 与 `aria-expanded`；有真实容器 ID 时再加 `aria-controls`（不能指向标题 ID）。
 
@@ -338,7 +340,7 @@ Error token 已在 `src/assets/styles/tokens.css` 的白昼 / 护眼 / 夜间三
 
 - **桌面浮动侧栏**（`SideNav.vue`，`>=900px`）：`sticky top: 16px`、高 `100dvh - 32px`、`28px` 圆角、`surface-low` 底色；展开 `220px` / 折叠 `104px`（偏好存 `localStorage.homura_sidenav_collapsed`，`280ms` 过渡，文案用宽/窄两份交叉淡化不插值 `font-size`）。固定 4 项主导航「书架 / 最近 / 收藏 / 设置」，选中指示器 `.sidenav-indicator` 使用 `secondary-container` + `on-secondary-container`（`300ms` 纵向滑动，带 `:aria-current="active === item.key ? 'page' : undefined"`）；每个导航项与收起按钮必须有 `title` 与 `aria-label`。
 - **手机悬浮胶囊底栏**（`SideNav.vue` 的 `.mobile-nav`，`<900px`）：Teleport 到 `#homura-mobile-nav-root`（`z-40`），左右 `24px`、高 `64px`、圆角 `32px`、最大宽 `560px`、贴 `bottom: env(safe-area-inset-bottom)`；果冻选中指示器 `.mobile-nav-indicator`（`82px × 56px`，圆角 `28px`，`secondary-container`）由物理弹簧驱动点击与横向拖拽切换；主内容区必须挂 `.md-bottom-nav-space`。
-- **书架顶栏**（`LibraryHeader.vue`）：Sticky `z-20`，手机 `56px` / 桌面 `64px`，包含页面标题（`21/22px`；书库内可点击重命名）、作品计数（`font-mono` `on-surface-variant`），以及右侧工具胶囊（全屏按钮、`palette` 外观设置、`tune` 筛选与排序对话框、可展开搜索胶囊 `.library-search-track`）；不可压住标题，不可导致横向溢出。
+- **书架 / 最近 / 收藏顶栏**（`LibraryHeader.vue`）：滚动时常驻 `z-20`，手机 `88px`（另计顶部安全区）/ 桌面 `104px`。与设置页共用渐隐磨砂层 `.md-topbar-fade`，内容从其下方滚过；标题（`21/22px`；书库内可点击重命名）和作品计数仍使用标题胶囊，右侧工具胶囊保留全屏、外观、筛选排序与展开搜索；不可压住标题，不可导致横向溢出。
 - **外观面板**（`AppearanceSheet.vue` + `AppearancePanel.vue`）：复用 `MobileBottomSheet`，手机底部弹出（带「完成」按钮）、桌面 `desktop-side` 渲染为右侧 `372px` side sheet；包含「阅读模式」（`SurfaceModePreview`）与「主题色」（`ThemeSwatchGrid` `5×2`），在面板内切换表面时展开遮罩需跟随 `dialog` 顶层。
 - **设置页布局**（`SettingsView.vue`）：按设置内容区容器宽度排版：`>=1040px` 三列、`600–1039px` 两列、`<600px` 单列；该容器断点仅用于设置卡片排版，不替代全局 `900px` 主断点。
 

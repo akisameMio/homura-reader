@@ -1,9 +1,9 @@
 <template>
   <span class="md-info-hint">
-    <button
+    <MdIconButton
       ref="triggerRef"
       type="button"
-      class="md-info-hint-trigger md-hit-target"
+      class="md-info-hint-trigger"
       :class="{ 'is-open': open }"
       :aria-label="t('{0}的说明', { 0: label })"
       :aria-expanded="open"
@@ -12,7 +12,7 @@
       @click.stop="toggle"
     >
       <MdIcon name="info" :size="18" />
-    </button>
+    </MdIconButton>
     <Teleport :to="portalTarget">
       <div
         :id="hintId"
@@ -30,6 +30,7 @@
 <script setup lang="ts">
 import { inject, nextTick, onBeforeUnmount, ref, shallowRef, useId } from 'vue';
 import MdIcon from './MdIcon.vue';
+import MdIconButton from './MdIconButton.vue';
 import { useI18n } from '../composables/useI18n.ts';
 import { settingsSelectBackKey } from '../composables/useSettingsTransition.ts';
 
@@ -37,7 +38,7 @@ defineProps({ label: { type: String, required: true } });
 const { t } = useI18n();
 const hintId = `md-info-hint-${useId()}`;
 const open = ref(false);
-const triggerRef = shallowRef<HTMLButtonElement | null>(null);
+const triggerRef = shallowRef<InstanceType<typeof MdIconButton> | null>(null);
 const cardRef = shallowRef<HTMLElement | null>(null);
 const portalTarget = shallowRef<string | HTMLElement>('body');
 const hasPopover = typeof HTMLElement !== 'undefined' && 'showPopover' in HTMLElement.prototype;
@@ -45,7 +46,7 @@ const settingsBack = inject(settingsSelectBackKey, null);
 const dismissFromSettings = () => close(true);
 
 function placeCard() {
-  const trigger = triggerRef.value;
+  const trigger = triggerRef.value?.button;
   const card = cardRef.value;
   if (!trigger || !card) return;
   const viewport = window.visualViewport;
@@ -71,12 +72,12 @@ async function toggle() {
     return;
   }
   // 旧 WebView 走固定定位；原生 dialog 内的说明仍留在同一顶层表面中。
-  portalTarget.value = triggerRef.value?.closest('dialog') ?? 'body';
+  portalTarget.value = triggerRef.value?.button?.closest('dialog') ?? 'body';
   settingsBack?.value?.();
-  triggerRef.value?.focus({ preventScroll: true });
+  triggerRef.value?.button?.focus({ preventScroll: true });
   open.value = true;
   await nextTick();
-  if (!open.value || !cardRef.value || !triggerRef.value?.isConnected) return;
+  if (!open.value || !cardRef.value || !triggerRef.value?.button?.isConnected) return;
   if (hasPopover) cardRef.value.showPopover();
   placeCard();
   if (settingsBack) settingsBack.value = dismissFromSettings;
@@ -104,11 +105,11 @@ function close(restoreFocus = false) {
   open.value = false;
   removeListeners();
   if (hasPopover && cardRef.value?.matches(':popover-open')) cardRef.value.hidePopover();
-  if (restoreFocus) triggerRef.value?.focus({ preventScroll: true });
+  if (restoreFocus) triggerRef.value?.button?.focus({ preventScroll: true });
 }
 
 function isInside(target: EventTarget | null) {
-  return target instanceof Node && (triggerRef.value?.contains(target) || cardRef.value?.contains(target));
+  return target instanceof Node && (triggerRef.value?.button?.contains(target) || cardRef.value?.contains(target));
 }
 
 function onOutsidePointer(event: PointerEvent) {
@@ -161,12 +162,11 @@ onBeforeUnmount(() => close());
   background: transparent;
   color: var(--md-on-surface-variant);
   cursor: pointer;
-  transition: color 200ms var(--md-ease-emphasized), background-color 200ms var(--md-ease-emphasized);
+  transition: color 200ms var(--md-ease-emphasized);
 }
 
-.md-info-hint-trigger.is-open,
-.md-info-hint-trigger:active {
-  background: var(--md-secondary-container);
+.md-info-hint-trigger.is-open {
+  --icon-button-background: var(--md-secondary-container);
   color: var(--md-on-secondary-container);
 }
 

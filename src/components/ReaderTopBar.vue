@@ -3,26 +3,26 @@
   <header class="md-reader-topbar" :aria-label="t('阅读器工具栏')">
     <div class="md-reader-topbar-side">
       <div class="md-reader-topbar-group">
-        <button
+        <MdIconButton
           type="button"
           @click="emit('back')"
-          class="md-icon-button md-hit-target"
+          class="md-icon-button"
           :title="t('返回书架 (Esc)')"
           :aria-label="t('返回书架')"
         >
           <MdIcon name="arrow_back" />
-        </button>
-        <button
+        </MdIconButton>
+        <MdIconButton
           type="button"
           @click="ui.openToc()"
-          class="md-icon-button md-hit-target"
+          class="md-icon-button"
           :title="t('目录')"
           :aria-label="t('目录')"
           aria-controls="reader-toc-drawer"
           :aria-expanded="ui.tocOpen"
         >
           <MdIcon name="toc" />
-        </button>
+        </MdIconButton>
       </div>
     </div>
 
@@ -30,7 +30,7 @@
 
     <div class="md-reader-topbar-side is-end">
       <!-- 可重排的正文用 Aa 开字体浮层；漫画 / PDF 没有字体可换，用齿轮开显示设置 -->
-      <button
+      <MdIconButton
         v-if="isReflowable"
         type="button"
         class="md-reader-type-button md-icon-button"
@@ -57,8 +57,8 @@
           <circle cx="17.15" cy="14.25" r="3.35" />
           <path d="M20.5 10.9v7.3" />
         </svg>
-      </button>
-      <button
+      </MdIconButton>
+      <MdIconButton
         type="button"
         class="md-icon-button"
         :class="{ 'is-active': ui.settingsOpen }"
@@ -69,10 +69,10 @@
         @click="ui.openSettings()"
       >
         <MdIcon name="settings" />
-      </button>
+      </MdIconButton>
 
 
-      <button
+      <MdIconButton
         type="button"
         class="md-icon-button"
         :class="{ 'is-favorite': isFavorite }"
@@ -83,11 +83,12 @@
         @click="toggleFavorite"
       >
         <MdIcon name="star" :filled="isFavorite" />
-      </button>
+      </MdIconButton>
       <!-- 全屏切换：默认仅 Windows 桌面显示，移动端窗口本身即全屏，不占位 -->
-      <button
+      <MdIconButton
         v-if="settings.showFullscreenButton"
         type="button"
+        preserve-user-activation
         @click="ui.toggleFullscreen()"
         class="md-icon-button is-desktop-only"
         :title="ui.fullscreen ? t('退出全屏 (F)') : t('全屏 (F)')"
@@ -95,7 +96,7 @@
         :aria-pressed="ui.fullscreen"
       >
         <MdIcon :name="ui.fullscreen ? 'fullscreen_exit' : 'fullscreen'" />
-      </button>
+      </MdIconButton>
     </div>
 
     <Transition
@@ -118,6 +119,7 @@ import { useShelfStore } from '../stores/shelf.ts';
 import { useSettingsStore } from '../stores/settings.ts';
 import { useUiStore } from '../stores/ui.ts';
 import MdIcon from './MdIcon.vue';
+import MdIconButton from './MdIconButton.vue';
 import { useI18n } from '../composables/useI18n.ts';
 
 const { t } = useI18n();

@@ -31,8 +31,6 @@
         <LibraryHeader
           :count="headerCount"
           :title="headerTitle"
-          :scroll-root="activeNav === 'shelf' ? libraryScrollRef : null"
-          :contained-scroll="containedShelfScroll"
           :appearance-open="appearanceOpen"
           :renamable="!!activeCollection"
           @toggle-appearance="appearanceOpen = !appearanceOpen"
@@ -50,7 +48,9 @@
           </template>
         </LibraryHeader>
 
-        <ImportStatusBar v-if="isCompact" @retry="retryFailedImport" />
+        <div v-if="isCompact" class="library-import-status relative z-[19] flex-none">
+          <ImportStatusBar @retry="retryFailedImport" />
+        </div>
 
         <main
           ref="libraryScrollRef"

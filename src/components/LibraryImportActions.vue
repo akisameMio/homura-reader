@@ -2,7 +2,8 @@
   <div
     :class="compact ? 'relative flex items-center' : 'md-fab-pos flex flex-col items-end'"
   >
-    <button
+    <component
+      :is="compact ? MdIconButton : 'button'"
       type="button"
       class="import-fab relative z-10"
       :class="{
@@ -46,7 +47,7 @@
         />
         <span v-else class="import-ring-number">{{ compact ? `${store.percent}%` : store.done }}</span>
       </span>
-    </button>
+    </component>
   </div>
 </template>
 
@@ -54,6 +55,7 @@
 import { computed } from 'vue';
 import { useImportProgressStore } from '../stores/importProgress.ts';
 import MdIcon from './MdIcon.vue';
+import MdIconButton from './MdIconButton.vue';
 import { useI18n } from '../composables/useI18n.ts';
 
 const { t } = useI18n();
@@ -149,6 +151,11 @@ function onFabClick() {
   border-radius: 16px;
   background-clip: content-box;
   box-shadow: none;
+}
+
+.import-fab.is-compact :deep(.md-icon-button-face) {
+  position: absolute;
+  inset: 0;
 }
 
 .import-fab.is-compact:not(.is-failed) {
@@ -286,16 +293,12 @@ function onFabClick() {
   }
 }
 
-.import-fab:active {
+.import-fab:not(.is-compact):active {
   background-color: color-mix(in oklab, var(--md-primary-container) 86%, var(--md-on-primary-container));
 }
 
-.import-fab.is-failed:active {
+.import-fab.is-failed:not(.is-compact):active {
   background-color: color-mix(in oklab, var(--md-error-container) 86%, var(--md-on-error-container));
-}
-
-.import-fab.is-compact:not(.is-failed):active {
-  background-color: color-mix(in oklab, var(--md-on-surface) 12%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

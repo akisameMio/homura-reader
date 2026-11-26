@@ -128,7 +128,7 @@
 
     <div class="island-trigger-row">
       <Transition name="island-orb">
-        <button
+        <MdIconButton
           v-if="showUpdateOrb"
           ref="updateButtonRef"
           type="button"
@@ -144,7 +144,7 @@
         >
           <MdIcon :name="updates.hasPendingInstall ? 'check' : 'update'" />
           <span v-if="!updates.hasPendingInstall" class="island-update-dot" aria-hidden="true"></span>
-        </button>
+        </MdIconButton>
       </Transition>
 
       <span
@@ -251,6 +251,7 @@ import ImportProgressPanel from './ImportProgressPanel.vue';
 import ImportMenuContent from './ImportMenuContent.vue';
 import UpdateIslandPanel from './UpdateIslandPanel.vue';
 import MdIcon from './MdIcon.vue';
+import MdIconButton from './MdIconButton.vue';
 import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
 import { useI18n } from '../composables/useI18n.ts';
 
@@ -273,7 +274,7 @@ const duplicateContentRef = shallowRef<InstanceType<typeof DuplicateImportConten
 const shelfContentRef = shallowRef<InstanceType<typeof ShelfDialogContent> | null>(null);
 const updatePanelRef = shallowRef<InstanceType<typeof UpdateIslandPanel> | null>(null);
 const importButtonRef = shallowRef<HTMLButtonElement | null>(null);
-const updateButtonRef = shallowRef<HTMLButtonElement | null>(null);
+const updateButtonRef = shallowRef<InstanceType<typeof MdIconButton> | null>(null);
 
 const menuOpen = defineModel('menuOpen', { type: Boolean, required: true });
 const importInPlace = defineModel('importInPlace', { type: Boolean, required: true });
@@ -435,7 +436,7 @@ const buttonDisabled = computed(() => (
 
 function openUpdate() {
   returnFocus.value = 'update';
-  lastTrigger.value = updateButtonRef.value;
+  lastTrigger.value = updateButtonRef.value?.button ?? null;
   updates.openUpdateDialog();
 }
 
@@ -551,14 +552,14 @@ async function focusSurface(key: string | null) {
     }
     if (restoreFocusTarget.value?.isConnected) {
       restoreFocusTarget.value.focus();
-    } else if (returnFocus.value === 'update' && updateButtonRef.value?.isConnected) {
-      updateButtonRef.value.focus();
+    } else if (returnFocus.value === 'update' && updateButtonRef.value?.button?.isConnected) {
+      updateButtonRef.value.button.focus();
     } else if (importButtonRef.value?.isConnected) {
       focusImportWhenReady();
     } else if (lastTrigger.value?.isConnected) {
       lastTrigger.value.focus();
     } else if (updatePending.value) {
-      updateButtonRef.value?.focus();
+      updateButtonRef.value?.button?.focus();
     } else {
       focusImportWhenReady();
     }
@@ -827,17 +828,16 @@ onBeforeUnmount(() => {
 
 .island-update-orb,
 .island-import-trigger {
+  --island-trigger-shadow:
+    0 2px 4px -2px color-mix(in oklab, var(--md-shadow-color-soft) 28%, transparent),
+    0 6px 16px -8px color-mix(in oklab, var(--md-shadow-color-soft) 38%, transparent);
   display: flex;
   flex: none;
   align-items: center;
   justify-content: center;
   height: 56px;
   padding: 0;
-  overflow: hidden;
   border: 0;
-  box-shadow:
-    0 2px 4px -2px color-mix(in oklab, var(--md-shadow-color-soft) 28%, transparent),
-    0 6px 16px -8px color-mix(in oklab, var(--md-shadow-color-soft) 38%, transparent);
   transition:
     width 420ms var(--island-morph-ease),
     right 420ms var(--island-morph-ease) 50ms,
@@ -851,15 +851,16 @@ onBeforeUnmount(() => {
 }
 
 .island-update-orb {
+  --icon-button-background: var(--md-secondary-container);
+  --icon-button-shadow: var(--island-trigger-shadow);
   position: relative;
   width: 56px;
   border-radius: 50%;
-  background: var(--md-secondary-container);
   color: var(--md-on-secondary-container);
 }
 
 .island-update-orb.is-ready {
-  background: var(--md-primary-container);
+  --icon-button-background: var(--md-primary-container);
   color: var(--md-on-primary-container);
 }
 
@@ -889,9 +890,11 @@ onBeforeUnmount(() => {
   bottom: 0;
   z-index: 3;
   width: 104px;
+  overflow: hidden;
   border-radius: 28px;
   background: var(--md-primary-container);
   color: var(--md-on-primary-container);
+  box-shadow: var(--island-trigger-shadow);
   transform-origin: center;
 }
 
@@ -1249,8 +1252,7 @@ onBeforeUnmount(() => {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .island-import-trigger:not(.is-card-primary):not(.is-card-tonal):not(.is-card-danger):hover,
-  .island-update-orb:hover {
+  .island-import-trigger:not(.is-card-primary):not(.is-card-tonal):not(.is-card-danger):hover {
     box-shadow:
       0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color-soft) 30%, transparent),
       0 10px 24px -10px color-mix(in oklab, var(--md-shadow-color-soft) 42%, transparent);

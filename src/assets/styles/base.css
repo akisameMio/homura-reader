@@ -45,6 +45,33 @@
       min-height: 100vh;
     }
 
+    /* 模糊层独立淡出，标题与工具控件保持清晰，不拦截下方交互。 */
+    .md-topbar-fade::before {
+      content: '';
+      position: absolute;
+      inset: 0 0 -12px;
+      z-index: -1;
+      pointer-events: none;
+      background: linear-gradient(
+        to bottom,
+        color-mix(in oklab, var(--md-surface-low) 72%, transparent),
+        color-mix(in oklab, var(--md-surface-low) 32%, transparent) 65%,
+        transparent
+      );
+      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(16px);
+      -webkit-mask-image: linear-gradient(to bottom, var(--md-surface) 45%, transparent 100%);
+      mask-image: linear-gradient(to bottom, var(--md-surface) 45%, transparent 100%);
+    }
+
+    :root {
+      --library-topbar-height: 104px;
+    }
+
+    html:has(.library-header-bar) {
+      scroll-padding-block-start: var(--library-topbar-height);
+    }
+
     /* macOS Tauri 的书架只在内容区滚动，侧栏、顶栏和背景装饰留在外壳。 */
     html:has(.has-contained-shelf-scroll) {
       overflow-y: hidden;
@@ -53,7 +80,6 @@
     }
 
     .has-contained-shelf-scroll {
-      --library-desktop-toolbar-height: 64px;
       flex: none;
       height: 100vh;
       height: 100dvh;
@@ -67,8 +93,8 @@
 
     .has-contained-shelf-scroll .library-scroll {
       min-height: 0;
-      padding-block-start: var(--library-desktop-toolbar-height);
-      scroll-padding-block-start: var(--library-desktop-toolbar-height);
+      padding-block-start: var(--library-topbar-height);
+      scroll-padding-block-start: var(--library-topbar-height);
       overflow-y: auto;
       overscroll-behavior-y: none;
       /* 阅读期间由 inert 挡住操作。WebKit 切到 hidden 会收走滚动槽位。 */
@@ -78,6 +104,10 @@
     /* 手机书架：整页固定外壳，只有内容列滚动。
        顶栏 / 底栏 / FAB 都留在不滚动的外壳里，避开安卓 WebView 固定层的滚动抖动。 */
     @media (max-width: 899px) {
+      :root {
+        --library-topbar-height: calc(88px + env(safe-area-inset-top));
+      }
+
       html,
       body {
         height: 100%;
@@ -122,6 +152,10 @@
       }
 
       .library-scroll {
+        /* 初始位置留出顶栏空间，滚动后内容从磨砂层下方经过。 */
+        margin-block-start: calc(-1 * var(--library-topbar-height));
+        padding-block-start: var(--library-topbar-height);
+        scroll-padding-block-start: var(--library-topbar-height);
         min-height: 0;
         overflow-y: auto;
         overscroll-behavior-y: contain;

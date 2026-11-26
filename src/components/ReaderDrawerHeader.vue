@@ -17,7 +17,7 @@
       <h2 :id="titleId" class="md-drawer-title">{{ title }}</h2>
       <p v-if="subtitle" class="md-drawer-subtitle" :title="subtitle">{{ subtitle }}</p>
     </div>
-    <button
+    <MdIconButton
       type="button"
       class="md-icon-button"
       :title="t(backLabel || closeLabel)"
@@ -26,13 +26,14 @@
       @click="backLabel ? $emit('back') : $emit('close')"
     >
       <MdIcon :name="backLabel ? 'arrow_back' : 'close'" />
-    </button>
+    </MdIconButton>
     <slot name="status" />
   </header>
 </template>
 
 <script setup lang="ts">
 import MdIcon from './MdIcon.vue';
+import MdIconButton from './MdIconButton.vue';
 import { useI18n } from '../composables/useI18n.ts';
 
 const { t } = useI18n();
@@ -61,11 +62,11 @@ defineEmits(['close', 'back', 'drag-start', 'drag-move', 'drag-end', 'drag-cance
 }
 .is-prominent .md-drawer-title { font-size: 22px; }
 .is-prominent .md-icon-button {
+  --icon-button-background: var(--md-surface);
   order: -1;
   width: 48px;
   height: 48px;
   flex: none;
-  background: var(--md-surface);
 }
 .md-drawer-header.has-inline-tabs { gap: 8px; padding-inline: 16px; }
 .has-inline-tabs .md-drawer-title { font-size: 20px; white-space: nowrap; }
