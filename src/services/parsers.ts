@@ -11,6 +11,7 @@ import { decodeTxtBytesAsync } from './textEncoding.ts';
 import { splitMarkdownChapters } from './markdown.ts';
 import { parseMobiFileData } from './mobi.ts';
 import { openPdfDocument, createPdfPageItems, renderPdfCoverBlob } from './pdf.ts';
+import { readPdfOutline } from './pdfOutline.ts';
 import { parseEpubFile } from './epubParser.ts';
 import {
   clearNativeArchiveBookCache,
@@ -63,6 +64,7 @@ export async function parsePdfFileLazy(file: File) {
 
     const coverBlob = await renderPdfCoverBlob(pdfDoc);
     const coverUrl = URL.createObjectURL(coverBlob as Blob);
+    const outline = await readPdfOutline(pdfDoc);
 
     return {
       id: 'pdf_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
@@ -72,6 +74,7 @@ export async function parsePdfFileLazy(file: File) {
       cover: coverUrl,
       coverBlob: coverBlob,
       pdfDoc: pdfDoc,
+      outline,
       pageItems: createPdfPageItems(pdfDoc, pageCount),
       pageCount: pageCount
     };

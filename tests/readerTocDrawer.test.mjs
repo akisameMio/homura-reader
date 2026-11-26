@@ -48,13 +48,16 @@ const drawer = await compile('ReaderTocDrawer', [
 ]);
 const { default: ReaderTocDrawer } = await import(drawer);
 
-async function mount({ collection = true, manga = false, openResult = true } = {}) {
+async function mount({ collection = true, manga = false, pdf = false, outline = null, openResult = true } = {}) {
   const pinia = createPinia();
   setActivePinia(pinia);
   const ui = useUiStore();
   const calls = [];
   const reader = reactive({
-    currentBook: { id: 'a', title: '当前书本', type: manga ? 'manga' : 'novel' },
+    currentBook: {
+      id: 'a', title: '当前书本', type: manga ? 'manga' : 'novel',
+      ...(pdf ? { format: 'pdf', outline } : {})
+    },
     currentCollection: collection ? { id: 'shelf', title: '测试书库' } : null,
     collectionBooks: [{ id: 'a', title: '当前书本' }, { id: 'b', title: '下一本书' }],
     activePages: [
@@ -174,6 +177,38 @@ test('漫画页码跳转保留原始索引，重新打开默认回到目录分�
     assert.equal(context.ui.settingsOpen, false);
     context.ui.openFontMenu();
     assert.equal(context.ui.tocOpen, false);
+  } finally { context.cleanup(); }
+});
+
+test('PDF 有书签目录时按书签显示并跳转到对应页', async () => {
+  const context = await mount({
+    manga: true,
+    pdf: true,
+    outline: [
+      { title: '第一章', page: 1, depth: 0 },
+      { title: '第一节', page: 2, depth: 1 },
+      { title: '第二章', page: 3, depth: 0 }
+    ]
+  });
+  try {
+    const buttons = [...document.querySelectorAll('#reader-toc-panel-book button')];
+    assert.equal(buttons.length, 3);
+    assert.equal(document.querySelectorAll('.md-toc-page').length, 0);
+    assert.equal(document.querySelector('.reader-toc-summary p').textContent, '3 条目录 · 3 页');
+    assert.equal(buttons[1].getAttribute('aria-current'), 'page');
+    assert.equal(buttons[1].style.getPropertyValue('padding-inline-start'), '28px');
+    buttons[2].click();
+    assert.deepEqual(context.calls, [['jump', 2]]);
+    assert.equal(context.ui.tocOpen, false);
+  } finally { context.cleanup(); }
+});
+
+test('PDF 没有书签时回退到页码网格', async () => {
+  const context = await mount({ manga: true, pdf: true });
+  try {
+    assert.equal(document.querySelectorAll('.md-toc-page').length, 3);
+    assert.equal(document.querySelector('#reader-toc-panel-book [aria-current]').getAttribute('aria-label'), '跳转到第 2 页');
+    assert.equal(document.querySelector('.reader-toc-summary p').textContent, '3 页');
   } finally { context.cleanup(); }
 });
 

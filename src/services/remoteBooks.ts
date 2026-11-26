@@ -12,6 +12,7 @@ import { parseTxtFile, parseMarkdownFile } from './parsers.ts';
 import { makeRemoteBookSource, remoteBookId, type RemoteBookSource } from './remoteBookSource.ts';
 import { createCoverThumbnail } from './coverThumb.ts';
 import { createPdfPageItems, openRemotePdfDocument, renderPdfCoverBlob } from './pdf.ts';
+import { readPdfOutline } from './pdfOutline.ts';
 
 export function canReadRemote(entry: DavEntry) {
   return !entry.directory && /\.(epub|cbz|zip|pdf|txt|md)$/i.test(entry.name);
@@ -38,7 +39,8 @@ export async function openRemoteBook(client: WebDavBooksClient, entry: DavEntry,
     if (/\.pdf$/i.test(entry.name)) {
       const pdf = await openRemotePdfDocument(source);
       destroyPdf = () => { void pdf.destroy().catch(() => {}); };
-      book = { id, type: 'manga', format: 'pdf', title: entry.name.replace(/\.pdf$/i, ''), pdfDoc: pdf.document, pageItems: createPdfPageItems(pdf.document, pdf.document.numPages), pageCount: pdf.document.numPages };
+      const outline = await readPdfOutline(pdf.document);
+      book = { id, type: 'manga', format: 'pdf', title: entry.name.replace(/\.pdf$/i, ''), pdfDoc: pdf.document, outline, pageItems: createPdfPageItems(pdf.document, pdf.document.numPages), pageCount: pdf.document.numPages };
     } else if (/\.(txt|md)$/i.test(entry.name)) {
       // 文本格式需完整正文才能分页，只进内存，不保存原文件；避免超大文本耗尽 WebView。
       if (source.size > 8 * 1024 * 1024) throw new Error('远程文本超过 8 MiB 上限');

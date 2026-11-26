@@ -869,6 +869,7 @@ export async function hydrateBook(book: BookLike) {
   book.readingDirection = (parsed.readingDirection || undefined) as string | undefined;
   book.zipContent = parsed.zipContent;
   book.pdfDoc = parsed.pdfDoc;
+  book.outline = parsed.outline || null;
   book.chapters = parsed.chapters;
   book.nativeArchiveId = (parsed.nativeArchiveId || undefined) as string | undefined;
   book.nativeArchivePath = parsed.nativeArchiveId
