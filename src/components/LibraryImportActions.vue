@@ -103,7 +103,7 @@ function onFabClick() {
   overflow: hidden;
   border: 0;
   border-radius: 28px;
-  background: var(--md-primary-container);
+  background-color: var(--md-primary-container);
   color: var(--md-on-primary-container);
   font-size: 13px;
   font-weight: 600;
@@ -117,7 +117,7 @@ function onFabClick() {
 }
 
 .import-fab.is-open {
-  background: color-mix(in oklab, var(--md-primary-container) 92%, var(--md-on-primary-container));
+  background-color: color-mix(in oklab, var(--md-primary-container) 92%, var(--md-on-primary-container));
   box-shadow:
     0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color-soft) 30%, transparent),
     0 10px 24px -10px color-mix(in oklab, var(--md-shadow-color-soft) 42%, transparent);
@@ -129,7 +129,7 @@ function onFabClick() {
 }
 
 .import-fab.is-failed {
-  background: var(--md-error-container);
+  background-color: var(--md-error-container);
   color: var(--md-on-error-container);
 }
 
@@ -142,10 +142,18 @@ function onFabClick() {
 }
 
 .import-fab.is-compact {
+  box-sizing: border-box;
   width: 44px;
   height: 44px;
-  border-radius: 999px;
+  padding: 4px;
+  border-radius: 16px;
+  background-clip: content-box;
   box-shadow: none;
+}
+
+.import-fab.is-compact:not(.is-failed) {
+  background-color: transparent;
+  color: var(--md-on-surface);
 }
 
 .import-fab.is-compact.is-open {
@@ -259,7 +267,7 @@ function onFabClick() {
 
 @media (hover: hover) and (pointer: fine) {
   .import-fab:hover {
-    background: color-mix(in oklab, var(--md-primary-container) 92%, var(--md-on-primary-container));
+    background-color: color-mix(in oklab, var(--md-primary-container) 92%, var(--md-on-primary-container));
     box-shadow:
       0 2px 6px -2px color-mix(in oklab, var(--md-shadow-color-soft) 30%, transparent),
       0 10px 24px -10px color-mix(in oklab, var(--md-shadow-color-soft) 42%, transparent);
@@ -269,17 +277,25 @@ function onFabClick() {
     box-shadow: none;
   }
 
+  .import-fab.is-compact:not(.is-failed):hover {
+    background-color: color-mix(in oklab, var(--md-on-surface) 8%, transparent);
+  }
+
   .import-fab.is-failed:hover {
-    background: color-mix(in oklab, var(--md-error-container) 92%, var(--md-on-error-container));
+    background-color: color-mix(in oklab, var(--md-error-container) 92%, var(--md-on-error-container));
   }
 }
 
 .import-fab:active {
-  background: color-mix(in oklab, var(--md-primary-container) 86%, var(--md-on-primary-container));
+  background-color: color-mix(in oklab, var(--md-primary-container) 86%, var(--md-on-primary-container));
 }
 
 .import-fab.is-failed:active {
-  background: color-mix(in oklab, var(--md-error-container) 86%, var(--md-on-error-container));
+  background-color: color-mix(in oklab, var(--md-error-container) 86%, var(--md-on-error-container));
+}
+
+.import-fab.is-compact:not(.is-failed):active {
+  background-color: color-mix(in oklab, var(--md-on-surface) 12%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

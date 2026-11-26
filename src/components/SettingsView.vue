@@ -82,6 +82,7 @@
               <MdIcon name="palette" />
               {{ t('外观') }}
             </h2>
+            <span>{{ t(themeLabel) }}</span>
           </div>
           <p class="settings-control-label">{{ t('表面模式') }}</p>
           <MdSegmentedControl
@@ -111,20 +112,6 @@
           <span>{{ t('更多外观设置') }}</span>
           <MdIcon name="chevron_right" :size="20" />
         </button>
-      </section>
-      <section class="settings-card settings-language" aria-labelledby="settings-language-title">
-        <div class="settings-card-head">
-          <h2 id="settings-language-title">
-            <MdIcon name="language" />
-            {{ t('语言') }}
-          </h2>
-        </div>
-        <SettingsSelectRow
-          :label="t('界面语言')"
-          :model-value="locale"
-          :options="localeOptions"
-          @update:model-value="setLocale"
-        />
       </section>
       <section class="settings-card settings-reading" aria-labelledby="settings-reading-title">
         <div class="settings-card-head">
@@ -261,11 +248,41 @@
           <MdIcon name="chevron_right" :size="20" />
         </button>
       </section>
+      <section class="settings-card settings-logs" aria-labelledby="settings-logs-title">
+        <div class="settings-card-head">
+          <h2 id="settings-logs-title">
+            <MdIcon name="history" />
+            {{ t('运行日志') }}
+          </h2>
+        </div>
+        <MdSwitch
+          :model-value="settings.runtimeLogCapture"
+          :title="t('记录应用运行期间的日志')"
+          @update:model-value="settings.setRuntimeLogCapture"
+        >
+          <span class="settings-value-copy">
+            <b>{{ t('日志捕获') }}</b>
+          </span>
+        </MdSwitch>
+        <div class="settings-log-summary">
+          <span>{{ logTotalText }}</span>
+          <span>{{ t('最近 300 条留在本机') }}</span>
+        </div>
+        <button
+          type="button"
+          class="settings-card-open"
+          @click="openSection('logs', $event)"
+        >
+          <span>{{ t('查看运行日志') }}</span>
+          <MdIcon name="chevron_right" :size="20" />
+        </button>
+      </section>
       <section class="settings-card settings-sync" aria-labelledby="settings-sync-title">
         <div class="settings-card-head">
-          <h2 id="settings-sync-title"><MdIcon name="update" />{{ t('WebDAV 同步') }}</h2>
+          <h2 id="settings-sync-title"><MdIcon name="cloud" />{{ t('WebDAV 同步') }}</h2>
+          <span class="settings-badge" :class="{ 'is-muted': !sync.config.url || !sync.enabled }">{{ syncStatusBadge }}</span>
         </div>
-        <p class="settings-note">{{ t('同步阅读进度、收藏与书库，原始文件不会上传。') }}</p>
+        <p class="settings-note">{{ syncCardNote }}</p>
         <button
           type="button"
           class="settings-card-open"
@@ -300,73 +317,20 @@
           <MdIcon name="chevron_right" :size="20" />
         </button>
       </section>
-      <section class="settings-card settings-logs" aria-labelledby="settings-logs-title">
+      <section class="settings-card settings-language" aria-labelledby="settings-language-title">
         <div class="settings-card-head">
-          <h2 id="settings-logs-title">
-            <MdIcon name="history" />
-            {{ t('运行日志') }}
+          <h2 id="settings-language-title">
+            <MdIcon name="language" />
+            {{ t('语言') }}
           </h2>
         </div>
-        <MdSwitch
-          :model-value="settings.runtimeLogCapture"
-          :title="t('记录应用运行期间的日志')"
-          @update:model-value="settings.setRuntimeLogCapture"
-        >
-          <span class="settings-value-copy">
-            <b>{{ t('日志捕获') }}</b>
-          </span>
-        </MdSwitch>
-        <div class="settings-log-summary">
-          <span>{{ logTotalText }}</span>
-          <span>{{ t('最近 300 条留在本机') }}</span>
-        </div>
-        <button
-          type="button"
-          class="settings-card-open"
-          @click="openSection('logs', $event)"
-        >
-          <span>{{ t('查看运行日志') }}</span>
-          <MdIcon name="chevron_right" :size="20" />
-        </button>
-      </section>
-      <section class="settings-card settings-about" aria-labelledby="settings-about-title">
-        <div class="settings-card-head">
-          <h2 id="settings-about-title">
-            <MdIcon name="info" />
-            {{ t('关于 HOMURA') }}
-          </h2>
-          <span class="settings-badge">{{ t('MIT 开源') }}</span>
-        </div>
-        <div class="about-version">
-          <img :src="logoUrl" :alt="t('HOMURA 应用图标')" />
-          <div>
-            <h3>
-              HOMURA
-              <span>{{ appVersion }}</span>
-            </h3>
-            <p class="settings-note">{{ t('本地优先的 ACGN 阅读器') }}</p>
-          </div>
-        </div>
-        <div class="settings-card-actions">
-          <button type="button" class="settings-tonal-button" @click="updates.handlePrimaryUpdateAction">{{ hasPendingInstall ? t('继续安装') : t('检查更新') }}</button>
-          <button type="button" class="settings-text-button" @click="updates.openChangelog">
-            {{ t('更新日志') }}
-            <i v-if="hasNewRelease" class="about-log-new" :aria-label="t('有新版本')"></i>
-          </button>
-          <button type="button" class="settings-text-button" @click="openRepository">
-            {{ t('开源仓库') }}
-            <MdIcon name="open_in_new" />
-          </button>
-        </div>
-        <p v-if="aboutLinkError" class="settings-note" role="alert">{{ aboutLinkError }}</p>
-        <button
-          type="button"
-          class="settings-card-open"
-          @click="openSection('about', $event)"
-        >
-          <span>{{ t('打开关于 HOMURA') }}</span>
-          <MdIcon name="chevron_right" :size="20" />
-        </button>
+        <SettingsSelectRow
+          :label="t('界面语言')"
+          :model-value="locale"
+          :options="localeOptions"
+          @update:model-value="setLocale"
+        />
+        <p class="settings-note">{{ t('更改即时应用到整个应用，也会自动保存。') }}</p>
       </section>
       <section class="settings-card settings-debug" aria-labelledby="settings-debug-title">
         <div class="settings-card-head">
@@ -385,11 +349,59 @@
           <MdIcon name="chevron_right" :size="20" />
         </button>
       </section>
+      <section class="settings-card settings-about" aria-labelledby="settings-about-title">
+        <div class="settings-card-head">
+          <h2 id="settings-about-title">
+            <MdIcon name="info" />
+            {{ t('关于 HOMURA') }}
+          </h2>
+          <span class="settings-badge">{{ t('MIT 开源') }}</span>
+        </div>
+        <div class="settings-about-body">
+          <div class="about-version">
+            <img :src="logoUrl" :alt="t('HOMURA 应用图标')" />
+            <div>
+              <h3>
+                HOMURA
+                <span>{{ appVersion }}</span>
+              </h3>
+              <p class="settings-note">{{ t('本地优先的 ACGN 阅读器') }}</p>
+            </div>
+          </div>
+          <div class="settings-card-actions">
+            <button type="button" class="settings-tonal-button" @click="updates.handlePrimaryUpdateAction">{{ hasPendingInstall ? t('继续安装') : t('检查更新') }}</button>
+            <button type="button" class="settings-text-button" @click="updates.openChangelog">
+              {{ t('更新日志') }}
+              <i v-if="hasNewRelease" class="about-log-new" :aria-label="t('有新版本')"></i>
+            </button>
+            <button type="button" class="settings-text-button" @click="openRepository">
+              {{ t('开源仓库') }}
+              <MdIcon name="open_in_new" />
+            </button>
+          </div>
+        </div>
+        <p v-if="aboutLinkError" class="settings-note" role="alert">{{ aboutLinkError }}</p>
+        <button
+          type="button"
+          class="settings-card-open"
+          @click="openSection('about', $event)"
+        >
+          <span>{{ t('打开关于 HOMURA') }}</span>
+          <MdIcon name="chevron_right" :size="20" />
+        </button>
+      </section>
     </div>
     <div v-if="activeSection" v-show="shownSection" class="settings-detail">
       <template v-if="activeSection === 'appearance'">
         <div class="settings-detail-hero settings-surface-hero">
-          <SettingsInterfacePreview />
+          <div class="settings-surface-hero-preview">
+            <SettingsInterfacePreview />
+          </div>
+          <div class="settings-hero-copy">
+            <span class="settings-badge">{{ t('排版预览') }}</span>
+            <h2>{{ t('外观设置') }}</h2>
+            <p>{{ t('更改即时应用到整个应用，也会自动保存。') }}</p>
+          </div>
         </div>
         <section class="settings-detail-group" aria-labelledby="settings-surface-heading">
           <h2 id="settings-surface-heading">
@@ -412,12 +424,12 @@
               <MdIcon v-if="theme.surfaceMode === option.value" name="check" class="settings-row-check" />
             </button>
           </div>
-          <p class="settings-detail-note">{{ t('更改即时应用到整个应用，也会自动保存。') }}</p>
         </section>
         <section class="settings-detail-group" aria-labelledby="settings-black-heading">
           <h2 id="settings-black-heading">
             <MdIcon name="contrast" />
             {{ t('纯黑模式') }}
+            <MdInfoHint :label="t('纯黑模式')">{{ t('仅在夜间模式下生效，跟随系统时也会自动应用。') }}</MdInfoHint>
           </h2>
           <div class="settings-list" role="group" :aria-label="t('纯黑模式')">
             <button
@@ -435,7 +447,6 @@
               <MdIcon v-if="theme.pureBlackMode === option.value" name="check" class="settings-row-check" />
             </button>
           </div>
-          <p class="settings-detail-note">{{ t('仅在夜间模式下生效，跟随系统时也会自动应用。') }}</p>
         </section>
         <section class="settings-detail-group" aria-labelledby="settings-colors-heading">
           <h2 id="settings-colors-heading">
@@ -475,7 +486,9 @@
           </div>
         </div>
         <section class="settings-detail-group" aria-labelledby="settings-layout-heading">
-          <h2 id="settings-layout-heading">{{ t('翻页与布局') }}</h2>
+          <h2 id="settings-layout-heading">{{ t('翻页与布局') }}
+            <MdInfoHint v-if="isScrollDefault" :label="t('翻页与布局')">{{ t('条漫模式沿用上次的分页方向与跨页布局，切回分页后生效。') }}</MdInfoHint>
+          </h2>
           <div class="settings-list">
             <SettingsSelectRow
               :label="t('翻页方式')"
@@ -519,10 +532,11 @@
               </span>
             </MdSwitch>
           </div>
-          <p v-if="isScrollDefault" class="settings-detail-note">{{ t('条漫模式沿用上次的分页方向与跨页布局，切回分页后生效。') }}</p>
         </section>
         <section class="settings-detail-group" aria-labelledby="settings-text-heading">
-          <h2 id="settings-text-heading">{{ t('文字与滚动') }}</h2>
+          <h2 id="settings-text-heading">{{ t('文字与滚动') }}
+            <MdInfoHint :label="t('文字与滚动')">{{ t('每本书已有的阅读位置与排版记忆会继续保留。') }}</MdInfoHint>
+          </h2>
           <div class="settings-list">
             <div class="settings-detail-font">
               <div class="settings-head">
@@ -579,7 +593,6 @@
               </span>
             </MdSwitch>
           </div>
-          <p class="settings-detail-note">{{ t('每本书已有的阅读位置与排版记忆会继续保留。') }}</p>
         </section>
         <button type="button" class="settings-text-button" @click="settings.resetReaderDefaults">{{ t('恢复阅读默认值') }}</button>
       </template>
@@ -654,7 +667,9 @@
           </template>
         </div>
         <section class="settings-detail-group" aria-labelledby="settings-smart-storage-heading">
-          <h2 id="settings-smart-storage-heading"><MdIcon name="tune" />{{ t('智能存储') }}</h2>
+          <h2 id="settings-smart-storage-heading"><MdIcon name="tune" />{{ t('智能存储') }}
+            <MdInfoHint :label="t('智能存储')">{{ t('仅在开启后使用。达到预算时，优先回收收益较低的自动存档。') }}</MdInfoHint>
+          </h2>
           <div class="settings-list">
             <MdSwitch
               class="settings-list-row"
@@ -683,7 +698,6 @@
               />
             </div>
           </div>
-          <p class="settings-detail-note">{{ t('仅在开启后使用。达到预算时，优先回收收益较低的自动存档。') }}</p>
         </section>
         <section v-if="diskSegments" class="settings-detail-group" aria-labelledby="settings-usage-heading">
           <h2 id="settings-usage-heading">{{ t('本机用量') }}</h2>
@@ -709,7 +723,9 @@
           </div>
         </section>
         <section class="settings-detail-group" aria-labelledby="settings-data-heading">
-          <h2 id="settings-data-heading">{{ t('数据管理') }}</h2>
+          <h2 id="settings-data-heading">{{ t('数据管理') }}
+            <MdInfoHint :label="t('数据管理')">{{ t('清空书架会删除应用内存档和阅读记录。外部原文件仍由你管理。') }}</MdInfoHint>
+          </h2>
           <div class="settings-list">
             <div class="settings-list-row">
               <span class="settings-value-copy">
@@ -740,104 +756,55 @@
               </button>
             </div>
           </div>
-          <p class="settings-detail-note">{{ t('清空书架会删除应用内存档和阅读记录。外部原文件仍由你管理。') }}</p>
           <p v-if="actionNote" class="settings-detail-note" role="status">{{ actionNote }}</p>
         </section>
       </template>
       <SyncSettings v-else-if="activeSection === 'sync'" />
       <template v-else-if="activeSection === 'logs'">
         <div class="settings-detail-hero settings-logs-hero">
-          <div class="settings-logs-hero-top">
-            <span class="settings-logs-hero-icon" aria-hidden="true"><MdIcon name="history" /></span>
-            <div class="settings-logs-hero-copy">
-              <span class="settings-badge" :class="{ 'is-paused': !settings.runtimeLogCapture }">
-                {{ settings.runtimeLogCapture ? t('记录中') : t('已暂停') }}
-              </span>
-              <h2>{{ t('操作与运行记录') }}</h2>
-              <p>{{ t('记录用户操作、运行信息与异常') }}</p>
-            </div>
+          <div class="settings-detail-hero-heading">
+            <span class="settings-detail-hero-icon" aria-hidden="true"><MdIcon name="history" /></span>
+            <h2>{{ settings.runtimeLogCapture ? t('记录中') : t('已暂停') }}</h2>
           </div>
-          <div class="settings-logs-summary" role="group" :aria-label="logTotalText">
+          <dl class="settings-logs-summary">
             <div>
-              <b>{{ runtimeLogs.infoCount }}</b>
-              <span>{{ t('信息') }}</span>
+              <dt>{{ t('信息') }}</dt>
+              <dd>{{ runtimeLogs.infoCount }}</dd>
             </div>
             <div>
-              <b class="is-warning">{{ runtimeLogs.warningCount }}</b>
-              <span>{{ t('警告') }}</span>
+              <dt>{{ t('警告') }}</dt>
+              <dd>{{ runtimeLogs.warningCount }}</dd>
             </div>
             <div>
-              <b class="is-error">{{ runtimeLogs.errorCount }}</b>
-              <span>{{ t('错误') }}</span>
+              <dt>{{ t('错误') }}</dt>
+              <dd>{{ runtimeLogs.errorCount }}</dd>
             </div>
-          </div>
-          <p class="settings-logs-retention">{{ logTotalText }} · {{ t('最近 300 条留在本机') }}</p>
+          </dl>
         </div>
         <section class="settings-detail-group" aria-labelledby="settings-log-settings-heading">
-          <h2 id="settings-log-settings-heading">{{ t('记录偏好') }}</h2>
+          <h2 id="settings-log-settings-heading">{{ t('记录偏好') }}
+            <MdInfoHint :label="t('记录偏好')">{{ t('启用捕获后，用户操作记录不受日志等级影响；等级控制控制台诊断信息。日志只保存在本机，不会随同步上传。') }}</MdInfoHint>
+          </h2>
           <div class="settings-list">
+            <MdSwitch
+              class="settings-list-row"
+              :model-value="settings.runtimeLogCapture"
+              @update:model-value="settings.setRuntimeLogCapture"
+            >
+              <span class="settings-value-copy"><b>{{ t('日志捕获') }}</b></span>
+            </MdSwitch>
             <SettingsSelectRow
               :label="t('日志等级')"
               :model-value="settings.runtimeLogLevel"
               :options="logLevelOptions"
               @update:model-value="settings.setRuntimeLogLevel"
             />
-            <MdSwitch
-              class="settings-list-row"
-              :model-value="settings.runtimeLogCapture"
-              :title="t('记录应用运行期间的日志')"
-              @update:model-value="settings.setRuntimeLogCapture"
-            >
-              <span class="settings-value-copy">
-                <b>{{ t('日志捕获') }}</b>
-              </span>
-            </MdSwitch>
           </div>
-          <p class="settings-detail-note">{{ t('启用捕获后，用户操作记录不受日志等级影响；等级控制控制台诊断信息。日志只保存在本机，不会随同步上传。') }}</p>
         </section>
         <section class="settings-detail-group" aria-labelledby="settings-recent-log-heading">
           <div class="settings-log-section-heading">
             <h2 id="settings-recent-log-heading">{{ t('最近记录') }}</h2>
-            <span class="settings-log-count">{{ t('{0} 条', { 0: filteredLogs.length }) }}</span>
-          </div>
-          <div class="settings-log-filter">
-            <MdSegmentedControl
-              :model-value="logFilter"
-              :options="logFilterOptions"
-              :aria-label="t('筛选日志等级')"
-              @update:model-value="setLogFilter"
-            />
-          </div>
-          <div v-if="filteredLogs.length" class="settings-log-list">
-            <article v-for="entry in filteredLogs" :key="entry.id" class="settings-log-entry" :class="`is-${entry.level}`">
-              <span class="settings-log-marker" aria-hidden="true">
-                <MdIcon :name="entry.level === 'error' ? 'error' : entry.level === 'warning' ? 'warning' : entry.source === 'operation' ? 'history' : 'info'" :size="17" />
-              </span>
-              <div class="settings-log-entry-body">
-                <div class="settings-log-meta">
-                  <span class="settings-log-level" :class="`is-${entry.level}`">{{ t(entry.level === 'info' ? '信息' : entry.level === 'warning' ? '警告' : '错误') }}</span>
-                  <time class="settings-log-time">{{ formatRuntimeLogTimestamp(entry.at) }}</time>
-                </div>
-                <p class="settings-log-message">{{ entry.message }}</p>
-                <div class="settings-log-entry-footer">
-                  <span class="settings-log-source">{{ entry.source === 'operation' ? t('用户操作') : formatRuntimeLogSource(entry.source) }}</span>
-                  <details v-if="entry.detail" class="settings-log-detail">
-                    <summary>{{ t('查看详情') }}</summary>
-                    <pre>{{ entry.detail }}</pre>
-                  </details>
-                </div>
-              </div>
-            </article>
-          </div>
-          <div v-else class="settings-log-empty">
-            <span class="settings-log-empty-icon"><MdIcon name="history" /></span>
-            <b>{{ logSearchActive ? t('没有匹配的日志') : t('暂无日志') }}</b>
-            <p v-if="logSearchActive">{{ t('换个关键词，或切换等级再试试。') }}</p>
-            <p v-else>{{ !settings.runtimeLogCapture ? t('日志捕获已关闭。') : logFilter === 'all' ? t('还没有运行记录。') : t('当前筛选条件下没有记录。') }}</p>
-            <p v-if="!logSearchActive && settings.runtimeLogCapture" class="settings-log-empty-hint">{{ t('用户操作和翻页会自动记录；提高日志等级可收集更多控制台信息。') }}</p>
-          </div>
-          <div class="settings-log-footer">
-            <span>{{ t('最多保留 300 条，超出后自动删除最旧的记录。') }}</span>
+            <span class="settings-log-count">{{ t('{0} 条记录', { 0: filteredLogs.length }) }}</span>
             <button
               type="button"
               class="settings-text-button settings-log-clear"
@@ -845,10 +812,48 @@
               :disabled="runtimeLogs.entries.length === 0"
               @click="requestLogClear"
             >
-              {{ logsClearArmed ? t('确认清空日志') : t('清空日志') }}
+              {{ logsClearArmed ? t('确认清空日志') : t('清空全部日志') }}
             </button>
           </div>
-          <p v-if="logActionNote" class="settings-log-action-note" role="status">{{ logActionNote }}</p>
+          <div role="status">
+            <p v-if="logActionNote" class="settings-log-action-note">{{ logActionNote }}</p>
+          </div>
+          <div class="settings-list settings-log-panel">
+            <div class="settings-log-filter">
+              <MdSegmentedControl
+                :model-value="logFilter"
+                :options="logFilterOptions"
+                :aria-label="t('筛选日志等级')"
+                @update:model-value="setLogFilter"
+              />
+            </div>
+            <ul v-if="filteredLogs.length" class="settings-log-list" role="list">
+              <li v-for="entry in filteredLogs" :key="entry.id" class="settings-log-entry" :class="`is-${entry.level}`">
+                <span class="settings-row-icon settings-log-marker" aria-hidden="true">
+                  <MdIcon :name="entry.level === 'error' ? 'error' : entry.level === 'warning' ? 'warning' : entry.source === 'operation' ? 'history' : 'info'" />
+                </span>
+                <div class="settings-log-entry-body">
+                  <p class="settings-log-message">{{ entry.message }}</p>
+                  <div class="settings-log-meta">
+                    <span>{{ t(entry.level === 'info' ? '信息' : entry.level === 'warning' ? '警告' : '错误') }}</span>
+                    <span>{{ entry.source === 'operation' ? t('用户操作') : formatRuntimeLogSource(entry.source) }}</span>
+                    <time class="settings-log-time">{{ formatRuntimeLogTimestamp(entry.at) }}</time>
+                  </div>
+                  <details v-if="entry.detail" class="settings-log-detail">
+                    <summary><MdIcon name="expand_more" :size="16" />{{ t('查看详情') }}</summary>
+                    <pre>{{ entry.detail }}</pre>
+                  </details>
+                </div>
+              </li>
+            </ul>
+            <div v-else class="settings-log-empty">
+              <span class="settings-row-icon" aria-hidden="true"><MdIcon :name="logSearchActive ? 'search' : 'history'" /></span>
+              <div>
+                <b>{{ logSearchActive || logFilter !== 'all' ? t('没有匹配的日志') : !settings.runtimeLogCapture ? t('日志捕获已关闭。') : t('暂无日志') }}</b>
+                <p v-if="logSearchActive">{{ t('换个关键词，或切换等级再试试。') }}</p>
+              </div>
+            </div>
+          </div>
         </section>
       </template>
       <template v-else-if="activeSection === 'about'">
@@ -933,7 +938,12 @@
           <p>{{ t('从文件夹到书库，保留你熟悉的整理方式。') }}</p>
         </div>
         <section class="settings-detail-group" aria-labelledby="settings-import-behavior-heading">
-          <h2 id="settings-import-behavior-heading">{{ t('导入行为') }}</h2>
+          <h2 id="settings-import-behavior-heading">{{ t('导入行为') }}
+            <MdInfoHint :label="t('导入行为')">
+              <p>{{ t('关闭后直接导入作品；开启后，目录导入会先询问是否按目录创建一级书库。') }}</p>
+              <p>{{ t('偏好会自动保存，仅影响之后的导入。') }}</p>
+            </MdInfoHint>
+          </h2>
           <div class="settings-list">
             <MdSwitch
               class="settings-list-row"
@@ -946,61 +956,55 @@
               </span>
             </MdSwitch>
           </div>
-          <p class="settings-detail-note">{{ t('关闭后直接导入作品；开启后，目录导入会先询问是否按目录创建一级书库。') }}</p>
         </section>
-        <p class="settings-quiet-note">{{ t('偏好会自动保存，仅影响之后的导入。') }}</p>
       </template>
       <template v-else-if="activeSection === 'debug'">
+        <div class="settings-detail-hero settings-detail-hero-heading">
+          <span class="settings-detail-hero-icon" aria-hidden="true"><MdIcon name="science" /></span>
+          <h2>{{ t('调试与实验功能') }}</h2>
+        </div>
         <section class="settings-detail-group" aria-labelledby="settings-debug-general-heading">
           <h2 id="settings-debug-general-heading">{{ t('更新与界面') }}</h2>
           <div class="settings-list">
             <MdSwitch
               class="settings-list-row"
               :model-value="settings.debugAutoUpdateCheck"
-              :title="t('启动时自动检查 GitHub 稳定版更新')"
               @update:model-value="settings.setDebugAutoUpdateCheck"
             >
-              <span class="settings-value-copy">
-                <b>{{ t('启动时静默检查更新') }}</b>
+              <span class="settings-debug-switch-label">
+                <span class="settings-row-icon"><MdIcon name="update" /></span>
+                <span class="settings-value-copy"><b>{{ t('启动时静默检查更新') }}</b></span>
               </span>
             </MdSwitch>
             <MdSwitch
               class="settings-list-row"
-              :model-value="settings.debugForceFullscreen"
-              :title="t('在非 Windows 系统也显示全屏入口')"
-              @update:model-value="settings.setDebugForceFullscreen"
+              :model-value="settings.showFullscreenButton"
+              @update:model-value="settings.setShowFullscreenButton"
             >
-              <span class="settings-value-copy">
-                <b>{{ t('强制显示全屏组件') }}</b>
+              <span class="settings-debug-switch-label">
+                <span class="settings-row-icon"><MdIcon name="fullscreen" /></span>
+                <span class="settings-value-copy"><b>{{ t('显示全屏按钮') }}</b></span>
               </span>
             </MdSwitch>
           </div>
-          <p class="settings-detail-note">{{ t('这些调试偏好只保存在此设备。') }}</p>
         </section>
         <section class="settings-detail-group" aria-labelledby="settings-demo-heading">
           <h2 id="settings-demo-heading">{{ t('示例内容') }}</h2>
           <div class="settings-list">
-            <div class="settings-list-row">
-              <span class="settings-row-icon">
-                <MdIcon name="auto_stories" />
-              </span>
-              <span class="settings-value-copy">
-                <b>{{ t('示例漫画') }}</b>
-              </span>
-              <button type="button" class="settings-text-button" @click="addDemoManga">{{ t('添加漫画') }}</button>
-            </div>
-            <div class="settings-list-row">
-              <span class="settings-row-icon">
-                <MdIcon name="article" />
-              </span>
-              <span class="settings-value-copy">
-                <b>{{ t('示例小说') }}</b>
-              </span>
-              <button type="button" class="settings-text-button" @click="addDemoNovel">{{ t('添加小说') }}</button>
-            </div>
+            <button type="button" class="settings-list-row" @click="addDemoManga">
+              <span class="settings-row-icon"><MdIcon name="auto_stories" /></span>
+              <span class="settings-value-copy"><b>{{ t('添加示例漫画') }}</b></span>
+              <MdIcon name="add" />
+            </button>
+            <button type="button" class="settings-list-row" @click="addDemoNovel">
+              <span class="settings-row-icon"><MdIcon name="article" /></span>
+              <span class="settings-value-copy"><b>{{ t('添加示例小说') }}</b></span>
+              <MdIcon name="add" />
+            </button>
           </div>
-          <p class="settings-detail-note">{{ t('示例只会加入本机书架，不会替换已有作品。') }}</p>
-          <p v-if="debugNote" class="settings-detail-note" role="status">{{ debugNote }}</p>
+          <div role="status">
+            <p v-if="debugNote" class="settings-detail-note">{{ debugNote }}</p>
+          </div>
         </section>
       </template>
     </div>
@@ -1115,10 +1119,12 @@ import {
 } from '../stores/theme.ts';
 import { WEBTOON_FIT_LABELS } from '../stores/reader.ts';
 import { useUpdateStore } from '../stores/updates.ts';
+import { useSyncStore } from '../stores/sync.ts';
 import { useViewport } from '../composables/useViewport.ts';
 import { settingsSelectBackKey, useSettingsTransition } from '../composables/useSettingsTransition.ts';
 import type { NativeBackEvent } from '../composables/useAndroidBackExit.ts';
 import MdIcon from './MdIcon.vue';
+import MdInfoHint from './MdInfoHint.vue';
 import MobileBottomSheet from './MobileBottomSheet.vue';
 import MdRange from './MdRange.vue';
 import MdSegmentedControl from './MdSegmentedControl.vue';
@@ -1136,6 +1142,7 @@ const shelf = useShelfStore();
 const settings = useSettingsStore();
 const theme = useThemeStore();
 const updates = useUpdateStore();
+const sync = useSyncStore();
 const runtimeLogs = useRuntimeLogStore();
 const { hasNewRelease, hasPendingInstall } = storeToRefs(updates);
 const appVersion = packageInfo.version;
@@ -1160,9 +1167,9 @@ const webtoonOptions = [
   { value: 'wide', label: WEBTOON_FIT_LABELS.wide }
 ];
 const logLevelOptions: { value: RuntimeLogLevel; label: string }[] = [
-  { value: 'error', label: 'error' },
-  { value: 'warning', label: 'warning' },
-  { value: 'info', label: 'info' }
+  { value: 'error', label: '错误' },
+  { value: 'warning', label: '警告' },
+  { value: 'info', label: '信息' }
 ];
 const logFilterOptions = [
   { value: 'all', label: '全部' },
@@ -1275,6 +1282,14 @@ const filteredLogs = computed(() => {
 });
 const logSearchActive = computed(() => logQuery.value.trim().length > 0);
 const logTotalText = computed(() => t('{0} 条记录', { 0: runtimeLogs.entries.length }));
+const syncStatusBadge = computed(() => {
+  if (!sync.config.url) return t('暂无信息');
+  return sync.enabled ? t('同步已启用') : t('已暂停');
+});
+const syncCardNote = computed(() => {
+  if (sync.config.url && sync.pendingCount > 0) return t('待同步 {0} 项', { 0: sync.pendingCount });
+  return t('同步阅读进度、收藏与书库，原始文件不会上传。');
+});
 const storageNativeText = computed(() =>
   diskStats.value ? formatBytes(diskStats.value.appBytes) : '0 B'
 );
@@ -1858,7 +1873,7 @@ onBeforeUnmount(() => {
 .settings-appearance {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 34%);
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 31%);
   align-items: center;
   column-gap: 24px;
 }
@@ -1888,26 +1903,26 @@ onBeforeUnmount(() => {
   margin-block: 5px;
 }
 
-.settings-language {
-  grid-column: 1 / -1;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .settings-language .settings-select-row {
-  width: auto;
   min-height: 44px;
-  padding: 8px 0;
+  padding: 6px 0;
 }
 
 .settings-language :deep(.settings-select-label) {
-  display: none;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.settings-language .settings-note {
+  margin-top: auto;
 }
 
 .settings-grid .settings-note {
   margin: 0;
+}
+
+.settings-grid .settings-language .settings-note {
+  margin-top: auto;
 }
 
 .appearance-content .settings-card-head {
@@ -1915,7 +1930,7 @@ onBeforeUnmount(() => {
 }
 
 .appearance-content :deep(.md-segmented) {
-  max-width: 480px;
+  max-width: 520px;
 }
 
 .settings-book-stage {
@@ -2235,6 +2250,23 @@ onBeforeUnmount(() => {
   font-size: 12px;
   background: var(--md-primary-container);
   color: var(--md-on-primary-container);
+}
+
+.settings-card-head > .settings-badge.is-muted {
+  background: var(--md-surface-high);
+  color: var(--md-on-surface-variant);
+}
+
+.settings-about {
+  grid-column: 1 / -1;
+}
+
+.settings-about-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
 }
 
 .about-version {
@@ -2620,7 +2652,6 @@ onBeforeUnmount(() => {
   padding: 4px;
   border-radius: 999px;
   background: var(--md-surface);
-  box-shadow: 0 6px 10px -8px color-mix(in oklab, var(--md-shadow-color-soft) 18%, transparent);
 }
 
 .settings-log-action {
@@ -2698,9 +2729,17 @@ onBeforeUnmount(() => {
 }
 
 .settings-surface-hero {
-  display: grid;
-  place-items: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 52px;
   min-height: 324px;
+}
+
+.settings-surface-hero-preview {
+  display: flex;
+  justify-content: center;
+  flex: none;
 }
 
 .settings-detail-group {
@@ -2717,7 +2756,7 @@ onBeforeUnmount(() => {
   font-weight: 650;
 }
 
-.settings-detail-group > h2 svg {
+.settings-detail-group > h2 > svg {
   width: 21px;
   height: 21px;
 }
@@ -2737,10 +2776,10 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 17px;
+  gap: 12px;
   width: 100%;
-  min-height: 74px;
-  padding: 18px 24px;
+  min-height: var(--md-space-700);
+  padding: var(--md-space-150) var(--md-space-250);
   border: 0;
   background: transparent;
   color: var(--md-on-surface);
@@ -2812,62 +2851,86 @@ button.settings-list-row {
 .settings-log-section-heading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
+  flex-wrap: wrap;
+  column-gap: var(--md-space-150);
+  margin: 0 18px var(--md-space-100);
 }
 
 .settings-log-section-heading > h2 {
-  margin: 0 18px;
+  margin: 0;
   color: var(--md-on-surface-variant);
   font-size: 16px;
   font-weight: 650;
 }
 
-.settings-log-filter {
-  margin: 0 0 14px;
+.settings-log-count {
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-log-clear {
+  margin-inline-start: auto;
+  color: var(--md-error);
+}
+
+.settings-log-clear.is-armed {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+
+.settings-log-action-note {
+  margin: 0 18px var(--md-space-100);
+  color: var(--md-primary);
+  font-size: 12px;
+}
+
+.settings-log-panel {
+  --settings-log-inset: var(--md-space-250);
+}
+
+.settings-log-filter,
+.settings-log-entry,
+.settings-log-empty {
+  padding: var(--md-space-200) var(--settings-log-inset);
+}
+
+.settings-log-filter > .md-segmented {
+  max-width: 360px;
 }
 
 .settings-log-filter :deep(.md-segmented-option) {
   min-height: 44px;
 }
 
-.settings-log-count {
-  flex: none;
-  margin-right: 18px;
-  color: var(--md-on-surface-variant);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
 .settings-log-list {
-  position: relative;
-  overflow: hidden;
-  padding: 4px 20px;
-  border-radius: 26px;
-  background: var(--md-surface);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.settings-log-entry {
-  position: relative;
+.settings-log-entry,
+.settings-log-empty {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
-  gap: 14px;
-  min-width: 0;
-  padding: 17px 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--md-space-150);
+  overflow-wrap: anywhere;
 }
 
 .settings-log-entry + .settings-log-entry {
-  border-top: 1px solid var(--md-outline-variant);
+  border-top: 1px solid color-mix(in oklab, var(--md-outline-variant) 65%, transparent);
 }
 
 .settings-log-marker {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 11px;
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
+}
+
+.settings-log-marker svg {
+  width: 18px;
+  height: 18px;
 }
 
 .settings-log-entry.is-warning .settings-log-marker {
@@ -2880,72 +2943,30 @@ button.settings-list-row {
   color: var(--md-on-error-container);
 }
 
-.settings-log-entry-body {
-  min-width: 0;
-}
-
 .settings-log-meta {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   flex-wrap: wrap;
-  gap: 9px;
+  gap: var(--md-space-50) var(--md-space-150);
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
 }
 
 .settings-log-time {
-  color: var(--md-on-surface-variant);
   font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, monospace;
-  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
-}
-
-.settings-log-level {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.settings-log-level.is-info {
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-}
-
-.settings-log-level.is-warning {
-  background: var(--md-tertiary-container);
-  color: var(--md-on-tertiary-container);
-}
-
-.settings-log-level.is-error {
-  background: var(--md-error-container);
-  color: var(--md-on-error-container);
+  margin-inline-start: auto;
 }
 
 .settings-log-message {
-  margin: 8px 0 5px;
+  margin: 0 0 var(--md-space-50);
   color: var(--md-on-surface);
   font-size: 13px;
   font-weight: 500;
   line-height: 1.6;
-  overflow-wrap: anywhere;
-}
-
-.settings-log-entry-footer {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 2px 12px;
-}
-
-.settings-log-source {
-  color: var(--md-on-surface-variant);
-  font-size: 10.5px;
 }
 
 .settings-log-detail {
-  min-width: 0;
   color: var(--md-primary);
   font-size: 11px;
 }
@@ -2953,6 +2974,8 @@ button.settings-list-row {
 .settings-log-detail summary {
   display: flex;
   align-items: center;
+  gap: var(--md-space-50);
+  width: fit-content;
   min-height: 44px;
   cursor: pointer;
   list-style: none;
@@ -2962,94 +2985,37 @@ button.settings-list-row {
   display: none;
 }
 
+.settings-log-detail[open] summary svg {
+  transform: rotate(180deg);
+}
+
 .settings-log-detail pre {
   max-height: 220px;
   overflow: auto;
-  margin: 0 0 5px;
-  padding: 12px;
+  margin: 0;
+  padding: var(--md-space-150);
   border-radius: 14px;
   background: var(--md-surface-high);
-  color: var(--md-on-surface-variant);
+  color: var(--md-on-surface);
   font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, monospace;
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.55;
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
 .settings-log-empty {
-  display: grid;
-  place-items: center;
-  gap: 5px;
-  padding: 42px 24px;
-  border-radius: 28px;
-  background: var(--md-surface);
-  text-align: center;
-}
-
-.settings-log-empty-icon {
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  margin-bottom: 5px;
-  border-radius: 15px;
-  background: var(--md-surface-container);
-  color: var(--md-on-surface-variant);
-}
-
-.settings-log-empty-icon svg {
-  width: 24px;
-  height: 24px;
+  align-items: center;
 }
 
 .settings-log-empty b {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .settings-log-empty p {
-  margin: 0;
+  margin: var(--md-space-50) 0 0;
   color: var(--md-on-surface-variant);
-  font-size: 11px;
-  line-height: 1.6;
-}
-
-.settings-log-empty-hint {
-  opacity: 0.75;
-}
-
-.settings-log-footer {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 16px 18px 0;
-  color: var(--md-on-surface-variant);
-  font-size: 10.5px;
-}
-
-.settings-log-clear {
-  flex: none;
-  margin-left: auto;
-  color: var(--md-error);
-}
-
-.settings-log-clear.is-armed {
-  background: var(--md-error-container);
-  color: var(--md-on-error-container);
-}
-
-.settings-log-action-note {
-  margin: 10px 18px 0;
-  color: var(--md-primary);
-  font-size: 10.5px;
-}
-
-.settings-quiet-note {
-  margin: 28px 0;
-  text-align: center;
   font-size: 12px;
-  color: var(--md-on-surface-variant);
 }
 
 .settings-surface-row {
@@ -3069,6 +3035,7 @@ button.settings-list-row {
 }
 
 .settings-hero-copy p {
+  margin: 0;
   color: var(--md-on-surface-variant);
   font-size: 12px;
   line-height: 1.7;
@@ -3134,7 +3101,7 @@ button.settings-list-row {
 }
 
 .settings-detail-font {
-  padding: 18px 24px;
+  padding: var(--md-space-150) var(--md-space-250);
 }
 
 .settings-detail-font .settings-head {
@@ -3174,20 +3141,33 @@ button.settings-list-row {
   gap: 24px;
 }
 
+.settings-detail-hero-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--md-space-200);
+}
+
+.settings-detail-hero-heading h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.settings-debug-switch-label {
+  display: flex;
+  align-items: center;
+  gap: var(--md-space-150);
+}
+
 .settings-logs-hero {
   display: grid;
-  gap: 22px;
-  padding: 28px 32px 22px;
-  background: var(--md-surface);
+  grid-template-columns: minmax(0, 1fr) min(50%, 360px);
+  align-items: center;
+  gap: var(--md-space-300);
 }
 
-.settings-logs-hero-top {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-}
-
-.settings-logs-hero-icon {
+.settings-detail-hero-icon {
   display: grid;
   place-items: center;
   flex: none;
@@ -3198,82 +3178,38 @@ button.settings-list-row {
   color: var(--md-on-primary-container);
 }
 
-.settings-logs-hero-icon :deep(svg) {
+.settings-detail-hero-icon :deep(svg) {
   width: 25px;
   height: 25px;
-}
-
-.settings-logs-hero-copy {
-  min-width: 0;
-}
-
-.settings-logs-hero-copy .settings-badge {
-  padding: 6px 10px;
-}
-
-.settings-logs-hero-copy .settings-badge.is-paused {
-  background: var(--md-surface-high);
-  color: var(--md-on-surface-variant);
-}
-
-.settings-logs-hero-copy h2 {
-  margin: 12px 0 5px;
-  color: var(--md-on-surface);
-  font-size: 22px;
-  font-weight: 650;
-  letter-spacing: -0.025em;
-}
-
-.settings-logs-hero-copy p,
-.settings-logs-retention {
-  margin: 0;
-  color: var(--md-on-surface-variant);
-  font-size: 12px;
-  line-height: 1.6;
 }
 
 .settings-logs-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding-top: 17px;
-  border-top: 1px solid var(--md-outline-variant);
+  margin: 0;
 }
 
 .settings-logs-summary > div {
   display: grid;
-  gap: 3px;
-  min-width: 0;
+  gap: var(--md-space-50);
+  padding-inline: var(--md-space-150);
+  text-align: center;
 }
 
 .settings-logs-summary > div + div {
-  padding-left: 20px;
-  border-left: 1px solid var(--md-outline-variant);
+  border-inline-start: 1px solid var(--md-outline-variant);
 }
 
-.settings-logs-summary b {
-  color: var(--md-on-surface);
-  font-size: 20px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 650;
-  line-height: 1.15;
-}
-
-.settings-logs-summary b.is-warning {
-  color: var(--md-tertiary);
-}
-
-.settings-logs-summary b.is-error {
-  color: var(--md-error);
-}
-
-.settings-logs-summary span {
+.settings-logs-summary dt {
   color: var(--md-on-surface-variant);
-  font-size: 11px;
+  font-size: 12px;
 }
 
-.settings-logs-retention {
-  margin-top: -13px;
-  font-size: 10.5px;
+.settings-logs-summary dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 
 .settings-about-hero {
@@ -3449,6 +3385,11 @@ button.settings-list-row {
     font-size: 20px;
   }
 
+  .settings-surface-hero {
+    gap: 28px;
+    min-height: 296px;
+  }
+
   .settings-reading-hero {
     gap: 22px;
   }
@@ -3471,8 +3412,7 @@ button.settings-list-row {
   }
 
   .settings-list-row {
-    gap: 12px;
-    padding: 18px 20px;
+    padding-inline: var(--md-space-200);
   }
 
   .settings-list-row .settings-value-copy b {
@@ -3493,7 +3433,7 @@ button.settings-list-row {
   }
 
   .settings-detail-font {
-    padding: 18px 20px;
+    padding-inline: var(--md-space-200);
   }
 
   .settings-import-diagram {
@@ -3544,78 +3484,60 @@ button.settings-list-row {
   .settings-color-strip {
     padding-inline: 12px;
   }
+
+  .settings-about-body {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .settings-surface-hero {
+    flex-direction: column;
+    gap: 18px;
+    min-height: 0;
+    text-align: center;
+  }
+
+  .settings-surface-hero .settings-hero-copy {
+    max-width: none;
+  }
+
+  .settings-surface-hero .settings-hero-copy h2 {
+    margin-top: 14px;
+  }
 }
 
 @container settings (max-width: 599px) {
   .settings-logs-hero {
-    gap: 18px;
-    padding: 24px 20px 20px;
-    border-radius: 28px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--md-space-200);
   }
 
-  .settings-logs-hero-icon {
+  .settings-detail-hero-icon {
     width: 46px;
     height: 46px;
     border-radius: 16px;
   }
 
-  .settings-logs-hero-copy h2 {
-    margin-top: 10px;
-    font-size: 20px;
-  }
-
-  .settings-logs-summary > div + div {
-    padding-left: 12px;
-  }
-
-  .settings-log-filter {
-    margin-bottom: 12px;
-  }
-
-  .settings-log-filter :deep(.md-segmented) {
-    width: 100%;
+  .settings-logs-summary {
+    padding-top: var(--md-space-200);
+    border-top: 1px solid var(--md-outline-variant);
   }
 
   .settings-log-section-heading > h2 {
-    margin-left: 0;
+    font-size: 15px;
   }
 
-  .settings-log-count {
-    margin-left: 0;
-    margin-right: 0;
+  .settings-log-panel {
+    --settings-log-inset: var(--md-space-200);
   }
 
-  .settings-log-list {
-    padding-inline: 14px;
-    border-radius: 22px;
+  .settings-log-filter > .md-segmented {
+    max-width: none;
   }
 
-  .settings-log-entry {
-    grid-template-columns: 28px minmax(0, 1fr);
-    gap: 10px;
-    padding-block: 15px;
-  }
-
-  .settings-log-marker {
-    width: 27px;
-    height: 27px;
-    border-radius: 10px;
-  }
-
-  .settings-log-message {
-    font-size: 13px;
-  }
-
-  .settings-log-footer {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-    margin-inline: 0;
-  }
-
-  .settings-log-clear {
-    margin-left: 0;
-    padding-left: 0;
+  .settings-log-time {
+    margin-inline-start: 0;
   }
 }
 </style>

@@ -20,7 +20,7 @@
             v-if="renamable"
             :key="title"
             type="button"
-            class="group flex items-center gap-1.5 min-w-0 text-left text-[21px] min-[900px]:text-[22px] font-medium tracking-tight"
+            class="library-title-text group flex items-center gap-1.5 min-w-0 text-left font-medium tracking-tight"
             :title="t('重命名书库')"
             :aria-label="t('重命名书库：{0}', { 0: title })"
             @click="$emit('rename')"
@@ -28,9 +28,9 @@
             <span class="min-w-0 truncate">{{ title }}</span>
             <MdIcon name="edit" class="w-3.5 h-3.5 shrink-0 text-[var(--md-on-surface-variant)] opacity-50 group-hover:opacity-80 transition-opacity duration-200" />
           </button>
-          <h1 v-else :key="title" class="text-[21px] min-[900px]:text-[22px] font-medium tracking-tight min-w-0 truncate">{{ title }}</h1>
+          <h1 v-else :key="title" class="library-title-text font-medium tracking-tight min-w-0 truncate">{{ title }}</h1>
         </Transition>
-        <span ref="countBadgeRef" class="hidden min-[360px]:inline-flex shrink-0 whitespace-nowrap text-[var(--md-on-surface-variant)] font-mono text-[10px] min-[900px]:text-[12px] font-semibold">{{ t('{0} 部作品', { 0: count }) }}</span>
+        <span ref="countBadgeRef" class="library-title-count font-mono">{{ t('{0} 部作品', { 0: count }) }}</span>
       </div>
 
       <div ref="searchTrackRef" class="library-search-track">
@@ -566,11 +566,33 @@ const sortOptions = [
 }
 .library-toolbar-title {
   display: flex;
-  align-items: center;
-  gap: inherit;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
   min-width: 0;
+  max-width: 100%;
   height: var(--library-action-size);
-  padding-inline: 14px;
+  padding-inline: 16px;
+}
+.library-title-text {
+  flex: none;
+  max-width: 100%;
+  font-size: 22px;
+  line-height: 24px;
+}
+.library-title-count {
+  display: block;
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--md-on-surface-variant);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .library-toolbar-title,
 .library-pill-surface {
@@ -585,17 +607,21 @@ const sortOptions = [
   height: var(--library-action-size);
   flex: none;
   place-items: center;
-  border-radius: 50%;
+  box-sizing: border-box;
+  padding: 4px;
+  border-radius: 16px;
+  /* 底色内缩，保留完整命中区，避免贴住外层胶囊边缘。 */
+  background-clip: content-box;
   color: var(--md-on-surface);
   transition: background-color 200ms var(--md-ease-emphasized);
 }
 .library-tool.is-tonal {
-  background: var(--md-secondary-container);
+  background-color: var(--md-secondary-container);
   color: var(--md-on-secondary-container);
 }
 @media (hover: hover) and (pointer: fine) {
   .library-tool:not(.is-tonal):hover {
-    background: color-mix(in oklab, var(--md-on-surface) 8%, transparent);
+    background-color: color-mix(in oklab, var(--md-on-surface) 8%, transparent);
   }
 }
 .library-search-track {
@@ -706,8 +732,11 @@ const sortOptions = [
     padding-inline-end: calc(var(--library-toolbar-inset) + var(--library-pill-rest) + 4px);
   }
   .library-toolbar-title {
-    padding-inline: 10px;
+    padding-inline: 14px;
     opacity: calc(1 - var(--library-search-progress));
+  }
+  .library-title-text {
+    font-size: 21px;
   }
   .library-search-input {
     font-size: 16px;

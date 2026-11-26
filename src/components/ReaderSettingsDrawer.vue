@@ -67,7 +67,7 @@
 
             <section class="reader-settings-card reader-settings-font" aria-labelledby="reader-font-size-label">
               <div class="reader-settings-row-head">
-                <h3 id="reader-font-size-label">{{ t('字号') }}</h3>
+                <h3 id="reader-font-size-label">{{ t('字号') }}<MdInfoHint :label="t('字号')">{{ t('{0}–{1} px · 自动分页，按书记忆', { 0: NOVEL_FONT_MIN, 1: NOVEL_FONT_MAX }) }}</MdInfoHint></h3>
                 <span>{{ config.fontSize }} px</span>
               </div>
               <div class="reader-font-control">
@@ -85,7 +85,6 @@
                 />
                 <button type="button" class="reader-font-step" :disabled="config.fontSize >= NOVEL_FONT_MAX" :title="t('增大字号')" :aria-label="t('增大字号')" @click="reader.changeFontSize(NOVEL_FONT_STEP)">A+</button>
               </div>
-              <p class="reader-settings-hint">{{ t('{0}–{1} px · 自动分页，按书记忆', { 0: NOVEL_FONT_MIN, 1: NOVEL_FONT_MAX }) }}</p>
             </section>
 
             <section class="reader-settings-card reader-settings-selects" :aria-label="t('文字排版')">
@@ -103,9 +102,9 @@
                 <MdSegmentedControl class="reader-settings-segment" :model-value="config.direction" :options="directions" :aria-label="t('阅读方向')" @update:model-value="reader.setDirection" />
               </div>
               <div v-if="!isVertical" class="reader-settings-row">
-                <h4 class="reader-settings-control-label">{{ t('页面布局') }}</h4>
+                <h4 class="reader-settings-control-label">{{ t('页面布局') }}<MdInfoHint v-if="!allowSpreadChoice" :label="t('页面布局')">{{ t('当前屏幕按单页显示，窗口变宽后可选择双页。') }}</MdInfoHint></h4>
                 <MdSegmentedControl v-if="allowSpreadChoice" class="reader-settings-segment" :model-value="config.spread" :options="spreadOptions" :aria-label="t('翻页布局')" @update:model-value="value => reader.setSpreadCount(Number(value))" />
-                <p v-else class="reader-settings-hint">{{ t('当前屏幕按单页显示，窗口变宽后可选择双页。') }}</p>
+                <p v-else class="reader-settings-hint">{{ t('单页') }}</p>
               </div>
               <Transition v-bind="expandMotion">
                 <div v-if="!isManga && !isVertical" class="reader-settings-row reader-settings-switch">
@@ -124,10 +123,9 @@
           </template>
 
           <template v-if="isAndroid">
-            <h3 class="reader-settings-group-label">{{ t('翻页控制') }}</h3>
+            <h3 class="reader-settings-group-label">{{ t('翻页控制') }}<MdInfoHint :label="t('翻页控制')">{{ t('音量加键上一页、音量减键下一页；该设置全局生效。') }}</MdInfoHint></h3>
             <section class="reader-settings-card reader-settings-row">
               <MdSwitch :model-value="settings.volumeKeysTurnPage" :title="t('音量加键上一页、音量减键下一页')" @update:model-value="settings.setVolumeKeysTurnPage">{{ t('音量键翻页') }}</MdSwitch>
-              <p class="reader-settings-hint">{{ t('音量加键上一页、音量减键下一页；该设置全局生效。') }}</p>
             </section>
           </template>
 
@@ -143,9 +141,8 @@
           role="tabpanel"
           aria-labelledby="reader-settings-tab-appearance"
         >
-          <h3 class="reader-settings-group-label">{{ t('阅读纸面') }}</h3>
+          <h3 class="reader-settings-group-label">{{ t('阅读纸面') }}<MdInfoHint :label="t('阅读纸面')">{{ t('只调整阅读纸面，应用外观仍沿用全局设置。') }}</MdInfoHint></h3>
           <SurfaceModePreview surface="reader" cards />
-          <p class="reader-settings-paper-hint">{{ t('只调整阅读纸面，应用外观仍沿用全局设置。') }}</p>
           <h3 class="reader-settings-group-label">{{ t('翻页方式') }}</h3>
           <section class="reader-settings-card">
             <div class="reader-settings-animation" :class="`is-${reader.transitionStyle}`" aria-hidden="true">
@@ -170,24 +167,18 @@
           role="tabpanel"
           aria-labelledby="reader-settings-tab-cover"
         >
-          <h3 class="reader-settings-group-label">{{ t('当前书本') }}</h3>
+          <h3 class="reader-settings-group-label">{{ t('当前书本') }}<MdInfoHint :label="t('当前书本')"><p>{{ t('为这本书换一张喜欢的封面') }}</p><p>{{ t('仅保存在本机') }} · {{ t('更换封面不会修改原书文件。') }}</p><p v-if="reader.currentBook?.id.startsWith('demo_')">{{ t('示例书封面仅在本次打开期间保留。') }}</p></MdInfoHint></h3>
           <section class="reader-settings-card reader-settings-cover">
             <div class="reader-cover-preview">
               <img v-if="currentCover" :src="currentCover" :alt="t('当前书本封面')" />
               <div v-else class="reader-cover-placeholder" aria-hidden="true"><MdIcon name="auto_stories" :size="32" /><span>{{ reader.currentBook?.title }}</span></div>
             </div>
             <h3>{{ reader.currentBook?.title }}</h3>
-            <p class="reader-settings-hint">{{ t('为这本书换一张喜欢的封面') }}</p>
             <input ref="coverInput" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.avif,.bmp" class="hidden" :aria-label="t('选择自定义封面图片')" @change="onCoverSelected" />
             <button type="button" class="md-tonal-button reader-settings-upload" :disabled="coverBusy || (!!reader.currentBook?.remote && !reader.currentBook?.remoteShelf)" @click="coverInput?.click()"><MdIcon name="upload_file" :size="18" />{{ coverBusy ? t('正在保存…') : t('选择封面图片') }}</button>
             <button v-if="hasCustomCover" type="button" class="md-text-button reader-settings-restore-cover" :disabled="coverBusy || (!!reader.currentBook?.remote && !reader.currentBook?.remoteShelf)" @click="saveCover(null)">{{ t('恢复原封面') }}</button>
-            <p v-if="reader.currentBook?.id.startsWith('demo_')" class="reader-settings-hint">{{ t('示例书封面仅在本次打开期间保留。') }}</p>
             <p v-if="coverError" role="alert" class="reader-settings-cover-error">{{ coverError }}</p>
           </section>
-          <div class="reader-settings-card reader-settings-cover-note">
-            <MdIcon name="folder_open" :size="20" />
-            <div><p>{{ t('仅保存在本机') }}</p><p class="reader-settings-hint">{{ t('更换封面不会修改原书文件。') }}</p></div>
-          </div>
         </div>
       </div>
 
@@ -222,6 +213,7 @@ import MdSwitch from './MdSwitch.vue';
 import SurfaceModePreview from './SurfaceModePreview.vue';
 import SettingsSelectRow from './SettingsSelectRow.vue';
 import MdIcon from './MdIcon.vue';
+import MdInfoHint from './MdInfoHint.vue';
 import { useI18n } from '../composables/useI18n.ts';
 
 const { t } = useI18n();
@@ -434,7 +426,7 @@ function onSheetKeydown(event: KeyboardEvent) {
 }
 .reader-settings-font { padding: 18px; }
 .reader-settings-row-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.reader-settings-row-head h3 { font-size: 13px; font-weight: 600; }
+.reader-settings-row-head h3 { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
 .reader-settings-row-head > span { color: var(--md-on-surface-variant); font-size: 12px; }
 .reader-font-control { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 .reader-font-range { min-width: 0; flex: 1; --md-range-halo: var(--md-surface); }
@@ -458,7 +450,7 @@ function onSheetKeydown(event: KeyboardEvent) {
 }
 .reader-font-step:disabled { opacity: 0.35; cursor: default; }
 .reader-settings-hint { margin-top: 8px; color: var(--md-on-surface-variant); font-size: 11px; line-height: 1.7; }
-.reader-settings-selects :deep(.settings-select-row) { min-height: 60px; padding: 16px 18px; gap: 8px; }
+.reader-settings-selects :deep(.settings-select-row) { padding-inline: 18px; gap: 8px; }
 .reader-settings-selects :deep(.settings-select-label) { font-size: 13px; }
 .reader-settings-selects :deep(.settings-select-control) { font-size: 12px; }
 .reader-settings-selects :deep(.settings-select-row > svg) { width: 18px; height: 18px; }
@@ -472,11 +464,11 @@ function onSheetKeydown(event: KeyboardEvent) {
   background: color-mix(in oklab, var(--md-outline-variant) 55%, transparent);
   content: '';
 }
-.reader-settings-group-label { margin: 22px 14px 10px; color: var(--md-on-surface-variant); font-size: 12px; font-weight: 600; }
+.reader-settings-group-label { display: flex; align-items: center; gap: 8px; margin: 22px 14px 10px; color: var(--md-on-surface-variant); font-size: 12px; font-weight: 600; }
 .reader-settings-group-label:first-child { margin-top: 2px; }
-.reader-settings-row { position: relative; padding: 16px 18px; }
+.reader-settings-row { position: relative; padding: var(--md-space-150) 18px; }
 .reader-settings-scroll-fit { position: relative; }
-.reader-settings-scroll-fit :deep(.settings-select-row) { min-height: 60px; padding: 16px 18px; gap: 8px; }
+.reader-settings-scroll-fit :deep(.settings-select-row) { padding-inline: 18px; gap: 8px; }
 .reader-settings-scroll-fit::before {
   position: absolute;
   top: 0;
@@ -489,13 +481,12 @@ function onSheetKeydown(event: KeyboardEvent) {
 .reader-settings-scroll-fit :deep(.settings-select-label) { font-size: 13px; }
 .reader-settings-scroll-fit :deep(.settings-select-control) { font-size: 12px; }
 .reader-settings-scroll-fit :deep(.settings-select-row > svg) { width: 18px; height: 18px; }
-.reader-settings-control-label { font-size: 13px; font-weight: 600; }
+.reader-settings-control-label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
 .reader-settings-segment { margin-top: 12px; --md-segmented-bg: var(--md-surface-low); }
 .reader-settings-segment :deep(.md-segmented-option) { min-height: 48px; padding-inline: 4px; font-size: 12px; }
 .reader-settings-segment :deep(.md-segmented-thumb) { background: var(--md-secondary-container); }
 .reader-settings-segment :deep(.md-segmented-option.is-selected) { color: var(--md-on-secondary-container); }
-.reader-settings-switch { padding-block: 6px; font-size: 13px; }
-.reader-settings-paper-hint { margin: 12px 14px 26px; color: var(--md-on-surface-variant); font-size: 11px; line-height: 1.7; }
+.reader-settings-switch { padding-block: var(--md-space-50); font-size: 13px; }
 .reader-settings-animation { display: flex; justify-content: center; align-items: center; gap: 5px; min-height: 135px; padding: 24px 20px; }
 .reader-settings-page { display: block; width: 80px; height: 86px; padding: 15px; border: 1px solid var(--md-outline-variant); border-radius: 6px; background: var(--md-surface-low); }
 .reader-settings-page i { display: block; height: 2px; margin-bottom: 8px; background: var(--md-outline-variant); }
@@ -511,9 +502,6 @@ function onSheetKeydown(event: KeyboardEvent) {
 .reader-settings-cover > h3 { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .reader-settings-upload { width: 100%; margin-top: 20px; }
 .reader-settings-restore-cover { width: 100%; margin-top: 8px; }
-.reader-settings-cover-note { display: flex; align-items: flex-start; gap: 12px; padding: 18px; font-size: 12px; }
-.reader-settings-cover-note > svg { flex: none; margin-top: 1px; color: var(--md-on-surface-variant); }
-.reader-settings-cover-note .reader-settings-hint { margin-top: 3px; }
 .reader-settings-cover-error { margin-top: 12px; color: var(--md-error); font-size: 12px; line-height: 1.7; }
 .reader-settings-reset-card { padding: 8px; }
 .reader-settings-reset { width: 100%; color: var(--md-on-surface-variant); }

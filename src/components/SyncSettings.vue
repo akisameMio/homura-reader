@@ -1,7 +1,7 @@
 <template>
   <div class="sync-settings" :aria-busy="busy">
     <section class="sync-group">
-      <h2>{{ t('远程') }}</h2>
+      <h2>{{ t('远程') }}<MdInfoHint :label="t('远程')">{{ t('移除连接不会删除本机作品或服务器上的同步记录。') }}</MdInfoHint></h2>
       <div class="sync-card connection-card">
         <MdIcon name="local_library" />
         <div class="connection-copy">
@@ -85,18 +85,16 @@
       <button v-if="sync.config.url" type="button" class="connection-delete md-mobile-sheet-card md-mobile-sheet-danger" :disabled="busy" @click="disconnect">{{ t('删除连接') }}</button>
     </MobileBottomSheet>
       <section class="sync-group" aria-labelledby="sync-options-title">
-        <h2 id="sync-options-title">{{ t('同步偏好') }}</h2>
+        <h2 id="sync-options-title">{{ t('同步偏好') }}<MdInfoHint :label="t('同步偏好')"><p>{{ t('开启后，允许向此服务器发送进度、收藏与书库信息。') }}</p><p>{{ t('应用运行且网络可用时，自动同步已保存的更改。') }}</p></MdInfoHint></h2>
         <div class="sync-card sync-options">
           <MdSwitch v-model="draft.enabled" :disabled="busy || !sync.config.url" @update:model-value="savePreferences">
             <span class="sync-switch-copy">
               <b>{{ t('启用 WebDAV 同步') }}</b>
-              <span>{{ t('开启后，允许向此服务器发送进度、收藏与书库信息。') }}</span>
             </span>
           </MdSwitch>
           <MdSwitch v-model="draft.autoSync" :disabled="busy || !draft.enabled" @update:model-value="savePreferences">
             <span class="sync-switch-copy">
               <b>{{ t('自动同步') }}</b>
-              <span>{{ t('应用运行且网络可用时，自动同步已保存的更改。') }}</span>
             </span>
           </MdSwitch>
         </div>
@@ -104,7 +102,7 @@
     <WebDavBrowser v-if="sync.config.url" :url="sync.config.url" :username="sync.config.username" :password="sync.password" :disabled="dirty || saving || performing || sync.status === 'syncing' || sync.status === 'testing'" @busy="browserBusy = $event" />
 
     <section class="sync-group" aria-labelledby="sync-status-title">
-      <h2 id="sync-status-title">{{ t('同步状态') }}</h2>
+      <h2 id="sync-status-title">{{ t('同步状态') }}<MdInfoHint v-if="sync.remoteOnlyCount > 0" :label="t('同步状态')">{{ t('在本机导入对应作品后，才能应用远端记录。') }}</MdInfoHint></h2>
       <div class="sync-card sync-status" aria-live="polite">
         <div class="sync-status-heading">
           <div>
@@ -118,7 +116,6 @@
           <div><dt>{{ t('待识别作品') }}</dt><dd>{{ sync.unmatchedCount }}</dd></div>
           <div><dt>{{ t('仅远端有记录') }}</dt><dd>{{ sync.remoteOnlyCount }}</dd></div>
         </dl>
-        <p v-if="sync.remoteOnlyCount > 0" class="sync-note">{{ t('在本机导入对应作品后，才能应用远端记录。') }}</p>
         <p v-if="displayError" class="sync-feedback is-error" role="alert">{{ t(displayError) }}</p>
         <p v-else-if="notice" class="sync-feedback" role="status">{{ t(notice) }}</p>
         <div class="sync-actions">
@@ -131,7 +128,6 @@
         </div>
       </div>
 
-      <p class="sync-note sync-disconnect-note">{{ t('移除连接不会删除本机作品或服务器上的同步记录。') }}</p>
     </section>
   </div>
 </template>
@@ -141,6 +137,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useSyncStore } from '../stores/sync.ts';
 import { useI18n } from '../composables/useI18n.ts';
 import MdIcon from './MdIcon.vue';
+import MdInfoHint from './MdInfoHint.vue';
 import MdSwitch from './MdSwitch.vue';
 import MobileBottomSheet from './MobileBottomSheet.vue';
 import { WebDavBooksClient } from '../services/webdavBooks.ts';
@@ -312,7 +309,7 @@ async function disconnect() {
 .sync-intro h2 { margin: 0 0 12px; font-size: 21px; font-weight: 600; }
 .sync-intro p { margin: 8px 0 0; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
 .sync-group { min-width: 0; margin-bottom: 28px; }
-.sync-group > h2 { margin: 0 16px 12px; color: var(--md-on-surface-variant); font-size: 13px; font-weight: 600; }
+.sync-group > h2 { display: flex; align-items: center; gap: 8px; margin: 0 16px 12px; color: var(--md-on-surface-variant); font-size: 13px; font-weight: 600; }
 .sync-card { min-width: 0; border-radius: 28px; background: var(--md-surface); color: var(--md-on-surface); }
 .sync-fields { overflow: hidden; padding: 0; }
 .sync-field { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.4fr) auto; grid-template-rows: auto auto; align-items: center; column-gap: 20px; min-width: 0; padding: 16px 30px; transition: background-color 200ms cubic-bezier(0.2, 0, 0, 1); }
@@ -331,11 +328,10 @@ async function disconnect() {
 .sync-password-toggle:disabled { opacity: .38; cursor: default; }
 .sync-password-toggle :deep(svg) { width: 22px; height: 22px; }
 .sync-note { margin: 0; color: var(--md-on-surface-variant); font-size: 12px; font-weight: 400; line-height: 1.7; overflow-wrap: anywhere; }
-.sync-options > :deep(.md-switch-row) { padding: 20px 24px; }
+.sync-options > :deep(.md-switch-row) { min-height: var(--md-space-700); padding: var(--md-space-150) var(--md-space-250); }
 .sync-options > :deep(.md-switch-row + .md-switch-row) { border-top: 1px solid var(--md-outline-variant); }
 .sync-switch-copy { display: grid; gap: 6px; }
 .sync-switch-copy b { font-size: 13px; font-weight: 600; }
-.sync-switch-copy > span { color: var(--md-on-surface-variant); font-size: 12px; line-height: 1.7; }
 .sync-save-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px; margin: 16px 0 0; }
 .sync-status { padding: 24px; }
 .sync-status-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 12px 16px; }
@@ -350,7 +346,6 @@ async function disconnect() {
 .sync-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
 .sync-actions > button, .sync-save-actions > button { min-height: 48px; }
 .sync-disconnect { margin-top: 12px; }
-.sync-disconnect-note { margin: 4px 16px 0; }
 @media (max-width: 899px) {
   .sync-field input { font-size: 16px; scroll-margin-block: 80px; }
 }
@@ -363,7 +358,7 @@ async function disconnect() {
   .sync-field-state { font-size: 13px; }
   .sync-field-end { grid-column: 2; grid-row: 1; gap: 8px; }
   .sync-status { padding: 20px; }
-  .sync-options > :deep(.md-switch-row) { padding: 20px; }
+  .sync-options > :deep(.md-switch-row) { padding-inline: var(--md-space-200); }
   .sync-stats { gap: 12px; }
   .sync-actions > button { flex: 1; }
 }

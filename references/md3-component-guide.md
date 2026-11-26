@@ -247,7 +247,7 @@ Error token 已在 `src/assets/styles/tokens.css` 的白昼 / 护眼 / 夜间三
 
 - 行高至少 `48px`，说明文字放默认 slot（作为点击目标的一部分），右侧为 `52px × 32px` 轨道。
 - 原生 `<button type="button" role="switch" :aria-checked="modelValue">`，禁止套 checkbox。
-- 关闭态：`surface-highest` 轨道 + `2px outline` 描边 + `16px outline` 滑块；开启态：`primary` 轨道 + `24px on-primary` 滑块（按下时 `28px`）。
+- 关闭态：`surface-highest` 轨道 + 极淡内槽边缘 + `24px outline` 实心滑块（四周 `4px` 同心留白）；开启态：`primary` 轨道 + `24px on-primary` 滑块；桌面悬停与按压提供状态光环与轻度滑块缩放反馈。
 - 切换由物理弹簧驱动位移与形变，连点只更新弹簧目标、保留当前位置和速度；`prefers-reduced-motion` 下直接落位。
 
 ### 3.7 进度与字号滑条

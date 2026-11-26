@@ -14,7 +14,8 @@ import { readSmartStorageConfig, writeSmartStorageConfig } from '../services/sma
 import { TRANSITION_OPTIONS, useThemeStore } from './theme.ts';
 
 const READER_DEFAULTS_KEY = 'homura_reader_defaults';
-const DEBUG_FORCE_FULLSCREEN_KEY = 'homura_debug_force_fullscreen';
+const SHOW_FULLSCREEN_BUTTON_KEY = 'homura_show_fullscreen_button';
+const LEGACY_FORCE_FULLSCREEN_KEY = 'homura_debug_force_fullscreen';
 const DEBUG_AUTO_UPDATE_CHECK_KEY = 'homura_debug_auto_update_check';
 const IMPORT_COLLECTION_PROMPT_KEY = 'homura_import_collection_prompt';
 const VOLUME_KEYS_TURN_PAGE_KEY = 'homura_volume_keys_turn_page';
@@ -89,11 +90,14 @@ function writeReaderDefaults(value: unknown) {
   }
 }
 
-function readDebugForceFullscreen() {
+function readShowFullscreenButton() {
   try {
-    return localStorage.getItem(DEBUG_FORCE_FULLSCREEN_KEY) === '1';
-  } catch (err) {
-    return false;
+    const saved = localStorage.getItem(SHOW_FULLSCREEN_BUTTON_KEY);
+    if (saved === '1' || saved === '0') return saved === '1';
+    // 旧开关只会额外显示按钮，不会隐藏 Windows 上的入口。
+    return isWindows || localStorage.getItem(LEGACY_FORCE_FULLSCREEN_KEY) === '1';
+  } catch {
+    return isWindows;
   }
 }
 
@@ -146,7 +150,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const initialSmartStorageConfig = readSmartStorageConfig();
   const readerDefaults = reactive(readReaderDefaults());
   const transitionStyle = computed(() => readerDefaults.direction === 'vertical' ? 'scroll' : theme.transitionStyle);
-  const debugForceFullscreen = ref(readDebugForceFullscreen());
+  const showFullscreenButton = ref(readShowFullscreenButton());
   const debugAutoUpdateCheck = ref(readDebugAutoUpdateCheck());
   const importCollectionPrompt = ref(readImportCollectionPrompt());
   // 默认关闭：不主动劫持 Android 硬件音量键，用户手动打开后才交给阅读器翻页
@@ -155,7 +159,6 @@ export const useSettingsStore = defineStore('settings', () => {
   const runtimeLogCapture = ref(readRuntimeLogCapture());
   const smartStorageEnabled = ref(initialSmartStorageConfig.enabled);
   const smartStorageBudgetMb = ref(initialSmartStorageConfig.budgetMb);
-  const showFullscreenButton = computed(() => isWindows || debugForceFullscreen.value);
 
   configureRuntimeLogs({ level: runtimeLogLevel.value, capture: runtimeLogCapture.value });
 
@@ -184,13 +187,12 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  function setDebugForceFullscreen(value: unknown) {
-    const next = !!value;
-    debugForceFullscreen.value = next;
+  function setShowFullscreenButton(value: boolean) {
+    showFullscreenButton.value = value;
     try {
-      localStorage.setItem(DEBUG_FORCE_FULLSCREEN_KEY, next ? '1' : '0');
+      localStorage.setItem(SHOW_FULLSCREEN_BUTTON_KEY, value ? '1' : '0');
     } catch (err) {
-      console.warn('[HOMURA] 调试开关保存失败', err);
+      console.warn('[HOMURA] 全屏按钮偏好保存失败', err);
     }
   }
 
@@ -267,7 +269,7 @@ export const useSettingsStore = defineStore('settings', () => {
   return {
     readerDefaults,
     transitionStyle,
-    debugForceFullscreen,
+    showFullscreenButton,
     debugAutoUpdateCheck,
     importCollectionPrompt,
     volumeKeysTurnPage,
@@ -275,11 +277,10 @@ export const useSettingsStore = defineStore('settings', () => {
     runtimeLogCapture,
     smartStorageEnabled,
     smartStorageBudgetMb,
-    showFullscreenButton,
     setReaderDefault,
     setTransitionStyle,
     resetReaderDefaults,
-    setDebugForceFullscreen,
+    setShowFullscreenButton,
     setDebugAutoUpdateCheck,
     setImportCollectionPrompt,
     setVolumeKeysTurnPage,

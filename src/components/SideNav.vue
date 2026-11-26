@@ -672,8 +672,8 @@ onBeforeUnmount(() => {
     align-items: center;
     justify-content: space-around;
     border-radius: 32px;
-    /* 内部浅填充（比页面略淡）+ 外圈淡描边 */
-    background: color-mix(in oklab, var(--md-surface-container) 70%, var(--md-outline-variant) 30%);
+    /* 与书架顶栏胶囊共用表面色。 */
+    background: var(--md-surface-low);
     box-shadow:
       0 0 0 1px color-mix(in oklab, var(--md-outline-variant) 45%, transparent),
       inset 0 0 0 1px color-mix(in oklab, var(--md-surface) 40%, transparent),

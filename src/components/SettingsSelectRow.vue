@@ -279,10 +279,10 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
-  min-height: 74px;
-  padding: 18px 24px;
+  min-height: var(--md-space-700);
+  padding: var(--md-space-150) var(--md-space-250);
   border: 0;
   background: transparent;
   color: var(--md-on-surface);
@@ -295,6 +295,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   font-size: 16px;
+  font-weight: 500;
 }
 
 .settings-select-value {
@@ -471,8 +472,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 599px) {
   .settings-select-row {
-    gap: 12px;
-    padding: 18px 20px;
+    padding-inline: var(--md-space-200);
   }
 
   .settings-select-label {

@@ -200,16 +200,16 @@ const progressWavePath = computed(() => {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: clamp(56px, 28%, 108px) minmax(0, 1fr);
+  grid-template-columns: clamp(64px, 17cqi, 96px) minmax(0, 1fr);
   grid-template-areas:
     "cover heading"
     "cover details"
     "cover progress";
   align-content: center;
-  gap: 6px clamp(12px, 3.5cqi, 22px);
-  width: 71%;
+  gap: 8px clamp(12px, 3cqi, 20px);
+  width: 74%;
   min-width: 0;
-  padding: 16px 12px 16px clamp(16px, 4cqi, 28px);
+  padding: 24px 16px 24px clamp(16px, 4cqi, 28px);
 }
 .cover-shell {
   grid-area: cover;
@@ -235,6 +235,7 @@ const progressWavePath = computed(() => {
   font-weight: 700;
   letter-spacing: -.025em;
   line-height: 1.3;
+  text-wrap: balance;
   overflow-wrap: anywhere;
 }
 .book-meta {
@@ -279,10 +280,10 @@ const progressWavePath = computed(() => {
   stroke-linecap: round;
 }
 .progress-track::after { position: absolute; top: 7px; right: 0; width: 6px; height: 6px; border-radius: 50%; background: currentColor; content: ''; }
-.action-panel { position: absolute; inset: 0 0 0 auto; width: 32%; }
+.action-panel { position: absolute; inset: 0 0 0 auto; width: 28%; }
 .action-surface { position: absolute; inset: 0; width: 100%; height: 100%; fill: color-mix(in oklab, var(--md-primary-container) 54%, var(--md-surface-low)); }
 .action-content { position: absolute; inset: 0 8px 0 14px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; }
-.play { position: relative; display: grid; place-items: center; width: clamp(48px, 65%, 96px); aspect-ratio: 1; color: var(--md-on-primary); }
+.play { position: relative; display: grid; place-items: center; width: clamp(48px, 65%, 72px); aspect-ratio: 1; color: var(--md-on-primary); }
 .play-shape { position: absolute; inset: 0; width: 100%; height: 100%; fill: var(--md-primary); filter: drop-shadow(0 5px 8px color-mix(in oklab, var(--md-shadow-color-soft) 18%, transparent)); transition: transform 420ms var(--md-ease-spring); }
 .play-icon { position: relative; width: 32px; height: 32px; transition: transform 420ms var(--md-ease-spring); }
 .action-label { color: var(--md-on-primary-container); font-size: 12px; font-weight: 650; text-align: center; }
@@ -302,18 +303,20 @@ const progressWavePath = computed(() => {
   .continue-card:not(:has(+ .md-shelf-card)) { min-height: 188px; }
   .content { position: absolute; inset: 0 auto 0 0; }
 }
-@container continue-reading (max-width: 379px) {
+@container continue-reading (max-width: 520px) {
   .content {
-    grid-template-columns: 52px minmax(0, 1fr);
+    grid-template-columns: clamp(52px, 15cqi, 72px) minmax(0, 1fr);
     grid-template-areas:
       "cover heading"
       "details details"
       "progress progress";
-    column-gap: 10px;
-    padding: 16px 8px 16px 16px;
+    column-gap: 12px;
+    row-gap: 8px;
+    padding: 20px 16px;
   }
   .book-heading { align-self: center; }
   .cover-shell { border-radius: 10px; }
+  .reading-details { margin-top: 4px; }
   .action-content { left: 8px; }
   .play-icon { width: 24px; height: 24px; }
 }
