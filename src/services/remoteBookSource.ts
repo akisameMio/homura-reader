@@ -63,6 +63,7 @@ export function resetRemoteBookRuntime(book: Book) {
     if (url.startsWith('blob:') && url !== book.cover) URL.revokeObjectURL(url);
   }
   book.pageItems = null; book.chapters = null; book.zipContent = null; book.pdfDoc = null;
+  book.outline = null;
   book.epubImageUrls = null; book.epubImageDecodes = null; book.resourceUrls = null;
   book.restored = true; book.remoteDispose = null; book.remoteReadError = null;
 }

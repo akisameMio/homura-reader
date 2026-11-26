@@ -9,6 +9,7 @@ import type { Book } from '../types.ts';
 import { createCoverThumbnail } from './coverThumb.ts';
 import { parseEpubArchive, type EpubArchive } from './epubParser.ts';
 import { createPdfPageItems, openRemotePdfDocument, renderPdfCoverBlob } from './pdf.ts';
+import { readPdfOutline } from './pdfOutline.ts';
 import { openRemoteZip, type RemoteZip, type RemoteZipEntry } from './remoteZip.ts';
 import type { RangeSource } from './webdavBooks.ts';
 
@@ -109,6 +110,7 @@ async function parseRangePdf(source: RangeSource, name: string, id: string, meta
       coverBlob = await renderPdfCoverBlob(pdf.document);
       cover = URL.createObjectURL(coverBlob);
     }
+    const outline = await readPdfOutline(pdf.document);
     return {
       id,
       type: 'manga',
@@ -117,6 +119,7 @@ async function parseRangePdf(source: RangeSource, name: string, id: string, meta
       cover,
       coverBlob,
       pdfDoc: pdf.document,
+      outline,
       pageItems: createPdfPageItems(pdf.document, pageCount),
       pageCount
     };

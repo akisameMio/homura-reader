@@ -332,6 +332,8 @@ export default {
   '跳转到第 {0} 页': 'Go to page {0}',
   '章节目录': 'Chapters',
   '暂无章节信息': 'No chapter information',
+  'PDF 书签目录': 'PDF bookmarks',
+  '{0} 条目录 · {1} 页': '{0} entries · {1} pages',
   '本 · 按书库顺序阅读': 'books · Read in collection order',
   '本书库书本顺序': 'Book order in this collection',
   '打开书库书本：{0}{1}': 'Open collection book: {0}{1}',
