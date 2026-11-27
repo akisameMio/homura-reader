@@ -25,6 +25,13 @@ export interface ReaderPage {
   [key: string]: unknown;
 }
 
+/** PDF 书签目录条目：page 为 1-based 页码，depth 从 0 开始 */
+export interface PdfOutlineEntry {
+  title: string;
+  page: number | null;
+  depth: number;
+}
+
 /** PDF 页项：交给 PDF 渲染管道按页懒渲染 */
 export interface PdfPageItem {
   render?: () => Promise<unknown>;
@@ -58,6 +65,7 @@ export interface Book {
   size?: number;
   pageCount?: number;
   pageItems?: PdfPageItem[] | null;
+  outline?: PdfOutlineEntry[] | null;
   chapters?: ChapterItem[] | null;
   pdfDoc?: unknown;
   pdfRange?: unknown;

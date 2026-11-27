@@ -27,6 +27,9 @@ interface PdfDocLike {
     render(params: { canvasContext: CanvasRenderingContext2D; viewport: unknown }): { promise: Promise<void> };
     cleanup(): void;
   }>;
+  getOutline?(): Promise<unknown[] | null>;
+  getDestination?(id: string): Promise<unknown[] | null>;
+  getPageIndex?(ref: unknown): Promise<number>;
 }
 
 let pdfjsPromise: Promise<typeof import('pdfjs-dist/legacy/build/pdf.mjs')> | null = null;

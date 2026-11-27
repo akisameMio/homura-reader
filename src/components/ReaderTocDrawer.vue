@@ -58,10 +58,27 @@
           :aria-labelledby="reader.currentCollection ? 'reader-toc-tab-book' : 'reader-toc-title'"
         >
           <div class="reader-toc-summary">
-            <MdIcon :name="isManga ? 'auto_stories' : 'toc'" :size="18" />
+            <MdIcon :name="pdfOutline.length || !isManga ? 'toc' : 'auto_stories'" :size="18" />
             <div><h3 :title="reader.currentBook?.title">{{ reader.currentBook?.title }}</h3><p>{{ tocSubtitle }}</p></div>
           </div>
-          <nav v-if="isManga" class="reader-toc-card reader-toc-pages md-toc-grid" :aria-label="t('漫画页码')">
+          <nav v-if="pdfOutline.length" class="reader-toc-card reader-toc-list" :aria-label="t('PDF 书签目录')">
+            <button
+              v-for="(entry, idx) in pdfOutline"
+              :key="idx"
+              type="button"
+              @click="jumpTo((entry.page || 1) - 1)"
+              class="md-drawer-list-item"
+              :class="{ 'is-active': idx === currentPdfEntryIndex }"
+              :style="{ paddingInlineStart: `${12 + entry.depth * 16}px` }"
+              :title="entry.title"
+              :aria-current="idx === currentPdfEntryIndex ? 'page' : undefined"
+            >
+              <span class="md-drawer-item-label">{{ entry.title }}</span>
+              <MdIcon v-if="idx === currentPdfEntryIndex" class="reader-toc-current" name="auto_stories" :size="18" />
+            </button>
+          </nav>
+
+          <nav v-else-if="isManga" class="reader-toc-card reader-toc-pages md-toc-grid" :aria-label="t('漫画页码')">
             <button
               v-for="(_page, idx) in reader.activePages"
               :key="idx"
@@ -76,7 +93,7 @@
 
           <nav v-else class="reader-toc-card reader-toc-list" :aria-label="t('章节目录')">
             <button
-              v-for="(group, index) in groups"
+              v-for="group in groups"
               :key="group.key"
               type="button"
               @click="jumpTo(group.index)"
@@ -85,7 +102,6 @@
               :title="group.title"
               :aria-current="isCurrentChapter(group) ? 'true' : undefined"
             >
-              <span class="md-drawer-item-index" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span>
               <span class="md-drawer-item-label">{{ group.title }}</span>
               <MdIcon v-if="isCurrentChapter(group)" class="reader-toc-current" name="auto_stories" :size="18" />
             </button>
@@ -180,6 +196,21 @@ const {
 
 const isManga = computed(() => reader.currentBook?.type === 'manga' || reader.currentBook?.format === 'pdf');
 
+// PDF 自带书签优先作为目录；没有书签时仍回落到页码网格
+const pdfOutline = computed(() => {
+  if (reader.currentBook?.format !== 'pdf') return [];
+  return (reader.currentBook.outline || []).filter(entry => entry.page != null);
+});
+
+const currentPdfEntryIndex = computed(() => {
+  const page = reader.currentIndex + 1;
+  let current = -1;
+  pdfOutline.value.forEach((entry, index) => {
+    if (entry.page != null && entry.page <= page) current = index;
+  });
+  return current;
+});
+
 // 小说分页后同一章节可能跨多页，这里按 chapterIndex 聚合成目录条目
 const groups = computed(() => {
   if (!reader.currentBook || isManga.value) return [];
@@ -201,6 +232,7 @@ const groups = computed(() => {
 
 const tocSubtitle = computed(() => {
   const pages = reader.activePages.length;
+  if (pdfOutline.value.length) return t('{0} 条目录 · {1} 页', { 0: pdfOutline.value.length, 1: pages });
   if (isManga.value) return t('{0} 页', { 0: pages });
   return t('{0} 章 · {1} 页', { 0: groups.value.length, 1: pages });
 });
