@@ -1,7 +1,7 @@
 <template>
-  <article class="md-shelf-card relative min-w-0 self-start" :class="{ 'is-touch-dragging': dragging }" draggable="true" @dragstart="$emit('drag', $event, book.id)" @contextmenu.prevent>
-    <button type="button" class="md-shelf-open absolute inset-0 z-10" :aria-label="selecting ? t('选择书本：{0}', { 0: book.title }) : t('阅读：{0}', { 0: book.title })" :aria-pressed="selecting ? selected : undefined" @click="onOpen"></button>
-    <div class="md-shelf-cover" :class="{ 'is-selected': selected }" ref="coverEl">
+  <article class="md-shelf-card relative min-w-0 self-start" :class="{ 'is-touch-dragging': dragging }" :data-book-id="book.id" draggable="true" @dragstart="$emit('drag', $event, book.id)" @contextmenu.prevent>
+    <button type="button" class="md-shelf-open absolute inset-0 z-10" :aria-label="selecting ? t('选择书本：{0}', { 0: book.title }) : t('阅读：{0}', { 0: book.title })" :aria-pressed="selecting ? selected : undefined" :aria-keyshortcuts="selecting ? undefined : 'Shift+F10'" @click="onOpen"></button>
+    <div class="md-shelf-cover" :class="{ 'is-selected': selected }" ref="coverEl" data-book-cover>
       <img
         v-if="book.cover"
         :src="book.cover"

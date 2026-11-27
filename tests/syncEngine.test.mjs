@@ -75,7 +75,10 @@ test('相同内容不同本地 ID 同步收藏、定位和唯一书库归属，�
   const b = client('device-b', snapshot('book-b'));
   const remote = server();
   a.local.books[0].favorite = true;
-  a.local.progress = [{ id: 'book-a', index: 4, total: 10, ratio: 4 / 9, chapterIndex: 1, chapterRatio: .25, updatedAt: 99, layout: { spread: 2, fontSize: 28 }, nativePath: '/secret' }];
+  a.local.progress = [{
+    id: 'book-a', index: 4, total: 10, ratio: 4 / 9, chapterIndex: 1, chapterRatio: .25, updatedAt: 99,
+    layout: { spread: 2, fontSize: 28 }, nativePath: '/secret', readingDurationMs: 84000, partialPagination: true
+  }];
   a.local.collections = [{ id: 'collection-1', title: '小说', createdAt: 1, bookIds: ['book-a'] }];
   b.local.progress = [];
   await a.engine.sync(remote.transport);
@@ -84,10 +87,13 @@ test('相同内容不同本地 ID 同步收藏、定位和唯一书库归属，�
   assert.equal(b.local.progress[0].id, 'book-b');
   assert.equal(b.local.progress[0].chapterRatio, .25);
   assert.equal(b.local.progress[0].layout, undefined);
+  assert.equal(b.local.progress[0].readingDurationMs, undefined);
   assert.deepEqual(b.local.collections[0].bookIds, ['book-b']);
   assert.equal(result.pendingCount, 0);
   const serialized = JSON.stringify(remote.document);
-  for (const forbidden of ['nativePath', '/secret', '"layout"', 'book-a', 'book-b', 'blob']) assert.equal(serialized.includes(forbidden), false);
+  for (const forbidden of ['nativePath', '/secret', '"layout"', 'book-a', 'book-b', 'blob', 'readingDurationMs', 'partialPagination']) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
 });
 
 test('离线改收藏、回看前文、删除书库与清空进度跨重启保留，旧设备不能复活墓碑', async () => {
@@ -142,7 +148,10 @@ test('远端更新正在阅读的书时不跳页，退出后才能恢复远端�
   const b = client('device-b', snapshot('book-b'));
   const remote = server();
   await b.engine.sync(remote.transport);
-  b.local.progress = [{ id: 'book-b', index: 1, total: 10, ratio: 1 / 9, layout: { spread: 1, fontSize: 18 } }];
+  b.local.progress = [{
+    id: 'book-b', index: 1, total: 10, ratio: 1 / 9, layout: { spread: 1, fontSize: 18 },
+    readingDurationMs: 62000, partialPagination: true
+  }];
   await b.engine.sync(remote.transport);
   await a.engine.sync(remote.transport);
   a.local.progress[0] = { ...a.local.progress[0], index: 7, ratio: 7 / 9 };
@@ -154,6 +163,8 @@ test('远端更新正在阅读的书时不跳页，退出后才能恢复远端�
   await b.engine.sync(remote.transport);
   assert.equal(b.local.progress[0].index, 7);
   assert.deepEqual(b.local.progress[0].layout, { spread: 1, fontSize: 18 });
+  assert.equal(b.local.progress[0].readingDurationMs, 62000);
+  assert.equal(b.local.progress[0].partialPagination, undefined);
 });
 
 test('ETag 竞争时重新拉取合并，保留另一个客户端写入的独立字段', async () => {

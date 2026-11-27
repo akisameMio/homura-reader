@@ -13,14 +13,20 @@ Object.assign(globalThis, {
   Element: window.Element, HTMLElement: window.HTMLElement, SVGElement: window.SVGElement,
   getComputedStyle: window.getComputedStyle.bind(window)
 });
-globalThis.requestAnimationFrame = window.requestAnimationFrame = () => 1;
-globalThis.cancelAnimationFrame = window.cancelAnimationFrame = () => {};
+const frames = new Map();
+let frameId = 0;
+let frameTime = 0;
+globalThis.requestAnimationFrame = window.requestAnimationFrame = callback => {
+  frames.set(++frameId, callback);
+  return frameId;
+};
+globalThis.cancelAnimationFrame = window.cancelAnimationFrame = id => frames.delete(id);
 let reducedMotion = false;
 window.matchMedia = query => ({ matches: query.includes('prefers-reduced-motion') && reducedMotion, addEventListener() {}, removeEventListener() {} });
 const { createApp, h, reactive, nextTick } = await import('vue');
 const { createPinia, disposePinia } = await import('pinia');
 const { useThemeStore } = await import('../src/stores/theme.ts');
-const { playShelfToReaderSplash } = await import('../src/services/readerTransition.ts');
+const { advanceReaderProgress, playShelfToReaderSplash, READER_OPEN_SPRINT_MS, sprintReaderProgress } = await import('../src/services/readerTransition.ts');
 const require = createRequire(import.meta.url);
 const source = await readFile(new URL('../src/components/ReaderLoadingPage.vue', import.meta.url), 'utf8');
 const tokens = await readFile(new URL('../src/assets/styles/tokens.css', import.meta.url), 'utf8');
@@ -33,8 +39,11 @@ compiled = compiled.replace(/from '(\.\.\/[^']+\.ts)'/g, (_, path) => `from '${n
 const { code } = await transform(compiled, { loader: 'ts', format: 'esm', target: 'esnext' });
 const { default: ReaderLoadingPage } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 
-function finishAnimation() {
-  document.querySelector('.rlp-surface').dispatchEvent(new window.Event('animationend'));
+function paintFrame(dt = 16) {
+  frameTime = Math.max(frameTime, performance.now()) + dt;
+  const callbacks = [...frames.values()];
+  frames.clear();
+  callbacks.forEach(callback => callback(frameTime));
   return nextTick();
 }
 
@@ -74,6 +83,8 @@ test('加载页出现即同步纸面和原生标题栏，数据提前就绪不�
         props.reveal = true;
         props.visible = false;
         await nextTick();
+        await paintFrame();
+        await paintFrame();
         assert.equal(document.querySelector('.rlp-root'), null);
         assert.deepEqual(chrome.at(-1), ['canvas', paperColors[token]]);
         theme.setReaderActive(false);
@@ -115,26 +126,72 @@ test('减少动效时快速重新打开加载页不会被旧离场定时器关�
 }, { mode: 'dark', reduced: true }));
 
 
-test('揭幕被重新打开打断时保持遮罩和纸面，完成后恢复书架颜色', () => fixture(async ({ chrome, props }) => {
-  props.visible = true;
-  await nextTick();
-  props.reveal = true;
-  props.visible = false;
-  await nextTick();
-  assert.ok(document.querySelector('.rlp-root.is-leaving'));
-  props.visible = true;
-  props.reveal = false;
-  await nextTick();
-  await finishAnimation();
-  assert.ok(document.querySelector('.rlp-root:not(.is-leaving)'));
-  assert.deepEqual(chrome.at(-1), ['canvas', paperColors['--md-parchment-paper']]);
-  props.reveal = true;
-  props.visible = false;
-  await nextTick();
-  assert.ok(document.querySelector('.rlp-root.is-leaving'));
-  await finishAnimation();
-  assert.equal(document.querySelector('.rlp-root'), null);
-  assert.deepEqual(chrome.at(-1), ['canvas', '#F8FAFC']);
+test('等待进度随时间推进，60Hz 与 120Hz 均单调且不会提前跑满', () => {
+  const simulate = hz => {
+    let display = 0;
+    const samples = [];
+    for (let frame = 0; frame < 120 * hz; frame++) {
+      const rendering = frame >= 3 * hz && frame < 119 * hz;
+      const next = advanceReaderProgress(display, rendering, 1 / hz, true);
+      assert.ok(next >= display && next < 100);
+      display = next;
+      if ((frame + 1) % hz === 0) samples.push(display);
+    }
+    assert.ok(samples[0] > 28 && samples[2] < 72);
+    assert.ok(samples[4] > samples[3] && samples[118] <= 92);
+    assert.equal(samples[118], samples[119]);
+    return samples;
+  };
+  const sixty = simulate(60);
+  const oneTwenty = simulate(120);
+  sixty.forEach((value, index) => assert.ok(Math.abs(value - oneTwenty[index]) < 0.08));
+  for (const from of [0, 28, 72, 92]) {
+    assert.ok(sprintReaderProgress(from, 80) < 100);
+    assert.equal(sprintReaderProgress(from, READER_OPEN_SPRINT_MS), 100);
+  }
+});
+
+test('真正满格后才清场，取消后不再绘制或触发旧揭幕', () => fixture(async ({ chrome, props }) => {
+  const surface = document.createElement('div');
+  document.body.append(surface);
+  const originalAnimate = window.HTMLElement.prototype.animate;
+  let clearCount = 0;
+  window.HTMLElement.prototype.animate = function () {
+    assert.ok(this.classList.contains('rlp-meta'));
+    assert.equal(document.querySelector('.rlp-bar').getAttribute('aria-valuenow'), '100');
+    clearCount++;
+    return { finished: new Promise(() => {}), cancel() {} };
+  };
+  try {
+    props.visible = true;
+    await nextTick();
+    await paintFrame();
+    props.frame = { surface, cover: null, firstPageIsCover: false };
+    props.reveal = true;
+    props.visible = false;
+    await nextTick();
+    await paintFrame(110);
+    assert.equal(clearCount, 0);
+    assert.equal(document.querySelector('.rlp-bar i').style.transform, 'scaleX(1)');
+    await paintFrame();
+    assert.equal(clearCount, 1);
+    assert.equal(document.querySelector('.rlp-root').dataset.openingMotion, 'clear');
+
+    props.reveal = false;
+    await nextTick();
+    await paintFrame();
+    assert.equal(document.querySelector('.rlp-root'), null);
+    assert.deepEqual(chrome.at(-1), ['canvas', '#F8FAFC']);
+
+    props.visible = true;
+    await nextTick();
+    await paintFrame();
+    assert.ok(Number(document.querySelector('.rlp-bar').getAttribute('aria-valuenow')) < 100);
+    assert.equal(clearCount, 1);
+  } finally {
+    surface.remove();
+    window.HTMLElement.prototype.animate = originalAnimate;
+  }
 }));
 
 test('飞行封面独占绘制，落位或取消时同步交还两端', async () => {

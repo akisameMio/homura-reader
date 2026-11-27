@@ -17,7 +17,7 @@ import { useSettingsStore } from './settings.ts';
 import { TRANSITION_OPTIONS, useThemeStore } from './theme.ts';
 import { resetRemoteBookRuntime } from '../services/remoteBookSource.ts';
 import { hydrateBook } from '../services/restore.ts';
-import { buildActivePages, createNovelPaginator, getNovelPaginationKey, ensureBookImagesResolved, releaseBookPageUrls } from '../services/pagination.ts';
+import { buildActivePages, buildActivePageSteps, finishPagination, createNovelPaginator, getNovelPaginationKey, ensureBookImagesResolved, releaseBookPageUrls } from '../services/pagination.ts';
 import {
   READER_FONT_OPTIONS,
   READER_LINE_HEIGHT_OPTIONS,
@@ -93,7 +93,26 @@ export const useReaderStore = defineStore('reader', () => {
   const collectionOrderIds = shallowRef<string[]>([]);
   const webtoonBounds = shallowRef({ atStart: true, atEnd: false });
   let openRequestToken = 0;
+  let deferOpeningPagination = false;
   const currentIndex = ref(0);
+  let readingClock: { bookId: string; since: number | null } | null = null;
+
+  function startReadingTime(book: Book) {
+    if (book !== currentBook.value || readingClock?.bookId === book.id) return;
+    readingClock = { bookId: book.id, since: document.hidden ? null : performance.now() };
+  }
+
+  function resumeReadingTime() {
+    if (readingClock?.since === null && !document.hidden) readingClock.since = performance.now();
+  }
+
+  function takeReadingTime(bookId: string) {
+    if (!readingClock || readingClock.bookId !== bookId || readingClock.since === null) return 0;
+    const elapsed = Math.max(0, Math.floor(performance.now() - readingClock.since));
+    readingClock.since = document.hidden ? null : readingClock.since + elapsed;
+    return elapsed;
+  }
+
   let smartReading: {
     book: Book;
     openedAt: number;
@@ -279,7 +298,9 @@ export const useReaderStore = defineStore('reader', () => {
       currentBook: currentBook.value,
       activePages: activePages.value,
       currentIndex: currentIndex.value,
-      layoutConfig
+      layoutConfig,
+      paginationPending: paginationPending.value,
+      takeReadingTime
     };
   }
 
@@ -410,11 +431,11 @@ export const useReaderStore = defineStore('reader', () => {
     return indexes[Math.round(ratio * (indexes.length - 1))];
   }
 
-  function planNovelPages(book: Book, layout: ReaderLayout, anchorOverride: { chapterIndex: number; ratio: number } | undefined = undefined): { pages: ReaderPage[]; incremental: boolean; job: NovelPaginationJob | null; restoredIndex: number; key: string } {
+  function* planNovelPages(book: Book, layout: ReaderLayout, anchorOverride?: { chapterIndex: number; ratio: number }): Generator<void, { pages: ReaderPage[]; incremental: boolean; job: NovelPaginationJob | null; restoredIndex: number; key: string }> {
     cancelNovelPagination();
     const key = getNovelPaginationKey(layout);
     if (!shouldUseIncrementalNovelPagination(book, layout)) {
-      return { pages: buildActivePages(book, layout, measurerEl.value as HTMLElement), incremental: false, job: null, restoredIndex: -1, key };
+      return { pages: yield* buildActivePageSteps(book, layout, measurerEl.value as HTMLElement), incremental: false, job: null, restoredIndex: -1, key };
     }
 
     const chapters = book.chapters || [];
@@ -425,7 +446,7 @@ export const useReaderStore = defineStore('reader', () => {
     }
 
     const targetChapter = Math.min(chapters.length - 1, Math.max(0, anchor?.chapterIndex ?? 0));
-    paginator.paginateChapter(targetChapter);
+    yield* paginator.paginateChapterSteps(targetChapter);
     const pages = paginator.buildPages({ provisional: true }) as unknown as ReaderPage[];
     const restoredIndex = findAnchorIndex(pages, { chapterIndex: targetChapter, ratio: anchor?.ratio ?? 0 });
     const order: number[] = [];
@@ -513,7 +534,27 @@ export const useReaderStore = defineStore('reader', () => {
     if (!job) return;
     novelPaginationJob = job;
     paginationPending.value = true;
+    if (!deferOpeningPagination) scheduleNovelPagination();
+  }
+
+  function resumeOpeningPagination() {
+    if (!deferOpeningPagination) return;
+    deferOpeningPagination = false;
     scheduleNovelPagination();
+  }
+
+  async function paginateOpeningBook(steps: ReturnType<typeof planNovelPages>, token: number) {
+    let started = performance.now();
+    let step = steps.next();
+    while (!step.done) {
+      if (performance.now() - started >= NOVEL_PAGINATION_SLICE_MS) {
+        await new Promise(resolve => window.setTimeout(resolve, 0));
+        if (token !== openRequestToken) return null;
+        started = performance.now();
+      }
+      step = steps.next();
+    }
+    return step.value;
   }
 
   function releaseRemoteBook(book: Book) {
@@ -528,7 +569,7 @@ export const useReaderStore = defineStore('reader', () => {
     }
   }
 
-  async function openBook(id: string, options: { preserveCollectionOrder?: boolean; position?: 'start' | 'end' | string; finishCurrent?: boolean; [key: string]: unknown } = {}, remoteBook?: Book) {
+  async function openBook(id: string, options: { preserveCollectionOrder?: boolean; position?: 'start' | 'end' | string; finishCurrent?: boolean; onPreparing?: () => void; deferPagination?: boolean; [key: string]: unknown } = {}, remoteBook?: Book) {
     const book = remoteBook || shelf.library.find((b: Book) => b.id === id);
     if (!book) return false;
     const previousBook = currentBook.value;
@@ -566,7 +607,10 @@ export const useReaderStore = defineStore('reader', () => {
         : options.position === 'start'
           ? { chapterIndex: 0, ratio: 0 }
           : undefined;
-      const pagePlan = planNovelPages(book, nextLayout, explicitAnchor);
+      options.onPreparing?.();
+      const pageSteps = planNovelPages(book, nextLayout, explicitAnchor);
+      const pagePlan = options.deferPagination ? await paginateOpeningBook(pageSteps, token) : finishPagination(pageSteps);
+      if (!pagePlan || token !== openRequestToken) return false;
       const pages = pagePlan.pages;
       if (!pages.length) throw new Error(t('没有可阅读的页面'));
       // 固定进入阅读器时的顺序，防止“最近阅读”时间更新后前后本突然重排。
@@ -600,9 +644,11 @@ export const useReaderStore = defineStore('reader', () => {
       collectionOrderIds.value = order;
       webtoonBounds.value = { atStart: currentIndex.value === 0, atEnd: false };
       finishSmartReading();
+      readingClock = null;
       currentBook.value = book;
       previousLocation.value = null;
       activeNovelPaginationKey = pagePlan.key || '';
+      deferOpeningPagination = options.deferPagination === true;
       beginNovelPagination(pagePlan.job);
       if (previousBook && previousBook.id !== id) {
         void releaseNativeArchiveSession(previousBook as unknown as { nativeArchiveId?: string | null; nativeArchivePath?: string | null; pageItems?: { nativeArchiveId?: string; nativeArchivePath?: string }[] | null });
@@ -661,8 +707,10 @@ export const useReaderStore = defineStore('reader', () => {
   }
 
   function closeReader() {
+    const snapshot = progressSnapshot();
     finishSmartReading();
     openRequestToken++;
+    deferOpeningPagination = false;
     openingBook.value = false;
     openError.value = '';
     readingCollectionId.value = null;
@@ -672,7 +720,8 @@ export const useReaderStore = defineStore('reader', () => {
     activeNovelPaginationKey = '';
     const shelf = useShelfStore();
     // 关闭前把防抖窗口内尚未落盘的位置补写一次，此时 currentBook 仍然有效
-    flushProgress(progressSnapshot(), shelf);
+    flushProgress(snapshot, shelf);
+    readingClock = null;
     if (webtoonObserver.value) {
       webtoonObserver.value.disconnect();
       webtoonObserver.value = null;
@@ -717,7 +766,7 @@ export const useReaderStore = defineStore('reader', () => {
 
     // 阅读器首次挂载时 stage 尺寸探测会触发一次 resize；尺寸没变就别把刚测好的分页推翻重来。
     if (getNovelPaginationKey(layoutConfig) === activeNovelPaginationKey) return;
-    const pagePlan = planNovelPages(book, layoutConfig, anchor ?? undefined);
+    const pagePlan = finishPagination(planNovelPages(book, layoutConfig, anchor ?? undefined));
     activeNovelPaginationKey = pagePlan.key || '';
     activePages.value = pagePlan.pages;
     const nextIndex = findAnchorIndex(pagePlan.pages, anchor);
@@ -1052,7 +1101,11 @@ export const useReaderStore = defineStore('reader', () => {
     isNavigationInverted,
     requestRender,
     touchProgress,
+    startReadingTime,
+    resumeReadingTime,
+    takeReadingTime,
     openBook,
+    resumeOpeningPagination,
     openRemoteBook: (book: Book) => openBook(book.id, {}, book),
     closeReader,
     recalculateNovelPaginationAndRender,

@@ -1,11 +1,15 @@
 <template>
   <div ref="pageRef" class="settings-page" :class="{ 'md-bottom-nav-space': isCompact }" :inert="!!activeSection">
     <header
-      class="settings-topbar"
+      class="settings-topbar md-topbar-fade"
       :style="isCompact ? { paddingTop: 'env(safe-area-inset-top)' } : null"
     >
       <div class="settings-topbar-inner">
-        <div class="settings-topbar-title"><h1>{{ t('设置') }}</h1></div>
+        <div class="settings-topbar-title">
+          <Transition name="md-topbar-title" appear>
+            <h1 class="md-topbar-title">{{ t('设置') }}</h1>
+          </Transition>
+        </div>
       </div>
     </header>
     <div v-if="isCompact && $slots.status" class="settings-import-status">
@@ -58,37 +62,43 @@
           </h2>
           <span>{{ t('首次打开作品时采用') }}</span>
         </div>
-        <div class="settings-reading-controls">
-          <div class="settings-block">
-            <p class="settings-control-label">{{ t('翻页方式') }}</p>
-            <MdSegmentedControl
-              :model-value="settings.transitionStyle"
-              :options="transitionOptions"
-              :aria-label="t('翻页方式')"
-              @update:model-value="settings.setTransitionStyle"
-            />
+        <div>
+          <div class="settings-reading-controls" :class="{ 'has-disabled-controls': isScrollDefault }">
+            <div class="settings-block">
+              <p class="settings-control-label">{{ t('翻页方式') }}</p>
+              <MdSegmentedControl
+                :model-value="settings.transitionStyle"
+                :options="transitionOptions"
+                :aria-label="t('翻页方式')"
+                @update:model-value="settings.setTransitionStyle"
+              />
+            </div>
+            <div class="settings-block settings-paged-block">
+              <p class="settings-control-label">{{ t('阅读方向') }}</p>
+              <MdSegmentedControl
+                :model-value="readerDefaults.pagedDirection"
+                :options="directionOptions"
+                :disabled="isScrollDefault"
+                :aria-label="t('阅读方向')"
+                @update:model-value="setDirection"
+              />
+            </div>
+            <div class="settings-block settings-paged-block">
+              <p class="settings-control-label">{{ t('跨页布局') }}</p>
+              <MdSegmentedControl
+                :model-value="readerDefaults.spread"
+                :options="spreadOptions"
+                :disabled="isScrollDefault"
+                :aria-label="t('跨页布局')"
+                @update:model-value="setSpread"
+              />
+            </div>
           </div>
-          <div class="settings-block">
-            <p class="settings-control-label">{{ t('阅读方向') }}</p>
-            <MdSegmentedControl
-              :model-value="readerDefaults.pagedDirection"
-              :options="directionOptions"
-              :disabled="isScrollDefault"
-              :aria-label="t('阅读方向')"
-              @update:model-value="setDirection"
-            />
+          <div class="settings-scroll-note" :class="{ 'is-expanded': isScrollDefault }" :aria-hidden="!isScrollDefault">
+            <div class="settings-scroll-note-clip">
+              <p>{{ t('条漫模式沿用上次的分页方向与跨页布局，切回分页后生效。') }}</p>
+            </div>
           </div>
-          <div class="settings-block">
-            <p class="settings-control-label">{{ t('跨页布局') }}</p>
-            <MdSegmentedControl
-              :model-value="readerDefaults.spread"
-              :options="spreadOptions"
-              :disabled="isScrollDefault"
-              :aria-label="t('跨页布局')"
-              @update:model-value="setSpread"
-            />
-          </div>
-          <p v-if="isScrollDefault" class="settings-scroll-note">{{ t('条漫模式沿用上次的分页方向与跨页布局，切回分页后生效。') }}</p>
         </div>
         <button
           type="button"
@@ -360,7 +370,7 @@
                 <MdIcon name="chevron_left" />
               </MdIconButton>
               <div class="settings-topbar-title">
-                <h1>{{ t(sectionTitles[activeSection]) }}</h1>
+                <h1 class="md-topbar-title">{{ t(sectionTitles[activeSection]) }}</h1>
               </div>
               <div v-if="activeSection === 'logs'" class="settings-topbar-actions">
                 <div v-if="logSearchOpen" class="settings-log-search" role="search">
@@ -1842,8 +1852,11 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: var(--md-surface-low);
   pointer-events: none;
+}
+
+.has-detail .settings-topbar {
+  background: var(--md-surface-low);
 }
 
 .settings-transition-layer {
@@ -1907,13 +1920,6 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-}
-
-.settings-topbar h1 {
-  margin: 0;
-  font-size: 26px;
-  font-weight: 650;
-  letter-spacing: -0.025em;
 }
 
 .settings-import-status {
@@ -2171,12 +2177,58 @@ onBeforeUnmount(() => {
   height: 14px;
 }
 
+.settings-paged-block {
+  --md-segmented-disabled-opacity: 1;
+  transition: opacity 200ms ease;
+}
+
+.settings-reading-controls.has-disabled-controls {
+  position: relative;
+  z-index: 1;
+}
+
+.has-disabled-controls .settings-paged-block {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .settings-scroll-note {
-  grid-column: 1 / -1;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms ease;
+}
+
+.settings-scroll-note.is-expanded {
+  grid-template-rows: 1fr;
+}
+
+.settings-scroll-note-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.settings-scroll-note p {
   margin: 0;
+  padding-top: 12px;
   color: var(--md-on-surface-variant);
   font-size: 12px;
   line-height: 1.7;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.settings-scroll-note.is-expanded p {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-paged-block,
+  .settings-scroll-note,
+  .settings-scroll-note p {
+    transition: none;
+  }
 }
 
 .font-size-control {
@@ -2503,10 +2555,6 @@ onBeforeUnmount(() => {
     padding: 18px 16px;
   }
 
-  .settings-topbar h1 {
-    font-size: 22px;
-  }
-
   .settings-appearance {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -2528,7 +2576,7 @@ onBeforeUnmount(() => {
 }
 
 @container settings (max-width: 399px) {
-  .settings-grid :deep(.md-segmented.has-many-options .md-segmented-option .md-icon-button-face) {
+  .settings-grid :deep(.md-segmented.has-many-options .md-segmented-icon) {
     display: none;
   }
 }

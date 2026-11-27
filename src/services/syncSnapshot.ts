@@ -26,6 +26,9 @@ export function portableProgress(record: ReadingProgress | undefined | null): Re
 
 export function replacePortableProgress(previous: ReadingProgress | undefined, position: ReadingProgress | null): ReadingProgress | null {
   const next = { ...previous };
+  if (previous?.index !== position?.index || previous?.total !== position?.total || previous?.updatedAt !== position?.updatedAt) {
+    delete next.partialPagination;
+  }
   for (const key of POSITION_KEYS) delete next[key];
   Object.assign(next, portableProgress(position));
   return Object.keys(next).some(key => key !== 'id') ? next : null;

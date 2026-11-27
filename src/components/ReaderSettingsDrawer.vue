@@ -43,15 +43,24 @@
         @drag-cancel="onSheetDragCancel"
       >
         <template #status>
-          <ReaderDrawerTabs :model-value="activeTab" :options="tabs" id-prefix="reader-settings" :label="t('阅读设置分类')" @update:model-value="selectTab" />
+          <MdSegmentedControl
+            class="reader-drawer-tabs"
+            data-sheet-no-drag
+            :model-value="activeTab"
+            :options="tabs"
+            tab-id-prefix="reader-settings"
+            aria-label="阅读设置分类"
+            @update:model-value="selectTab"
+          />
         </template>
       </ReaderDrawerHeader>
 
-      <div ref="scrollRef" class="md-drawer-body reader-settings-scroll">
+      <div class="reader-settings-panels">
         <div
-          v-show="activeTab === 'layout'"
           id="reader-settings-panel-layout"
-          class="md-drawer-tab-panel"
+          class="md-drawer-body reader-settings-scroll"
+          :class="{ 'is-active': activeTab === 'layout' }"
+          :inert="activeTab !== 'layout'"
           role="tabpanel"
           aria-labelledby="reader-settings-tab-layout"
         >
@@ -94,33 +103,29 @@
             </section>
           </template>
 
-          <template v-if="!isVertical || isManga">
-            <h3 class="reader-settings-group-label">{{ isVertical ? t('滚动尺寸') : t('翻页布局') }}</h3>
-            <section class="reader-settings-card">
-              <div v-if="!isVertical" class="reader-settings-row">
-                <h4 class="reader-settings-control-label">{{ t('阅读方向') }}</h4>
-                <MdSegmentedControl class="reader-settings-segment" :model-value="config.direction" :options="directions" :aria-label="t('阅读方向')" @update:model-value="reader.setDirection" />
+          <h3 class="reader-settings-group-label">{{ isVertical && isManga ? t('滚动尺寸') : t('翻页布局') }}</h3>
+          <section class="reader-settings-card">
+            <div v-if="!isVertical" class="reader-settings-row">
+              <h4 class="reader-settings-control-label">{{ t('阅读方向') }}</h4>
+              <MdSegmentedControl class="reader-settings-segment" :model-value="config.direction" :options="directions" :aria-label="t('阅读方向')" @update:model-value="reader.setDirection" />
+            </div>
+            <div v-if="!isVertical" class="reader-settings-row">
+              <h4 class="reader-settings-control-label">{{ t('页面布局') }}<MdInfoHint v-if="!allowSpreadChoice" :label="t('页面布局')">{{ t('当前屏幕按单页显示，窗口变宽后可选择双页。') }}</MdInfoHint></h4>
+              <MdSegmentedControl v-if="allowSpreadChoice" class="reader-settings-segment" :model-value="config.spread" :options="spreadOptions" :aria-label="t('翻页布局')" @update:model-value="value => reader.setSpreadCount(Number(value))" />
+              <p v-else class="reader-settings-hint">{{ t('单页') }}</p>
+            </div>
+            <Transition v-bind="expandMotion">
+              <div v-if="!isManga && !isVertical" class="reader-settings-row reader-settings-switch">
+                <MdSwitch :model-value="config.verticalText" :title="t('文字从上往下，各列从右往左排列')" @update:model-value="reader.setVerticalText">{{ t('竖排文字') }}</MdSwitch>
               </div>
-              <div v-if="!isVertical" class="reader-settings-row">
-                <h4 class="reader-settings-control-label">{{ t('页面布局') }}<MdInfoHint v-if="!allowSpreadChoice" :label="t('页面布局')">{{ t('当前屏幕按单页显示，窗口变宽后可选择双页。') }}</MdInfoHint></h4>
-                <MdSegmentedControl v-if="allowSpreadChoice" class="reader-settings-segment" :model-value="config.spread" :options="spreadOptions" :aria-label="t('翻页布局')" @update:model-value="value => reader.setSpreadCount(Number(value))" />
-                <p v-else class="reader-settings-hint">{{ t('单页') }}</p>
-              </div>
-              <Transition v-bind="expandMotion">
-                <div v-if="!isManga && !isVertical" class="reader-settings-row reader-settings-switch">
-                  <MdSwitch :model-value="config.verticalText" :title="t('文字从上往下，各列从右往左排列')" @update:model-value="reader.setVerticalText">{{ t('竖排文字') }}</MdSwitch>
-                </div>
-              </Transition>
-              <Transition v-bind="expandMotion">
-                <div v-if="!isVertical && allowSpreadChoice && config.spread === 2" class="reader-settings-row reader-settings-switch">
-                  <MdSwitch :model-value="config.coverOffset" :title="t('双页模式下首页单独显示，确保后续跨页大图对齐')" @update:model-value="reader.toggleCoverOffset()">{{ t('首页单排') }}</MdSwitch>
-                </div>
-              </Transition>
-              <div v-if="isVertical && isManga" class="reader-settings-row">
-                <MdSegmentedControl class="reader-settings-segment" :model-value="config.webtoonFit" :options="webtoonFits" :aria-label="t('滚动尺寸')" @update:model-value="reader.setWebtoonFit" />
-              </div>
-            </section>
-          </template>
+            </Transition>
+            <div v-if="isVertical && isManga" class="reader-settings-row">
+              <MdSegmentedControl class="reader-settings-segment" :model-value="config.webtoonFit" :options="webtoonFits" :aria-label="t('滚动尺寸')" @update:model-value="reader.setWebtoonFit" />
+            </div>
+            <div class="reader-settings-row reader-settings-switch reader-settings-availability" :class="{ 'is-unavailable': !canOffsetCover }">
+              <MdSwitch :model-value="config.coverOffset" :disabled="!canOffsetCover" :title="t('双页模式下首页单独显示，确保后续跨页大图对齐')" @update:model-value="reader.toggleCoverOffset()">{{ t('首页单排') }}</MdSwitch>
+            </div>
+          </section>
 
           <template v-if="isAndroid">
             <h3 class="reader-settings-group-label">{{ t('翻页控制') }}<MdInfoHint :label="t('翻页控制')">{{ t('音量加键上一页、音量减键下一页；该设置全局生效。') }}</MdInfoHint></h3>
@@ -135,9 +140,10 @@
         </div>
 
         <div
-          v-show="activeTab === 'appearance'"
           id="reader-settings-panel-appearance"
-          class="md-drawer-tab-panel"
+          class="md-drawer-body reader-settings-scroll"
+          :class="{ 'is-active': activeTab === 'appearance' }"
+          :inert="activeTab !== 'appearance'"
           role="tabpanel"
           aria-labelledby="reader-settings-tab-appearance"
         >
@@ -145,25 +151,24 @@
           <SurfaceModePreview surface="reader" cards />
           <h3 class="reader-settings-group-label">{{ t('翻页方式') }}</h3>
           <section class="reader-settings-card">
-            <div class="reader-settings-animation" :class="`is-${reader.transitionStyle}`" aria-hidden="true">
+            <div class="reader-settings-animation" :class="`is-${selectedTransitionStyle}`" aria-hidden="true">
               <span class="reader-settings-page"><i></i><i></i><i></i><i></i><i></i></span>
               <span class="reader-settings-page"><i></i><i></i><i></i><i></i><i></i></span>
             </div>
             <div class="reader-settings-row">
-              <MdSegmentedControl class="reader-settings-segment" :model-value="reader.transitionStyle" :options="transitionOptions" :aria-label="t('翻页方式')" @update:model-value="reader.setTransitionStyle" />
+              <MdSegmentedControl class="reader-settings-segment" :model-value="selectedTransitionStyle" :options="transitionOptions" :aria-label="t('翻页方式')" @update:model-value="selectTransitionStyle" />
             </div>
-            <Transition v-bind="expandMotion">
-              <div v-if="reader.transitionStyle === 'scroll'" class="reader-settings-scroll-fit">
-                <SettingsSelectRow :label="t('滚动宽度')" :model-value="config.webtoonFit" :options="isManga ? webtoonFits : novelScrollWidths" @update:model-value="value => reader.setWebtoonFit(String(value))" />
-              </div>
-            </Transition>
+            <div class="reader-settings-scroll-fit reader-settings-availability" :class="{ 'is-unavailable': !canSetScrollWidth }">
+              <SettingsSelectRow :label="t('滚动宽度')" :model-value="config.webtoonFit" :disabled="!canSetScrollWidth" :options="isManga ? webtoonFits : novelScrollWidths" @update:model-value="value => reader.setWebtoonFit(String(value))" />
+            </div>
           </section>
         </div>
 
         <div
-          v-show="activeTab === 'cover'"
           id="reader-settings-panel-cover"
-          class="md-drawer-tab-panel"
+          class="md-drawer-body reader-settings-scroll"
+          :class="{ 'is-active': activeTab === 'cover' }"
+          :inert="activeTab !== 'cover'"
           role="tabpanel"
           aria-labelledby="reader-settings-tab-cover"
         >
@@ -187,7 +192,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, shallowRef, watch, nextTick } from 'vue';
+import { computed, ref, shallowRef, watch, nextTick, onBeforeUnmount } from 'vue';
 import { useReaderStore, WEBTOON_FIT_LABELS, NOVEL_FONT_MIN, NOVEL_FONT_MAX, NOVEL_FONT_STEP } from '../stores/reader.ts';
 import {
   READER_FONT_OPTIONS,
@@ -206,7 +211,6 @@ import { useSheetDrag } from '../composables/useSheetDrag.ts';
 import { useSheetSpring } from '../composables/useSheetSpring.ts';
 import { useSpringExpand } from '../composables/useSpringExpand.ts';
 import ReaderDrawerHeader from './ReaderDrawerHeader.vue';
-import ReaderDrawerTabs from './ReaderDrawerTabs.vue';
 import MdRange from './MdRange.vue';
 import MdSegmentedControl from './MdSegmentedControl.vue';
 import MdSwitch from './MdSwitch.vue';
@@ -220,7 +224,6 @@ const { t } = useI18n();
 
 const reader = useReaderStore();
 const shelf = useShelfStore();
-const scrollRef = shallowRef<HTMLElement | null>(null);
 const coverInput = shallowRef<HTMLInputElement | null>(null);
 const coverBusy = ref(false);
 const coverError = ref('');
@@ -297,6 +300,38 @@ const {
 const isVertical = computed(() => config.direction === 'vertical');
 const isManga = computed(() => reader.currentBook?.type === 'manga' || reader.currentBook?.format === 'pdf');
 const allowSpreadChoice = computed(() => isManga.value ? !isPhone.value : !isCompact.value);
+const canOffsetCover = computed(() => !isVertical.value && allowSpreadChoice.value && config.spread === 2);
+const pendingTransitionStyle = ref<string | null>(null);
+const selectedTransitionStyle = computed(() => pendingTransitionStyle.value ?? reader.transitionStyle);
+const canSetScrollWidth = computed(() => selectedTransitionStyle.value === 'scroll');
+let transitionFrame = 0;
+
+function cancelPendingTransitionStyle() {
+  cancelAnimationFrame(transitionFrame);
+  transitionFrame = 0;
+  pendingTransitionStyle.value = null;
+}
+
+function selectTransitionStyle(style: string) {
+  cancelPendingTransitionStyle();
+  if ((style === 'scroll') === isVertical.value) {
+    reader.setTransitionStyle(style);
+    return;
+  }
+
+  pendingTransitionStyle.value = style;
+  // 让胶囊先绘制一帧，再挂载另一种阅读视图或重排小说。
+  transitionFrame = requestAnimationFrame(() => {
+    transitionFrame = requestAnimationFrame(() => {
+      transitionFrame = 0;
+      reader.setTransitionStyle(style);
+      pendingTransitionStyle.value = null;
+    });
+  });
+}
+
+watch(() => reader.currentBook?.id, cancelPendingTransitionStyle, { flush: 'sync' });
+onBeforeUnmount(cancelPendingTransitionStyle);
 
 const directions = [
   { value: 'ltr', label: '从左到右', title: '普通排版', icon: 'chevron_right' },
@@ -362,8 +397,10 @@ watch(settingsOpen, async open => {
 });
 
 function selectTab(tab: SettingsTab) {
+  if (tab === activeTab.value) return;
+  const panel = settingsSheetRef.value?.querySelector<HTMLElement>(`#reader-settings-panel-${tab}`);
+  if (panel) panel.scrollTop = 0;
   activeTab.value = tab;
-  if (scrollRef.value) scrollRef.value.scrollTop = 0;
 }
 
 function onSheetKeydown(event: KeyboardEvent) {
@@ -375,7 +412,7 @@ function onSheetKeydown(event: KeyboardEvent) {
   }
   if (event.key !== 'Tab') return;
   const controls = [...(settingsSheetRef.value?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex="0"]') || [])]
-    .filter(element => element.tabIndex >= 0 && element.getClientRects().length > 0);
+    .filter(element => element.tabIndex >= 0 && !element.closest('[inert]') && element.getClientRects().length > 0);
   const first = controls[0];
   const last = controls[controls.length - 1];
   if (event.shiftKey && document.activeElement === first) {
@@ -393,11 +430,29 @@ function onSheetKeydown(event: KeyboardEvent) {
   padding-bottom: 0;
   background: color-mix(in oklab, var(--md-surface-container) 65%, var(--md-surface-low));
 }
+.reader-settings-drawer :deep(.has-inline-tabs) { flex-wrap: wrap; }
+.reader-settings-drawer :deep(.md-drawer-heading) { flex-basis: auto; }
+.reader-drawer-tabs { max-width: 100%; margin-inline-start: auto; }
 .reader-font-step:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 3px; }
+.reader-settings-panels { position: relative; flex: 1; min-height: 0; }
 .reader-settings-scroll {
+  position: absolute;
+  inset: 0;
   padding: 0 18px max(20px, env(safe-area-inset-bottom));
+  overflow-anchor: none;
   scrollbar-width: thin;
   scrollbar-color: var(--md-outline-variant) transparent;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 150ms ease, visibility 0s linear 150ms;
+}
+.reader-settings-scroll.is-active {
+  z-index: 1;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
 }
 .reader-settings-card {
   margin-bottom: 18px;
@@ -482,12 +537,18 @@ function onSheetKeydown(event: KeyboardEvent) {
 .reader-settings-scroll-fit :deep(.settings-select-control) { font-size: 12px; }
 .reader-settings-scroll-fit :deep(.settings-select-row > svg) { width: 18px; height: 18px; }
 .reader-settings-control-label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
-.reader-settings-segment { margin-top: 12px; --md-segmented-bg: var(--md-surface-low); }
+.reader-settings-segment {
+  margin-top: 12px;
+  --md-segmented-bg: var(--md-surface-low);
+  --md-segmented-selected-bg: var(--md-secondary-container);
+  --md-segmented-selected-color: var(--md-on-secondary-container);
+}
 .reader-settings-segment :deep(.md-segmented-option) { min-height: 48px; padding-inline: 4px; font-size: 12px; }
-.reader-settings-segment :deep(.md-segmented-thumb) { background: var(--md-secondary-container); }
-.reader-settings-segment :deep(.md-segmented-option.is-selected) { color: var(--md-on-secondary-container); }
 .reader-settings-switch { padding-block: var(--md-space-50); font-size: 13px; }
-.reader-settings-animation { display: flex; justify-content: center; align-items: center; gap: 5px; min-height: 135px; padding: 24px 20px; }
+.reader-settings-availability { transition: opacity 200ms ease; }
+.reader-settings-availability.is-unavailable { opacity: 0.45; pointer-events: none; }
+.reader-settings-availability :deep(button:disabled) { opacity: 1; }
+.reader-settings-animation { display: flex; justify-content: center; align-items: center; gap: 5px; min-height: 135px; padding: 17px 20px; }
 .reader-settings-page { display: block; width: 80px; height: 86px; padding: 15px; border: 1px solid var(--md-outline-variant); border-radius: 6px; background: var(--md-surface-low); }
 .reader-settings-page i { display: block; height: 2px; margin-bottom: 8px; background: var(--md-outline-variant); }
 .is-curl .reader-settings-page:last-child { transform: perspective(300px) rotateY(-32deg); transform-origin: left; box-shadow: 6px 3px 10px color-mix(in oklab, var(--md-shadow-color-soft) 8%, transparent); }
@@ -510,5 +571,9 @@ function onSheetKeydown(event: KeyboardEvent) {
 }
 @media (hover: hover) and (pointer: fine) {
   .reader-font-step:hover:not(:disabled) { background: var(--md-surface-high); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reader-settings-scroll,
+  .reader-settings-availability { transition: none; }
 }
 </style>

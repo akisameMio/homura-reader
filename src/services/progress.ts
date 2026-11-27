@@ -41,11 +41,15 @@ interface ReaderLike {
   activePages: ReaderPage[];
   currentIndex: number;
   layoutConfig: ProgressLayout;
+  paginationPending?: boolean;
+  takeReadingTime?: (bookId: string) => number;
+  resumeReadingTime?: () => void;
 }
 
 /** shelf store 里进度回写所需的最小结构。 */
 interface ShelfLike {
-  setProgressRecord(record: ProgressRecord): void;
+  progressMap?: Record<string, ReadingProgress>;
+  setProgressRecord(record: ProgressRecord & { id: string }): void;
 }
 
 
@@ -70,6 +74,7 @@ function makeRecord(reader: ReaderLike) {
     ratio: lastIdx > 0 ? index / lastIdx : 0,
     chapterIndex,
     chapterRatio: chapterEnd > chapterStart ? (index - chapterStart) / (chapterEnd - chapterStart) : 0,
+    ...(reader.paginationPending ? { partialPagination: true } : {}),
     // 每本书自己的排版：方向 / 单双页 / 首页单排 / 字号 / 条漫尺寸
     layout: {
       direction: reader.layoutConfig.direction,
@@ -90,9 +95,16 @@ function makeRecord(reader: ReaderLike) {
 function writeCurrentProgress(reader: ReaderLike, shelf: ShelfLike) {
   const record = makeRecord(reader);
   if (!record) return Promise.resolve();
+  const elapsedMs = reader.takeReadingTime?.(record.id) ?? 0;
+  const previousDuration = shelf.progressMap?.[record.id]?.readingDurationMs ?? 0;
+  const optimistic = { ...record, readingDurationMs: previousDuration + elapsedMs };
   // 先同步更新内存表，书架重绘时能立刻读到最新百分比
-  shelf.setProgressRecord(record);
-  return HomuraStore.saveProgress(record).catch(() => {});
+  shelf.setProgressRecord(optimistic);
+  return HomuraStore.saveProgress(optimistic, elapsedMs).then(saved => {
+    if (shelf.progressMap?.[record.id] === optimistic && saved.readingDurationMs !== optimistic.readingDurationMs) {
+      shelf.setProgressRecord({ ...optimistic, readingDurationMs: saved.readingDurationMs });
+    }
+  }).catch(() => {});
 }
 
 // 启动时把整张进度表读进内存，书架渲染可以直接同步读取
@@ -136,8 +148,15 @@ export function flushProgress(reader: ReaderLike, shelf: ShelfLike) {
 
 // 关窗 / 切后台时兜底刷写，防止防抖窗口内的最后一次翻页丢失
 export function installProgressFlushHooks(reader: ReaderLike, shelf: ShelfLike) {
-  window.addEventListener('beforeunload', () => { flushProgress(reader, shelf); });
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) flushProgress(reader, shelf);
-  });
+  const flush = () => { void flushProgress(reader, shelf); };
+  const onVisibilityChange = () => {
+    if (document.hidden) flush();
+    else reader.resumeReadingTime?.();
+  };
+  window.addEventListener('beforeunload', flush);
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  return () => {
+    window.removeEventListener('beforeunload', flush);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+  };
 }

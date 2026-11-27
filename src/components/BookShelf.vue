@@ -66,10 +66,10 @@
       />
     </div>
   </Transition>
-  <section ref="gridRef" class="md-shelf-grid" :aria-label="favoritesOnly ? t('收藏内容') : currentCollection ? t('书库：{0}', { 0: currentCollection.title }) : t('书架内容')">
+  <section ref="gridRef" class="md-shelf-grid" :aria-label="favoritesOnly ? t('收藏内容') : currentCollection ? t('书库：{0}', { 0: currentCollection.title }) : t('书架内容')" @contextmenu="onShelfContextMenu" @keydown="onShelfKeydown" @touchstart.passive="onBookTouchStart">
     <ContinueReading v-if="!favoritesOnly && !currentCollection && !selecting && featuredBooks.length" :books="featuredBooks" @open="openBook" />
     <CollectionCard v-for="collection in displayCollections" :key="collection.id" :collection="collection" :books="booksForCollection(collection)" :sort-key="sortKey" :touch-over="touchDrag.overId === collection.id" :selecting="selecting" :selected="selectedCollectionIds.includes(collection.id)" @open="openCollection" @toggle="toggleCollection" @move="moveDropped" />
-    <BookCard v-for="book in renderedBooks" :key="book.id" :book="book" :progress="shelf.progressInfoFor(book.id) ?? undefined" :selecting="selecting" :selected="selectedIds.includes(book.id)" :dragging="touchDrag.active && touchDrag.ids.includes(book.id)" @open="openBook" @drag="onBookDrag" @touchstart="onBookTouchStart($event, book.id)" />
+    <BookCard v-for="book in renderedBooks" :key="book.id" :book="book" :progress="shelf.progressInfoFor(book.id) ?? undefined" :selecting="selecting" :selected="selectedIds.includes(book.id)" :dragging="touchDrag.active && touchDrag.ids.includes(book.id)" @open="openBook" @drag="onBookDrag" />
     <template v-if="!selecting">
       <div
         v-for="slot in importPlaceholderCount"
@@ -109,7 +109,7 @@ import { useI18n } from '../composables/useI18n.ts';
 const { t } = useI18n();
 
 const props = defineProps({ books: { type: Array as PropType<Book[]>, default: () => [] }, sortKey: { type: String, default: 'title' }, query: { type: String, default: '' }, hasFilter: { type: Boolean, default: false }, homeRequest: { type: Number, default: 0 }, favoritesOnly: { type: Boolean, default: false }, importing: { type: Boolean, default: false }, pendingImportCount: { type: Number, default: 0 } });
-const emit = defineEmits(['open', 'browse', 'manage-storage']);
+const emit = defineEmits(['open', 'detail', 'browse', 'manage-storage']);
 const shelf = useShelfStore();
 const { askShelfDialog } = useShelfDialogs();
 const { isTouch } = useViewport();
@@ -152,7 +152,7 @@ const compactSelectionLabel = computed(() => currentCollection.value && !selecte
 const emptyShelfHint = computed(() => {
   if (props.hasFilter) return t('没有符合条件的作品，换个关键词或筛选试试');
   if (props.favoritesOnly) return t('还没有收藏的书，在阅读器中点亮星星即可收藏');
-  if (currentCollection.value) return isTouch.value ? t('书库还是空的，长按主页书本拖入，或多选后移入书库') : t('书库还是空的，可从主页拖入书本，或多选后移入书库');
+  if (currentCollection.value) return isTouch.value ? t('书库还是空的，可长按主页封面后移入书库') : t('书库还是空的，可从主页拖入书本，或多选后移入书库');
   return t('书库还是空的，可从主页拖入书本，或多选后移入书库');
 });
 
@@ -169,11 +169,16 @@ const touchDrag = reactive({
   home: false
 });
 let touchTimer: number | null = null;
-let touchContext: { id: string; startX: number; startY: number; x: number; y: number; scrollEl: Element | null } | null = null;
+type BookTrigger = { id: string; card: HTMLElement; cover: HTMLElement; button: HTMLButtonElement | null };
+let touchContext: {
+  trigger: BookTrigger; identifier: number; startX: number; startY: number;
+  x: number; y: number; held: boolean; scrollEl: Element | null;
+} | null = null;
 let autoScrollFrame = 0;
 let autoScrollVelocity = 0;
 let autoScrollEl: Element | null = null;
 let swallowClick = false;
+let swallowClickTarget: HTMLElement | null = null;
 let swallowClickTimer: number | null = null;
 
 const canTouchMoveBooks = computed(() => !props.favoritesOnly && (displayCollections.value.length > 0 || !!currentCollection.value));
@@ -314,37 +319,83 @@ async function moveDropped(ids: string[], target: string | null) {
   await perform(async () => { await shelf.moveBooks(ids, target); selectedIds.value = []; selecting.value = false; });
 }
 
-function onBookTouchStart(event: TouchEvent, id: string) {
-  if (!canTouchMoveBooks.value || touchDrag.active || event.touches.length !== 1) return;
+function bookTrigger(target: EventTarget | null): BookTrigger | null {
+  const card = target instanceof Element ? target.closest<HTMLElement>('[data-book-id]') : null;
+  const cover = card?.querySelector<HTMLElement>('[data-book-cover]');
+  const id = card?.dataset.bookId;
+  if (!card || !cover || !id) return null;
+  return { id, card, cover, button: card instanceof HTMLButtonElement ? card : card.querySelector('.md-shelf-open') };
+}
+
+function hitsCover(cover: HTMLElement, x: number, y: number) {
+  const rect = cover.getBoundingClientRect();
+  return x >= rect.left && x < rect.right && y >= rect.top && y < rect.bottom;
+}
+
+function showBookDetail(trigger: BookTrigger) {
+  if (!selecting.value) emit('detail', trigger.id, trigger.cover, trigger.button);
+}
+
+function onShelfContextMenu(event: MouseEvent) {
+  const trigger = bookTrigger(event.target);
+  if (!trigger) return;
+  event.preventDefault();
+  // 触屏的系统 contextmenu 可能先于 touchend，交给同一条长按手势处理。
+  if (touchContext || swallowClick || (event as PointerEvent).pointerType === 'touch') return;
+  if (hitsCover(trigger.cover, event.clientX, event.clientY)) showBookDetail(trigger);
+}
+
+function onShelfKeydown(event: KeyboardEvent) {
+  if (selecting.value || (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10'))) return;
+  const trigger = bookTrigger(event.target);
+  if (!trigger) return;
+  event.preventDefault();
+  showBookDetail(trigger);
+}
+
+function onBookTouchStart(event: TouchEvent) {
+  if (touchDrag.active || event.touches.length !== 1) return;
+  const trigger = bookTrigger(event.target);
+  if (!trigger) return;
 
   cancelTouchCandidate();
   const touch = event.touches[0];
+  if (selecting.value && !canTouchMoveBooks.value) return;
+  if (!selecting.value && !hitsCover(trigger.cover, touch.clientX, touch.clientY)) return;
   touchContext = {
-    id,
+    trigger,
+    identifier: touch.identifier,
     startX: touch.clientX,
     startY: touch.clientY,
     x: touch.clientX,
     y: touch.clientY,
-    scrollEl: findScrollParent(event.currentTarget as Element)
+    held: false,
+    scrollEl: findScrollParent(trigger.card)
   };
   window.addEventListener('touchmove', onBookTouchMove, { passive: false });
+  window.addEventListener('touchstart', onAdditionalTouch, { passive: true });
   window.addEventListener('touchend', onBookTouchEnd, { passive: false });
   window.addEventListener('touchcancel', onBookTouchCancel, { passive: false });
-  touchTimer = window.setTimeout(beginTouchDrag, TOUCH_DRAG_DELAY);
+  touchTimer = window.setTimeout(() => {
+    touchTimer = null;
+    if (!touchContext) return;
+    touchContext.held = true;
+    try { navigator.vibrate?.(12); } catch (err) {}
+    if (selecting.value) beginTouchDrag();
+  }, TOUCH_DRAG_DELAY);
 }
 
 function beginTouchDrag() {
-  touchTimer = null;
   if (!touchContext || touchDrag.active) return;
   const ctx = touchContext;
-  const ids = selectedIds.value.includes(ctx.id) ? [...selectedIds.value] : [ctx.id];
+  const id = ctx.trigger.id;
+  const ids = selectedIds.value.includes(id) ? [...selectedIds.value] : [id];
   autoScrollEl = ctx.scrollEl;
   touchDrag.active = true;
   touchDrag.x = ctx.x;
   touchDrag.y = ctx.y;
   touchDrag.ids = ids;
   document.body.classList.add('md-touch-dragging');
-  try { navigator.vibrate?.(12); } catch (err) {}
   updateTouchDropTarget();
   updateAutoScroll();
 }
@@ -357,14 +408,19 @@ function onBookTouchMove(event: TouchEvent) {
     return;
   }
   const touch = event.touches[0];
-  if (!touch) return;
+  if (!touch || touch.identifier !== touchContext.identifier) return;
   touchContext.x = touch.clientX;
   touchContext.y = touch.clientY;
 
   if (!touchDrag.active) {
     const distance = Math.hypot(touch.clientX - touchContext.startX, touch.clientY - touchContext.startY);
-    if (distance > TOUCH_DRAG_CANCEL_DISTANCE) cancelTouchCandidate();
-    return;
+    if (distance <= TOUCH_DRAG_CANCEL_DISTANCE) return;
+    if (touchContext.held && canTouchMoveBooks.value && touchContext.trigger.card.classList.contains('md-shelf-card') && event.cancelable) {
+      beginTouchDrag();
+    } else {
+      cancelTouchCandidate();
+      return;
+    }
   }
 
   event.preventDefault();
@@ -374,14 +430,24 @@ function onBookTouchMove(event: TouchEvent) {
   updateAutoScroll();
 }
 
+function onAdditionalTouch(event: TouchEvent) {
+  if (event.touches.length > 1) finishTouchDrag(false);
+}
+
 function onBookTouchEnd(event: TouchEvent) {
-  if (!touchContext) return;
+  const context = touchContext;
+  if (!context || !Array.from(event.changedTouches).some(touch => touch.identifier === context.identifier)) return;
   if (touchDrag.active) {
     event.preventDefault();
     finishTouchDrag(true);
     return;
   }
   cancelTouchCandidate();
+  if (context.held && !selecting.value && context.trigger.cover.isConnected) {
+    event.preventDefault();
+    armClickGuard(context.trigger.card);
+    showBookDetail(context.trigger);
+  }
 }
 
 function onBookTouchCancel(event: TouchEvent) {
@@ -408,6 +474,7 @@ function cancelTouchCandidate() {
     touchTimer = null;
   }
   window.removeEventListener('touchmove', onBookTouchMove);
+  window.removeEventListener('touchstart', onAdditionalTouch);
   window.removeEventListener('touchend', onBookTouchEnd);
   window.removeEventListener('touchcancel', onBookTouchCancel);
   touchContext = null;
@@ -480,18 +547,22 @@ function stopAutoScroll() {
   autoScrollVelocity = 0;
 }
 
-function armClickGuard() {
+function armClickGuard(target: HTMLElement | null = null) {
   swallowClick = true;
+  swallowClickTarget = target;
   if (swallowClickTimer !== null) window.clearTimeout(swallowClickTimer);
   swallowClickTimer = window.setTimeout(() => {
     swallowClick = false;
+    swallowClickTarget = null;
     swallowClickTimer = null;
   }, 500);
 }
 
 function onDocumentClick(event: MouseEvent) {
   if (!swallowClick) return;
+  if (swallowClickTarget && (!(event.target instanceof Node) || !swallowClickTarget.contains(event.target))) return;
   swallowClick = false;
+  swallowClickTarget = null;
   if (swallowClickTimer !== null) {
     window.clearTimeout(swallowClickTimer);
     swallowClickTimer = null;

@@ -54,8 +54,7 @@
 - 统一使用 `ReaderDrawerHeader.vue`，不要另写标题和关闭按钮。
 - Bottom sheet 默认传 `prominent`：标题 `22px / 600`，左侧圆形关闭按钮 48px；桌面 side sheet 沿用同一头部，保持同源。
 - 只有嵌在更小容器里的历史抽屉才使用默认 `17px` 头部，新 sheet 不作为默认样式。
-- 阅读器需要标题同行页签时，给 `ReaderDrawerHeader` 传 `prominent inline-tabs`，在 `status` 插槽使用
-  `ReaderDrawerTabs.vue`；此模式标题为 20px，关闭按钮为 44px。
+- 阅读器需要标题同行页签时，给 `ReaderDrawerHeader` 传 `prominent inline-tabs`，在 `status` 插槽放入页签胶囊。此模式标题为 20px，关闭按钮为 44px。
 - `MobileBottomSheet` 已内置 `prominent` 头部，只开放 `status` 插槽，当前不提供 `inlineTabs` prop。
   需要通用同行页签时应集中扩展共享外壳，不要给业务组件私加一份头部或用透传属性假定其生效。
 - 头部固定，不随内容滚动；副标题最多一行，超出省略并提供 `title`。
@@ -211,13 +210,12 @@
 跟手阶段直接写 DOM style，不驱动 Vue 响应式；松手吸附使用 200ms
 `cubic-bezier(0.2, 0, 0, 1)` 的 `height` / `transform` 过渡。
 起手意图阈值为 8px。展开判定还要求没有向下偏移；阈值由共享 composable 维护，
-业务组件不得复制常量或覆盖弹簧参数。拖动高度与页签滑块宽度是共享组件内受控的布局过渡例外。
+业务组件不得复制常量或覆盖弹簧参数。拖动高度是共享组件内受控的布局过渡例外。
 
 ### 5.3 页签与内容切换
 
-- 页签胶囊使用 `ReaderDrawerTabs.vue`，滑块位移 / 宽度 280ms
-  `cubic-bezier(0.22, 1.2, 0.36, 1)`，允许轻微回弹。
-- 页签面板使用 `.md-drawer-tab-panel`：220ms 淡入 + 6px 上移，`backwards` 填充。
+- 阅读设置页签使用 `MdSegmentedControl.vue` 的 `tab-id-prefix` 模式，复用等宽滑块弹簧和文字裁切。阅读目录页签使用 `ReaderDrawerTabs.vue`。
+- 阅读设置正文使用 150ms 交叉淡化。离开的页签保留滚动位置直至淡出，进入的页签从顶部显示。
 - 不要为每个面板各写一套动画；页签切换必须保留滚动位置策略，目录切换后按既有逻辑滚到当前项。
 
 ### 5.4 减少动态效果

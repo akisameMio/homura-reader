@@ -7,12 +7,12 @@
       :style="{ '--library-pill-button-count': 3 + Number(showFullscreen) + Number(!!$slots.actions) }"
     >
       <div class="library-toolbar-title" :inert="searchOpen && isCompact">
-        <Transition name="library-title" mode="out-in" appear @enter="onTitleEnter">
+        <Transition name="md-topbar-title" mode="out-in" appear>
           <button
             v-if="renamable"
             :key="title"
             type="button"
-            class="library-title-text group flex items-center gap-1.5 min-w-0 text-left font-medium tracking-tight"
+            class="md-topbar-title library-title-text group flex items-center gap-1.5 text-left"
             :title="t('重命名书库')"
             :aria-label="t('重命名书库：{0}', { 0: title })"
             @click="$emit('rename')"
@@ -20,12 +20,16 @@
             <span class="min-w-0 truncate">{{ title }}</span>
             <MdIcon name="edit" class="w-3.5 h-3.5 shrink-0 text-[var(--md-on-surface-variant)] opacity-50 group-hover:opacity-80 transition-opacity duration-200" />
           </button>
-          <h1 v-else :key="title" class="library-title-text font-medium tracking-tight min-w-0 truncate">{{ title }}</h1>
+          <h1 v-else :key="title" class="md-topbar-title library-title-text truncate">{{ title }}</h1>
         </Transition>
-        <span ref="countBadgeRef" class="library-title-count font-mono">{{ t('{0} 部作品', { 0: count }) }}</span>
       </div>
 
-      <div ref="searchTrackRef" class="library-search-track">
+      <div
+        ref="searchTrackRef"
+        class="library-search-track"
+        :class="{ 'is-scroll-hidden': scrollHidden }"
+        :inert="scrollHidden"
+      >
         <div class="library-pill-surface"></div>
         <div class="library-pill-content">
           <div class="library-pill-buttons" :inert="searchOpen">
@@ -179,7 +183,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch, shallowRef, onBeforeUnmount } from 'vue';
+import { computed, nextTick, ref, watch, shallowRef, onBeforeUnmount, type PropType } from 'vue';
 import { useSettingsStore } from '../stores/settings.ts';
 import { useUiStore } from '../stores/ui.ts';
 import { useViewport } from '../composables/useViewport.ts';
@@ -195,7 +199,8 @@ const { t } = useI18n();
 
 const props = defineProps({
   title: { type: String, default: '书架' },
-  count: { type: Number, default: 0 },
+  scrollRoot: { type: Object as PropType<HTMLElement | null>, default: null },
+  importOpen: { type: Boolean, default: false },
   appearanceOpen: { type: Boolean, default: false },
   filterOpen: { type: Boolean, default: false },
   query: { type: String, default: '' },
@@ -212,14 +217,110 @@ const { isCompact } = useViewport();
 const showFullscreen = computed(() => !isCompact.value && settings.showFullscreenButton);
 
 const searchOpen = ref(false);
+const scrollHidden = ref(false);
 const toolbarRef = shallowRef<HTMLElement | null>(null);
 const searchTrackRef = shallowRef<HTMLElement | null>(null);
 const searchFieldRef = shallowRef<HTMLElement | null>(null);
 const searchInputRef = shallowRef<HTMLInputElement | null>(null);
 const searchButtonRef = shallowRef<InstanceType<typeof MdIconButton> | null>(null);
+const scrollSpring = makeAxis(0, 620);
 const searchSpring = makeAxis(0, 740);
 let cancelSearchSpring: (() => void) | null = null;
 let closeSpringDelay: ReturnType<typeof setTimeout> | undefined;
+
+const keepToolsVisible = computed(() => searchOpen.value || props.appearanceOpen || props.filterOpen || props.importOpen);
+watch(keepToolsVisible, visible => {
+  if (visible) scrollHidden.value = false;
+});
+
+watch([() => props.scrollRoot, () => props.title], ([root], _, onCleanup) => {
+  scrollHidden.value = false;
+  const column = root?.parentElement;
+  if (!root || !column) return;
+
+  let wheelDistance = 0;
+  let lastWheelTime = -Infinity;
+  let touch: { id: number; startX: number; startY: number; turningY: number; vertical: boolean } | null = null;
+
+  function updateTools(distance: number) {
+    if (keepToolsVisible.value || searchTrackRef.value?.querySelector(':focus-visible')) {
+      scrollHidden.value = false;
+    } else if (distance >= 12) {
+      scrollHidden.value = true;
+    } else if (distance <= -8) {
+      scrollHidden.value = false;
+    }
+  }
+
+  const onWheel = (event: WheelEvent) => {
+    if (event.ctrlKey || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? column.clientHeight : 1;
+    const distance = event.deltaY * unit;
+    if (event.timeStamp - lastWheelTime > 150 || wheelDistance * distance < 0) wheelDistance = 0;
+    lastWheelTime = event.timeStamp;
+    wheelDistance += distance;
+    updateTools(wheelDistance);
+    if (wheelDistance >= 12 || wheelDistance <= -8) wheelDistance = 0;
+  };
+
+  function onTouchStart(event: TouchEvent) {
+    const point = event.touches.length === 1 ? event.touches[0] : null;
+    touch = point ? { id: point.identifier, startX: point.clientX, startY: point.clientY, turningY: point.clientY, vertical: false } : null;
+  }
+
+  function onTouchMove(event: TouchEvent) {
+    if (!touch) return;
+    const point = event.touches[0];
+    if (event.touches.length !== 1 || point.identifier !== touch.id || document.body.classList.contains('md-touch-dragging')) {
+      touch = null;
+      return;
+    }
+    if (!touch.vertical) {
+      const horizontal = Math.abs(point.clientX - touch.startX);
+      const vertical = Math.abs(point.clientY - touch.startY);
+      if (horizontal >= 8 && horizontal >= vertical) touch = null;
+      if (!touch || vertical < 8 || vertical <= horizontal * 1.15) return;
+      touch.vertical = true;
+    }
+    // 用手指最近的转向点判断反向，长滑时也能立即把胶囊带回来。
+    const wasHidden = scrollHidden.value;
+    touch.turningY = wasHidden ? Math.min(touch.turningY, point.clientY) : Math.max(touch.turningY, point.clientY);
+    updateTools(touch.turningY - point.clientY);
+    if (scrollHidden.value !== wasHidden || keepToolsVisible.value) touch.turningY = point.clientY;
+  }
+
+  function onTouchEnd() {
+    touch = null;
+  }
+
+  column.addEventListener('wheel', onWheel, { passive: true });
+  root.addEventListener('touchstart', onTouchStart, { passive: true });
+  root.addEventListener('touchmove', onTouchMove, { passive: true });
+  root.addEventListener('touchend', onTouchEnd, { passive: true });
+  root.addEventListener('touchcancel', onTouchEnd, { passive: true });
+  onCleanup(() => {
+    column.removeEventListener('wheel', onWheel);
+    root.removeEventListener('touchstart', onTouchStart);
+    root.removeEventListener('touchmove', onTouchMove);
+    root.removeEventListener('touchend', onTouchEnd);
+    root.removeEventListener('touchcancel', onTouchEnd);
+  });
+}, { immediate: true, flush: 'post' });
+
+watch(scrollHidden, (hidden, _, onCleanup) => {
+  const track = searchTrackRef.value;
+  if (!track) return;
+  const property = '--library-tools-spring-progress';
+  scrollSpring.target = hidden ? 1 : 0;
+  if (prefersReducedMotion()) {
+    snapAxes([scrollSpring]);
+    track.style.removeProperty(property);
+    return;
+  }
+  const paint = () => track.style.setProperty(property, String(Math.min(1, Math.max(0, scrollSpring.pos))));
+  paint();
+  onCleanup(runSpring([scrollSpring], paint, () => track.style.removeProperty(property), { damping: 0.9 }));
+});
 
 watch(searchOpen, open => {
   const toolbar = toolbarRef.value;
@@ -306,49 +407,9 @@ function clearSearch() {
   searchInputRef.value?.focus({ preventScroll: true });
 }
 
-const countBadgeRef = shallowRef<HTMLElement | null>(null);
-let previousBadgeLeft: number | null = null;
-let badgeAnimation: Animation | null = null;
-
-// 标题变化前记录徽章位置；新标题进场时用 FLIP 补间，制造被文字推动的效果。
-watch(() => props.title, () => {
-  const badge = countBadgeRef.value;
-  if (!badge) {
-    previousBadgeLeft = null;
-    return;
-  }
-  const rect = badge.getBoundingClientRect();
-  previousBadgeLeft = rect.width > 0 ? rect.left : null;
-});
-
-function onTitleEnter() {
-  const badge = countBadgeRef.value;
-  const oldLeft = previousBadgeLeft;
-  previousBadgeLeft = null;
-  if (!badge || oldLeft === null) return;
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-  badgeAnimation?.cancel();
-  badgeAnimation = null;
-  const newLeft = badge.getBoundingClientRect().left;
-  const offset = oldLeft - newLeft;
-  if (Math.abs(offset) < 0.5) return;
-
-  badgeAnimation = badge.animate(
-    [
-      { transform: `translate3d(${offset}px, 0, 0)` },
-      { transform: 'translate3d(0, 0, 0)' }
-    ],
-    { duration: 180, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
-  );
-  badgeAnimation.onfinish = () => { badgeAnimation = null; };
-}
-
 onBeforeUnmount(() => {
   cancelSearchSpring?.();
   clearTimeout(closeSpringDelay);
-  badgeAnimation?.cancel();
-  badgeAnimation = null;
 });
 
 const categories = [
@@ -373,6 +434,7 @@ const sortOptions = [
 
 <style scoped>
 .library-header-bar {
+  container-type: inline-size;
   position: sticky;
   top: 0;
   flex: none;
@@ -409,36 +471,14 @@ const sortOptions = [
   }
 }
 .library-toolbar-title {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 0;
   min-width: 0;
-  max-width: 100%;
-  height: var(--library-action-size);
-  padding-inline: 16px;
 }
 .library-title-text {
-  flex: none;
   max-width: 100%;
-  font-size: 22px;
-  line-height: 24px;
 }
-.library-title-count {
-  display: block;
-  flex: none;
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--md-on-surface-variant);
-  font-size: 10px;
-  font-weight: 500;
-  line-height: 12px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+button.library-title-text {
+  min-height: var(--library-action-size);
 }
-.library-toolbar-title,
 .library-pill-surface {
   border-radius: 9999px;
   background: var(--md-surface-low);
@@ -468,12 +508,23 @@ const sortOptions = [
   }
 }
 .library-search-track {
+  --library-tools-target: 0;
+  --library-tools-progress: var(--library-tools-target);
   position: absolute;
   z-index: 1;
   inset-inline-end: var(--library-toolbar-inset);
   width: var(--library-search-width);
   height: var(--library-action-size);
   pointer-events: none;
+  transform: translateY(calc(-1 * var(--library-topbar-height) * var(--library-tools-progress)));
+}
+.library-search-track.is-scroll-hidden {
+  --library-tools-target: 1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .library-search-track {
+    --library-tools-progress: var(--library-tools-spring-progress, var(--library-tools-target));
+  }
 }
 .library-pill-surface {
   position: absolute;
@@ -572,11 +623,7 @@ const sortOptions = [
     padding-inline-end: calc(var(--library-toolbar-inset) + var(--library-pill-rest) + 4px);
   }
   .library-toolbar-title {
-    padding-inline: 14px;
     opacity: calc(1 - var(--library-search-progress));
-  }
-  .library-title-text {
-    font-size: 21px;
   }
   .library-search-input {
     font-size: 16px;
@@ -585,6 +632,7 @@ const sortOptions = [
 @media (max-width: 399px) {
   .library-toolbar {
     --library-toolbar-inset: 12px;
+    padding-inline-start: 16px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -608,6 +656,7 @@ const sortOptions = [
   margin-bottom: 2px;
 }
 .shelf-category-control {
+  --md-segmented-color: var(--md-on-surface);
   --md-segmented-selected-bg: var(--md-secondary-container);
   --md-segmented-selected-color: var(--md-on-secondary-container);
 }
@@ -616,23 +665,17 @@ const sortOptions = [
   padding: 4px;
   white-space: normal;
 }
-.shelf-category-control :deep(.md-segmented-option:not(.is-selected)) {
-  color: var(--md-on-surface);
-}
-.shelf-category-control :deep(.md-segmented-option.is-selected > .md-icon-button-face) {
+.shelf-category-control :deep(.md-segmented-option.is-selected > .md-segmented-icon) {
   order: 1;
   flex: none;
 }
 @media (max-width: 899px) {
-  .shelf-category-control {
-    padding-block: 0;
-  }
   .shelf-category-control :deep(.md-segmented-option) {
     min-height: 44px;
   }
 }
 @media (min-width: 360px) {
-  .shelf-category-control :deep(.md-segmented-option.is-selected > .md-icon-button-face) {
+  .shelf-category-control :deep(.md-segmented-option.is-selected > .md-segmented-icon) {
     display: grid;
   }
 }
@@ -665,35 +708,5 @@ const sortOptions = [
 }
 .shelf-sort-option svg {
   flex: none;
-}
-
-.library-title-enter-active {
-  transition:
-    opacity 180ms var(--md-ease-emphasized),
-    transform 180ms var(--md-ease-emphasized);
-}
-.library-title-leave-active {
-  transition:
-    opacity 120ms var(--md-ease-emphasized),
-    transform 120ms var(--md-ease-emphasized);
-}
-.library-title-enter-from {
-  opacity: 0;
-  transform: translate3d(-12px, 0, 0);
-}
-.library-title-leave-to {
-  opacity: 0;
-  transform: translate3d(12px, 0, 0);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .library-title-enter-active,
-  .library-title-leave-active {
-    transition: none;
-  }
-  .library-title-enter-from,
-  .library-title-leave-to {
-    transform: none;
-  }
 }
 </style>

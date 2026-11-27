@@ -230,10 +230,10 @@ Error token 已在 `src/assets/styles/tokens.css` 的白昼 / 护眼 / 夜间三
 />
 ```
 
-- 槽体：`surface-high`、`20px` 圆角、`3px` padding；滑块：`primary`、`17px` 圆角，`280ms` `--md-ease-expressive` 位移。
+- 槽体使用 `surface-high`、`20px` 圆角与 `3px` 内边距。选项等宽排列，滑块始终保持一列宽，和反色字形共用轨道内的逐帧裁切。默认使用 `primary` / `on-primary`，可用组件色彩变量替换配对。
 - 建议 `2–4` 个短而平行的互斥选项；更多选项改用菜单或列表。必须传 `aria-label`。
 - `update:modelValue` 第二个参数会 emit 点击元素中心坐标 `origin`，供表面切换 reveal 使用，不要丢掉。
-- 手机 `<=480px` 且选项达 3 个时自动隐藏图标以保证标签完整；`prefers-reduced-motion` 下关闭图标动画。
+- 可从滑块上横向拖动，松手时按当前覆盖位置选中并继承拖拽速度。手机 `<=480px` 且选项达 3 个时默认隐藏图标，保留标签空间。`prefers-reduced-motion` 下滑块直接落位。
 
 ### 3.6 开关
 
@@ -340,9 +340,9 @@ Error token 已在 `src/assets/styles/tokens.css` 的白昼 / 护眼 / 夜间三
 
 - **桌面浮动侧栏**（`SideNav.vue`，`>=900px`）：`sticky top: 16px`、高 `100dvh - 32px`、`28px` 圆角、`surface-low` 底色；展开 `220px` / 折叠 `104px`（偏好存 `localStorage.homura_sidenav_collapsed`，`280ms` 过渡，文案用宽/窄两份交叉淡化不插值 `font-size`）。固定 4 项主导航「书架 / 最近 / 收藏 / 设置」，选中指示器 `.sidenav-indicator` 使用 `secondary-container` + `on-secondary-container`（`300ms` 纵向滑动，带 `:aria-current="active === item.key ? 'page' : undefined"`）；每个导航项与收起按钮必须有 `title` 与 `aria-label`。
 - **手机悬浮胶囊底栏**（`SideNav.vue` 的 `.mobile-nav`，`<900px`）：Teleport 到 `#homura-mobile-nav-root`（`z-40`），左右 `24px`、高 `64px`、圆角 `32px`、最大宽 `560px`、贴 `bottom: env(safe-area-inset-bottom)`；果冻选中指示器 `.mobile-nav-indicator`（`82px × 56px`，圆角 `28px`，`secondary-container`）由物理弹簧驱动点击与横向拖拽切换；主内容区必须挂 `.md-bottom-nav-space`。
-- **书架 / 最近 / 收藏顶栏**（`LibraryHeader.vue`）：滚动时常驻 `z-20`，手机 `88px`（另计顶部安全区）/ 桌面 `104px`。与设置页共用渐隐磨砂层 `.md-topbar-fade`，内容从其下方滚过；标题（`21/22px`；书库内可点击重命名）和作品计数仍使用标题胶囊，右侧工具胶囊保留全屏、外观、筛选排序与展开搜索；不可压住标题，不可导致横向溢出。
+- **书架 / 最近 / 收藏顶栏**（`LibraryHeader.vue`）：滚动时常驻 `z-20`，手机 `88px`（另计顶部安全区）/ 桌面 `104px`。内容从渐隐磨砂层 `.md-topbar-fade` 下方滚过。标题与设置页共用 `.md-topbar-title`，容器宽度不超过 `599px` 时为 `22px`，其余为 `26px`。书库内可点击标题重命名。右侧工具胶囊保留全屏、外观、筛选排序与展开搜索，避免遮住标题或导致横向溢出。
 - **外观面板**（`AppearanceSheet.vue` + `AppearancePanel.vue`）：复用 `MobileBottomSheet`，手机底部弹出（带「完成」按钮）、桌面 `desktop-side` 渲染为右侧 `372px` side sheet；包含「阅读模式」（`SurfaceModePreview`）与「主题色」（`ThemeSwatchGrid` `5×2`），在面板内切换表面时展开遮罩需跟随 `dialog` 顶层。
-- **设置页布局**（`SettingsView.vue`）：按设置内容区容器宽度排版：`>=1040px` 三列、`600–1039px` 两列、`<600px` 单列；该容器断点仅用于设置卡片排版，不替代全局 `900px` 主断点。
+- **设置页布局**（`SettingsView.vue`）：首页顶栏与书架共用渐隐磨砂层 `.md-topbar-fade`。卡片按设置内容区容器宽度排版：`>=1040px` 三列、`600–1039px` 两列、`<600px` 单列；该容器断点仅用于设置卡片排版，不替代全局 `900px` 主断点。
 
 ### 4.3 阅读器组件
 
@@ -350,7 +350,7 @@ Error token 已在 `src/assets/styles/tokens.css` 的白昼 / 护眼 / 夜间三
 - **页脚**（`ReaderFooter.vue`）：常驻纸面底部（`z-35`），不随顶栏自动隐藏；左侧显示「回到上次位置」（目录跳读后出现），中间显示单页/双页页码，右侧显示「本章还剩 N 页」，底部为通栏可拖拽进度条（拖动只预览气泡，松手或键盘 change 提交翻页；触屏拖动期间钉住顶栏）。`NovelCard.vue` 的 `.reader-page-folio` 保留占位高度但隐藏文字，避免与页脚重复和正文重排。
 - **工具栏自动隐藏**：`AUTO_HIDE_DELAY = 2200ms`（在 `stores/ui.ts` 维护，组件内不另设时长）；抽屉打开期间不自动隐藏，关闭后重新显示并开始计时。
 - **目录抽屉**（`ReaderTocDrawer.vue`）：漫画使用 5 列页码格（`44px` 高）；小说使用章节列表（最小 `44px` 高，可显示两行标题）；当前项用 `secondary-container` 对；空目录显示「暂无章节信息」；跳转后关闭目录并恢复工具栏。
-- **阅读设置与字体抽屉**（`ReaderSettingsDrawer.vue` / `ReaderFontDrawer.vue`）：阅读设置页签固定为「排版 / 外观 / 封面」（`ReaderDrawerHeader prominent inline-tabs` + `ReaderDrawerTabs`），包含排版预览、字号 `MdRange variant="bubble"` + `48px` `A−`/`A+` 按钮、`SettingsSelectRow`（字体/行距/页边距）、`MdSegmentedControl`、`MdSwitch`、阅读纸面 `SurfaceModePreview cards` 与恢复默认卡片；窄屏强制单页时必须给出解释文案。`ReaderFontDrawer` 复用 `ReaderDrawerHeader prominent`、遮罩与 `useSheetDrag()`，固定搜索区，按字体本身展示 `READER_FONT_OPTIONS`，打开时与其他阅读抽屉互斥。
+- **阅读设置与字体抽屉**（`ReaderSettingsDrawer.vue` / `ReaderFontDrawer.vue`）：阅读设置页签固定为「外观 / 排版 / 封面」（`ReaderDrawerHeader prominent inline-tabs` + `MdSegmentedControl tab-id-prefix`），包含排版预览、字号 `MdRange variant="bubble"` + `48px` `A−`/`A+` 按钮、`SettingsSelectRow`（字体/行距/页边距）、`MdSegmentedControl`、`MdSwitch`、阅读纸面 `SurfaceModePreview cards` 与恢复默认卡片；窄屏强制单页时必须给出解释文案。`ReaderFontDrawer` 复用 `ReaderDrawerHeader prominent`、遮罩与 `useSheetDrag()`，固定搜索区，按字体本身展示 `READER_FONT_OPTIONS`，打开时与其他阅读抽屉互斥。
 - **阅读画布与手势**（`PaginatedView.vue` / `WebtoonView.vue`）：手势层（`.reader-gesture-layer`，`z-30`，`touch-action: none; overscroll-behavior: contain`）必须高于翻页舞台图片层（`z-20`）；横向滑动跟手、阻尼与回弹；轻点左/右 `30%` 翻页、中间切换工具栏；`<768px`（`DOUBLE_SPREAD_MIN_WIDTH`）强制单页；双缓冲动画对象、DOM 引用与 `Animation` 保持非深度响应式，禁止改写成响应式 `v-for` 动画布局。
 
 ### 4.4 全局反馈与系统界面
@@ -421,7 +421,7 @@ Error token 已在 `src/assets/styles/tokens.css` 的白昼 / 护眼 / 夜间三
 | 常规颜色、透明度、非 sheet 浮层进出 | `200ms` / `--md-ease-emphasized`（`cubic-bezier(0.2, 0, 0, 1)`） |
 | 卡片 hover | `200–280ms`，只改状态层透明度或柔和投影 |
 | 侧栏展开/折叠 | `280ms` / `--md-ease-emphasized` |
-| 分段控件滑块 | `280ms` / `--md-ease-expressive` |
+| 分段控件滑块 | 质量 `1`，横向位移刚度 `460` / 阻尼 `34` |
 | 开关滑块 | 位移与形变弹簧（`--md-ease-spring`），收敛后结束 |
 | Sheet 进出场 | `useSheetSpring()`：入场刚度 `380` / 阻尼比 `0.86`，退场 `760` / `1` |
 | Sheet 松手吸附 | `useSheetDrag()`：`200ms` / `cubic-bezier(0.2, 0, 0, 1)` |

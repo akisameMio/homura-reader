@@ -48,6 +48,7 @@ export interface NovelPaginatorBase {
   totalChapters: number;
   pages?: NovelPageEntry[];
   paginateChapter(chapterIndex: number): NovelChapterPage[] | void;
+  paginateChapterSteps(chapterIndex: number): Generator<void, NovelChapterPage[] | void>;
   buildPages(options?: { provisional?: boolean }): NovelPageEntry[];
   isComplete(): boolean;
   commitCache(): NovelPageEntry[];
@@ -364,7 +365,7 @@ export async function ensureBookImagesResolved(book: Book & BookImageCache | nul
 // 长段落按实际高度二分切开，保留行内标记；不依赖句号，避免整段被裁掉。
 // 纯文本段落走按行数估算的快路径，只做少量实测校正；带行内标记的段落
 // 继续使用 Range 精确切分，避免为了性能丢掉 strong/em 等结构。
-function splitPlainTextParagraph(text: string, measurer: HTMLElement, maxHeight: number) {
+function* splitPlainTextParagraph(text: string, measurer: HTMLElement, maxHeight: number): Generator<void, string[] | null> {
   if (!text) return null;
   measurer.innerHTML = '<p></p>';
   const paragraph = measurer.firstElementChild;
@@ -429,18 +430,29 @@ function splitPlainTextParagraph(text: string, measurer: HTMLElement, maxHeight:
     }
     parts.push(`<p>${escapeHtml(text.slice(start, start + guess))}</p>`);
     start += guess;
+    yield;
   }
   return parts;
 }
 
+export function finishPagination<T>(steps: Generator<void, T>): T {
+  let result = steps.next();
+  while (!result.done) result = steps.next();
+  return result.value;
+}
+
 export function splitLongParagraph(html: string, measurer: HTMLElement, maxHeight: number) {
+  return finishPagination(splitLongParagraphSteps(html, measurer, maxHeight));
+}
+
+function* splitLongParagraphSteps(html: string, measurer: HTMLElement, maxHeight: number): Generator<void, string[]> {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = html;
   const source = wrapper.firstElementChild;
   if (!source || source.tagName !== 'P' || source.querySelector('img, svg, image')) return [html];
 
   if (source.children.length === 0) {
-    const plainParts = splitPlainTextParagraph(source.textContent, measurer, maxHeight);
+    const plainParts = yield* splitPlainTextParagraph(source.textContent, measurer, maxHeight);
     if (plainParts) {
       if (source.id) {
         const first = document.createElement('div');
@@ -536,6 +548,7 @@ export function splitLongParagraph(html: string, measurer: HTMLElement, maxHeigh
     }
     parts.push(fragment(offsets[start], offsets[fit]));
     start = fit;
+    yield;
   }
   return parts;
 }
@@ -697,10 +710,11 @@ export function getNovelPaginationKey(layoutConfig: ReaderLayoutConfig) {
 }
 
 // 单章分页：返回这一章切出来的所有页，不写页面序号（由 paginator 统一编号）。
-function paginateNovelChapter(chap: ChapterItem, chapterIndex: number, measurer: HTMLElement, availableTextHeight: number) {
+function* paginateNovelChapter(chap: ChapterItem, chapterIndex: number, measurer: HTMLElement, availableTextHeight: number): Generator<void, NovelChapterPage[]> {
   const title = chap.title || `第 ${chapterIndex + 1} 章`;
   const blocks = collectNovelBlocks(chap.htmlContent || '');
   const chapterPages: NovelChapterPage[] = [];
+  yield;
 
   if (blocks.length === 0) {
     chapterPages.push({
@@ -749,10 +763,9 @@ function paginateNovelChapter(chap: ChapterItem, chapterIndex: number, measurer:
       }
       if (currentPageParts.length) flushCurrentPage();
       measurer.innerHTML = blk.html;
-      const parts = measureBlockExtent(measurer) > availableTextHeight ? splitLongParagraph(blk.html, measurer, availableTextHeight) : [blk.html];
+      const parts = measureBlockExtent(measurer) > availableTextHeight ? yield* splitLongParagraphSteps(blk.html, measurer, availableTextHeight) : [blk.html];
       for (let index = 0; index < parts.length; index++) {
         const part = parts[index];
-        measurer.innerHTML = part;
         if (index < parts.length - 1) {
           chapterPages.push({
             title,
@@ -760,11 +773,13 @@ function paginateNovelChapter(chap: ChapterItem, chapterIndex: number, measurer:
             chapterIndex
           });
         } else {
+          measurer.innerHTML = part;
           currentPageParts = [part];
           if (measureBlockExtent(measurer) > availableTextHeight) flushCurrentPage();
         }
       }
     }
+    yield;
   }
   flushCurrentPage();
   return chapterPages;
@@ -783,6 +798,7 @@ export function createNovelPaginator(book: Book, layoutConfig: ReaderLayoutConfi
       pages: cached.pages,
       totalChapters: chapters.length,
       paginateChapter() {},
+      *paginateChapterSteps() {},
       buildPages() { return cached.pages; },
       isComplete() { return true; },
       commitCache() { return cached.pages; }
@@ -807,9 +823,9 @@ export function createNovelPaginator(book: Book, layoutConfig: ReaderLayoutConfi
   const chapterPages = new Array(chapters.length);
   let completedChapters = 0;
 
-  function paginateChapter(chapterIndex: number) {
+  function* paginateChapterSteps(chapterIndex: number) {
     if (chapterPages[chapterIndex]) return chapterPages[chapterIndex];
-    const pages = paginateNovelChapter(chapters[chapterIndex] || {}, chapterIndex, measurer, metrics.availableBlockExtent);
+    const pages = yield* paginateNovelChapter(chapters[chapterIndex] || {}, chapterIndex, measurer, metrics.availableBlockExtent);
     chapterPages[chapterIndex] = pages;
     completedChapters++;
     return pages;
@@ -858,7 +874,8 @@ export function createNovelPaginator(book: Book, layoutConfig: ReaderLayoutConfi
     complete: false,
     cacheKey: metrics.cacheKey,
     totalChapters: chapters.length,
-    paginateChapter,
+    paginateChapter: chapterIndex => finishPagination(paginateChapterSteps(chapterIndex)),
+    paginateChapterSteps,
     buildPages,
     isComplete,
     commitCache
@@ -866,6 +883,10 @@ export function createNovelPaginator(book: Book, layoutConfig: ReaderLayoutConfi
 }
 
 export function buildActivePages(book: Book, layoutConfig: ReaderLayoutConfig, measurer: HTMLElement): ReaderPage[] {
+  return finishPagination(buildActivePageSteps(book, layoutConfig, measurer));
+}
+
+export function* buildActivePageSteps(book: Book, layoutConfig: ReaderLayoutConfig, measurer: HTMLElement): Generator<void, ReaderPage[]> {
   if (book.type === 'manga') {
     return ((book.pageItems || []) as unknown as MangaPageItem[]).map((item, idx) => ({
       pageNumber: idx + 1,
@@ -887,7 +908,7 @@ export function buildActivePages(book: Book, layoutConfig: ReaderLayoutConfig, m
   const paginator = createNovelPaginator(book, layoutConfig, measurer);
   if (paginator.complete) return (paginator.pages || []) as ReaderPage[];
   for (let cIdx = 0; cIdx < paginator.totalChapters; cIdx++) {
-    paginator.paginateChapter(cIdx);
+    yield* paginator.paginateChapterSteps(cIdx);
   }
   const pages = paginator.commitCache();
   measurer.innerHTML = '';

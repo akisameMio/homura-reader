@@ -85,6 +85,7 @@ import { logRuntimeOperation } from '../services/runtimeLogs.ts';
 import { createPageTurn, type PageTurnController, type PaperTurnStyle } from '../services/pageTurn.ts';
 import { pageTurnTarget, type TurnSide } from '../services/pageTurnGeometry.ts';
 import { prefersReducedMotion } from '../services/spring.ts';
+import { decodeVisibleReaderImages, standaloneCover } from '../services/readerTransition.ts';
 import NovelCard from './NovelCard.vue';
 import ReaderFooter from './ReaderFooter.vue';
 import type { Book, ReaderPage } from '../types.ts';
@@ -102,7 +103,7 @@ interface SlotVM {
 }
 
 const props = defineProps({ opening: Boolean });
-const emit = defineEmits<{ 'first-frame': [book: Book, ready: boolean] }>();
+const emit = defineEmits<{ 'first-frame': [book: Book, ready: boolean, cover?: HTMLImageElement | null] }>();
 const reader = useReaderStore();
 const theme = useThemeStore();
 const ui = useUiStore();
@@ -339,6 +340,10 @@ async function renderReaderViewport(transitionDir = 'fade') {
   try {
     if (!initialized) {
       const ready = await prepareSlot(0, pair, total, valid, props.opening);
+      const slot = stageEls[0];
+      if (ready && props.opening && !isManga.value && slot && pageStage.value) {
+        await decodeVisibleReaderImages(slot, pageStage.value);
+      }
       if (!valid()) return;
       if (!ready) {
         emit('first-frame', book, false);
@@ -348,7 +353,10 @@ async function renderReaderViewport(transitionDir = 'fade') {
       displayedIndex = targetIndex;
       reader.activeBufferSlot = 0;
       showSlot(0);
-      emit('first-frame', book, true);
+      const cover = targetIndex === 0 && pair.length === 1
+        ? isManga.value ? imgEls[0].single : standaloneCover(slot?.querySelector('.reader-page-flow') ?? null)
+        : null;
+      emit('first-frame', book, true, cover);
       scheduleIdlePreload();
       return;
     }
@@ -499,7 +507,7 @@ function cancelIdlePreload() {
 
 function scheduleIdlePreload() {
   cancelIdlePreload();
-  if (!reader.currentBook || reader.currentBook.type !== 'manga') return;
+  if (props.opening || !reader.currentBook || reader.currentBook.type !== 'manga') return;
 
   const generation = preloadGeneration;
   const startIndex = reader.currentIndex;
@@ -533,6 +541,10 @@ function scheduleIdlePreload() {
     }
   }, delay);
 }
+
+watch(() => props.opening, opening => {
+  if (!opening && initialized) scheduleIdlePreload();
+});
 
 // ---- 统一指针手势：移动越过阈值后，即使回到原位也不再当成点击 ----
 const drag: {

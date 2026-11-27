@@ -1,14 +1,15 @@
 <template>
   <!-- 手机底栏挂在阅读器预见式返回的 transform 容器外，避免长书架把 fixed 底栏带出视口 -->
   <div id="homura-mobile-nav-root"
-    :inert="readerOpening || !!reader.currentBook || settingsDetailOpen"></div>
+    :inert="readerOpening || !!reader.currentBook || settingsDetailOpen || bookDetailOpen"></div>
 
   <div
     class="library-back-layer flex min-h-0"
     :class="{
       'is-under-reader': !!reader.currentBook,
       'has-contained-shelf-scroll': containedShelfScroll,
-      'flex-1': !containedShelfScroll
+      'has-contained-settings-scroll': containedSettingsScroll,
+      'flex-1': !containedShelfScroll && !containedSettingsScroll
     }"
     :inert="readerOpening || !!reader.currentBook"
     @wheel="onLibraryWheel"
@@ -16,8 +17,10 @@
     <SideNav :active="activeNav" @nav="onRailNav" />
 
     <div
+      ref="libraryColumnRef"
       class="library-main-column relative isolate flex-1 min-w-0 flex flex-col"
-      :class="{ 'is-settings': isCompact && activeNav === 'settings' }"
+      :class="{ 'is-settings': activeNav === 'settings' }"
+      :inert="bookDetailOpen"
       data-app-scroll
     >
       <template v-if="activeNav === 'settings'">
@@ -29,8 +32,9 @@
       </template>
       <template v-else>
         <LibraryHeader
-          :count="headerCount"
           :title="headerTitle"
+          :scroll-root="activeNav === 'shelf' ? libraryScrollRef : null"
+          :import-open="importMenuOpen"
           :appearance-open="appearanceOpen"
           :renamable="!!activeCollection"
           @toggle-appearance="appearanceOpen = !appearanceOpen"
@@ -60,7 +64,7 @@
           data-app-scroll
         >
           <p v-if="shelf.error || (!reader.currentBook && reader.openError)" role="alert" class="mx-4 min-[900px]:mx-7 mt-3 text-[13px] text-[var(--md-error)]">{{ t(shelf.error || reader.openError) }}</p>
-          <BookShelf v-if="favoritesOnly || shelf.library.length || shelf.collections.length || shelfImportActive" :books="visibleBooks" :favorites-only="favoritesOnly" :sort-key="sortKey" :query="query" :has-filter="!!query.trim() || typeFilter !== 'all'" :home-request="shelfHomeRequest" :importing="shelfImportActive" :pending-import-count="shelfImportActive ? importProgress.pending : 0" @open="openBookWithTransition" @manage-storage="manageBookStorage" @browse="query = ''; typeFilter = 'all'" />
+          <BookShelf v-if="favoritesOnly || shelf.library.length || shelf.collections.length || shelfImportActive" :books="visibleBooks" :favorites-only="favoritesOnly" :sort-key="sortKey" :query="query" :has-filter="!!query.trim() || typeFilter !== 'all'" :home-request="shelfHomeRequest" :importing="shelfImportActive" :pending-import-count="shelfImportActive ? importProgress.pending : 0" @open="openBookWithTransition" @detail="openBookDetail" @manage-storage="manageBookStorage" @browse="query = ''; typeFilter = 'all'" />
           <EmptyShelf v-else @pick-file="openFilePicker" @pick-folder="openFolderPicker" />
         </main>
         <ShelfBackdrop v-if="activeNav === 'shelf'" />
@@ -68,9 +72,19 @@
     </div>
   </div>
 
+  <BookDetailView
+    ref="bookDetailRef"
+    :column="libraryColumnRef"
+    :blocked="bookDetailBlocked"
+    :storage-blocked="importProgress.isRunning"
+    :manage-storage-action="manageBookStorage"
+    @detail-change="onBookDetailChange"
+    @read="openBookWithTransition"
+  />
   <DesktopIsland
     v-if="desktopIslandVisible"
     :inert="readerOpening || !!reader.currentBook"
+    :style="bookDetailOpen && pendingShelfDialog ? { zIndex: 48 } : null"
     :active-nav="activeNav"
     v-model:menu-open="importMenuOpen"
     v-model:import-in-place="importInPlace"
@@ -91,7 +105,8 @@
     ref="readerLoadingRef"
     :visible="readerPhase === 'loading'"
     :reveal="readerPhase === 'reveal'"
-    :rendering="!!reader.currentBook"
+    :rendering="readerPreparing"
+    :frame="readerOpeningFrame"
     :phase="readerLoadingPhase"
     :title="readerLoadingBook?.title || ''"
     :cover="readerLoadingBook?.cover || ''"
@@ -182,6 +197,7 @@ import DesktopIsland from './components/DesktopIsland.vue';
 import ImportStatusBar from './components/ImportStatusBar.vue';
 import AppearanceSheet from './components/AppearanceSheet.vue';
 import BookShelf from './components/BookShelf.vue';
+import BookDetailView from './components/BookDetailView.vue';
 import ShelfBackdrop from './components/ShelfBackdrop.vue';
 import EmptyShelf from './components/EmptyShelf.vue';
 import SettingsView from './components/SettingsView.vue';
@@ -195,6 +211,7 @@ import ShelfDialogSheet from './components/ShelfDialogSheet.vue';
 import { useI18n } from './composables/useI18n.ts';
 import { keepSmartArchive, relinkBookSource } from './services/bookStorage.ts';
 import { scheduleSmartStorage } from './services/smartStorageRuntime.ts';
+import { waitForOpeningPaint } from './services/readerTransition.ts';
 
 const { t } = useI18n();
 
@@ -211,6 +228,7 @@ const { pendingShelfDialog, askShelfDialog, resolveShelfDialog } = useShelfDialo
 const { isCompact } = useViewport();
 
 const measurerRef = ref(null);
+const libraryColumnRef = shallowRef(null);
 const libraryScrollRef = shallowRef(null);
 const fileInput = ref(null);
 const folderInput = ref(null);
@@ -221,38 +239,46 @@ const appearanceOpen = ref(false);
 const shelfFilterOpen = ref(false);
 const activeNav = ref(readSettingsSection(window.history.state) ? 'settings' : 'shelf');
 const containedShelfScroll = computed(() => isMacOSTauri && !isCompact.value && activeNav.value !== 'settings');
+const containedSettingsScroll = computed(() => !isCompact.value && activeNav.value === 'settings');
 const settingsViewRef = shallowRef(null);
 
-// macOS 桌面把书架滚动收进内容区后，侧栏与顶栏不再有可滚动祖先；
-// 指针停在这两处时把竖向滚轮转给书架，避免出现滚不动的死区。
+watch(containedSettingsScroll, active => {
+  if (active && window.scrollY > 0) window.scrollTo(0, 0);
+}, { flush: 'sync' });
+
+// macOS 桌面书架及桌面设置把滚动收进内容区后，侧栏不再有可滚动祖先；
+// 指针停在侧栏或书架顶栏时把竖向滚轮转给对应内容区，避免出现滚不动的死区。
 function onLibraryWheel(event) {
-  if (!containedShelfScroll.value || event.ctrlKey) return;
+  if ((!containedShelfScroll.value && !containedSettingsScroll.value) || event.ctrlKey) return;
   if (!event.deltaY || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-  const scroller = libraryScrollRef.value;
+  const scroller = containedSettingsScroll.value ? libraryColumnRef.value : libraryScrollRef.value;
   const target = event.target;
   if (!scroller || scroller.scrollHeight <= scroller.clientHeight + 1) return;
-  if (!(target instanceof Element) || target.closest('.library-scroll')) return;
+  if (!(target instanceof Element)) return;
+  if (containedSettingsScroll.value ? target.closest('.library-main-column.is-settings') : target.closest('.library-scroll')) return;
   const sidebar = target.closest('.sidenav');
   if (sidebar && sidebar.scrollHeight > sidebar.clientHeight + 1) return;
   const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? scroller.clientHeight : 1;
   scroller.scrollTop += event.deltaY * unit;
 }
 const settingsDetailOpen = ref(false);
+const bookDetailRef = shallowRef(null);
+const bookDetailOpen = ref(false);
 
 useScrollBounce(libraryScrollRef);
 
-// 遮罩挂载后才打开书籍，等封面落位和首屏渲染都结束后再揭幕。
 const readerPhase = ref('shelf');
 const readerOpening = computed(() => readerPhase.value === 'loading' || readerPhase.value === 'reveal');
 const readerLoadingRef = shallowRef(null);
 const readerLoadingBook = shallowRef(null);
+const readerOpeningFrame = shallowRef(null);
+const readerPreparing = ref(false);
 const readerLoadingError = ref('');
 const readerLoadingPhase = computed(() => readerLoadingError.value ? 'error' : 'loading');
 const READER_OPEN_TIMEOUT = 15000;
 let loadingGuardTimer;
-let readerOpenRequest = 0;
-let readerFirstFrameReady = false;
-let readerFlightComplete = false;
+let readerOpenController;
+let readerDataReady = false;
 
 function bookById(id) { return shelf.library.find(item => item.id === id) || null; }
 
@@ -289,15 +315,31 @@ async function manageBookStorage(id) {
   });
   if (!action || nativeImportPending) return;
   nativeImportPending = true;
+  let error;
   try {
     if (action === 'relink') await relinkBookSource(book);
-    else if (!await keepSmartArchive(book)) shelf.error = t('这本书还没有自动生成的阅读存档。');
+    else if (!await keepSmartArchive(book)) error = t('这本书还没有自动生成的阅读存档。');
     shelf.touchBook(book);
   } catch (err) {
-    if (!isNativeImportCancelled(err)) shelf.error = t('无法更新书籍存储：{0}', { 0: err?.message || t('请检查本地存档') });
+    if (!isNativeImportCancelled(err)) error = t('无法更新书籍存储：{0}', { 0: err?.message || t('请检查本地存档') });
   } finally {
     nativeImportPending = false;
   }
+  if (error && !bookDetailOpen.value) shelf.error = error;
+  return error;
+}
+
+function openBookDetail(id, cover, trigger) {
+  if (bookDetailBlocked.value || bookDetailOpen.value || pendingShelfDialog.value) return;
+  importMenuOpen.value = false;
+  appearanceOpen.value = false;
+  shelfFilterOpen.value = false;
+  bookDetailRef.value?.open(id, cover, trigger);
+}
+
+function onBookDetailChange(open) {
+  bookDetailOpen.value = open;
+  if (open && activeNav.value === 'settings') activeNav.value = libraryView.value;
 }
 
 function clearLoadingGuard() {
@@ -305,32 +347,35 @@ function clearLoadingGuard() {
 }
 
 function failReaderOpen(message) {
-  readerOpenRequest++;
+  readerOpenController?.abort();
   clearLoadingGuard();
+  readerOpeningFrame.value = null;
   readerLoadingError.value = message || t('无法加载这本书，请重试。');
   if (reader.currentBook || reader.openingBook) reader.closeReader();
 }
 
 function maybeRevealReader() {
   if (readerPhase.value !== 'loading' || readerLoadingError.value || !reader.currentBook) return;
-  if (!readerFirstFrameReady || !readerFlightComplete) return;
+  if (!readerOpeningFrame.value || !readerDataReady) return;
   clearLoadingGuard();
   readerPhase.value = 'reveal';
 }
 
-function onReaderFirstFrame(book, ready) {
+function onReaderFirstFrame(book, ready, frame) {
   if (readerPhase.value !== 'loading' || readerLoadingError.value || book !== reader.currentBook) return;
   if (!ready || reader.openError) {
     failReaderOpen(reader.openError);
     return;
   }
-  readerFirstFrameReady = true;
+  readerOpeningFrame.value = frame;
   maybeRevealReader();
 }
 
 function finishReaderReveal() {
   if (readerPhase.value !== 'reveal') return;
   readerPhase.value = 'reader';
+  reader.resumeOpeningPagination();
+  readerOpeningFrame.value = null;
   readerLoadingBook.value = null;
 }
 
@@ -345,33 +390,36 @@ async function openBookWithTransition(id, coverSource) {
 async function loadReaderBook(coverSource) {
   const book = readerLoadingBook.value;
   if (!book) return;
-  const request = ++readerOpenRequest;
+  readerOpenController?.abort();
+  readerOpenController = new AbortController();
+  const { signal } = readerOpenController;
   clearLoadingGuard();
   relinkError.value = '';
   readerLoadingError.value = '';
-  readerFirstFrameReady = false;
-  readerFlightComplete = false;
+  readerOpeningFrame.value = null;
+  readerPreparing.value = false;
+  readerDataReady = false;
   readerPhase.value = 'loading';
   loadingGuardTimer = window.setTimeout(() => failReaderOpen(), READER_OPEN_TIMEOUT);
   try {
     await nextTick();
-    if (request !== readerOpenRequest) return;
-    const flight = readerLoadingRef.value?.flyCoverFrom(coverSource);
-    // 让遮罩先实际绘制一帧，冷启动同步分页时也不会继续停留在书架。
-    if (!document.hidden) {
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    }
-    if (request !== readerOpenRequest) return;
-    const [opened] = await Promise.all([reader.openBook(book.id), flight]);
-    if (request !== readerOpenRequest) return;
+    if (signal.aborted) return;
+    void readerLoadingRef.value?.flyCoverFrom(coverSource);
+    await waitForOpeningPaint(signal);
+    if (signal.aborted) return;
+    const opened = await reader.openBook(book.id, {
+      onPreparing: () => { if (!signal.aborted) readerPreparing.value = true; },
+      deferPagination: true
+    });
+    if (signal.aborted) return;
     if (!opened || reader.openError) {
       failReaderOpen(reader.openError);
       return;
     }
-    readerFlightComplete = true;
+    readerDataReady = true;
     maybeRevealReader();
   } catch (err) {
-    if (request !== readerOpenRequest) return;
+    if (signal.aborted) return;
     console.warn('[HOMURA] 打开书籍失败', err);
     failReaderOpen(reader.openError);
   }
@@ -382,9 +430,10 @@ function retryReaderOpen() {
 }
 
 function cancelReaderOpen() {
-  readerOpenRequest++;
+  readerOpenController?.abort();
   clearLoadingGuard();
   readerPhase.value = 'shelf';
+  readerOpeningFrame.value = null;
   readerLoadingBook.value = null;
   readerLoadingError.value = '';
   if (reader.currentBook || reader.openingBook) reader.closeReader();
@@ -405,11 +454,10 @@ const headerTitle = computed(() => {
   if (activeNav.value === 'recent') return t('最近');
   return activeCollection.value?.title || t('书架');
 });
-const headerCount = computed(() => activeCollection.value ? (shelf.branchBooks.get(activeCollection.value.id)?.length ?? 0) : favoritesOnly.value ? favoriteBooks.value.length : shelf.library.length);
 const desktopIslandVisible = computed(() => (
   !isCompact.value
   && (
-    activeNav.value !== 'settings'
+    (activeNav.value !== 'settings' && !bookDetailOpen.value)
     || importProgress.status !== 'idle'
     || updates.updateDialogOpen
     || updates.hasNewRelease
@@ -418,6 +466,8 @@ const desktopIslandVisible = computed(() => (
     || !!pendingShelfDialog.value
   )
 ));
+const bookDetailBlocked = computed(() => readerOpening.value || !!reader.currentBook
+  || !!pendingDuplicate.value || updates.changelogOpen || updates.updateDialogOpen);
 const overlayLocksBody = computed(() => (
   updates.changelogOpen
   || (
@@ -432,6 +482,7 @@ const overlayLocksBody = computed(() => (
   )
 ));
 const SPLASH_MIN_DURATION = 720;
+let uninstallProgressFlushHooks;
 let previousUpdateBodyOverflow = '';
 let updateBodyLocked = false;
 
@@ -455,6 +506,7 @@ const nativePredictiveBackSupported = useAndroidBackExit(reader, () => {
     updates.closeUpdateDialog();
     return true;
   }
+  if (bookDetailRef.value?.dismissBack()) return true;
   if (activeNav.value === 'settings') {
     if (settingsViewRef.value?.dismissBack()) return true;
     activeNav.value = 'shelf';
@@ -480,11 +532,16 @@ const nativePredictiveBackSupported = useAndroidBackExit(reader, () => {
   if (shelf.activeCollectionId) { shelf.activeCollectionId = activeCollection.value?.parentId ?? null; return true; }
   return false;
 }, {
-  enabled: () => activeNav.value === 'settings' && !readerOpening.value
-    && !pendingShelfDialog.value && !pendingDuplicate.value && !updates.changelogOpen && !updates.updateDialogOpen
-    && !!settingsViewRef.value?.canUsePredictiveBack(),
-  handle: event => settingsViewRef.value?.onPredictiveBack(event)
+  enabled: () => !bookDetailBlocked.value && !pendingShelfDialog.value
+    && !!predictiveDetail()?.canUsePredictiveBack(),
+  handle: event => predictiveDetail()?.onPredictiveBack(event)
 });
+
+function predictiveDetail() {
+  if (bookDetailOpen.value) return bookDetailRef.value;
+  if (activeNav.value === 'settings') return settingsViewRef.value;
+  return null;
+}
 
 watch(
   () => overlayLocksBody.value,
@@ -682,6 +739,7 @@ function retryFailedImport() {
 // 设置是一级页面；书架 / 最近 / 收藏复用书库筛选状态。
 function onRailNav(key) {
   if (!['shelf', 'recent', 'favorite', 'settings'].includes(key)) return;
+  if (bookDetailRef.value?.leaveDetail(() => onRailNav(key))) return;
   if (activeNav.value === 'settings') {
     if (key === 'settings') return;
     if (settingsViewRef.value?.leaveDetail(() => onRailNav(key))) return;
@@ -764,7 +822,7 @@ onMounted(async () => {
   reader.measurerEl = measurerRef.value;
   window.addEventListener('keydown', onFullscreenKeydown);
   // 关窗 / 切后台时兜底刷写进度，防止防抖窗口内的最后一次翻页丢失
-  installProgressFlushHooks(reader, shelf);
+  uninstallProgressFlushHooks = installProgressFlushHooks(reader, shelf);
   if (settings.debugAutoUpdateCheck) {
     updates.checkForUpdates({ startup: true });
   }
@@ -779,7 +837,8 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  readerOpenRequest++;
+  readerOpenController?.abort();
+  uninstallProgressFlushHooks?.();
   clearLoadingGuard();
   window.removeEventListener('keydown', onFullscreenKeydown);
   window.removeEventListener('popstate', restoreSettingsFromHistory);

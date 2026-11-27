@@ -73,6 +73,7 @@ import { useReaderStore } from '../stores/reader.ts';
 import { decodePageImage, releaseDistantPageUrls, type MangaPageItem } from '../services/pagination.ts';
 import { resolveProseStyle } from '../services/readerLayout.ts';
 import { logRuntimeOperation } from '../services/runtimeLogs.ts';
+import { decodeVisibleReaderImages, standaloneCover } from '../services/readerTransition.ts';
 import type { Book, ReaderPage } from '../types.ts';
 import ReaderFooter from './ReaderFooter.vue';
 import { useI18n } from '../composables/useI18n.ts';
@@ -89,7 +90,8 @@ const NOVEL_SCROLL_WIDTHS: Record<string, string> = {
   wide: 'min(100%, 1024px)'
 };
 
-const emit = defineEmits<{ 'first-frame': [book: Book, ready: boolean] }>();
+const props = defineProps({ opening: Boolean });
+const emit = defineEmits<{ 'first-frame': [book: Book, ready: boolean, cover?: HTMLImageElement | null] }>();
 const reader = useReaderStore();
 function onContentLink(event: MouseEvent) {
   const link = (event.target as Element)?.closest<HTMLAnchorElement>('a[href]');
@@ -211,11 +213,39 @@ function releaseImageElement(imgEl: HTMLImageElement) {
 }
 
 let firstFrameReported = false;
+const failedOpeningImages = new Set<number>();
 
-function reportFirstFrame(ready: boolean) {
+function reportFirstFrame(ready: boolean, cover?: HTMLImageElement | null) {
   if (firstFrameReported || !mountedBook || disposed || reader.currentBook !== mountedBook) return;
   firstFrameReported = true;
-  emit('first-frame', mountedBook, ready);
+  emit('first-frame', mountedBook, ready, cover);
+}
+
+function checkOpeningMangaFrame(index: number, ready: boolean) {
+  if (firstFrameReported) return;
+  if (!props.opening) {
+    if (index === initialMangaIndex) reportFirstFrame(ready);
+    return;
+  }
+  if (!ready) failedOpeningImages.add(index);
+  if (failedOpeningImages.has(initialMangaIndex)) {
+    reportFirstFrame(false);
+    return;
+  }
+  if (!mangaLoadedIndexes.has(initialMangaIndex)) return;
+  if (!mangaHasStableLayout) measureMangaOffsets();
+  const { start, end } = getMangaVisibleRange();
+  for (let page = start; page <= end; page++) {
+    if (failedOpeningImages.has(page)) {
+      reportFirstFrame(false);
+      return;
+    }
+    if (!mangaLoadedIndexes.has(page)) {
+      enqueueMangaDecode(page);
+      return;
+    }
+  }
+  reportFirstFrame(true, initialMangaIndex === 0 ? mangaImages[0] : null);
 }
 
 function restoreImageElement(imgEl: HTMLImageElement) {
@@ -292,11 +322,11 @@ function pumpMangaDecodeQueue() {
           mangaLoadedIndexes.add(best.index);
           restoreImageElement(best.imgEl);
         }
-        if (best.index === initialMangaIndex) reportFirstFrame(ready);
+        checkOpeningMangaFrame(best.index, ready);
       })
       .catch(err => {
         if (!disposed) console.warn('[HOMURA] 条漫页面解码失败', best.index, err);
-        if (best.index === initialMangaIndex && mangaDecoding.get(best.index) === token) reportFirstFrame(false);
+        if (mangaDecoding.get(best.index) === token) checkOpeningMangaFrame(best.index, false);
       })
       .finally(() => {
         if (disposed) return;
@@ -429,7 +459,7 @@ function syncMangaScrollPosition() {
   const root = scrollRoot.value;
   if (!root || reader.activePages.length === 0) return;
   // 恢复旧进度时先不要用滚动容器的初始 top 覆盖 currentIndex。
-  if (restoringMangaProgress) return;
+  if (restoringMangaProgress || props.opening) return;
 
   ensureMangaOffsets();
   const probe = root.scrollTop + root.clientHeight * 0.45;
@@ -677,7 +707,7 @@ onMounted(() => {
         if (disposed || reader.currentBook?.id !== mountedBookId) return;
         const lazyIndex = parseInt(entry.target.getAttribute('data-lazy-index') as string, 10);
         if (!Number.isInteger(lazyIndex)) return;
-        if (!entry.isIntersecting) return;
+        if (!entry.isIntersecting || props.opening) return;
         enqueueMangaDecode(lazyIndex);
       });
     }, { root: scrollRoot.value, rootMargin: '1600px 0px', threshold: 0.01 });
@@ -707,7 +737,14 @@ onMounted(() => {
     syncNovelScrollPosition();
     syncScrollBounds();
   }
-  if (!isManga.value) reportFirstFrame(true);
+  if (!isManga.value) {
+    if (props.opening && novelContent.value && scrollRoot.value) {
+      const cover = reader.currentIndex === 0
+        ? standaloneCover(novelContent.value.querySelector('.epub-content'))
+        : null;
+      void decodeVisibleReaderImages(novelContent.value, scrollRoot.value).then(() => reportFirstFrame(true, cover));
+    } else reportFirstFrame(true);
+  }
 });
 
 watch(
@@ -717,6 +754,10 @@ watch(
     scheduleMangaOffsetMeasure();
   }
 );
+
+watch(() => props.opening, opening => {
+  if (!opening && isManga.value) syncMangaScrollPosition();
+});
 
 onBeforeUnmount(() => {
   disposed = true;

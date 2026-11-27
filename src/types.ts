@@ -151,6 +151,8 @@ export interface ReadingProgress {
   lineHeight?: number;
   pageMargin?: number;
   updatedAt?: number;
+  readingDurationMs?: number;
+  partialPagination?: boolean;
   [key: string]: unknown;
 }
 

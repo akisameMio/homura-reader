@@ -16,6 +16,7 @@ export interface SpringAxis {
   vel: number;
   target: number;
   stiffness: number;
+  dampingRatio?: number;
 }
 
 export interface SpringOptions {
@@ -27,6 +28,8 @@ export interface SpringOptions {
   playbackRate?: number;
   /** 每次积分的最大时间步（秒），防止切后台回来后大步长炸开。默认 0.032。 */
   maxDt?: number;
+  /** 半隐式欧拉子步的最大步长（秒）。 */
+  maxStep?: number;
   /** 位置收敛阈值，默认 0.002。 */
   posEpsilon?: number;
   /** 速度收敛阈值，默认 0.02。 */
@@ -35,17 +38,18 @@ export interface SpringOptions {
   stopWhen?: () => boolean;
 }
 
-export function makeAxis(initial: number, stiffness: number): SpringAxis {
-  return { pos: initial, vel: 0, target: initial, stiffness };
+export function makeAxis(initial: number, stiffness: number, dampingRatio?: number): SpringAxis {
+  return { pos: initial, vel: 0, target: initial, stiffness, dampingRatio };
 }
 
-/** 对所有轴做一次半隐式欧拉子步积分（内部再分两半，精度更高）。 */
-export function stepAxes(axes: SpringAxis[], dt: number, damping = 1): void {
-  const h = dt * 0.5;
+/** 用至少两个半隐式欧拉子步推进各轴。 */
+export function stepAxes(axes: SpringAxis[], dt: number, damping = 1, maxStep = Infinity): void {
+  const steps = Math.max(2, Math.ceil(dt / maxStep));
+  const h = dt / steps;
   for (const s of axes) {
     const k = s.stiffness;
-    const c = 2 * damping * Math.sqrt(k);
-    for (let i = 0; i < 2; i++) {
+    const c = 2 * (s.dampingRatio ?? damping) * Math.sqrt(k);
+    for (let i = 0; i < steps; i++) {
       const disp = s.pos - s.target;
       const acc = -k * disp - c * s.vel;
       s.vel += acc * h;
@@ -88,9 +92,9 @@ export function runSpring(
 
   const tick = (now: number) => {
     if (cancelled) return;
-    const dt = Math.min((now - lastT) * playbackRate / 1000, maxDt);
+    const dt = Math.max(0, Math.min((now - lastT) * playbackRate / 1000, maxDt));
     lastT = now;
-    stepAxes(axes, dt, damping);
+    stepAxes(axes, dt, damping, opts.maxStep);
     onStep();
     if ((opts.stopWhen && opts.stopWhen()) || axesSettled(axes, posEps, velEps)) {
       snapAxes(axes);

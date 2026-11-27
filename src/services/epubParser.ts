@@ -607,7 +607,13 @@ async function parseEpubFull(archive: EpubArchive, pkg: EpubPackage, id: string)
   let imageHeavyCount = 0;
   let textChapterCount = 0;
 
+  let sliceStarted = performance.now();
   for (let index = 0; index < spine.length; index++) {
+    // 原生批量读取返回后，按时间预算分批解析 DOM，给开书进度和输入留出帧。
+    if (performance.now() - sliceStarted >= 6) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+      sliceStarted = performance.now();
+    }
     const item = spine[index];
     const rawHtml = rawHtmls[index];
     if (!rawHtml) continue;

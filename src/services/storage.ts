@@ -264,8 +264,26 @@ export const HomuraStore = (() => {
     }));
   }
 
-  function idbSaveProgress(record: ReadingProgress) {
-    return run(STORE_PROGRESS, 'readwrite', (store) => store.put(record));
+  async function idbSaveProgress(record: ReadingProgress, elapsedMs: number): Promise<ReadingProgress> {
+    const id = record.id;
+    if (disabled || typeof id !== 'string') return record;
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_PROGRESS, 'readwrite');
+      const store = tx.objectStore(STORE_PROGRESS);
+      const previous = store.get(id);
+      let merged = record;
+      previous.onsuccess = () => {
+        const previousDuration = (previous.result as ReadingProgress | undefined)?.readingDurationMs ?? 0;
+        if (previousDuration || record.readingDurationMs || elapsedMs) {
+          // 同一本书的多个会话以事务内的时长为基数，各自只追加自己的增量。
+          merged = { ...record, readingDurationMs: Math.max(record.readingDurationMs ?? 0, previousDuration + elapsedMs) };
+        }
+        store.put(merged);
+      };
+      tx.oncomplete = () => resolve(merged);
+      tx.onerror = tx.onabort = () => reject(tx.error);
+    });
   }
 
   function idbGetProgress(id: string) {
@@ -555,14 +573,13 @@ export const HomuraStore = (() => {
   }
 
   // ---- 阅读进度：按书籍 id 记录当前位置，翻页时高频写入 ----
-  async function saveProgress(record: ReadingProgress) {
+  async function saveProgress(record: ReadingProgress, elapsedMs = 0) {
     markNativeDirty();
-    await idbSaveProgress(record);
+    const saved = await idbSaveProgress(record, elapsedMs);
     notifyMetadataChanges();
-    upsertCachedProgress(record);
-    if (!canUseNativeMetadata()) return;
-    const written = await queueNativeMirror(() => saveNativeProgress(record));
-    if (written) upsertCachedProgress(record);
+    upsertCachedProgress(saved);
+    if (canUseNativeMetadata()) await queueNativeMirror(() => saveNativeProgress(saved));
+    return saved;
   }
 
   async function getProgress(id: string) {

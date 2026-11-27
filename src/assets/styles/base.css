@@ -34,6 +34,7 @@
     @media (min-width: 900px) {
       html:has(.settings-transition-layer) {
         overflow-y: hidden;
+        scrollbar-gutter: auto;
       }
     }
 
@@ -49,6 +50,44 @@
 
     #app {
       min-height: 100vh;
+    }
+
+    .md-topbar-title {
+      margin: 0;
+      color: var(--md-on-surface);
+      font-size: 26px;
+      font-weight: 650;
+      letter-spacing: -0.025em;
+    }
+
+    @container (max-width: 599px) {
+      .md-topbar-title {
+        font-size: 22px;
+      }
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .md-topbar-title-enter-active {
+        transition:
+          opacity 180ms var(--md-ease-emphasized),
+          transform 180ms var(--md-ease-emphasized);
+      }
+
+      .md-topbar-title-leave-active {
+        transition:
+          opacity 120ms var(--md-ease-emphasized),
+          transform 120ms var(--md-ease-emphasized);
+      }
+
+      .md-topbar-title-enter-from {
+        opacity: 0;
+        transform: translate3d(-12px, 0, 0);
+      }
+
+      .md-topbar-title-leave-to {
+        opacity: 0;
+        transform: translate3d(12px, 0, 0);
+      }
     }
 
     /* 模糊层独立淡出，标题与工具控件保持清晰，不拦截下方交互。 */
@@ -78,23 +117,33 @@
       scroll-padding-block-start: var(--library-topbar-height);
     }
 
-    /* macOS Tauri 的书架只在内容区滚动，侧栏、顶栏和背景装饰留在外壳。 */
-    html:has(.has-contained-shelf-scroll) {
+    /* macOS Tauri 的书架及桌面设置只在内容区滚动，侧栏、顶栏和背景装饰留在外壳。 */
+    html:has(.has-contained-shelf-scroll),
+    html:has(.has-contained-settings-scroll) {
       overflow-y: hidden;
       overscroll-behavior-y: none;
       scrollbar-gutter: auto;
     }
 
-    .has-contained-shelf-scroll {
+    .has-contained-shelf-scroll,
+    .has-contained-settings-scroll {
       flex: none;
       height: 100vh;
       height: 100dvh;
       overflow: clip;
     }
 
-    .has-contained-shelf-scroll > .sidenav {
+    .has-contained-shelf-scroll > .sidenav,
+    .has-contained-settings-scroll > .sidenav {
       position: relative;
       top: auto;
+    }
+
+    .has-contained-settings-scroll > .library-main-column.is-settings {
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior-y: contain;
+      background: var(--md-surface-low);
     }
 
     .has-contained-shelf-scroll .library-scroll {

@@ -190,7 +190,7 @@
 
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--brand-primary); opacity: 0.35; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--md-primary) 35%, transparent); border-radius: 9999px; }
 
     /* 移动端（手机 / 紧凑布局）隐藏所有滚动条，保留滚动与手势能力 */
     @media (max-width: 899px) {

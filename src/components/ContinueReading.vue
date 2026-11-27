@@ -4,12 +4,14 @@
     v-if="featured"
     type="button"
     class="md-card continue-card md-featured-cell"
+    :data-book-id="featured.book.id"
     :title="started ? t('继续阅读：{0}', { 0: featured.book.title }) : t('开始阅读：{0}', { 0: featured.book.title })"
     :aria-label="started ? t('继续阅读：{0}', { 0: featured.book.title }) : t('开始阅读：{0}', { 0: featured.book.title })"
+    aria-keyshortcuts="Shift+F10"
     @click="onOpen"
   >
     <span class="content">
-      <span class="cover-shell" ref="coverEl">
+      <span class="cover-shell" ref="coverEl" data-book-cover>
         <img v-if="featured.book.cover" :src="featured.book.cover" class="cover-image" alt="" loading="lazy" decoding="async" draggable="false" />
         <span v-else class="cover-fallback" aria-hidden="true"><MdIcon name="auto_stories" /></span>
       </span>
