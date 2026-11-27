@@ -13,7 +13,7 @@ import app.tauri.plugin.Plugin
 
 @InvokeArg
 class EnableOptions {
-  lateinit var handler: Channel
+  var handler: Channel? = null
 }
 
 @TauriPlugin
@@ -31,7 +31,8 @@ class PredictiveBackPlugin(private val activity: Activity) : Plugin(activity) {
   fun enable(invoke: Invoke) {
     try {
       val options = invoke.parseArgs(EnableOptions::class.java)
-      channel = options.handler
+      options.handler?.let { channel = it }
+      checkNotNull(channel) { "Predictive back channel is missing" }
 
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
         registerCallback()
@@ -50,7 +51,6 @@ class PredictiveBackPlugin(private val activity: Activity) : Plugin(activity) {
   fun disable(invoke: Invoke) {
     try {
       unregisterCallback()
-      channel = null
       invoke.resolve()
     } catch (ex: Exception) {
       invoke.reject(ex.message ?: "Failed to disable predictive back")
@@ -75,7 +75,7 @@ class PredictiveBackPlugin(private val activity: Activity) : Plugin(activity) {
 
   override fun onResume(activity: AppCompatActivity) {
     super.onResume(activity)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && channel != null) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && callback != null) {
       // AndroidX 会在 onResume 重注册普通返回回调，这里重新置顶才能继续消费预见式返回。
       registerCallback(refresh = true)
     }
