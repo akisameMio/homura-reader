@@ -1,82 +1,17 @@
 <template>
-  <div ref="pageRef" class="settings-page" :class="{
-    'has-detail': shownSection, 'md-bottom-nav-space': isCompact && !shownSection
-  }">
+  <div ref="pageRef" class="settings-page" :class="{ 'md-bottom-nav-space': isCompact }" :inert="!!activeSection">
     <header
-      :key="isCompact || isAndroid ? undefined : (shownSection ?? 'overview')"
-      class="settings-topbar md-topbar-fade"
+      class="settings-topbar"
       :style="isCompact ? { paddingTop: 'env(safe-area-inset-top)' } : null"
     >
-      <div class="settings-topbar-inner" :class="{ 'is-log-searching': shownSection === 'logs' && logSearchOpen }">
-        <MdIconButton
-          v-if="activeSection"
-          v-show="shownSection"
-          ref="backButtonRef"
-          type="button"
-          class="settings-back-button"
-          :aria-label="t('返回设置')"
-          @click="showPreviousSection"
-        >
-          <MdIcon name="chevron_left" />
-        </MdIconButton>
-        <div class="settings-topbar-title">
-          <h1>{{ shownSection ? t(sectionTitles[shownSection]) : t('设置') }}</h1>
-        </div>
-        <div v-if="activeSection === 'logs'" v-show="shownSection" class="settings-topbar-actions">
-          <div v-if="logSearchOpen" class="settings-log-search" role="search">
-            <MdIcon name="search" :size="19" />
-            <input
-              ref="logSearchInputRef"
-              v-model="logQuery"
-              type="text"
-              inputmode="search"
-              enterkeyhint="search"
-              autocomplete="off"
-              spellcheck="false"
-              :placeholder="t('搜索日志')"
-              :aria-label="t('搜索日志')"
-              @keydown.esc.stop="closeLogSearch"
-            />
-            <MdIconButton
-              type="button"
-              class="settings-log-search-close"
-              :aria-label="t('关闭搜索')"
-              :title="t('关闭搜索')"
-              @click="closeLogSearch"
-            >
-              <MdIcon name="close" :size="18" />
-            </MdIconButton>
-          </div>
-          <div v-else class="settings-log-actions">
-            <MdIconButton
-              type="button"
-              preserve-user-activation
-              class="settings-log-action"
-              :aria-label="t('搜索日志')"
-              :title="t('搜索日志')"
-              @click="openLogSearch"
-            >
-              <MdIcon name="search" :size="22" />
-            </MdIconButton>
-            <MdIconButton
-              type="button"
-              preserve-user-activation
-              class="settings-log-action"
-              :aria-label="t('导出日志')"
-              :title="t('导出日志')"
-              :disabled="!filteredLogs.length || logExporting"
-              @click="exportLogs"
-            >
-              <MdIcon name="ios_share" :size="22" />
-            </MdIconButton>
-          </div>
-        </div>
+      <div class="settings-topbar-inner">
+        <div class="settings-topbar-title"><h1>{{ t('设置') }}</h1></div>
       </div>
     </header>
     <div v-if="isCompact && $slots.status" class="settings-import-status">
       <slot name="status"></slot>
     </div>
-    <div v-if="!shownSection" class="settings-grid">
+    <div class="settings-grid">
       <section class="settings-card settings-appearance" aria-labelledby="settings-appearance-title">
         <div class="appearance-content">
           <div class="settings-card-head">
@@ -109,7 +44,7 @@
         <button
           type="button"
           class="settings-card-open"
-          @click="openSection('appearance', $event)"
+          @click="openSection('appearance')"
         >
           <span>{{ t('更多外观设置') }}</span>
           <MdIcon name="chevron_right" :size="20" />
@@ -158,7 +93,7 @@
         <button
           type="button"
           class="settings-card-open"
-          @click="openSection('reading', $event)"
+          @click="openSection('reading')"
         >
           <span>{{ t('更多阅读设置') }}</span>
           <MdIcon name="chevron_right" :size="20" />
@@ -244,7 +179,7 @@
         <button
           type="button"
           class="settings-card-open"
-          @click="openSection('storage', $event)"
+          @click="openSection('storage')"
         >
           <span>{{ t('管理本机数据') }}</span>
           <MdIcon name="chevron_right" :size="20" />
@@ -273,7 +208,7 @@
         <button
           type="button"
           class="settings-card-open"
-          @click="openSection('logs', $event)"
+          @click="openSection('logs')"
         >
           <span>{{ t('查看运行日志') }}</span>
           <MdIcon name="chevron_right" :size="20" />
@@ -288,7 +223,7 @@
         <button
           type="button"
           class="settings-card-open"
-          @click="openSection('sync', $event)"
+          @click="openSection('sync')"
         >
           <span>{{ t('配置同步连接') }}</span>
           <MdIcon name="chevron_right" :size="20" />
@@ -313,7 +248,7 @@
         <button
           type="button"
           class="settings-card-open"
-          @click="openSection('import', $event)"
+          @click="openSection('import')"
         >
           <span>{{ t('打开导入偏好') }}</span>
           <MdIcon name="chevron_right" :size="20" />
@@ -345,7 +280,7 @@
         <button
           type="button"
           class="settings-card-open"
-          @click="openSection('debug', $event)"
+          @click="openSection('debug')"
         >
           <span>{{ t('打开调试设置') }}</span>
           <MdIcon name="chevron_right" :size="20" />
@@ -386,702 +321,790 @@
         <button
           type="button"
           class="settings-card-open"
-          @click="openSection('about', $event)"
+          @click="openSection('about')"
         >
           <span>{{ t('打开关于 HOMURA') }}</span>
           <MdIcon name="chevron_right" :size="20" />
         </button>
       </section>
     </div>
-    <div v-if="activeSection" v-show="shownSection" class="settings-detail">
-      <template v-if="activeSection === 'appearance'">
-        <div class="settings-detail-hero settings-surface-hero">
-          <div class="settings-surface-hero-preview">
-            <SettingsInterfacePreview />
-          </div>
-          <div class="settings-hero-copy">
-            <span class="settings-badge">{{ t('排版预览') }}</span>
-            <h2>{{ t('外观设置') }}</h2>
-            <p>{{ t('更改即时应用到整个应用，也会自动保存。') }}</p>
-          </div>
-        </div>
-        <section class="settings-detail-group" aria-labelledby="settings-surface-heading">
-          <h2 id="settings-surface-heading">
-            <MdIcon name="light_mode" />
-            {{ t('表面模式') }}
-          </h2>
-          <div class="settings-list" role="group" :aria-label="t('表面模式')">
-            <button
-              v-for="option in detailSurfaceOptions"
-              :key="option.value"
-              type="button"
-              class="settings-list-row settings-surface-row"
-              :aria-pressed="theme.surfaceMode === option.value"
-              @click="selectSurfaceMode(option.value, $event)"
-            >
-              <SettingsInterfacePreview :mode="option.value" thumbnail />
-              <span class="settings-value-copy">
-                <b>{{ t(option.label) }}</b>
-              </span>
-              <MdIcon v-if="theme.surfaceMode === option.value" name="check" class="settings-row-check" />
-            </button>
-          </div>
-        </section>
-        <section class="settings-detail-group" aria-labelledby="settings-black-heading">
-          <h2 id="settings-black-heading">
-            <MdIcon name="contrast" />
-            {{ t('纯黑模式') }}
-            <MdInfoHint :label="t('纯黑模式')">{{ t('仅在夜间模式下生效，跟随系统时也会自动应用。') }}</MdInfoHint>
-          </h2>
-          <div class="settings-list" role="group" :aria-label="t('纯黑模式')">
-            <button
-              v-for="option in pureBlackOptions"
-              :key="option.black"
-              type="button"
-              class="settings-list-row settings-surface-row"
-              :aria-pressed="theme.pureBlackMode === option.value"
-              @click="selectPureBlackMode(option.value, $event)"
-            >
-              <SettingsInterfacePreview mode="dark" :black="option.black" thumbnail />
-              <span class="settings-value-copy">
-                <b>{{ t(option.label) }}</b>
-              </span>
-              <MdIcon v-if="theme.pureBlackMode === option.value" name="check" class="settings-row-check" />
-            </button>
-          </div>
-        </section>
-        <section class="settings-detail-group" aria-labelledby="settings-colors-heading">
-          <h2 id="settings-colors-heading">
-            <MdIcon name="palette" />
-            {{ t('主题色彩') }}
-            <span class="settings-color-name">{{ t(themeLabel) }}</span>
-          </h2>
-          <div class="settings-list settings-color-strip">
-            <ThemeSwatchGrid strip />
-          </div>
-        </section>
-      </template>
-      <template v-else-if="activeSection === 'reading'">
-        <div class="settings-detail-hero settings-reading-hero">
-          <div class="settings-book-stage" aria-hidden="true">
-            <div class="settings-open-book">
-              <div class="settings-book-page">
-                <b>{{ t('夏日的序章') }}</b>
-                <p>
-                  {{ t('风穿过敞开的窗，') }}
-                  <br />
-                  {{ t('书页轻轻翻动。') }}
-                </p>
-                <i v-for="line in 5" :key="line"></i>
-                <span>12</span>
-              </div>
-              <div class="settings-book-page">
-                <i v-for="line in 9" :key="line"></i>
-                <span>13</span>
-              </div>
-            </div>
-          </div>
-          <div class="settings-hero-copy">
-            <span class="settings-badge">{{ t('阅读示意') }}</span>
-            <h2>{{ t('找到舒服的阅读节奏') }}</h2>
-            <p>{{ t('首次打开作品时，从这里开始。') }}</p>
-          </div>
-        </div>
-        <section class="settings-detail-group" aria-labelledby="settings-layout-heading">
-          <h2 id="settings-layout-heading">{{ t('翻页与布局') }}
-            <MdInfoHint v-if="isScrollDefault" :label="t('翻页与布局')">{{ t('条漫模式沿用上次的分页方向与跨页布局，切回分页后生效。') }}</MdInfoHint>
-          </h2>
-          <div class="settings-list">
-            <SettingsSelectRow
-              :label="t('翻页方式')"
-              :model-value="settings.transitionStyle"
-              :options="transitionOptions"
-              @update:model-value="settings.setTransitionStyle"
-            />
-            <SettingsSelectRow
-              :label="t('阅读方向')"
-              :model-value="readerDefaults.pagedDirection"
-              :options="directionOptions"
-              :disabled="isScrollDefault"
-              @update:model-value="setDirection"
-            />
-            <SettingsSelectRow
-              :label="t('跨页布局')"
-              :model-value="readerDefaults.spread"
-              :options="spreadOptions"
-              :disabled="isScrollDefault"
-              @update:model-value="setSpread"
-            />
-            <MdSwitch
-              v-if="readerDefaults.spread === 2 && !isScrollDefault"
-              class="settings-list-row"
-              :model-value="readerDefaults.coverOffset"
-              :title="t('让后续跨页大图保持对齐')"
-              @update:model-value="value => settings.setReaderDefault('coverOffset', value)"
-            >
-              <span class="settings-value-copy">
-                <b>{{ t('首页单排') }}</b>
-              </span>
-            </MdSwitch>
-            <MdSwitch
-              class="settings-list-row"
-              :model-value="readerDefaults.verticalText"
-              :title="t('文字从上往下，各列从右往左排列，仅作用于小说分页阅读')"
-              @update:model-value="value => settings.setReaderDefault('verticalText', value)"
-            >
-              <span class="settings-value-copy">
-                <b>{{ t('竖排文字') }}</b>
-              </span>
-            </MdSwitch>
-          </div>
-        </section>
-        <section class="settings-detail-group" aria-labelledby="settings-text-heading">
-          <h2 id="settings-text-heading">{{ t('文字与滚动') }}
-            <MdInfoHint :label="t('文字与滚动')">{{ t('每本书已有的阅读位置与排版记忆会继续保留。') }}</MdInfoHint>
-          </h2>
-          <div class="settings-list">
-            <div class="settings-detail-font">
-              <div class="settings-head">
-                <span>{{ t('默认字号') }}</span>
-                <b>{{ readerDefaults.fontSize }} px</b>
-              </div>
-              <div class="font-size-control">
-                <MdIconButton
-                  type="button"
-                  class="settings-icon-button"
-                  :title="t('减小字号')"
-                  :aria-label="t('减小字号')"
-                  :disabled="readerDefaults.fontSize <= 14"
-                  @click="changeDefaultFont(-2)"
-                >
-                  <MdIcon name="remove" />
-                </MdIconButton>
-                <MdRange
-                  class="settings-range"
-                  :model-value="readerDefaults.fontSize"
-                  :min="14"
-                  :max="28"
-                  :step="2"
-                  :aria-label="t('默认字号')"
-                  @update:model-value="setFontSize"
-                />
-                <MdIconButton
-                  type="button"
-                  class="settings-icon-button"
-                  :title="t('增大字号')"
-                  :aria-label="t('增大字号')"
-                  :disabled="readerDefaults.fontSize >= 28"
-                  @click="changeDefaultFont(2)"
-                >
-                  <MdIcon name="add" />
-                </MdIconButton>
-              </div>
-            </div>
-            <SettingsSelectRow
-              :label="t('滚动宽度')"
-              :model-value="readerDefaults.webtoonFit"
-              :options="webtoonOptions"
-              @update:model-value="value => settings.setReaderDefault('webtoonFit', value)"
-            />
-            <MdSwitch
-              v-if="isAndroid"
-              class="settings-list-row"
-              :model-value="settings.volumeKeysTurnPage"
-              :title="t('音量加键上一页、音量减键下一页')"
-              @update:model-value="settings.setVolumeKeysTurnPage"
-            >
-              <span class="settings-value-copy">
-                <b>{{ t('用音量键翻页') }}</b>
-              </span>
-            </MdSwitch>
-          </div>
-        </section>
-        <button type="button" class="settings-text-button" @click="settings.resetReaderDefaults">{{ t('恢复阅读默认值') }}</button>
-      </template>
-      <template v-else-if="activeSection === 'storage'">
-        <div class="settings-detail-hero settings-storage-hero">
-          <div class="settings-storage-hero-head">
-            <span>{{ t('本机存储用量') }}</span>
-            <MdIconButton
-              type="button"
-              class="settings-icon-button"
-              :title="t('刷新存储用量')"
-              :aria-label="t('刷新存储用量')"
-              :disabled="storageLoading"
-              @click="refreshStorage"
-            >
-              <MdIcon name="update" />
-            </MdIconButton>
-          </div>
-          <template v-if="diskSegments">
-            <strong class="storage-number">{{ formatBytes(diskSegments.appBytes) }}</strong>
-            <p class="settings-note">{{ t('HOMURA 占用 · 共 {0}', { 0: storageTotalText }) }}</p>
-            <div
-              class="storage-stack"
-              :class="{ 'is-revealing': storageRevealing }"
-              role="img"
-              :aria-label="storageAriaLabel"
-            >
-              <i class="storage-seg storage-seg-app" :style="{ width: segmentWidth(diskSegments.appRatio) }"></i>
-              <i
-                class="storage-seg storage-seg-other"
-                :style="{ width: segmentWidth(diskSegments.otherRatio) }"
-              ></i>
-              <i
-                class="storage-seg storage-seg-free"
-                :style="{ width: segmentWidth(diskSegments.freeRatio) }"
-              ></i>
-            </div>
-            <div class="storage-legend">
-              <div>
-                <i class="storage-dot storage-seg-app"></i>
-                <span>HOMURA</span>
-                <b>{{ formatBytes(diskSegments.appBytes) }}</b>
-              </div>
-              <div>
-                <i class="storage-dot storage-seg-other"></i>
-                <span>{{ t('其他应用') }}</span>
-                <b>{{ formatBytes(diskSegments.otherBytes) }}</b>
-              </div>
-              <div>
-                <i class="storage-dot storage-seg-free"></i>
-                <span>{{ t('可用空间') }}</span>
-                <b>{{ formatBytes(diskSegments.freeBytes) }}</b>
-              </div>
-            </div>
-          </template>
-          <template v-else>
-            <strong class="storage-number">{{ storageUsageText }}</strong>
-            <p class="settings-note">{{ nativeStorageEnabled ? t('WebView 本地数据') : t('浏览器本地数据') }}</p>
-            <div
-              class="storage-bar"
-              :class="{ 'is-revealing': storageRevealing }"
-              role="progressbar"
-              :aria-label="t('本地存储用量')"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              :aria-valuenow="storagePercent"
-            >
-              <i :style="{ width: storageBarWidth }"></i>
-            </div>
-            <p class="settings-note">{{ storageQuotaText }}</p>
-            <p v-if="nativeStorageEnabled" class="settings-note">{{ t('应用内存档保存在此设备，容量受可用空间限制。') }}</p>
-          </template>
-        </div>
-        <section class="settings-detail-group" aria-labelledby="settings-smart-storage-heading">
-          <h2 id="settings-smart-storage-heading"><MdIcon name="tune" />{{ t('智能存储') }}
-            <MdInfoHint :label="t('智能存储')">{{ t('仅在开启后使用。达到预算时，优先回收收益较低的自动存档。') }}</MdInfoHint>
-          </h2>
-          <div class="settings-list">
-            <MdSwitch
-              class="settings-list-row"
-              :model-value="settings.smartStorageEnabled"
-              :title="t('按阅读频率自动转存')"
-              @update:model-value="settings.setSmartStorageEnabled"
-            >
-              <span class="settings-value-copy">
-                <b>{{ t('自动转存常读作品') }}</b>
-              </span>
-            </MdSwitch>
-            <div class="settings-detail-font">
-              <div class="settings-head">
-                <span>{{ t('自动转存预算') }}</span>
-                <b>{{ settings.smartStorageBudgetMb }} MB</b>
-              </div>
-              <MdRange
-                class="settings-range"
-                :model-value="settings.smartStorageBudgetMb"
-                :min="SMART_STORAGE_MIN_BUDGET_MB"
-                :max="SMART_STORAGE_MAX_BUDGET_MB"
-                :step="SMART_STORAGE_BUDGET_STEP_MB"
-                :aria-label="t('自动转存预算')"
-                :aria-value-text="`${settings.smartStorageBudgetMb} MB`"
-                @update:model-value="settings.setSmartStorageBudget"
-              />
-            </div>
-          </div>
-        </section>
-        <section v-if="diskSegments" class="settings-detail-group" aria-labelledby="settings-usage-heading">
-          <h2 id="settings-usage-heading">{{ t('本机用量') }}</h2>
-          <div class="settings-list">
-            <div class="settings-list-row">
-              <span class="settings-row-icon">
-                <MdIcon name="folder_open" />
-              </span>
-              <span class="settings-value-copy">
-                <b>{{ t('原始文件与缓存') }}</b>
-              </span>
-              <b class="settings-row-value">{{ storageNativeText }}</b>
-            </div>
-            <div class="settings-list-row">
-              <span class="settings-row-icon">
-                <MdIcon name="database" />
-              </span>
-              <span class="settings-value-copy">
-                <b>{{ t('WebView 本地数据') }}</b>
-              </span>
-              <b class="settings-row-value">{{ storageWebviewText }}</b>
-            </div>
-          </div>
-        </section>
-        <section class="settings-detail-group" aria-labelledby="settings-data-heading">
-          <h2 id="settings-data-heading">{{ t('数据管理') }}
-            <MdInfoHint :label="t('数据管理')">{{ t('清空书架会删除应用内存档和阅读记录。外部原文件仍由你管理。') }}</MdInfoHint>
-          </h2>
-          <div class="settings-list">
-            <div class="settings-list-row">
-              <span class="settings-value-copy">
-                <b>{{ t('阅读进度') }}</b>
-                <span>{{ t('{0} 本作品保留阅读位置与排版', { 0: progressCount }) }}</span>
-              </span>
-              <button
-                type="button"
-                class="settings-text-button"
-                :disabled="progressCount === 0 || actionBusy"
-                @click="requestDataAction('progress')"
-              >
-                {{ t('清空进度') }}
-              </button>
-            </div>
-            <div class="settings-list-row">
-              <span class="settings-value-copy">
-                <b>{{ t('书架与应用内存档') }}</b>
-                <span>{{ t('{0} 部作品，删除后无法恢复', { 0: shelf.library.length }) }}</span>
-              </span>
-              <button
-                type="button"
-                class="settings-text-button"
-                :disabled="shelf.library.length === 0 || actionBusy"
-                @click="requestDataAction('shelf')"
-              >
-                {{ t('清空书架') }}
-              </button>
-            </div>
-          </div>
-          <p v-if="actionNote" class="settings-detail-note" role="status">{{ actionNote }}</p>
-        </section>
-      </template>
-      <SyncSettings v-else-if="activeSection === 'sync'" />
-      <template v-else-if="activeSection === 'logs'">
-        <div class="settings-detail-hero settings-logs-hero">
-          <div class="settings-detail-hero-heading">
-            <span class="settings-detail-hero-icon" aria-hidden="true"><MdIcon name="history" /></span>
-            <h2>{{ settings.runtimeLogCapture ? t('记录中') : t('已暂停') }}</h2>
-          </div>
-          <dl class="settings-logs-summary">
-            <div>
-              <dt>{{ t('信息') }}</dt>
-              <dd>{{ runtimeLogs.infoCount }}</dd>
-            </div>
-            <div>
-              <dt>{{ t('警告') }}</dt>
-              <dd>{{ runtimeLogs.warningCount }}</dd>
-            </div>
-            <div>
-              <dt>{{ t('错误') }}</dt>
-              <dd>{{ runtimeLogs.errorCount }}</dd>
-            </div>
-          </dl>
-        </div>
-        <section class="settings-detail-group" aria-labelledby="settings-log-settings-heading">
-          <h2 id="settings-log-settings-heading">{{ t('记录偏好') }}
-            <MdInfoHint :label="t('记录偏好')">{{ t('启用捕获后，用户操作记录不受日志等级影响；等级控制控制台诊断信息。日志只保存在本机，不会随同步上传。') }}</MdInfoHint>
-          </h2>
-          <div class="settings-list">
-            <MdSwitch
-              class="settings-list-row"
-              :model-value="settings.runtimeLogCapture"
-              @update:model-value="settings.setRuntimeLogCapture"
-            >
-              <span class="settings-value-copy"><b>{{ t('日志捕获') }}</b></span>
-            </MdSwitch>
-            <SettingsSelectRow
-              :label="t('日志等级')"
-              :model-value="settings.runtimeLogLevel"
-              :options="logLevelOptions"
-              @update:model-value="settings.setRuntimeLogLevel"
-            />
-          </div>
-        </section>
-        <section class="settings-detail-group" aria-labelledby="settings-recent-log-heading">
-          <div class="settings-log-section-heading">
-            <h2 id="settings-recent-log-heading">{{ t('最近记录') }}</h2>
-            <span class="settings-log-count">{{ t('{0} 条记录', { 0: filteredLogs.length }) }}</span>
-            <button
-              type="button"
-              class="settings-text-button settings-log-clear"
-              :class="{ 'is-armed': logsClearArmed }"
-              :disabled="runtimeLogs.entries.length === 0"
-              @click="requestLogClear"
-            >
-              {{ logsClearArmed ? t('确认清空日志') : t('清空全部日志') }}
-            </button>
-          </div>
-          <div role="status">
-            <p v-if="logActionNote" class="settings-log-action-note">{{ logActionNote }}</p>
-          </div>
-          <div class="settings-list settings-log-panel">
-            <div class="settings-log-filter">
-              <MdSegmentedControl
-                :model-value="logFilter"
-                :options="logFilterOptions"
-                :aria-label="t('筛选日志等级')"
-                @update:model-value="setLogFilter"
-              />
-            </div>
-            <ul v-if="filteredLogs.length" class="settings-log-list" role="list">
-              <li v-for="entry in filteredLogs" :key="entry.id" class="settings-log-entry" :class="`is-${entry.level}`">
-                <span class="settings-row-icon settings-log-marker" aria-hidden="true">
-                  <MdIcon :name="entry.level === 'error' ? 'error' : entry.level === 'warning' ? 'warning' : entry.source === 'operation' ? 'history' : 'info'" />
-                </span>
-                <div class="settings-log-entry-body">
-                  <p class="settings-log-message">{{ entry.message }}</p>
-                  <div class="settings-log-meta">
-                    <span>{{ t(entry.level === 'info' ? '信息' : entry.level === 'warning' ? '警告' : '错误') }}</span>
-                    <span>{{ entry.source === 'operation' ? t('用户操作') : formatRuntimeLogSource(entry.source) }}</span>
-                    <time class="settings-log-time">{{ formatRuntimeLogTimestamp(entry.at) }}</time>
-                  </div>
-                  <details v-if="entry.detail" class="settings-log-detail">
-                    <summary><MdIcon name="expand_more" :size="16" />{{ t('查看详情') }}</summary>
-                    <pre>{{ entry.detail }}</pre>
-                  </details>
-                </div>
-              </li>
-            </ul>
-            <div v-else class="settings-log-empty">
-              <span class="settings-row-icon" aria-hidden="true"><MdIcon :name="logSearchActive ? 'search' : 'history'" /></span>
-              <div>
-                <b>{{ logSearchActive || logFilter !== 'all' ? t('没有匹配的日志') : !settings.runtimeLogCapture ? t('日志捕获已关闭。') : t('暂无日志') }}</b>
-                <p v-if="logSearchActive">{{ t('换个关键词，或切换等级再试试。') }}</p>
-              </div>
-            </div>
-          </div>
-        </section>
-      </template>
-      <template v-else-if="activeSection === 'about'">
-        <div class="settings-detail-hero settings-about-hero">
-          <img :src="logoUrl" :alt="t('HOMURA 应用图标')" />
-          <h2>HOMURA</h2>
-          <span class="settings-badge">{{ appVersion }}</span>
-          <p>{{ t('把故事留在本机，把阅读留给自己。') }}</p>
-          <p class="settings-note">
-            {{ t('漫画、轻小说与图集都在设备内解析。') }}
-            <br />
-            {{ t('原始文件不会上传，进度、收藏与书库可选同步。') }}
-          </p>
-        </div>
-        <section class="settings-detail-group" aria-labelledby="settings-update-heading">
-          <h2 id="settings-update-heading">{{ t('版本与更新') }}</h2>
-          <div class="settings-list">
-            <button type="button" class="settings-list-row" @click="updates.handlePrimaryUpdateAction">
-              <span class="settings-row-icon">
-                <MdIcon name="update" />
-              </span>
-              <span class="settings-value-copy">
-                <b>{{ hasPendingInstall ? t('继续安装') : t('检查更新') }}</b>
-              </span>
-              <span class="settings-row-value">{{ hasPendingInstall ? t('安装包已就绪') : t('手动检查') }}</span>
-              <MdIcon name="chevron_right" />
-            </button>
-            <button type="button" class="settings-list-row" @click="updates.openChangelog">
-              <span class="settings-row-icon">
-                <MdIcon name="article" />
-              </span>
-              <span class="settings-value-copy">
-                <b>{{ t('更新日志') }}</b>
-              </span>
-              <i v-if="hasNewRelease" class="about-log-new" :aria-label="t('有新版本')"></i>
-              <MdIcon name="chevron_right" />
-            </button>
-          </div>
-        </section>
-        <section class="settings-detail-group" aria-labelledby="settings-open-source-heading">
-          <h2 id="settings-open-source-heading">{{ t('开源信息') }}</h2>
-          <div class="settings-list">
-            <button type="button" class="settings-list-row" @click="openRepository">
-              <span class="settings-row-icon">
-                <MdIcon name="open_in_new" />
-              </span>
-              <span class="settings-value-copy">
-                <b>{{ t('开源仓库') }}</b>
-              </span>
-              <span class="settings-row-value">GitHub</span>
-              <MdIcon name="chevron_right" />
-            </button>
-            <button type="button" class="settings-list-row" @click="openLicense">
-              <span class="settings-row-icon">
-                <MdIcon name="info" />
-              </span>
-              <span class="settings-value-copy">
-                <b>{{ t('开源许可') }}</b>
-              </span>
-              <span class="settings-row-value">MIT License</span>
-              <MdIcon name="chevron_right" />
-            </button>
-          </div>
-          <p class="settings-detail-note">© Leo NING · AkisameRin</p>
-          <p v-if="aboutLinkError" class="settings-detail-note" role="alert">{{ aboutLinkError }}</p>
-        </section>
-      </template>
-      <template v-else-if="activeSection === 'import'">
-        <div class="settings-detail-hero settings-import-hero">
-          <div class="settings-import-diagram" aria-hidden="true">
-            <span class="settings-import-folder">
-              <MdIcon name="folder_open" />
-            </span>
-            <MdIcon name="chevron_right" />
-            <span class="settings-import-books">
-              <i></i>
-              <i></i>
-              <i></i>
-            </span>
-          </div>
-          <h2>{{ t('让作品，井井有条') }}</h2>
-          <p>{{ t('从文件夹到书库，保留你熟悉的整理方式。') }}</p>
-        </div>
-        <section class="settings-detail-group" aria-labelledby="settings-import-behavior-heading">
-          <h2 id="settings-import-behavior-heading">{{ t('导入行为') }}
-            <MdInfoHint :label="t('导入行为')">
-              <p>{{ t('关闭后直接导入作品；开启后，目录导入会先询问是否按目录创建一级书库。') }}</p>
-              <p>{{ t('偏好会自动保存，仅影响之后的导入。') }}</p>
-            </MdInfoHint>
-          </h2>
-          <div class="settings-list">
-            <MdSwitch
-              class="settings-list-row"
-              :model-value="settings.importCollectionPrompt"
-              :title="t('导入多本作品时询问是否创建书库')"
-              @update:model-value="settings.setImportCollectionPrompt"
-            >
-              <span class="settings-value-copy">
-                <b>{{ t('导入时询问创建书库') }}</b>
-              </span>
-            </MdSwitch>
-          </div>
-        </section>
-      </template>
-      <template v-else-if="activeSection === 'debug'">
-        <div class="settings-detail-hero settings-detail-hero-heading">
-          <span class="settings-detail-hero-icon" aria-hidden="true"><MdIcon name="science" /></span>
-          <h2>{{ t('调试与实验功能') }}</h2>
-        </div>
-        <section class="settings-detail-group" aria-labelledby="settings-debug-general-heading">
-          <h2 id="settings-debug-general-heading">{{ t('更新与界面') }}</h2>
-          <div class="settings-list">
-            <MdSwitch
-              class="settings-list-row"
-              :model-value="settings.debugAutoUpdateCheck"
-              @update:model-value="settings.setDebugAutoUpdateCheck"
-            >
-              <span class="settings-debug-switch-label">
-                <span class="settings-row-icon"><MdIcon name="update" /></span>
-                <span class="settings-value-copy"><b>{{ t('启动时静默检查更新') }}</b></span>
-              </span>
-            </MdSwitch>
-            <MdSwitch
-              class="settings-list-row"
-              :model-value="settings.showFullscreenButton"
-              @update:model-value="settings.setShowFullscreenButton"
-            >
-              <span class="settings-debug-switch-label">
-                <span class="settings-row-icon"><MdIcon name="fullscreen" /></span>
-                <span class="settings-value-copy"><b>{{ t('显示全屏按钮') }}</b></span>
-              </span>
-            </MdSwitch>
-          </div>
-        </section>
-        <section class="settings-detail-group" aria-labelledby="settings-demo-heading">
-          <h2 id="settings-demo-heading">{{ t('示例内容') }}</h2>
-          <div class="settings-list">
-            <button type="button" class="settings-list-row" @click="addDemoManga">
-              <span class="settings-row-icon"><MdIcon name="auto_stories" /></span>
-              <span class="settings-value-copy"><b>{{ t('添加示例漫画') }}</b></span>
-              <MdIcon name="add" />
-            </button>
-            <button type="button" class="settings-list-row" @click="addDemoNovel">
-              <span class="settings-row-icon"><MdIcon name="article" /></span>
-              <span class="settings-value-copy"><b>{{ t('添加示例小说') }}</b></span>
-              <MdIcon name="add" />
-            </button>
-          </div>
-          <div role="status">
-            <p v-if="debugNote" class="settings-detail-note">{{ debugNote }}</p>
-          </div>
-        </section>
-      </template>
-    </div>
     <footer class="settings-footer">
       <span>{{ t('作品保存在本机，同步由你选择。') }}</span>
       <span>HOMURA · ACGN GO</span>
     </footer>
-    <MobileBottomSheet v-if="isCompact" :open="!!pendingAction" :title="t(dataDialogTitle)" title-id="mobile-settings-dialog-title"
-      description-id="mobile-settings-dialog-copy" :busy="actionBusy" @close="closeDataDialog" @cancel="closeDataDialog"
-      @opened="mobileCancelButtonRef?.focus()">
-      <p class="md-mobile-sheet-label">{{ t('请确认影响范围') }}</p>
-      <div class="md-mobile-sheet-card">
-        <div class="md-mobile-sheet-row">
-          <span class="md-mobile-sheet-icon is-danger"><MdIcon name="delete" /></span>
-          <span class="md-mobile-sheet-copy"><b>{{ displayedAction === 'shelf' ? t('书架、应用内存档与阅读记录') : t('阅读位置与排版记忆') }}</b>
-            <small id="mobile-settings-dialog-copy">{{ t(dataDialogDescription) }}</small>
-          </span>
-        </div>
-      </div>
-      <div class="md-mobile-sheet-card md-mobile-sheet-notice is-danger">
-        <MdIcon name="warning" /><span class="md-mobile-sheet-copy"><b>{{ t('此操作无法撤销') }}</b><small>{{ t('请确认后再继续。') }}</small></span>
-      </div>
-      <template #footer>
-        <button type="button" class="md-filled-button md-mobile-sheet-danger" :disabled="actionBusy" @click="confirmDataAction">{{ actionBusy ? t('正在清空') : t('确认清空') }}</button>
-        <button ref="mobileCancelButtonRef" type="button" class="md-tonal-button" :disabled="actionBusy" @click="closeDataDialog">{{ t('取消') }}</button>
-      </template>
-    </MobileBottomSheet>
-    <Teleport v-if="!isCompact" to="body">
-      <Transition
-        enter-active-class="settings-dialog-enter-active"
-        enter-from-class="settings-dialog-enter"
-        enter-to-class="settings-dialog-enter-to"
-        leave-active-class="settings-dialog-leave-active"
-        leave-from-class="settings-dialog-leave-from"
-        leave-to-class="settings-dialog-leave-to"
-      >
-        <div v-if="pendingAction" class="settings-dialog-layer" @mousedown.self="closeDataDialog">
-          <section
-            class="settings-dialog"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="settings-dialog-title"
-            aria-describedby="settings-dialog-copy"
-            :aria-busy="actionBusy"
-          >
-            <div class="settings-dialog-icon" aria-hidden="true">
-              <MdIcon name="delete" />
-            </div>
-            <h3 id="settings-dialog-title">{{ t(dataDialogTitle) }}</h3>
-            <p id="settings-dialog-copy">{{ t(dataDialogDescription) }}</p>
-            <div class="settings-dialog-actions">
-              <button
-                ref="cancelButtonRef"
-                type="button"
-                class="settings-dialog-button is-secondary"
-                :disabled="actionBusy"
-                @click="closeDataDialog"
-              >
-                {{ t('取消') }}
-              </button>
-              <button
-                ref="confirmButtonRef"
-                type="button"
-                class="settings-dialog-button is-primary"
-                :disabled="actionBusy"
-                @click="confirmDataAction"
-              >
-                {{ actionBusy ? t('正在清空') : t('确认清空') }}
-              </button>
-            </div>
-          </section>
-        </div>
-      </Transition>
-    </Teleport>
   </div>
+  <Teleport to="body">
+    <section
+      v-if="activeSection"
+      class="settings-transition-layer"
+      :class="{ 'is-preparing': preparingDetail, 'is-settled': detailSettled }"
+      :style="detailInsets"
+      :aria-label="t(sectionTitles[activeSection])"
+    >
+      <div ref="clipRef" class="settings-transition-clip">
+        <div class="settings-transition-surround" aria-hidden="true"></div>
+        <div ref="surfaceRef" class="settings-transition-surface" aria-hidden="true"></div>
+        <div ref="detailRef" class="settings-page has-detail" :inert="returningDetail">
+          <header
+            class="settings-topbar"
+            :style="isCompact ? { paddingTop: 'env(safe-area-inset-top)' } : null"
+          >
+            <div class="settings-topbar-inner" :class="{ 'is-log-searching': activeSection === 'logs' && logSearchOpen }">
+              <MdIconButton
+                ref="backButtonRef"
+                type="button"
+                class="settings-back-button"
+                :aria-label="t('返回设置')"
+                @click="showPreviousSection"
+              >
+                <MdIcon name="chevron_left" />
+              </MdIconButton>
+              <div class="settings-topbar-title">
+                <h1>{{ t(sectionTitles[activeSection]) }}</h1>
+              </div>
+              <div v-if="activeSection === 'logs'" class="settings-topbar-actions">
+                <div v-if="logSearchOpen" class="settings-log-search" role="search">
+                  <MdIcon name="search" :size="19" />
+                  <input
+                    ref="logSearchInputRef"
+                    v-model="logQuery"
+                    type="text"
+                    inputmode="search"
+                    enterkeyhint="search"
+                    autocomplete="off"
+                    spellcheck="false"
+                    :placeholder="t('搜索日志')"
+                    :aria-label="t('搜索日志')"
+                    @keydown.esc.stop="closeLogSearch"
+                  />
+                  <MdIconButton
+                    type="button"
+                    class="settings-log-search-close"
+                    :aria-label="t('关闭搜索')"
+                    :title="t('关闭搜索')"
+                    @click="closeLogSearch"
+                  >
+                    <MdIcon name="close" :size="18" />
+                  </MdIconButton>
+                </div>
+                <div v-else class="settings-log-actions">
+                  <MdIconButton
+                    type="button"
+                    preserve-user-activation
+                    class="settings-log-action"
+                    :aria-label="t('搜索日志')"
+                    :title="t('搜索日志')"
+                    @click="openLogSearch"
+                  >
+                    <MdIcon name="search" :size="22" />
+                  </MdIconButton>
+                  <MdIconButton
+                    type="button"
+                    preserve-user-activation
+                    class="settings-log-action"
+                    :aria-label="t('导出日志')"
+                    :title="t('导出日志')"
+                    :disabled="!filteredLogs.length || logExporting"
+                    @click="exportLogs"
+                  >
+                    <MdIcon name="ios_share" :size="22" />
+                  </MdIconButton>
+                </div>
+              </div>
+            </div>
+          </header>
+          <div class="settings-detail">
+            <template v-if="activeSection === 'appearance'">
+              <div class="settings-detail-hero settings-surface-hero">
+                <div class="settings-surface-hero-preview">
+                  <SettingsInterfacePreview />
+                </div>
+                <div class="settings-hero-copy">
+                  <span class="settings-badge">{{ t('排版预览') }}</span>
+                  <h2>{{ t('外观设置') }}</h2>
+                  <p>{{ t('更改即时应用到整个应用，也会自动保存。') }}</p>
+                </div>
+              </div>
+              <section class="settings-detail-group" aria-labelledby="settings-surface-heading">
+                <h2 id="settings-surface-heading">
+                  <MdIcon name="light_mode" />
+                  {{ t('表面模式') }}
+                </h2>
+                <div class="settings-list" role="group" :aria-label="t('表面模式')">
+                  <button
+                    v-for="option in detailSurfaceOptions"
+                    :key="option.value"
+                    type="button"
+                    class="settings-list-row settings-surface-row"
+                    :aria-pressed="theme.surfaceMode === option.value"
+                    @click="selectSurfaceMode(option.value, $event)"
+                  >
+                    <SettingsInterfacePreview :mode="option.value" thumbnail />
+                    <span class="settings-value-copy">
+                      <b>{{ t(option.label) }}</b>
+                    </span>
+                    <MdIcon v-if="theme.surfaceMode === option.value" name="check" class="settings-row-check" />
+                  </button>
+                </div>
+              </section>
+              <section class="settings-detail-group" aria-labelledby="settings-black-heading">
+                <h2 id="settings-black-heading">
+                  <MdIcon name="contrast" />
+                  {{ t('纯黑模式') }}
+                  <MdInfoHint :label="t('纯黑模式')">{{ t('仅在夜间模式下生效，跟随系统时也会自动应用。') }}</MdInfoHint>
+                </h2>
+                <div class="settings-list" role="group" :aria-label="t('纯黑模式')">
+                  <button
+                    v-for="option in pureBlackOptions"
+                    :key="option.black"
+                    type="button"
+                    class="settings-list-row settings-surface-row"
+                    :aria-pressed="theme.pureBlackMode === option.value"
+                    @click="selectPureBlackMode(option.value, $event)"
+                  >
+                    <SettingsInterfacePreview mode="dark" :black="option.black" thumbnail />
+                    <span class="settings-value-copy">
+                      <b>{{ t(option.label) }}</b>
+                    </span>
+                    <MdIcon v-if="theme.pureBlackMode === option.value" name="check" class="settings-row-check" />
+                  </button>
+                </div>
+              </section>
+              <section class="settings-detail-group" aria-labelledby="settings-colors-heading">
+                <h2 id="settings-colors-heading">
+                  <MdIcon name="palette" />
+                  {{ t('主题色彩') }}
+                  <span class="settings-color-name">{{ t(themeLabel) }}</span>
+                </h2>
+                <div class="settings-list settings-color-strip">
+                  <ThemeSwatchGrid strip />
+                </div>
+              </section>
+            </template>
+            <template v-else-if="activeSection === 'reading'">
+              <div class="settings-detail-hero settings-reading-hero">
+                <div class="settings-book-stage" aria-hidden="true">
+                  <div class="settings-open-book">
+                    <div class="settings-book-page">
+                      <b>{{ t('夏日的序章') }}</b>
+                      <p>
+                        {{ t('风穿过敞开的窗，') }}
+                        <br />
+                        {{ t('书页轻轻翻动。') }}
+                      </p>
+                      <i v-for="line in 5" :key="line"></i>
+                      <span>12</span>
+                    </div>
+                    <div class="settings-book-page">
+                      <i v-for="line in 9" :key="line"></i>
+                      <span>13</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="settings-hero-copy">
+                  <span class="settings-badge">{{ t('阅读示意') }}</span>
+                  <h2>{{ t('找到舒服的阅读节奏') }}</h2>
+                  <p>{{ t('首次打开作品时，从这里开始。') }}</p>
+                </div>
+              </div>
+              <section class="settings-detail-group" aria-labelledby="settings-layout-heading">
+                <h2 id="settings-layout-heading">{{ t('翻页与布局') }}
+                  <MdInfoHint v-if="isScrollDefault" :label="t('翻页与布局')">{{ t('条漫模式沿用上次的分页方向与跨页布局，切回分页后生效。') }}</MdInfoHint>
+                </h2>
+                <div class="settings-list">
+                  <SettingsSelectRow
+                    :label="t('翻页方式')"
+                    :model-value="settings.transitionStyle"
+                    :options="transitionOptions"
+                    @update:model-value="settings.setTransitionStyle"
+                  />
+                  <SettingsSelectRow
+                    :label="t('阅读方向')"
+                    :model-value="readerDefaults.pagedDirection"
+                    :options="directionOptions"
+                    :disabled="isScrollDefault"
+                    @update:model-value="setDirection"
+                  />
+                  <SettingsSelectRow
+                    :label="t('跨页布局')"
+                    :model-value="readerDefaults.spread"
+                    :options="spreadOptions"
+                    :disabled="isScrollDefault"
+                    @update:model-value="setSpread"
+                  />
+                  <MdSwitch
+                    v-if="readerDefaults.spread === 2 && !isScrollDefault"
+                    class="settings-list-row"
+                    :model-value="readerDefaults.coverOffset"
+                    :title="t('让后续跨页大图保持对齐')"
+                    @update:model-value="value => settings.setReaderDefault('coverOffset', value)"
+                  >
+                    <span class="settings-value-copy">
+                      <b>{{ t('首页单排') }}</b>
+                    </span>
+                  </MdSwitch>
+                  <MdSwitch
+                    class="settings-list-row"
+                    :model-value="readerDefaults.verticalText"
+                    :title="t('文字从上往下，各列从右往左排列，仅作用于小说分页阅读')"
+                    @update:model-value="value => settings.setReaderDefault('verticalText', value)"
+                  >
+                    <span class="settings-value-copy">
+                      <b>{{ t('竖排文字') }}</b>
+                    </span>
+                  </MdSwitch>
+                </div>
+              </section>
+              <section class="settings-detail-group" aria-labelledby="settings-text-heading">
+                <h2 id="settings-text-heading">{{ t('文字与滚动') }}
+                  <MdInfoHint :label="t('文字与滚动')">{{ t('每本书已有的阅读位置与排版记忆会继续保留。') }}</MdInfoHint>
+                </h2>
+                <div class="settings-list">
+                  <div class="settings-detail-font">
+                    <div class="settings-head">
+                      <span>{{ t('默认字号') }}</span>
+                      <b>{{ readerDefaults.fontSize }} px</b>
+                    </div>
+                    <div class="font-size-control">
+                      <MdIconButton
+                        type="button"
+                        class="settings-icon-button"
+                        :title="t('减小字号')"
+                        :aria-label="t('减小字号')"
+                        :disabled="readerDefaults.fontSize <= 14"
+                        @click="changeDefaultFont(-2)"
+                      >
+                        <MdIcon name="remove" />
+                      </MdIconButton>
+                      <MdRange
+                        class="settings-range"
+                        :model-value="readerDefaults.fontSize"
+                        :min="14"
+                        :max="28"
+                        :step="2"
+                        :aria-label="t('默认字号')"
+                        @update:model-value="setFontSize"
+                      />
+                      <MdIconButton
+                        type="button"
+                        class="settings-icon-button"
+                        :title="t('增大字号')"
+                        :aria-label="t('增大字号')"
+                        :disabled="readerDefaults.fontSize >= 28"
+                        @click="changeDefaultFont(2)"
+                      >
+                        <MdIcon name="add" />
+                      </MdIconButton>
+                    </div>
+                  </div>
+                  <SettingsSelectRow
+                    :label="t('滚动宽度')"
+                    :model-value="readerDefaults.webtoonFit"
+                    :options="webtoonOptions"
+                    @update:model-value="value => settings.setReaderDefault('webtoonFit', value)"
+                  />
+                  <MdSwitch
+                    v-if="isAndroid"
+                    class="settings-list-row"
+                    :model-value="settings.volumeKeysTurnPage"
+                    :title="t('音量加键上一页、音量减键下一页')"
+                    @update:model-value="settings.setVolumeKeysTurnPage"
+                  >
+                    <span class="settings-value-copy">
+                      <b>{{ t('用音量键翻页') }}</b>
+                    </span>
+                  </MdSwitch>
+                </div>
+              </section>
+              <button type="button" class="settings-text-button" @click="settings.resetReaderDefaults">{{ t('恢复阅读默认值') }}</button>
+            </template>
+            <template v-else-if="activeSection === 'storage'">
+              <div class="settings-detail-hero settings-storage-hero">
+                <div class="settings-storage-hero-head">
+                  <span>{{ t('本机存储用量') }}</span>
+                  <MdIconButton
+                    type="button"
+                    class="settings-icon-button"
+                    :title="t('刷新存储用量')"
+                    :aria-label="t('刷新存储用量')"
+                    :disabled="storageLoading"
+                    @click="refreshStorage"
+                  >
+                    <MdIcon name="update" />
+                  </MdIconButton>
+                </div>
+                <template v-if="diskSegments">
+                  <strong class="storage-number">{{ formatBytes(diskSegments.appBytes) }}</strong>
+                  <p class="settings-note">{{ t('HOMURA 占用 · 共 {0}', { 0: storageTotalText }) }}</p>
+                  <div
+                    class="storage-stack"
+                    :class="{ 'is-revealing': storageRevealing }"
+                    role="img"
+                    :aria-label="storageAriaLabel"
+                  >
+                    <i class="storage-seg storage-seg-app" :style="{ width: segmentWidth(diskSegments.appRatio) }"></i>
+                    <i
+                      class="storage-seg storage-seg-other"
+                      :style="{ width: segmentWidth(diskSegments.otherRatio) }"
+                    ></i>
+                    <i
+                      class="storage-seg storage-seg-free"
+                      :style="{ width: segmentWidth(diskSegments.freeRatio) }"
+                    ></i>
+                  </div>
+                  <div class="storage-legend">
+                    <div>
+                      <i class="storage-dot storage-seg-app"></i>
+                      <span>HOMURA</span>
+                      <b>{{ formatBytes(diskSegments.appBytes) }}</b>
+                    </div>
+                    <div>
+                      <i class="storage-dot storage-seg-other"></i>
+                      <span>{{ t('其他应用') }}</span>
+                      <b>{{ formatBytes(diskSegments.otherBytes) }}</b>
+                    </div>
+                    <div>
+                      <i class="storage-dot storage-seg-free"></i>
+                      <span>{{ t('可用空间') }}</span>
+                      <b>{{ formatBytes(diskSegments.freeBytes) }}</b>
+                    </div>
+                  </div>
+                </template>
+                <template v-else>
+                  <strong class="storage-number">{{ storageUsageText }}</strong>
+                  <p class="settings-note">{{ nativeStorageEnabled ? t('WebView 本地数据') : t('浏览器本地数据') }}</p>
+                  <div
+                    class="storage-bar"
+                    :class="{ 'is-revealing': storageRevealing }"
+                    role="progressbar"
+                    :aria-label="t('本地存储用量')"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    :aria-valuenow="storagePercent"
+                  >
+                    <i :style="{ width: storageBarWidth }"></i>
+                  </div>
+                  <p class="settings-note">{{ storageQuotaText }}</p>
+                  <p v-if="nativeStorageEnabled" class="settings-note">{{ t('应用内存档保存在此设备，容量受可用空间限制。') }}</p>
+                </template>
+              </div>
+              <section class="settings-detail-group" aria-labelledby="settings-smart-storage-heading">
+                <h2 id="settings-smart-storage-heading"><MdIcon name="tune" />{{ t('智能存储') }}
+                  <MdInfoHint :label="t('智能存储')">{{ t('仅在开启后使用。达到预算时，优先回收收益较低的自动存档。') }}</MdInfoHint>
+                </h2>
+                <div class="settings-list">
+                  <MdSwitch
+                    class="settings-list-row"
+                    :model-value="settings.smartStorageEnabled"
+                    :title="t('按阅读频率自动转存')"
+                    @update:model-value="settings.setSmartStorageEnabled"
+                  >
+                    <span class="settings-value-copy">
+                      <b>{{ t('自动转存常读作品') }}</b>
+                    </span>
+                  </MdSwitch>
+                  <div class="settings-detail-font">
+                    <div class="settings-head">
+                      <span>{{ t('自动转存预算') }}</span>
+                      <b>{{ settings.smartStorageBudgetMb }} MB</b>
+                    </div>
+                    <MdRange
+                      class="settings-range"
+                      :model-value="settings.smartStorageBudgetMb"
+                      :min="SMART_STORAGE_MIN_BUDGET_MB"
+                      :max="SMART_STORAGE_MAX_BUDGET_MB"
+                      :step="SMART_STORAGE_BUDGET_STEP_MB"
+                      :aria-label="t('自动转存预算')"
+                      :aria-value-text="`${settings.smartStorageBudgetMb} MB`"
+                      @update:model-value="settings.setSmartStorageBudget"
+                    />
+                  </div>
+                </div>
+              </section>
+              <section v-if="diskSegments" class="settings-detail-group" aria-labelledby="settings-usage-heading">
+                <h2 id="settings-usage-heading">{{ t('本机用量') }}</h2>
+                <div class="settings-list">
+                  <div class="settings-list-row">
+                    <span class="settings-row-icon">
+                      <MdIcon name="folder_open" />
+                    </span>
+                    <span class="settings-value-copy">
+                      <b>{{ t('原始文件与缓存') }}</b>
+                    </span>
+                    <b class="settings-row-value">{{ storageNativeText }}</b>
+                  </div>
+                  <div class="settings-list-row">
+                    <span class="settings-row-icon">
+                      <MdIcon name="database" />
+                    </span>
+                    <span class="settings-value-copy">
+                      <b>{{ t('WebView 本地数据') }}</b>
+                    </span>
+                    <b class="settings-row-value">{{ storageWebviewText }}</b>
+                  </div>
+                </div>
+              </section>
+              <section class="settings-detail-group" aria-labelledby="settings-data-heading">
+                <h2 id="settings-data-heading">{{ t('数据管理') }}
+                  <MdInfoHint :label="t('数据管理')">{{ t('清空书架会删除应用内存档和阅读记录。外部原文件仍由你管理。') }}</MdInfoHint>
+                </h2>
+                <div class="settings-list">
+                  <div class="settings-list-row">
+                    <span class="settings-value-copy">
+                      <b>{{ t('阅读进度') }}</b>
+                      <span>{{ t('{0} 本作品保留阅读位置与排版', { 0: progressCount }) }}</span>
+                    </span>
+                    <button
+                      type="button"
+                      class="settings-text-button"
+                      :disabled="progressCount === 0 || actionBusy"
+                      @click="requestDataAction('progress')"
+                    >
+                      {{ t('清空进度') }}
+                    </button>
+                  </div>
+                  <div class="settings-list-row">
+                    <span class="settings-value-copy">
+                      <b>{{ t('书架与应用内存档') }}</b>
+                      <span>{{ t('{0} 部作品，删除后无法恢复', { 0: shelf.library.length }) }}</span>
+                    </span>
+                    <button
+                      type="button"
+                      class="settings-text-button"
+                      :disabled="shelf.library.length === 0 || actionBusy"
+                      @click="requestDataAction('shelf')"
+                    >
+                      {{ t('清空书架') }}
+                    </button>
+                  </div>
+                </div>
+                <p v-if="actionNote" class="settings-detail-note" role="status">{{ actionNote }}</p>
+              </section>
+            </template>
+            <SyncSettings v-else-if="activeSection === 'sync'" />
+            <template v-else-if="activeSection === 'logs'">
+              <div class="settings-detail-hero settings-logs-hero">
+                <div class="settings-detail-hero-heading">
+                  <span class="settings-detail-hero-icon" aria-hidden="true"><MdIcon name="history" /></span>
+                  <h2>{{ settings.runtimeLogCapture ? t('记录中') : t('已暂停') }}</h2>
+                </div>
+                <dl class="settings-logs-summary">
+                  <div>
+                    <dt>{{ t('信息') }}</dt>
+                    <dd>{{ runtimeLogs.infoCount }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ t('警告') }}</dt>
+                    <dd>{{ runtimeLogs.warningCount }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ t('错误') }}</dt>
+                    <dd>{{ runtimeLogs.errorCount }}</dd>
+                  </div>
+                </dl>
+              </div>
+              <section class="settings-detail-group" aria-labelledby="settings-log-settings-heading">
+                <h2 id="settings-log-settings-heading">{{ t('记录偏好') }}
+                  <MdInfoHint :label="t('记录偏好')">{{ t('启用捕获后，用户操作记录不受日志等级影响；等级控制控制台诊断信息。日志只保存在本机，不会随同步上传。') }}</MdInfoHint>
+                </h2>
+                <div class="settings-list">
+                  <MdSwitch
+                    class="settings-list-row"
+                    :model-value="settings.runtimeLogCapture"
+                    @update:model-value="settings.setRuntimeLogCapture"
+                  >
+                    <span class="settings-value-copy"><b>{{ t('日志捕获') }}</b></span>
+                  </MdSwitch>
+                  <SettingsSelectRow
+                    :label="t('日志等级')"
+                    :model-value="settings.runtimeLogLevel"
+                    :options="logLevelOptions"
+                    @update:model-value="settings.setRuntimeLogLevel"
+                  />
+                </div>
+              </section>
+              <section class="settings-detail-group" aria-labelledby="settings-recent-log-heading">
+                <div class="settings-log-section-heading">
+                  <h2 id="settings-recent-log-heading">{{ t('最近记录') }}</h2>
+                  <span class="settings-log-count">{{ t('{0} 条记录', { 0: filteredLogs.length }) }}</span>
+                  <button
+                    type="button"
+                    class="settings-text-button settings-log-clear"
+                    :class="{ 'is-armed': logsClearArmed }"
+                    :disabled="runtimeLogs.entries.length === 0"
+                    @click="requestLogClear"
+                  >
+                    {{ logsClearArmed ? t('确认清空日志') : t('清空全部日志') }}
+                  </button>
+                </div>
+                <div role="status">
+                  <p v-if="logActionNote" class="settings-log-action-note">{{ logActionNote }}</p>
+                </div>
+                <div class="settings-list settings-log-panel">
+                  <div class="settings-log-filter">
+                    <MdSegmentedControl
+                      :model-value="logFilter"
+                      :options="logFilterOptions"
+                      :aria-label="t('筛选日志等级')"
+                      @update:model-value="setLogFilter"
+                    />
+                  </div>
+                  <ul v-if="filteredLogs.length" class="settings-log-list" role="list">
+                    <li v-for="entry in filteredLogs" :key="entry.id" class="settings-log-entry" :class="`is-${entry.level}`">
+                      <span class="settings-row-icon settings-log-marker" aria-hidden="true">
+                        <MdIcon :name="entry.level === 'error' ? 'error' : entry.level === 'warning' ? 'warning' : entry.source === 'operation' ? 'history' : 'info'" />
+                      </span>
+                      <div class="settings-log-entry-body">
+                        <p class="settings-log-message">{{ entry.message }}</p>
+                        <div class="settings-log-meta">
+                          <span>{{ t(entry.level === 'info' ? '信息' : entry.level === 'warning' ? '警告' : '错误') }}</span>
+                          <span>{{ entry.source === 'operation' ? t('用户操作') : formatRuntimeLogSource(entry.source) }}</span>
+                          <time class="settings-log-time">{{ formatRuntimeLogTimestamp(entry.at) }}</time>
+                        </div>
+                        <details v-if="entry.detail" class="settings-log-detail">
+                          <summary><MdIcon name="expand_more" :size="16" />{{ t('查看详情') }}</summary>
+                          <pre>{{ entry.detail }}</pre>
+                        </details>
+                      </div>
+                    </li>
+                  </ul>
+                  <div v-else class="settings-log-empty">
+                    <span class="settings-row-icon" aria-hidden="true"><MdIcon :name="logSearchActive ? 'search' : 'history'" /></span>
+                    <div>
+                      <b>{{ logSearchActive || logFilter !== 'all' ? t('没有匹配的日志') : !settings.runtimeLogCapture ? t('日志捕获已关闭。') : t('暂无日志') }}</b>
+                      <p v-if="logSearchActive">{{ t('换个关键词，或切换等级再试试。') }}</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </template>
+            <template v-else-if="activeSection === 'about'">
+              <div class="settings-detail-hero settings-about-hero">
+                <img :src="logoUrl" :alt="t('HOMURA 应用图标')" />
+                <h2>HOMURA</h2>
+                <span class="settings-badge">{{ appVersion }}</span>
+                <p>{{ t('把故事留在本机，把阅读留给自己。') }}</p>
+                <p class="settings-note">
+                  {{ t('漫画、轻小说与图集都在设备内解析。') }}
+                  <br />
+                  {{ t('原始文件不会上传，进度、收藏与书库可选同步。') }}
+                </p>
+              </div>
+              <section class="settings-detail-group" aria-labelledby="settings-update-heading">
+                <h2 id="settings-update-heading">{{ t('版本与更新') }}</h2>
+                <div class="settings-list">
+                  <button type="button" class="settings-list-row" @click="updates.handlePrimaryUpdateAction">
+                    <span class="settings-row-icon">
+                      <MdIcon name="update" />
+                    </span>
+                    <span class="settings-value-copy">
+                      <b>{{ hasPendingInstall ? t('继续安装') : t('检查更新') }}</b>
+                    </span>
+                    <span class="settings-row-value">{{ hasPendingInstall ? t('安装包已就绪') : t('手动检查') }}</span>
+                    <MdIcon name="chevron_right" />
+                  </button>
+                  <button type="button" class="settings-list-row" @click="updates.openChangelog">
+                    <span class="settings-row-icon">
+                      <MdIcon name="article" />
+                    </span>
+                    <span class="settings-value-copy">
+                      <b>{{ t('更新日志') }}</b>
+                    </span>
+                    <i v-if="hasNewRelease" class="about-log-new" :aria-label="t('有新版本')"></i>
+                    <MdIcon name="chevron_right" />
+                  </button>
+                </div>
+              </section>
+              <section class="settings-detail-group" aria-labelledby="settings-open-source-heading">
+                <h2 id="settings-open-source-heading">{{ t('开源信息') }}</h2>
+                <div class="settings-list">
+                  <button type="button" class="settings-list-row" @click="openRepository">
+                    <span class="settings-row-icon">
+                      <MdIcon name="open_in_new" />
+                    </span>
+                    <span class="settings-value-copy">
+                      <b>{{ t('开源仓库') }}</b>
+                    </span>
+                    <span class="settings-row-value">GitHub</span>
+                    <MdIcon name="chevron_right" />
+                  </button>
+                  <button type="button" class="settings-list-row" @click="openLicense">
+                    <span class="settings-row-icon">
+                      <MdIcon name="info" />
+                    </span>
+                    <span class="settings-value-copy">
+                      <b>{{ t('开源许可') }}</b>
+                    </span>
+                    <span class="settings-row-value">MIT License</span>
+                    <MdIcon name="chevron_right" />
+                  </button>
+                </div>
+                <p class="settings-detail-note">© Leo NING · AkisameRin</p>
+                <p v-if="aboutLinkError" class="settings-detail-note" role="alert">{{ aboutLinkError }}</p>
+              </section>
+            </template>
+            <template v-else-if="activeSection === 'import'">
+              <div class="settings-detail-hero settings-import-hero">
+                <div class="settings-import-diagram" aria-hidden="true">
+                  <span class="settings-import-folder">
+                    <MdIcon name="folder_open" />
+                  </span>
+                  <MdIcon name="chevron_right" />
+                  <span class="settings-import-books">
+                    <i></i>
+                    <i></i>
+                    <i></i>
+                  </span>
+                </div>
+                <h2>{{ t('让作品，井井有条') }}</h2>
+                <p>{{ t('从文件夹到书库，保留你熟悉的整理方式。') }}</p>
+              </div>
+              <section class="settings-detail-group" aria-labelledby="settings-import-behavior-heading">
+                <h2 id="settings-import-behavior-heading">{{ t('导入行为') }}
+                  <MdInfoHint :label="t('导入行为')">
+                    <p>{{ t('关闭后直接导入作品；开启后，目录导入会先询问是否按目录创建一级书库。') }}</p>
+                    <p>{{ t('偏好会自动保存，仅影响之后的导入。') }}</p>
+                  </MdInfoHint>
+                </h2>
+                <div class="settings-list">
+                  <MdSwitch
+                    class="settings-list-row"
+                    :model-value="settings.importCollectionPrompt"
+                    :title="t('导入多本作品时询问是否创建书库')"
+                    @update:model-value="settings.setImportCollectionPrompt"
+                  >
+                    <span class="settings-value-copy">
+                      <b>{{ t('导入时询问创建书库') }}</b>
+                    </span>
+                  </MdSwitch>
+                </div>
+              </section>
+            </template>
+            <template v-else-if="activeSection === 'debug'">
+              <div class="settings-detail-hero settings-detail-hero-heading">
+                <span class="settings-detail-hero-icon" aria-hidden="true"><MdIcon name="science" /></span>
+                <h2>{{ t('调试与实验功能') }}</h2>
+              </div>
+              <section class="settings-detail-group" aria-labelledby="settings-debug-general-heading">
+                <h2 id="settings-debug-general-heading">{{ t('更新与界面') }}</h2>
+                <div class="settings-list">
+                  <MdSwitch
+                    class="settings-list-row"
+                    :model-value="settings.debugAutoUpdateCheck"
+                    @update:model-value="settings.setDebugAutoUpdateCheck"
+                  >
+                    <span class="settings-debug-switch-label">
+                      <span class="settings-row-icon"><MdIcon name="update" /></span>
+                      <span class="settings-value-copy"><b>{{ t('启动时静默检查更新') }}</b></span>
+                    </span>
+                  </MdSwitch>
+                  <MdSwitch
+                    class="settings-list-row"
+                    :model-value="settings.showFullscreenButton"
+                    @update:model-value="settings.setShowFullscreenButton"
+                  >
+                    <span class="settings-debug-switch-label">
+                      <span class="settings-row-icon"><MdIcon name="fullscreen" /></span>
+                      <span class="settings-value-copy"><b>{{ t('显示全屏按钮') }}</b></span>
+                    </span>
+                  </MdSwitch>
+                </div>
+              </section>
+              <section class="settings-detail-group" aria-labelledby="settings-demo-heading">
+                <h2 id="settings-demo-heading">{{ t('示例内容') }}</h2>
+                <div class="settings-list">
+                  <button type="button" class="settings-list-row" @click="addDemoManga">
+                    <span class="settings-row-icon"><MdIcon name="auto_stories" /></span>
+                    <span class="settings-value-copy"><b>{{ t('添加示例漫画') }}</b></span>
+                    <MdIcon name="add" />
+                  </button>
+                  <button type="button" class="settings-list-row" @click="addDemoNovel">
+                    <span class="settings-row-icon"><MdIcon name="article" /></span>
+                    <span class="settings-value-copy"><b>{{ t('添加示例小说') }}</b></span>
+                    <MdIcon name="add" />
+                  </button>
+                </div>
+                <div role="status">
+                  <p v-if="debugNote" class="settings-detail-note">{{ debugNote }}</p>
+                </div>
+              </section>
+            </template>
+          </div>
+          <footer class="settings-footer">
+            <span>{{ t('作品保存在本机，同步由你选择。') }}</span>
+            <span>HOMURA · ACGN GO</span>
+          </footer>
+        </div>
+      </div>
+    </section>
+  </Teleport>
+  <MobileBottomSheet v-if="isCompact" :open="!!pendingAction" :title="t(dataDialogTitle)" title-id="mobile-settings-dialog-title"
+    description-id="mobile-settings-dialog-copy" :busy="actionBusy" @close="closeDataDialog" @cancel="closeDataDialog"
+    @opened="mobileCancelButtonRef?.focus()">
+    <p class="md-mobile-sheet-label">{{ t('请确认影响范围') }}</p>
+    <div class="md-mobile-sheet-card">
+      <div class="md-mobile-sheet-row">
+        <span class="md-mobile-sheet-icon is-danger"><MdIcon name="delete" /></span>
+        <span class="md-mobile-sheet-copy"><b>{{ displayedAction === 'shelf' ? t('书架、应用内存档与阅读记录') : t('阅读位置与排版记忆') }}</b>
+          <small id="mobile-settings-dialog-copy">{{ t(dataDialogDescription) }}</small>
+        </span>
+      </div>
+    </div>
+    <div class="md-mobile-sheet-card md-mobile-sheet-notice is-danger">
+      <MdIcon name="warning" /><span class="md-mobile-sheet-copy"><b>{{ t('此操作无法撤销') }}</b><small>{{ t('请确认后再继续。') }}</small></span>
+    </div>
+    <template #footer>
+      <button type="button" class="md-filled-button md-mobile-sheet-danger" :disabled="actionBusy" @click="confirmDataAction">{{ actionBusy ? t('正在清空') : t('确认清空') }}</button>
+      <button ref="mobileCancelButtonRef" type="button" class="md-tonal-button" :disabled="actionBusy" @click="closeDataDialog">{{ t('取消') }}</button>
+    </template>
+  </MobileBottomSheet>
+  <Teleport v-if="!isCompact" to="body">
+    <Transition
+      enter-active-class="settings-dialog-enter-active"
+      enter-from-class="settings-dialog-enter"
+      enter-to-class="settings-dialog-enter-to"
+      leave-active-class="settings-dialog-leave-active"
+      leave-from-class="settings-dialog-leave-from"
+      leave-to-class="settings-dialog-leave-to"
+    >
+      <div v-if="pendingAction" class="settings-dialog-layer" @mousedown.self="closeDataDialog">
+        <section
+          class="settings-dialog"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="settings-dialog-title"
+          aria-describedby="settings-dialog-copy"
+          :aria-busy="actionBusy"
+        >
+          <div class="settings-dialog-icon" aria-hidden="true">
+            <MdIcon name="delete" />
+          </div>
+          <h3 id="settings-dialog-title">{{ t(dataDialogTitle) }}</h3>
+          <p id="settings-dialog-copy">{{ t(dataDialogDescription) }}</p>
+          <div class="settings-dialog-actions">
+            <button
+              ref="cancelButtonRef"
+              type="button"
+              class="settings-dialog-button is-secondary"
+              :disabled="actionBusy"
+              @click="closeDataDialog"
+            >
+              {{ t('取消') }}
+            </button>
+            <button
+              ref="confirmButtonRef"
+              type="button"
+              class="settings-dialog-button is-primary"
+              :disabled="actionBusy"
+              @click="confirmDataAction"
+            >
+              {{ actionBusy ? t('正在清空') : t('确认清空') }}
+            </button>
+          </div>
+        </section>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -1123,7 +1146,8 @@ import { WEBTOON_FIT_LABELS } from '../stores/reader.ts';
 import { useUpdateStore } from '../stores/updates.ts';
 import { useSyncStore } from '../stores/sync.ts';
 import { useViewport } from '../composables/useViewport.ts';
-import { settingsSelectBackKey, useSettingsTransition } from '../composables/useSettingsTransition.ts';
+import { createSettingsTransition, measureSettingsTransition, settingsSelectBackKey } from '../composables/useSettingsTransition.ts';
+import { readSettingsSection, sectionTitles, type SettingsSection } from '../services/settingsSectionHistory.ts';
 import type { NativeBackEvent } from '../composables/useAndroidBackExit.ts';
 import MdIcon from './MdIcon.vue';
 import MdIconButton from './MdIconButton.vue';
@@ -1182,14 +1206,11 @@ const logFilterOptions = [
 ];
 
 const emit = defineEmits(['detail-change']);
-const sectionTitles = {
-  appearance: '外观', reading: '阅读默认值', storage: '存储与数据', sync: 'WebDAV 同步',
-  about: '关于 HOMURA', import: '导入偏好', debug: '调试', logs: '运行日志'
-};
-type SettingsSection = keyof typeof sectionTitles;
 const activeSection = ref<SettingsSection | null>(null);
-const previewingBack = ref(false);
-const shownSection = computed(() => previewingBack.value ? null : activeSection.value);
+const preparingDetail = ref(false);
+const detailSettled = ref(false);
+const returningDetail = ref(false);
+const detailInsets = shallowRef<{ left: string; right: string }>();
 const logFilter = ref<RuntimeLogFilter>('all');
 const logsClearArmed = ref(false);
 let logsClearTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1201,13 +1222,22 @@ const logActionNote = ref('');
 let logActionNoteTimer: ReturnType<typeof setTimeout> | null = null;
 const pageRef = shallowRef<HTMLElement | null>(null);
 const backButtonRef = shallowRef<InstanceType<typeof MdIconButton> | null>(null);
-const sectionTransition = useSettingsTransition();
+const clipRef = shallowRef<HTMLElement | null>(null);
+const surfaceRef = shallowRef<HTMLElement | null>(null);
+const detailRef = shallowRef<HTMLElement | null>(null);
 const selectBack = shallowRef<(() => void) | null>(null);
 provide(settingsSelectBackKey, selectBack);
-let sectionOrigin: { scrollTop: number; selector: string } | null = null;
-let returnMotion: ReturnType<typeof sectionTransition.capture> = null;
-let backSample: { progress: number; time: number; touchX?: number } | null = null;
-let backVelocity = 0;
+let anchor: ReturnType<typeof measureSettingsTransition>['anchor'] = null;
+let motion: ReturnType<typeof createSettingsTransition> = null;
+let measureFrame = 0;
+let backRequestTimer: number | undefined;
+let afterReturn: (() => void) | undefined;
+let motionPreference: MediaQueryList | undefined;
+let resizeObserver: ResizeObserver | undefined;
+let previousScrollRestoration: ScrollRestoration;
+const PREDICTIVE_SETTLE_MS = 250;
+let backGestureActive = false;
+let gestureStartProgress = 0;
 const detailSurfaceOptions = ['auto', 'light', 'dark'].map(value => {
   const option = SURFACE_MODE_OPTIONS.find(item => item.value === value)!;
   return {
@@ -1450,90 +1480,150 @@ function openLicense() {
 }
 
 
-function settingsScroller() {
-  const node = document.querySelector<HTMLElement>('[data-app-scroll]');
-  return node && /auto|scroll/.test(getComputedStyle(node).overflowY) ? node : null;
+function sectionTrigger(section: SettingsSection) {
+  return pageRef.value?.querySelector<HTMLButtonElement>(`.settings-${section} > .settings-card-open`);
 }
 
-function getSettingsScroll() {
-  return settingsScroller()?.scrollTop ?? window.scrollY;
+function measureSection(section: SettingsSection) {
+  if (!pageRef.value) return;
+  const card = sectionTrigger(section)?.closest<HTMLElement>('.settings-card') ?? null;
+  const geometry = measureSettingsTransition(pageRef.value, card);
+  detailInsets.value = geometry.insets;
+  anchor = geometry.anchor;
 }
 
-function restoreSettingsScroll(top: number) {
-  (settingsScroller() ?? window).scrollTo({ top, behavior: 'instant' });
-}
-
-async function openSection(section: SettingsSection, event: MouseEvent) {
-  if (activeSection.value) return;
-  selectBack.value?.();
-  const trigger = event.currentTarget as HTMLElement;
-  const card = trigger.closest<HTMLElement>('.settings-card');
-  const transition = card ? sectionTransition.capture(pageRef.value, card) : null;
-  sectionOrigin = { scrollTop: getSettingsScroll(), selector: `.settings-${section} > .settings-card-open` };
-  activeSection.value = section;
-  emit('detail-change', true);
-  await nextTick();
-  restoreSettingsScroll(0);
-  transition?.play();
-  if (section === 'storage' && !storageLoading.value) refreshStorage();
-  await transition?.finished;
-  if (activeSection.value === section && !previewingBack.value) backButtonRef.value?.button?.focus({ preventScroll: true });
-}
-
-function startSectionReturn() {
-  if (!activeSection.value || returnMotion) return returnMotion;
-  const detailScroll = getSettingsScroll();
-  const focused = document.activeElement as HTMLElement | null;
-  const detailFocus = pageRef.value?.contains(focused) ? focused : null;
-  const origin = sectionOrigin;
-  const findTrigger = () => origin ? pageRef.value?.querySelector<HTMLElement>(origin.selector) : null;
-  const restoreOverview = () => {
-    activeSection.value = null;
-    previewingBack.value = false;
-    sectionOrigin = null;
-    emit('detail-change', false);
-  };
-
-  const transition = sectionTransition.capture(pageRef.value, null, async commit => {
-    if (commit) restoreOverview();
-    else previewingBack.value = false;
-    await nextTick();
-    if (!commit) restoreSettingsScroll(detailScroll);
-  });
-  if (!transition) return null;
-  returnMotion = transition;
-  previewingBack.value = true;
-  void nextTick(() => {
-    if (returnMotion !== transition || !previewingBack.value) return;
-    restoreSettingsScroll(origin?.scrollTop ?? 0);
-    transition.play(findTrigger()?.closest<HTMLElement>('.settings-card'));
-  });
-  void transition.finished.then(() => {
-    if (returnMotion !== transition) return;
-    returnMotion = null;
-    // 卸载时无需恢复焦点。手势取消后回到原详情控件，提交后回到入口。
-    if (!pageRef.value?.isConnected) return;
-    if (!activeSection.value) findTrigger()?.focus({ preventScroll: true });
-    else if (!previewingBack.value) (detailFocus?.isConnected ? detailFocus : backButtonRef.value?.button)?.focus({ preventScroll: true });
-  });
-  return transition;
-}
-
-async function showPreviousSection() {
-  if (actionBusy.value || !activeSection.value) return;
-  selectBack.value?.();
-  const transition = startSectionReturn();
-  if (transition) {
-    transition.settle(1);
+function finishSectionMotion() {
+  cancelAnimationFrame(measureFrame);
+  measureFrame = 0;
+  motion?.destroy();
+  motion = null;
+  preparingDetail.value = false;
+  returningDetail.value = false;
+  backGestureActive = false;
+  const previous = activeSection.value;
+  const section = readSettingsSection(window.history.state);
+  detailSettled.value = !!section;
+  if (section) {
+    if (previous !== section) enterSection(section, false);
     return;
   }
-  const origin = sectionOrigin;
+  if (!previous) return;
   activeSection.value = null;
-  sectionOrigin = null;
   emit('detail-change', false);
-  await nextTick();
-  restoreSettingsScroll(origin?.scrollTop ?? 0);
-  if (origin) pageRef.value?.querySelector<HTMLElement>(origin.selector)?.focus({ preventScroll: true });
+  const navigate = afterReturn;
+  afterReturn = undefined;
+  if (navigate) navigate();
+  else void nextTick(() => sectionTrigger(previous)?.focus({ preventScroll: true }));
+}
+
+function startMotion(progress: number) {
+  if (motion || !clipRef.value || !surfaceRef.value || !detailRef.value || !anchor) return motion;
+  motion = createSettingsTransition(clipRef.value, surfaceRef.value, detailRef.value, anchor, progress, finishSectionMotion);
+  return motion;
+}
+
+function enterSection(section: SettingsSection, animate: boolean) {
+  if (!animate) measureSection(section);
+  preparingDetail.value = animate;
+  detailSettled.value = !animate;
+  activeSection.value = section;
+  emit('detail-change', true);
+  void nextTick(() => {
+    if (activeSection.value !== section || readSettingsSection(window.history.state) !== section) return;
+    const transition = animate ? startMotion(1) : null;
+    preparingDetail.value = false;
+    if (transition) transition.playTo(0, finishSectionMotion);
+    else detailSettled.value = true;
+    backButtonRef.value?.button?.focus({ preventScroll: true });
+  });
+  if (section === 'storage' && !storageLoading.value) refreshStorage();
+}
+
+function openSection(section: SettingsSection) {
+  if (activeSection.value) return;
+  // 先读取入口位置，随后的 History 和 Vue 更新都不会重置概览滚动。
+  measureSection(section);
+  try {
+    window.history.pushState({ ...window.history.state, homuraSettings: true, subPage: section }, '');
+  } catch (error) {
+    console.warn('[HOMURA] 写入设置详情历史失败', error);
+    return;
+  }
+  selectBack.value?.();
+  enterSection(section, true);
+}
+
+function clearBackRequest() {
+  window.clearTimeout(backRequestTimer);
+  backRequestTimer = undefined;
+}
+
+function showPreviousSection() {
+  if (actionBusy.value || !readSettingsSection(window.history.state) || backRequestTimer !== undefined) return;
+  selectBack.value?.();
+  try {
+    window.history.back();
+    backRequestTimer = window.setTimeout(() => {
+      clearBackRequest();
+      afterReturn = undefined;
+      backGestureActive = false;
+      if (readSettingsSection(window.history.state)) motion?.playTo(0, finishSectionMotion);
+    }, 600);
+  } catch (error) {
+    afterReturn = undefined;
+    backGestureActive = false;
+    motion?.playTo(0, finishSectionMotion);
+    console.warn('[HOMURA] 返回设置概览失败', error);
+  }
+}
+
+function onSectionPopState(event: PopStateEvent) {
+  clearBackRequest();
+  const settleDuration = backGestureActive ? PREDICTIVE_SETTLE_MS : undefined;
+  backGestureActive = false;
+  const section = readSettingsSection(event.state);
+  if (section) {
+    afterReturn = undefined;
+    if (section === activeSection.value) motion?.playTo(0, finishSectionMotion);
+    else {
+      motion?.destroy();
+      motion = null;
+      returningDetail.value = false;
+      enterSection(section, false);
+    }
+    return;
+  }
+
+  const previous = activeSection.value;
+  if (!previous) return;
+  selectBack.value?.();
+  closeDataDialog();
+  if (motion) {
+    returningDetail.value = true;
+    motion.playTo(1, finishSectionMotion, settleDuration);
+    return;
+  }
+  // 等到独立的读帧再确认落点。详情与底层布局在这之前都留在原位。
+  cancelAnimationFrame(measureFrame);
+  measureFrame = requestAnimationFrame(() => {
+    measureFrame = 0;
+    if (readSettingsSection(window.history.state)) return;
+    measureSection(previous);
+    const transition = startMotion(0);
+    if (!transition) finishSectionMotion();
+    else {
+      returningDetail.value = true;
+      transition.playTo(1, finishSectionMotion, settleDuration);
+    }
+  });
+}
+
+function leaveDetail(navigate: () => void) {
+  if (!activeSection.value) return false;
+  if (actionBusy.value) return true;
+  afterReturn = navigate;
+  showPreviousSection();
+  return true;
 }
 
 function dismissBack() {
@@ -1555,31 +1645,29 @@ function canUsePredictiveBack() {
 }
 
 function onPredictiveBack(event: NativeBackEvent) {
-  const time = event.frameTimeMillis ?? performance.now();
+  if (event.phase === 'invoked') {
+    dismissBack();
+    return;
+  }
+  if (!readSettingsSection(window.history.state) || backRequestTimer !== undefined) return;
   if (event.phase === 'started') {
-    backSample = { progress: 0, time, touchX: event.touchX };
-    backVelocity = 0;
-    startSectionReturn();
-  } else if (event.phase === 'progressed') {
-    const progress = event.progress ?? 0;
-    returnMotion?.update(progress);
-    // 同一触点的系统补帧不覆盖手指实际移动时的速度。
-    if (backSample && time > backSample.time && (event.touchX === undefined || event.touchX !== backSample.touchX)) {
-      const elapsed = time - backSample.time;
-      backVelocity = elapsed <= 120 ? (progress - backSample.progress) * 1000 / elapsed : 0;
-      backSample = { progress, time, touchX: event.touchX };
-    }
-  } else {
-    const elapsed = backSample ? time - backSample.time : Infinity;
-    const velocity = elapsed >= 0 && elapsed <= 120 ? backVelocity : 0;
-    backSample = null;
-    backVelocity = 0;
-    if (returnMotion) returnMotion.settle(event.phase === 'invoked' ? 1 : 0, velocity);
-    else if (event.phase === 'invoked') dismissBack();
+    backGestureActive = true;
+    gestureStartProgress = startMotion(0)?.pause() ?? 0;
+  } else if (event.phase === 'progressed' && backGestureActive) {
+    const progress = Math.max(0, Math.min(1, event.progress ?? 0));
+    motion?.seek(gestureStartProgress + (1 - gestureStartProgress) * progress);
+  } else if (event.phase === 'cancelled') {
+    backGestureActive = false;
+    motion?.playTo(0, finishSectionMotion);
   }
 }
 
-defineExpose({ dismissBack, canUsePredictiveBack, onPredictiveBack });
+function onSettingsResize() {
+  if (motion || measureFrame) finishSectionMotion();
+  if (activeSection.value) measureSection(activeSection.value);
+}
+
+defineExpose({ dismissBack, canUsePredictiveBack, onPredictiveBack, leaveDetail });
 
 function selectSurfaceMode(value: string, event: MouseEvent) {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -1705,6 +1793,21 @@ watch(activeSection, () => {
 onMounted(() => {
   refreshStorage();
   window.addEventListener('keydown', onDialogKeydown);
+  window.addEventListener('popstate', onSectionPopState);
+  window.addEventListener('resize', onSettingsResize);
+  window.addEventListener('pagehide', finishSectionMotion);
+  motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+  motionPreference.addEventListener('change', finishSectionMotion);
+  previousScrollRestoration = window.history.scrollRestoration;
+  window.history.scrollRestoration = 'manual';
+  if (pageRef.value && typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(() => {
+      if (!motion && activeSection.value) measureSection(activeSection.value);
+    });
+    resizeObserver.observe(pageRef.value);
+  }
+  const section = readSettingsSection(window.history.state);
+  if (section) enterSection(section, false);
 });
 
 onBeforeUnmount(() => {
@@ -1712,6 +1815,15 @@ onBeforeUnmount(() => {
   disarmLogClear();
   clearLogActionNote();
   window.removeEventListener('keydown', onDialogKeydown);
+  window.removeEventListener('popstate', onSectionPopState);
+  window.removeEventListener('resize', onSettingsResize);
+  window.removeEventListener('pagehide', finishSectionMotion);
+  motionPreference?.removeEventListener('change', finishSectionMotion);
+  resizeObserver?.disconnect();
+  clearBackRequest();
+  cancelAnimationFrame(measureFrame);
+  motion?.destroy();
+  window.history.scrollRestoration = previousScrollRestoration;
   if (modalLayerLocked) document.body.style.overflow = previousModalBodyOverflow;
 });
 </script>
@@ -1730,35 +1842,59 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: transparent;
+  background: var(--md-surface-low);
   pointer-events: none;
 }
 
-/* 桌面详情顶栏与转场副本使用同一不透明表面，接手时不再采样背景或独立入场。 */
-@media (min-width: 900px) {
-  .has-detail .settings-topbar {
-    background: var(--md-surface-low);
-    animation: none;
-    transition: none;
-  }
-
-  .has-detail .settings-topbar::before {
-    content: none;
-  }
+.settings-transition-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+  isolation: isolate;
 }
 
-/* Android 转场临时停用背景采样；副本只保留静态外观，避免控件动画重新起播。 */
-:global(html[data-platform="android"].settings-card-transition .settings-topbar::before) {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+.settings-transition-layer.is-preparing {
+  visibility: hidden;
 }
 
-:global(html[data-platform="android"] [data-settings-snapshot]),
-:global(html[data-platform="android"] [data-settings-snapshot] *),
-:global(html[data-platform="android"] [data-settings-snapshot] *::before),
-:global(html[data-platform="android"] [data-settings-snapshot] *::after) {
-  animation: none !important;
-  transition: none !important;
+.settings-transition-clip,
+.settings-transition-surface,
+.settings-transition-clip > .settings-page {
+  position: absolute;
+  inset: 0;
+}
+
+.settings-transition-surface {
+  background: var(--md-surface-low);
+  pointer-events: none;
+}
+
+.settings-transition-clip.is-morphing > .settings-transition-surface {
+  clip-path: var(--settings-anchor-clip);
+}
+
+.settings-transition-surround {
+  display: none;
+}
+
+.settings-transition-clip.is-morphing > .settings-transition-surround {
+  display: block;
+  position: absolute;
+  inset: var(--settings-anchor-inset);
+  border-radius: var(--settings-anchor-radius);
+  outline: 150vmax solid var(--md-surface-low);
+  pointer-events: none;
+}
+
+.settings-transition-clip > .settings-page {
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: transparent;
+  opacity: 0;
+}
+
+.settings-transition-layer.is-settled .settings-transition-clip > .settings-page {
+  opacity: 1;
 }
 
 .settings-topbar-inner {

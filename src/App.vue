@@ -1,6 +1,6 @@
 <template>
   <!-- 手机底栏挂在阅读器预见式返回的 transform 容器外，避免长书架把 fixed 底栏带出视口 -->
-  <div id="homura-mobile-nav-root" :class="{ 'is-settings-detail': settingsDetailOpen }"
+  <div id="homura-mobile-nav-root"
     :inert="readerOpening || !!reader.currentBook || settingsDetailOpen"></div>
 
   <div
@@ -172,6 +172,7 @@ import { useShelfDialogs } from './composables/useShelfDialogs.ts';
 import { collectionNameError, availableCollectionName } from './services/collections.ts';
 import { useViewport } from './composables/useViewport.ts';
 import { useAndroidBackExit } from './composables/useAndroidBackExit.ts';
+import { readSettingsSection } from './services/settingsSectionHistory.ts';
 import { useScrollBounce } from './composables/useScrollBounce.ts';
 import SideNav from './components/SideNav.vue';
 import LibraryHeader from './components/LibraryHeader.vue';
@@ -218,7 +219,7 @@ const importInPlace = ref(true);
 const importMode = computed(() => importInPlace.value ? 'reference' : 'copy');
 const appearanceOpen = ref(false);
 const shelfFilterOpen = ref(false);
-const activeNav = ref('shelf');
+const activeNav = ref(readSettingsSection(window.history.state) ? 'settings' : 'shelf');
 const containedShelfScroll = computed(() => isMacOSTauri && !isCompact.value && activeNav.value !== 'settings');
 const settingsViewRef = shallowRef(null);
 
@@ -681,6 +682,10 @@ function retryFailedImport() {
 // 设置是一级页面；书架 / 最近 / 收藏复用书库筛选状态。
 function onRailNav(key) {
   if (!['shelf', 'recent', 'favorite', 'settings'].includes(key)) return;
+  if (activeNav.value === 'settings') {
+    if (key === 'settings') return;
+    if (settingsViewRef.value?.leaveDetail(() => onRailNav(key))) return;
+  }
   importMenuOpen.value = false;
   appearanceOpen.value = false;
   shelfFilterOpen.value = false;
@@ -740,7 +745,12 @@ async function dismissStartupSplash() {
   window.setTimeout(removeSplash, 240);
 }
 
+function restoreSettingsFromHistory(event) {
+  if (activeNav.value !== 'settings' && readSettingsSection(event.state)) activeNav.value = 'settings';
+}
+
 onMounted(async () => {
+  window.addEventListener('popstate', restoreSettingsFromHistory);
   let savedTheme = 'orchid';
   let savedMode = 'light';
   try {
@@ -772,6 +782,7 @@ onBeforeUnmount(() => {
   readerOpenRequest++;
   clearLoadingGuard();
   window.removeEventListener('keydown', onFullscreenKeydown);
+  window.removeEventListener('popstate', restoreSettingsFromHistory);
   if (updateBodyLocked) document.body.style.overflow = previousUpdateBodyOverflow;
 });
 </script>

@@ -31,6 +31,12 @@
       }
     }
 
+    @media (min-width: 900px) {
+      html:has(.settings-transition-layer) {
+        overflow-y: hidden;
+      }
+    }
+
     body {
       background-color: var(--bg-canvas);
       color: var(--fg-main);
@@ -132,12 +138,6 @@
 
       #homura-mobile-nav-root .mobile-nav {
         pointer-events: auto;
-        opacity: var(--settings-nav-visibility, 1);
-        translate: 0 calc(20px * (1 - var(--settings-nav-visibility, 1)));
-      }
-
-      #homura-mobile-nav-root.is-settings-detail {
-        --settings-nav-visibility: 0;
       }
 
       .library-main-column {

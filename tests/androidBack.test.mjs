@@ -103,6 +103,7 @@ test('预见式返回只注册一个原生通道，按手势归属转发并保�
   let fallbackHandler;
   let fallbackCalls = 0;
   const commands = [];
+  const registeredChannels = [];
   window.__TAURI__ = {
     app: { onBackButtonPress: async handler => { fallbackHandler = handler; } },
     core: {
@@ -110,7 +111,10 @@ test('预见式返回只注册一个原生通道，按手势归属转发并保�
       async invoke(command, args) {
         commands.push(command.split('|')[1]);
         if (command.endsWith('|supported')) return { supported: true };
-        if (command.endsWith('|enable')) nativeHandler = args.handler.handler;
+        if (command.endsWith('|enable') && args.handler) {
+          registeredChannels.push(args.handler);
+          nativeHandler = args.handler.handler;
+        }
       }
     }
   };
@@ -162,6 +166,14 @@ test('预见式返回只注册一个原生通道，按手势归属转发并保�
     nativeHandler({ phase: 'cancelled' });
     await tick();
     assert.deepEqual(commands, ['supported', 'enable', 'disable']);
+
+    settings.value = true;
+    await tick();
+    assert.deepEqual(commands, ['supported', 'enable', 'disable', 'enable']);
+    assert.equal(registeredChannels.length, 1, '重启系统回调时不重新序列化 JS 通道');
+    nativeHandler({ phase: 'started' });
+    nativeHandler({ phase: 'invoked' });
+    assert.deepEqual(detailPhases.slice(-2), ['started', 'invoked']);
   } finally {
     app.unmount();
     unregister();

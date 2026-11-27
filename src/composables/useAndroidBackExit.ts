@@ -42,6 +42,7 @@ const EXIT_TOAST_TEXT = '再按一次退出';
 export function useAndroidBackExit(reader: ReaderStore, dismissOverlay: () => boolean, settingsBack?: SettingsBack) {
   const nativePredictiveBackSupported = ref(false);
   let nativeChannel: unknown;
+  let nativeChannelConfigured = false;
   let nativeEnabled = false;
   let disposed = false;
   let registration = Promise.resolve();
@@ -168,8 +169,11 @@ export function useAndroidBackExit(reader: ReaderStore, dismissOverlay: () => bo
         && (!!currentPredictiveHandler() || gestureStarted);
       if (enabled === nativeEnabled) return;
       try {
-        if (enabled) await core.invoke('plugin:android-predictive-back|enable', { handler: nativeChannel });
-        else await core.invoke('plugin:android-predictive-back|disable');
+        if (enabled) {
+          // 同一个 JS Channel 重传会重建 Rust 消息序号，后续手势无法送达。
+          await core.invoke('plugin:android-predictive-back|enable', nativeChannelConfigured ? {} : { handler: nativeChannel });
+          nativeChannelConfigured = true;
+        } else await core.invoke('plugin:android-predictive-back|disable');
         nativeEnabled = enabled;
       } catch (err) {
         if (enabled) nativePredictiveBackSupported.value = false;
