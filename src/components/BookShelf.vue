@@ -18,7 +18,8 @@
   </div>
   <Teleport v-if="selectionTarget" :to="selectionTarget">
     <ShelfBatchBar
-      :label="selectionLabel"
+      :count="selectionCount"
+      :includes-collections="!!selectedCollectionIds.length"
       :all-selected="allSelected"
       :select-all-disabled="!canSelect || busy"
       :move-label="currentCollection ? t('移出书库') : t('移入书库')"
@@ -34,8 +35,16 @@
       @manage-storage="emit('manage-storage', selectedIds[0])"
     />
   </Teleport>
-  <section ref="gridRef" class="md-shelf-grid" :aria-label="favoritesOnly ? t('收藏内容') : currentCollection ? t('书库：{0}', { 0: currentCollection.title }) : t('书架内容')" @contextmenu="onShelfContextMenu" @keydown="onShelfKeydown" @touchstart.passive="onBookTouchStart">
-    <ContinueReading v-if="!favoritesOnly && !currentCollection && !selecting && featuredBooks.length" :books="featuredBooks" @open="openBook" />
+  <section ref="gridRef" class="md-shelf-grid relative" :aria-label="favoritesOnly ? t('收藏内容') : currentCollection ? t('书库：{0}', { 0: currentCollection.title }) : t('书架内容')" @contextmenu="onShelfContextMenu" @keydown="onShelfKeydown" @touchstart.passive="onBookTouchStart">
+    <div
+      v-if="!favoritesOnly && !currentCollection && featuredBooks.length"
+      ref="featuredCell"
+      class="md-featured-cell shelf-featured"
+      :class="{ 'is-collapsed': selecting }"
+      :inert="selecting"
+    >
+      <ContinueReading :books="featuredBooks" @open="openBook" />
+    </div>
     <CollectionCard v-for="collection in displayCollections" :key="collection.id" :collection="collection" :books="booksForCollection(collection)" :sort-key="sortKey" :touch-over="touchDrag.overId === collection.id" :selecting="selecting" :selected="selectedCollectionIds.includes(collection.id)" @open="openCollection" @toggle="toggleCollection" @move="moveDropped" />
     <BookCard v-for="book in renderedBooks" :key="book.id" :book="book" :progress="shelf.progressInfoFor(book.id) ?? undefined" :selecting="selecting" :selected="selectedIds.includes(book.id)" :dragging="touchDrag.active && touchDrag.ids.includes(book.id)" @open="openBook" @drag="onBookDrag" />
     <template v-if="!selecting">
@@ -65,6 +74,7 @@ import { compareBookTitles, normalizeBookTitle } from '../services/bookTitles.ts
 import { collectionPath } from '../services/collections.ts';
 import { groupShelfBooks } from '../services/shelfSections.ts';
 import { canUseNativeImport } from '../services/nativeImport.ts';
+import { prefersReducedMotion } from '../services/spring.ts';
 import BookCard from './BookCard.vue';
 import ContinueReading from './ContinueReading.vue';
 import CollectionCard from './CollectionCard.vue';
@@ -90,13 +100,14 @@ const props = defineProps({
 const emit = defineEmits(['open', 'detail', 'browse', 'manage-storage']);
 const shelf = useShelfStore();
 const { askShelfDialog } = useShelfDialogs();
-const { isTouch } = useViewport();
+const { isCompact, isTouch } = useViewport();
 const selecting = ref(false);
 const selectedIds = ref<string[]>([]);
 const selectedCollectionIds = ref<string[]>([]);
 const busy = ref(false);
-const canManageStorage = computed(() => canUseNativeImport() && !busy.value && selectedIds.value.length === 1
-  && !selectedCollectionIds.value.length && shelf.library.some(book => book.id === selectedIds.value[0] && !book.remote));
+const canManageStorage = computed(() => !busy.value && selectedIds.value.length === 1
+  && !selectedCollectionIds.value.length && canUseNativeImport()
+  && shelf.library.some(book => book.id === selectedIds.value[0] && !book.remote));
 const currentCollection = computed(() => props.favoritesOnly ? null : shelf.collectionsById.get(shelf.activeCollectionId ?? '') ?? null);
 const backLabel = computed(() => currentCollection.value?.parentId ? t('返回上一级') : t('返回书架'));
 const groupedIds = computed(() => new Set(shelf.collections.flatMap(item => item.bookIds)));
@@ -108,6 +119,7 @@ const RENDER_STEP = 96;
 const importPlaceholderCount = computed(() => Math.min(8, props.pendingImportCount));
 const renderLimit = ref(INITIAL_RENDER_LIMIT);
 const gridRef = shallowRef<HTMLElement | null>(null);
+const featuredCell = shallowRef<HTMLElement | null>(null);
 const loadMoreSentinel = shallowRef<HTMLElement | null>(null);
 const renderedBooks = computed(() => orderedBooks.value.length > renderLimit.value
   ? orderedBooks.value.slice(0, renderLimit.value)
@@ -119,11 +131,51 @@ const allSelected = computed(() => {
     displayBooks.value.every(book => selectedIds.value.includes(book.id)) &&
     displayCollections.value.every(collection => selectedCollectionIds.value.includes(collection.id));
 });
-const selectionLabel = computed(() => {
-  const bookCount = selectedIds.value.length;
-  const collectionCount = selectedCollectionIds.value.length;
-  if (collectionCount) return t('已选 {0} 项', { 0: bookCount + collectionCount });
-  return t('已选 {0} 本', { 0: bookCount });
+const selectionCount = computed(() => selectedIds.value.length + selectedCollectionIds.value.length);
+
+const FEATURED_FOLD_MS = 240;
+const shelfMoves = new Set<Animation>();
+let shelfMoveVersion = 0;
+
+function stopShelfMoves() {
+  for (const animation of shelfMoves) animation.cancel();
+  shelfMoves.clear();
+}
+
+watch(selecting, async collapsed => {
+  const version = ++shelfMoveVersion;
+  const cell = featuredCell.value;
+  if (!cell || isCompact.value || prefersReducedMotion()) {
+    stopShelfMoves();
+    return;
+  }
+
+  // 保留特色卡占三列的排布，收起时让其余卡片从原位置滑到重新排版后的位置。
+  const positions = Array.from(gridRef.value?.querySelectorAll<HTMLElement>(':scope > .md-shelf-card') ?? [],
+    card => ({ card, before: card.getBoundingClientRect() }));
+  if (collapsed) {
+    cell.style.setProperty('--featured-offset-x', `${cell.offsetLeft}px`);
+    cell.style.setProperty('--featured-offset-y', `${cell.offsetTop}px`);
+    cell.style.setProperty('--featured-width', `${cell.offsetWidth}px`);
+    cell.style.setProperty('--featured-height', `${cell.offsetHeight}px`);
+  }
+  stopShelfMoves();
+  await nextTick();
+  if (version !== shelfMoveVersion) return;
+
+  const moves = positions.filter(({ card }) => card.isConnected).map(({ card, before }) => {
+    const after = card.getBoundingClientRect();
+    return { card, x: before.left - after.left, y: before.top - after.top };
+  });
+  for (const { card, x, y } of moves) {
+    if (Math.abs(x) < .5 && Math.abs(y) < .5) continue;
+    const animation = card.animate([{ translate: `${x}px ${y}px` }, { translate: '0 0' }], {
+      duration: FEATURED_FOLD_MS,
+      easing: 'cubic-bezier(0.2, 0, 0, 1)'
+    });
+    shelfMoves.add(animation);
+    animation.onfinish = () => shelfMoves.delete(animation);
+  }
 });
 const emptyShelfHint = computed(() => {
   if (props.hasFilter) return t('没有符合条件的作品，换个关键词或筛选试试');
@@ -630,6 +682,8 @@ onMounted(() => {
   nextTick(observeLoadMore);
 });
 onBeforeUnmount(() => {
+  shelfMoveVersion++;
+  stopShelfMoves();
   document.removeEventListener('click', onDocumentClick, true);
   loadMoreObserver?.disconnect();
   loadMoreObserver = null;
@@ -639,6 +693,47 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.shelf-featured {
+  display: grid;
+  min-width: 0;
+}
+.shelf-featured.is-collapsed {
+  display: none;
+}
+@media (min-width: 768px) {
+  .shelf-featured:not(:has(+ .md-shelf-card)) {
+    min-height: 188px;
+  }
+}
+@media (min-width: 900px) and (prefers-reduced-motion: no-preference) {
+  .shelf-featured {
+    clip-path: inset(-16px);
+    transform-origin: top center;
+    transition:
+      clip-path 240ms var(--md-ease-emphasized),
+      opacity 240ms var(--md-ease-emphasized),
+      transform 240ms var(--md-ease-emphasized);
+  }
+  .shelf-featured.is-collapsed {
+    position: absolute;
+    z-index: 2;
+    display: grid;
+    inset: var(--featured-offset-y) auto auto var(--featured-offset-x);
+    width: var(--featured-width);
+    height: var(--featured-height);
+    min-height: 0;
+    opacity: 0;
+    visibility: hidden;
+    clip-path: inset(0 0 100%);
+    transform: scale(.98);
+    transition:
+      clip-path 240ms var(--md-ease-emphasized),
+      opacity 240ms var(--md-ease-emphasized),
+      transform 240ms var(--md-ease-emphasized),
+      visibility 0s linear 240ms;
+  }
+}
+
 .shelf-import-status {
   display: inline-flex;
   align-items: center;

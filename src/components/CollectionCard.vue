@@ -1,5 +1,5 @@
 <template>
-  <article class="md-shelf-card md-collection-card relative min-w-0 self-start" :class="{ 'is-drop-target': highlighted }" :data-collection-id="collection.id" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
+  <article class="md-shelf-card md-collection-card relative min-w-0 self-start" :class="{ 'is-drop-target': highlighted, 'is-selecting': selecting }" :data-collection-id="collection.id" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
     <button type="button" class="md-shelf-open absolute inset-0 z-10" :aria-label="selecting ? t('选择书库：{0}', { 0: collection.title }) : t('打开书库：{0}，{1} 本', { 0: collection.title, 1: books.length })" :aria-pressed="selecting ? selected : undefined" @click="$emit(selecting ? 'toggle' : 'open', collection.id)"></button>
     <div class="md-collection-stack">
       <div class="md-shelf-cover" :class="{ 'is-selected': selected }">
@@ -15,9 +15,11 @@
             <span class="md-collection-badge-label">{{ t('系列') }}</span>
           </span>
         </span>
-        <span v-if="selecting" class="md-select-badge md-shape-morph md-shape-boom" :class="{ 'is-selected': selected }" aria-hidden="true">
-          <MdIcon :name="selected ? 'check' : 'radio_button_unchecked'" :size="16" />
-        </span>
+        <Transition name="md-select-badge">
+          <span v-if="selecting" class="md-select-badge" :class="{ 'is-selected': selected }" aria-hidden="true">
+            <MdIcon :name="selected ? 'check' : 'radio_button_unchecked'" :size="16" />
+          </span>
+        </Transition>
         <span v-if="highlighted" class="md-collection-drop">{{ t('松开移入书库') }}</span>
       </div>
     </div>

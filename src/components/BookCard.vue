@@ -1,5 +1,5 @@
 <template>
-  <article class="md-shelf-card relative min-w-0 self-start" :class="{ 'is-touch-dragging': dragging }" :data-book-id="book.id" draggable="true" @dragstart="$emit('drag', $event, book.id)" @contextmenu.prevent>
+  <article class="md-shelf-card relative min-w-0 self-start" :class="{ 'is-touch-dragging': dragging, 'is-selecting': selecting }" :data-book-id="book.id" draggable="true" @dragstart="$emit('drag', $event, book.id)" @contextmenu.prevent>
     <button type="button" class="md-shelf-open absolute inset-0 z-10" :aria-label="selecting ? t('选择书本：{0}', { 0: book.title }) : t('阅读：{0}', { 0: book.title })" :aria-pressed="selecting ? selected : undefined" :aria-keyshortcuts="selecting ? undefined : 'Shift+F10'" @click="onOpen"></button>
     <div class="md-shelf-cover" :class="{ 'is-selected': selected }" ref="coverEl" data-book-cover>
       <img
@@ -16,10 +16,12 @@
         <span class="md-shelf-cover-title line-clamp-3">{{ book.title }}</span>
       </div>
 
-      <span v-if="selecting" class="md-select-badge md-shape-morph md-shape-boom" :class="{ 'is-selected': selected }" aria-hidden="true">
-        <MdIcon :name="selected ? 'check' : 'radio_button_unchecked'" :size="16" />
-      </span>
-      <span v-else class="book-badges">
+      <Transition name="md-select-badge">
+        <span v-if="selecting" class="md-select-badge" :class="{ 'is-selected': selected }" aria-hidden="true">
+          <MdIcon :name="selected ? 'check' : 'radio_button_unchecked'" :size="16" />
+        </span>
+      </Transition>
+      <span v-if="!selecting" class="book-badges">
         <span v-if="book.remote" class="book-badge" role="img" :aria-label="t('云端')">
           <MdIcon name="cloud" />
         </span>

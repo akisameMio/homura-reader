@@ -188,7 +188,8 @@
       contain-intrinsic-size: auto 1200px;
     }
 
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    :root { --md-scrollbar-size: 6px; }
+    ::-webkit-scrollbar { width: var(--md-scrollbar-size); height: var(--md-scrollbar-size); }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--md-primary) 35%, transparent); border-radius: 9999px; }
 

@@ -51,8 +51,9 @@ defineProps({
   visibility: visible;
 }
 @media (hover: hover) and (pointer: fine) {
-  .shelf-tool-tooltip:hover .shelf-tool-tooltip-label {
+  .shelf-tool-tooltip.is-tooltip-hovered .shelf-tool-tooltip-label {
     visibility: visible;
+    transition: visibility 0s linear 360ms;
   }
 }
 </style>

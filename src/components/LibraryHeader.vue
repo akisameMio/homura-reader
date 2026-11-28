@@ -1,9 +1,9 @@
 <template>
-  <header class="library-header-bar md-topbar-fade z-20" :class="{ 'is-selecting': selecting }">
+  <header class="library-header-bar md-topbar-fade z-20">
     <div
       ref="toolbarRef"
       class="library-toolbar"
-      :class="{ 'is-pill-expanded': pillExpanded, 'is-search-open': searchOpen }"
+      :class="{ 'is-pill-expanded': pillExpanded }"
       :style="{ '--library-pill-button-count': 2 + Number(showFullscreen) + Number(!!$slots.actions) + Number(selectionVisible) }"
     >
       <div class="library-toolbar-title" :inert="pillExpanded && isCompact">
@@ -27,8 +27,11 @@
       <div
         ref="pillTrackRef"
         class="library-pill-track"
-        :class="{ 'is-scroll-hidden': scrollHidden }"
+        :class="{ 'is-scroll-hidden': scrollHidden, 'is-morphing': pillMorphing }"
         :inert="scrollHidden"
+        @pointermove="onToolPointerMove"
+        @pointerleave="hideToolTooltip"
+        @pointerdown="onToolPointerDown"
       >
         <div class="library-pill-surface"></div>
         <div class="library-pill-content">
@@ -72,7 +75,7 @@
                 <MdIcon name="check_circle" class="w-5 h-5" />
               </MdIconButton>
             </ShelfToolTooltip>
-            <ShelfToolTooltip :label="t('搜索书名、作者')" align-end class="library-pill-search">
+            <ShelfToolTooltip :label="t('搜索书名、作者')" align-end>
               <MdIconButton
                 ref="searchButtonRef"
                 preserve-user-activation
@@ -92,7 +95,8 @@
             id="library-toolbar-search"
             class="library-search-field"
             role="search"
-            :inert="!searchOpen"
+            :class="{ 'is-active-field': expandedField === 'search' }"
+            :inert="pillMode !== 'search'"
             @focusout="onSearchFocusOut"
             @keydown="onSearchKeydown"
           >
@@ -127,6 +131,7 @@
             id="library-toolbar-selection"
             ref="selectionFieldRef"
             class="library-selection-field"
+            :class="{ 'is-active-field': expandedField === 'selection' }"
             :inert="!selecting"
           ></div>
         </div>
@@ -226,7 +231,10 @@ const showFullscreen = computed(() => !isCompact.value && settings.showFullscree
 const fullscreenLabel = computed(() => ui.fullscreen ? t('退出全屏 (F)') : t('全屏 (F)'));
 
 const searchOpen = ref(false);
-const pillExpanded = computed(() => searchOpen.value || props.selecting);
+const pillMode = computed(() => props.selecting ? 'selection' : searchOpen.value ? 'search' : 'tools');
+const pillExpanded = computed(() => pillMode.value !== 'tools');
+const expandedField = ref<'search' | 'selection'>('search');
+const pillMorphing = ref(false);
 const scrollHidden = ref(false);
 const toolbarRef = shallowRef<HTMLElement | null>(null);
 const pillTrackRef = shallowRef<HTMLElement | null>(null);
@@ -238,7 +246,9 @@ const selectionButtonRef = shallowRef<InstanceType<typeof MdIconButton> | null>(
 const scrollSpring = makeAxis(0, 620);
 const pillSpring = makeAxis(0, 740);
 let cancelPillSpring: (() => void) | null = null;
-let closeSpringDelay: ReturnType<typeof setTimeout> | undefined;
+let hoveredTooltip: HTMLElement | null = null;
+let pointerX: number | undefined;
+let pointerY: number | undefined;
 
 defineExpose({ selectionFieldRef });
 
@@ -247,18 +257,48 @@ watch(keepToolsVisible, visible => {
   if (visible) scrollHidden.value = false;
 });
 
+const SCROLL_IDLE_DELAY = 160;
+
 watch([() => props.scrollRoot, () => props.containedScroll, () => props.title], ([root, containedScroll], _, onCleanup) => {
   scrollHidden.value = false;
   const column = root?.parentElement;
   if (!root || !column) return;
   const scroller = containedScroll ? root : (document.scrollingElement ?? document.documentElement);
+  const scrollEventTarget = containedScroll ? root : document;
 
   let wheelDistance = 0;
   let lastWheelTime = -Infinity;
+  let previousScrollTop = readScrollTop();
+  let scrollIdleTimer: number | undefined;
   let touch: { id: number; startX: number; startY: number; turningY: number; vertical: boolean } | null = null;
+
+  function readScrollTop() {
+    const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    return Math.max(0, Math.min(maxScrollTop, scroller.scrollTop));
+  }
+
+  function onScroll() {
+    const scrollTop = readScrollTop();
+    if (scrollHidden.value && scrollTop < previousScrollTop) {
+      wheelDistance = 0;
+      scrollHidden.value = false;
+    }
+    previousScrollTop = scrollTop;
+    scheduleToolsRestore();
+  }
+
+  function scheduleToolsRestore() {
+    window.clearTimeout(scrollIdleTimer);
+    if (!scrollHidden.value || touch?.vertical) return;
+    scrollIdleTimer = window.setTimeout(() => {
+      wheelDistance = 0;
+      scrollHidden.value = false;
+    }, SCROLL_IDLE_DELAY);
+  }
 
   function resetIfNoScrollRange() {
     if (scroller.scrollHeight > scroller.clientHeight + 1) return false;
+    window.clearTimeout(scrollIdleTimer);
     scrollHidden.value = false;
     wheelDistance = 0;
     touch = null;
@@ -273,6 +313,7 @@ watch([() => props.scrollRoot, () => props.containedScroll, () => props.title], 
     } else if (distance <= -8) {
       scrollHidden.value = false;
     }
+    scheduleToolsRestore();
   }
 
   const onWheel = (event: WheelEvent) => {
@@ -297,7 +338,7 @@ watch([() => props.scrollRoot, () => props.containedScroll, () => props.title], 
     if (!touch) return;
     const point = event.touches[0];
     if (event.touches.length !== 1 || point.identifier !== touch.id || document.body.classList.contains('md-touch-dragging')) {
-      touch = null;
+      onTouchEnd();
       return;
     }
     if (!touch.vertical) {
@@ -317,16 +358,20 @@ watch([() => props.scrollRoot, () => props.containedScroll, () => props.title], 
 
   function onTouchEnd() {
     touch = null;
+    scheduleToolsRestore();
   }
 
   column.addEventListener('wheel', onWheel, { passive: true });
+  scrollEventTarget.addEventListener('scroll', onScroll, { passive: true });
   root.addEventListener('touchstart', onTouchStart, { passive: true });
   root.addEventListener('touchmove', onTouchMove, { passive: true });
   root.addEventListener('touchend', onTouchEnd, { passive: true });
   root.addEventListener('touchcancel', onTouchEnd, { passive: true });
   window.addEventListener('resize', resetIfNoScrollRange);
   onCleanup(() => {
+    window.clearTimeout(scrollIdleTimer);
     column.removeEventListener('wheel', onWheel);
+    scrollEventTarget.removeEventListener('scroll', onScroll);
     root.removeEventListener('touchstart', onTouchStart);
     root.removeEventListener('touchmove', onTouchMove);
     root.removeEventListener('touchend', onTouchEnd);
@@ -336,6 +381,7 @@ watch([() => props.scrollRoot, () => props.containedScroll, () => props.title], 
 }, { immediate: true, flush: 'post' });
 
 watch(scrollHidden, (hidden, _, onCleanup) => {
+  hideToolTooltip();
   const track = pillTrackRef.value;
   if (!track) return;
   const property = '--library-tools-spring-progress';
@@ -350,46 +396,59 @@ watch(scrollHidden, (hidden, _, onCleanup) => {
   onCleanup(runSpring([scrollSpring], paint, () => track.style.removeProperty(property), { damping: 0.9 }));
 });
 
-watch(pillExpanded, open => {
+watch(pillMode, mode => {
+  hideToolTooltip();
+  if (mode !== 'tools') expandedField.value = mode;
   const toolbar = toolbarRef.value;
   if (!toolbar) return;
   cancelPillSpring?.();
   cancelPillSpring = null;
-  clearTimeout(closeSpringDelay);
-  pillSpring.target = open ? 1 : 0;
-  if (prefersReducedMotion()) {
+  pillSpring.target = mode === 'tools' ? 0 : 1;
+  const property = '--library-pill-spring-progress';
+  if (prefersReducedMotion() || (pillSpring.pos === pillSpring.target && !pillSpring.vel)) {
     snapAxes([pillSpring]);
-    toolbar.style.removeProperty('--library-pill-spring-progress');
+    toolbar.style.removeProperty(property);
+    pillMorphing.value = false;
     return;
   }
 
-  const startProgress = Math.min(1, Math.max(0, pillSpring.pos));
-  const collapseDelay = !open && startProgress >= 0.98 && Math.abs(pillSpring.vel) < 0.04 ? 80 : 0;
-  if (open) {
-    toolbar.style.setProperty('--library-field-appear-delay', `${Math.round(125 * (1 - startProgress))}ms`);
-  } else {
-    toolbar.style.setProperty('--library-pill-return-delay', `${collapseDelay + Math.round(134 * startProgress)}ms`);
-  }
-
-  // 反向切换沿用当前弹簧的位移和速度，每帧只更新 DOM 样式。
+  pillMorphing.value = true;
   const paint = () => {
     const progress = Math.min(1, Math.max(0, pillSpring.pos));
-    toolbar.style.setProperty('--library-pill-spring-progress', String(progress));
+    toolbar.style.setProperty(property, String(progress));
   };
   paint();
-  const animate = () => {
-    cancelPillSpring = runSpring([pillSpring], paint, () => {
-      cancelPillSpring = null;
-      toolbar.style.removeProperty('--library-pill-spring-progress');
-    }, { damping: 0.94 });
-  };
-  // 已展开时先淡出文字。途中反向时马上交给弹簧，保留当帧速度。
-  if (collapseDelay) {
-    closeSpringDelay = setTimeout(animate, collapseDelay);
-  } else {
-    animate();
-  }
+  cancelPillSpring = runSpring([pillSpring], paint, () => {
+    cancelPillSpring = null;
+    toolbar.style.removeProperty(property);
+    pillMorphing.value = false;
+  }, { damping: 0.94 });
 });
+
+function hideToolTooltip() {
+  hoveredTooltip?.classList.remove('is-tooltip-hovered');
+  hoveredTooltip = null;
+}
+
+function onToolPointerDown(event: PointerEvent) {
+  if (event.pointerType !== 'mouse') return;
+  pointerX = event.clientX;
+  pointerY = event.clientY;
+  hideToolTooltip();
+}
+
+function onToolPointerMove(event: PointerEvent) {
+  if (!event.isTrusted || event.pointerType !== 'mouse'
+    || (event.clientX === pointerX && event.clientY === pointerY)) return;
+  pointerX = event.clientX;
+  pointerY = event.clientY;
+  if (pillMorphing.value || scrollHidden.value) return;
+  const tooltip = (event.target as Element).closest<HTMLElement>('.shelf-tool-tooltip');
+  if (tooltip === hoveredTooltip) return;
+  hideToolTooltip();
+  hoveredTooltip = tooltip;
+  hoveredTooltip?.classList.add('is-tooltip-hovered');
+}
 
 watch(searchOpen, (open, _, onCleanup) => {
   if (!open) return;
@@ -402,6 +461,7 @@ watch(searchOpen, (open, _, onCleanup) => {
 
 watch(() => props.selecting, async selecting => {
   const restoreFocus = selectionFieldRef.value?.contains(document.activeElement);
+  if (selecting) searchOpen.value = false;
   await nextTick();
   if (props.selecting !== selecting) return;
   if (selecting) {
@@ -448,7 +508,6 @@ function clearSearch() {
 
 onBeforeUnmount(() => {
   cancelPillSpring?.();
-  clearTimeout(closeSpringDelay);
 });
 
 const categories = [
@@ -484,6 +543,9 @@ const sortOptions = [
   position: absolute;
   inset: 0 0 auto;
 }
+.has-contained-shelf-scroll .library-header-bar::before {
+  inset-inline-end: var(--md-scrollbar-size);
+}
 
 .library-toolbar {
   --library-toolbar-inset: 28px;
@@ -493,6 +555,8 @@ const sortOptions = [
   --library-pill-width: calc(var(--library-pill-rest) + (var(--library-pill-expanded-width) - var(--library-pill-rest)) * var(--library-pill-progress));
   --library-pill-target: 0;
   --library-pill-progress: var(--library-pill-target);
+  --library-tools-opacity: clamp(0, (0.43 - var(--library-pill-progress)) / 0.43, 1);
+  --library-field-opacity: clamp(0, (var(--library-pill-progress) - 0.57) / 0.43, 1);
   position: relative;
   display: flex;
   align-items: center;
@@ -603,41 +667,26 @@ button.library-title-text {
 .library-selection-field:not([inert]) {
   pointer-events: auto;
 }
-.library-pill-buttons > * {
-  --library-icon-delay: var(--library-pill-return-delay, 214ms);
-  opacity: 1;
-  filter: blur(0);
-  transition:
-    opacity 110ms var(--md-ease-emphasized) var(--library-icon-delay),
-    filter 110ms var(--md-ease-emphasized) var(--library-icon-delay),
-    background-color var(--md-duration-short) var(--md-ease-emphasized);
+.library-pill-buttons {
+  opacity: var(--library-tools-opacity);
+  filter: blur(calc((1 - var(--library-tools-opacity)) * 5px));
 }
-.library-pill-buttons .library-pill-search {
-  --library-icon-delay: calc(var(--library-pill-return-delay, 214ms) + 40ms);
-}
-.is-pill-expanded .library-pill-buttons > * {
-  opacity: 0;
-  filter: blur(5px);
-  transition-delay: 0ms;
-  transition-duration: 78ms, 78ms, var(--md-duration-short);
+.library-pill-track:is(.is-morphing, .is-scroll-hidden) :deep(.shelf-tool-tooltip-label) {
+  visibility: hidden;
+  transition: none;
 }
 .library-search-field,
 .library-selection-field {
-  inset-inline: 0;
+  inset-inline: var(--library-pill-clip-start) 0;
   opacity: 0;
-  filter: blur(5px);
-  transition: opacity 80ms var(--md-ease-emphasized), filter 80ms var(--md-ease-emphasized);
+  filter: blur(calc((1 - var(--library-field-opacity)) * 5px));
+}
+.is-active-field {
+  opacity: var(--library-field-opacity);
 }
 .library-search-field {
   gap: 8px;
   padding-inline-start: 15px;
-}
-.is-search-open .library-search-field,
-.is-selecting .library-selection-field {
-  opacity: 1;
-  filter: blur(0);
-  transition-delay: var(--library-field-appear-delay, 125ms);
-  transition-duration: 120ms;
 }
 .library-search-icon {
   flex: none;
@@ -689,10 +738,7 @@ button.library-title-text {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .library-tool,
-  .library-pill-buttons > *,
-  .library-search-field,
-  .library-selection-field {
+  .library-tool {
     transition: none;
   }
 }

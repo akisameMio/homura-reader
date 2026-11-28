@@ -933,6 +933,7 @@ export default {
   '移动到书库': 'Move to collection',
   '书架首页': 'Main shelf',
   '管理存储': 'Manage storage',
+  '单选时可管理存储': 'Select one book to manage storage',
   '原位引用': 'Linked file',
   '本机副本': 'Local copy',
   '文件信息': 'File info',

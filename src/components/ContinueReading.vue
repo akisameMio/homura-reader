@@ -3,7 +3,7 @@
   <button
     v-if="featured"
     type="button"
-    class="md-card continue-card md-featured-cell"
+    class="md-card continue-card"
     :data-book-id="featured.book.id"
     :title="started ? t('继续阅读：{0}', { 0: featured.book.title }) : t('开始阅读：{0}', { 0: featured.book.title })"
     :aria-label="started ? t('继续阅读：{0}', { 0: featured.book.title }) : t('开始阅读：{0}', { 0: featured.book.title })"
@@ -302,7 +302,6 @@ const progressWavePath = computed(() => {
 @media (min-width: 768px) {
   /* 同排书卡决定行高，特色卡随网格拉伸。 */
   .continue-card { min-height: 0; align-self: stretch; }
-  .continue-card:not(:has(+ .md-shelf-card)) { min-height: 188px; }
   .content { position: absolute; inset: 0 auto 0 0; }
 }
 @container continue-reading (max-width: 520px) {
