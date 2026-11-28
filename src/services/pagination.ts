@@ -325,6 +325,7 @@ export async function ensureChapterImagesResolved(chap: ChapterItem | null | und
       if (img.tagName.toLowerCase() === 'image') {
         img.setAttribute('href', url);
         img.setAttribute('xlink:href', url);
+        if (decodeTask) decodedImages.push({ img, decodeTask });
       } else {
         img.setAttribute('src', url);
         if (decodeTask) decodedImages.push({ img, decodeTask });
@@ -338,6 +339,12 @@ export async function ensureChapterImagesResolved(chap: ChapterItem | null | und
     if (!size) return;
     if (!img.hasAttribute('width')) img.setAttribute('width', String(size.width));
     if (!img.hasAttribute('height')) img.setAttribute('height', String(size.height));
+    if (img.tagName.toLowerCase() === 'image') {
+      const svg = img.closest('svg');
+      if (svg && !svg.hasAttribute('viewBox') && !svg.hasAttribute('viewbox')) {
+        svg.setAttribute('viewBox', `0 0 ${size.width} ${size.height}`);
+      }
+    }
   }));
   chap.htmlContent = wrapper.innerHTML;
   chap.imagesResolved = true;
@@ -441,6 +448,8 @@ export function finishPagination<T>(steps: Generator<void, T>): T {
   return result.value;
 }
 
+const SPLITTABLE_BLOCK_TAGS = new Set(['P', 'DIV', 'BLOCKQUOTE', 'LI']);
+
 export function splitLongParagraph(html: string, measurer: HTMLElement, maxHeight: number) {
   return finishPagination(splitLongParagraphSteps(html, measurer, maxHeight));
 }
@@ -449,9 +458,9 @@ function* splitLongParagraphSteps(html: string, measurer: HTMLElement, maxHeight
   const wrapper = document.createElement('div');
   wrapper.innerHTML = html;
   const source = wrapper.firstElementChild;
-  if (!source || source.tagName !== 'P' || source.querySelector('img, svg, image')) return [html];
+  if (!source || !SPLITTABLE_BLOCK_TAGS.has(source.tagName) || source.querySelector('img, svg, image')) return [html];
 
-  if (source.children.length === 0) {
+  if (source.tagName === 'P' && source.children.length === 0) {
     const plainParts = yield* splitPlainTextParagraph(source.textContent, measurer, maxHeight);
     if (plainParts) {
       if (source.id) {
@@ -464,7 +473,7 @@ function* splitLongParagraphSteps(html: string, measurer: HTMLElement, maxHeight
     }
   }
 
-  // <br> 没有文本，但换行本身占高度；把它当作一个虚拟字符参与 Range 定位。
+  // <br> 与日文注音 <ruby> 均按不可拆分的原子单元参与 Range 定位，避免振假名跨页断裂。
   const atoms: Array<{ type: string; node: Node; start: number; end: number }> = [];
   let length = 0;
   function collect(node: Node) {
@@ -476,7 +485,7 @@ function* splitLongParagraphSteps(html: string, measurer: HTMLElement, maxHeight
         length += textNode.length;
       } else if (child.nodeType === Node.ELEMENT_NODE) {
         const element = child as Element;
-        if (element.tagName === 'BR') {
+        if (element.tagName === 'BR' || element.tagName === 'RUBY') {
           atoms.push({ type: 'break', node: element, start: length, end: length + 1 });
           length += 1;
         } else {
@@ -591,8 +600,13 @@ function measureBlockExtent(measurer: HTMLElement) {
   return vertical ? measurer.scrollWidth : measurer.scrollHeight;
 }
 
-// EPUB 常把整章包在 section/div 里；结构容器必须拆开分页，否则含图的整章会被裁成一页。
-// 只在容器没有直接文本时递归展开，避免丢掉混在子元素之间的文字。
+const BLOCK_CHILD_TAGS = new Set([
+  'body', 'main', 'section', 'article', 'div', 'header', 'footer', 'aside',
+  'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'ul', 'ol',
+  'dl', 'table', 'hr'
+]);
+
+// EPUB 常把整章包在 section/div 里；结构容器必须拆开分页，否则含图或混排的整章会被裁成一页。
 export function collectNovelBlocks(html: string) {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = html || '';
@@ -602,6 +616,34 @@ export function collectNovelBlocks(html: string) {
     return Array.from(node.childNodes).some(child => (
       child.nodeType === Node.TEXT_NODE && child.textContent!.trim()
     ));
+  }
+
+  function hasBlockChild(element: Element) {
+    return Array.from(element.children).some(child => BLOCK_CHILD_TAGS.has(child.tagName.toLowerCase()));
+  }
+
+  function pushChildrenWithInlineGrouping(parent: Node) {
+    let inlineNodes: Node[] = [];
+    const flushInline = () => {
+      if (!inlineNodes.length) return;
+      const p = document.createElement('p');
+      for (const item of inlineNodes) p.appendChild(item.cloneNode(true));
+      inlineNodes = [];
+      const text = (p.textContent || '').trim();
+      const hasMedia = !!p.querySelector('img, svg, image');
+      if (text || hasMedia) {
+        blocks.push({ type: 'p', text, html: p.outerHTML });
+      }
+    };
+    for (const child of Array.from(parent.childNodes)) {
+      if (child.nodeType === Node.ELEMENT_NODE && BLOCK_CHILD_TAGS.has((child as Element).tagName.toLowerCase())) {
+        flushInline();
+        pushNode(child);
+      } else {
+        inlineNodes.push(child);
+      }
+    }
+    flushInline();
   }
 
   function pushNode(node: Node) {
@@ -614,9 +656,16 @@ export function collectNovelBlocks(html: string) {
 
     const element = node as Element;
     const tag = element.tagName.toLowerCase();
-    if (NOVEL_CONTAINER_TAGS.has(tag) && element.children.length > 0 && !hasDirectText(node)) {
+    const shouldUnwrap = NOVEL_CONTAINER_TAGS.has(tag)
+      && element.children.length > 0
+      && (!hasDirectText(node) || hasBlockChild(element));
+    if (shouldUnwrap) {
       const start = blocks.length;
-      Array.from(node.childNodes).forEach(pushNode);
+      if (hasDirectText(node)) {
+        pushChildrenWithInlineGrouping(node);
+      } else {
+        Array.from(node.childNodes).forEach(pushNode);
+      }
       if (element.id && blocks[start]) {
         const first = document.createElement('div');
         first.innerHTML = blocks[start].html;
@@ -725,10 +774,10 @@ function* paginateNovelChapter(chap: ChapterItem, chapterIndex: number, measurer
     return chapterPages;
   }
 
-  // 插图章节直接展示图片：不注入章首页，也丢掉书内自带的「插圖」标题块。
+  // 插图章节直接展示图片：不注入章首页，也丢掉书内自带的纯文字「插圖」标题块（若标题内嵌图片则保留）。
   const illustration = isIllustrationChapter(blocks);
   const contentBlocks = illustration
-    ? blocks.filter(block => !HEADING_BLOCK_TAGS.has(block.type))
+    ? blocks.filter(block => !HEADING_BLOCK_TAGS.has(block.type) || blockContainsMedia(block))
     : blocks;
 
   // 章首页作为整章第一块参与测量：标题、分隔线、章序号都被算进页高。

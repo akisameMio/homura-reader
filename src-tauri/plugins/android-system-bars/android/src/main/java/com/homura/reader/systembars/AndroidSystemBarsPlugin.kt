@@ -20,16 +20,24 @@ class AndroidSystemBarsPlugin(private val activity: Activity) : Plugin(activity)
     try {
       val options = invoke.parseArgs(SystemBarsOptions::class.java)
       activity.runOnUiThread {
-        val window = activity.window
-        if (window == null) {
-          invoke.reject("Android window unavailable")
-          return@runOnUiThread
+        try {
+          if (activity.isFinishing || activity.isDestroyed) {
+            invoke.reject("Android activity unavailable")
+            return@runOnUiThread
+          }
+          val window = activity.window
+          if (window == null) {
+            invoke.reject("Android window unavailable")
+            return@runOnUiThread
+          }
+          // enableEdgeToEdge 已让系统栏透明，这里只负责切图标明暗，避免夜间深色底上压黑图标。
+          val controller = WindowCompat.getInsetsController(window, window.decorView)
+          controller.isAppearanceLightStatusBars = !options.dark
+          controller.isAppearanceLightNavigationBars = !options.dark
+          invoke.resolve()
+        } catch (ex: Exception) {
+          invoke.reject(ex.message ?: "Failed to update Android system bars")
         }
-        // enableEdgeToEdge 已让系统栏透明，这里只负责切图标明暗，避免夜间深色底上压黑图标。
-        val controller = WindowCompat.getInsetsController(window, window.decorView)
-        controller.isAppearanceLightStatusBars = !options.dark
-        controller.isAppearanceLightNavigationBars = !options.dark
-        invoke.resolve()
       }
     } catch (ex: Exception) {
       invoke.reject(ex.message ?: "Failed to update Android system bars")

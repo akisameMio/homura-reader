@@ -121,11 +121,13 @@ export async function openRemoteZip(source: RangeSource): Promise<RemoteZip> {
     const next = cursor + 46 + nameLength + extraLength + commentLength;
     if (next > length || !nameLength || nameLength > 4096 || (flags & 1) || ![0, 8].includes(method)) throw fail();
     const rawName = central.subarray(cursor + 46, cursor + 46 + nameLength);
-    // UTF-8 为标准路径；历史非 UTF-8 包用浏览器支持的 GB18030 解码。
+    // UTF-8 为标准路径；历史非 UTF-8 包依次尝试 GB18030 与日文 Shift-JIS 解码。
     let name: string;
     try { name = new TextDecoder('utf-8', { fatal: true }).decode(rawName); } catch {
       if (flags & 0x800) throw fail();
-      name = new TextDecoder('gb18030', { fatal: true }).decode(rawName);
+      try { name = new TextDecoder('gb18030', { fatal: true }).decode(rawName); } catch {
+        name = new TextDecoder('shift-jis', { fatal: true }).decode(rawName);
+      }
     }
     const parts = name.replace(/\/$/, '').split('/');
     if (name.startsWith('/') || /[\\\u0000-\u001f]/.test(name) || parts.some(part => !part || part === '.' || part === '..') || byName.has(name)) throw fail();

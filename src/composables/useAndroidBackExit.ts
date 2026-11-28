@@ -5,7 +5,7 @@
    主页第一次按返回只提示，短时间内再按一次才退出。
    ========================================================================== */
 
-import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
+import { onMounted, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { isAndroid } from '../services/platform.ts';
 import { t } from './useI18n.ts';
 import type { useReaderStore } from '../stores/reader.ts';
@@ -23,21 +23,23 @@ interface SettingsBack {
   enabled: () => boolean;
   handle: PredictiveHandler;
 }
-let readerBackHandler: (() => void) | null = null;
-let readerPredictiveHandler: PredictiveHandler | null = null;
+const readerBackHandler = shallowRef<(() => void) | null>(null);
+const readerPredictiveHandler = shallowRef<PredictiveHandler | null>(null);
 
 export function registerReaderBackHandler(handler: () => void, predictiveHandler: PredictiveHandler) {
-  readerBackHandler = handler;
-  readerPredictiveHandler = predictiveHandler;
+  readerBackHandler.value = handler;
+  readerPredictiveHandler.value = predictiveHandler;
   return () => {
-    if (readerBackHandler !== handler) return;
-    readerBackHandler = null;
-    readerPredictiveHandler = null;
+    if (readerBackHandler.value !== handler) return;
+    readerBackHandler.value = null;
+    readerPredictiveHandler.value = null;
   };
 }
 
 const EXIT_CONFIRM_WINDOW = 2000;
 const EXIT_TOAST_TEXT = '再按一次退出';
+const BACK_LISTENER_RETRY_DELAY = 350;
+const BACK_LISTENER_MAX_RETRIES = 6;
 
 export function useAndroidBackExit(reader: ReaderStore, dismissOverlay: () => boolean, settingsBack?: SettingsBack) {
   const nativePredictiveBackSupported = ref(false);
@@ -50,9 +52,29 @@ export function useAndroidBackExit(reader: ReaderStore, dismissOverlay: () => bo
   let gestureStarted = false;
   let gestureInterrupted = false;
   let backListener: BackListener = null;
+  let backListenerPending = false;
+  let backListenerRetries = 0;
+  let backListenerRetryTimer: ReturnType<typeof setTimeout> | null = null;
   let backListenerToken = 0;
   let lastBackAt = 0;
   let exitRequested = false;
+
+  function clearBackListenerRetry() {
+    if (backListenerRetryTimer !== null) {
+      clearTimeout(backListenerRetryTimer);
+      backListenerRetryTimer = null;
+    }
+  }
+
+  function scheduleBackListenerRetry() {
+    if (disposed || backListener || backListenerRetryTimer !== null) return;
+    if (backListenerRetries >= BACK_LISTENER_MAX_RETRIES) return;
+    backListenerRetries++;
+    backListenerRetryTimer = setTimeout(() => {
+      backListenerRetryTimer = null;
+      void enableBackListener();
+    }, BACK_LISTENER_RETRY_DELAY * backListenerRetries);
+  }
 
   function unregisterBackListener(listener: BackListener) {
     if (typeof listener === 'function') return listener();
@@ -86,7 +108,8 @@ export function useAndroidBackExit(reader: ReaderStore, dismissOverlay: () => bo
 
   function onBackButtonPress() {
     if (reader.currentBook) {
-      readerBackHandler?.();
+      lastBackAt = 0;
+      readerBackHandler.value?.();
       return;
     }
     if (dismissOverlay && dismissOverlay()) {
@@ -106,26 +129,37 @@ export function useAndroidBackExit(reader: ReaderStore, dismissOverlay: () => bo
   }
 
   async function enableBackListener() {
-    if (!isAndroid || backListener) return;
+    if (!isAndroid || disposed || backListener || backListenerPending) return;
+
+    const app = window.__TAURI__ && window.__TAURI__.app;
+    if (!app || typeof app.onBackButtonPress !== 'function') {
+      scheduleBackListenerRetry();
+      return;
+    }
 
     const token = ++backListenerToken;
-    const app = window.__TAURI__ && window.__TAURI__.app;
-    if (!app || typeof app.onBackButtonPress !== 'function') return;
-
+    backListenerPending = true;
     try {
       const listener = await app.onBackButtonPress(onBackButtonPress);
-      if (token !== backListenerToken) {
+      if (disposed || token !== backListenerToken) {
         await unregisterBackListener(listener);
         return;
       }
       backListener = listener;
+      backListenerRetries = 0;
+      clearBackListenerRetry();
     } catch (err) {
       console.warn('[HOMURA] 注册 Android 返回监听失败', err);
+      scheduleBackListenerRetry();
+    } finally {
+      backListenerPending = false;
     }
   }
 
   function disableBackListener() {
+    clearBackListenerRetry();
     backListenerToken++;
+    backListenerPending = false;
     lastBackAt = 0;
     if (!backListener) return;
 
@@ -137,7 +171,7 @@ export function useAndroidBackExit(reader: ReaderStore, dismissOverlay: () => bo
   }
 
   function currentPredictiveHandler() {
-    if (reader.currentBook) return readerPredictiveHandler;
+    if (reader.currentBook) return readerPredictiveHandler.value;
     return settingsBack?.enabled() ? settingsBack.handle : null;
   }
 
@@ -150,7 +184,15 @@ export function useAndroidBackExit(reader: ReaderStore, dismissOverlay: () => bo
     }
     const handler = gestureStarted ? gestureHandler : currentPredictiveHandler();
     if (handler && !gestureInterrupted && handler === currentPredictiveHandler()) handler(event);
-    else if (!handler && event.phase === 'invoked') onBackButtonPress();
+    else if (!gestureInterrupted && event.phase === 'invoked') {
+      // 阅读器开启期间绝不允许未匹配的手势直接漏到主页退出逻辑
+      if (reader.currentBook) {
+        lastBackAt = 0;
+        readerBackHandler.value?.();
+      } else if (!handler) {
+        onBackButtonPress();
+      }
+    }
     if (event.phase === 'invoked' || event.phase === 'cancelled') {
       if (event.phase === 'invoked') lastBackAt = 0;
       gestureStarted = false;
@@ -199,7 +241,25 @@ export function useAndroidBackExit(reader: ReaderStore, dismissOverlay: () => bo
     }
   }
 
-  watch(() => reader.currentBook, () => { lastBackAt = 0; });
+  function onVisibilityChange() {
+    if (disposed || typeof document === 'undefined' || document.visibilityState !== 'visible') return;
+    if (!backListener) {
+      backListenerRetries = 0;
+      void enableBackListener();
+    }
+  }
+
+  watch(
+    () => reader.currentBook,
+    book => {
+      lastBackAt = 0;
+      if (book && !backListener) {
+        backListenerRetries = 0;
+        void enableBackListener();
+      }
+    },
+    { flush: 'sync' }
+  );
   watch(currentPredictiveHandler, handler => {
     if (gestureHandler && gestureHandler !== handler && !gestureInterrupted) {
       gestureInterrupted = true;
@@ -211,10 +271,16 @@ export function useAndroidBackExit(reader: ReaderStore, dismissOverlay: () => bo
   onMounted(() => {
     enableBackListener();
     initializeNativeBack();
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityChange);
+    }
   });
 
   onBeforeUnmount(() => {
     disposed = true;
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    }
     syncNativeRegistration();
     disableBackListener();
   });

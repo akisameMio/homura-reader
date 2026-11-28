@@ -7,6 +7,7 @@
 
 import JSZip from 'jszip';
 import type { Book } from '../types.ts';
+import { openRemoteZip } from './remoteZip.ts';
 import { sanitizeEpubHtml } from './sanitize.ts';
 import { shouldReadEpubAsManga, TEXT_CHAPTER_MIN_LENGTH } from './epubType.ts';
 import {
@@ -153,15 +154,31 @@ async function readNativeTexts(archiveId: string, paths: string[], entryIndexByP
 export async function createJsZipEpubArchive(file: Blob): Promise<EpubArchive> {
   const zip = new JSZip();
   const zipContent = await zip.loadAsync(file);
+  const lowerPathMap = new Map<string, string>();
+  zipContent.forEach((relPath, entry) => {
+    if (!entry.dir) {
+      const key = relPath.toLowerCase();
+      if (!lowerPathMap.has(key)) lowerPathMap.set(key, relPath);
+    }
+  });
+  const resolveSingle = (candidate: string) => {
+    if (!candidate) return null;
+    if (zipContent.file(candidate)) return candidate;
+    return lowerPathMap.get(candidate.toLowerCase()) || null;
+  };
 
   return {
     kind: 'jszip',
     zipContent,
     hasPath(path: string) {
-      return !!zipContent.file(path);
+      return !!resolveSingle(path);
     },
     resolvePath(candidates: string[]) {
-      return candidates.find((path) => !!zipContent.file(path)) || null;
+      for (const candidate of candidates) {
+        const hit = resolveSingle(candidate);
+        if (hit) return hit;
+      }
+      return null;
     },
     async readTexts(paths: string[]) {
       const texts: (string | null)[] = [];
@@ -217,14 +234,24 @@ export async function createNativeEpubArchive(nativePath: string, options: EpubP
 
   const entryIndexByPath = new Map<string, number>();
   const entryByPath = new Map<string, NativeZipEntry>();
+  const lowerPathMap = new Map<string, string>();
   for (const entry of entries) {
     const path = entry?.path || entry?.name;
     if (!path) continue;
     entryByPath.set(path, entry);
-    if (Number.isInteger(entry.index) && typeof entry.index === 'number') entryIndexByPath.set(path, entry.index);
+    if (Number.isInteger(entry.index) && typeof entry.index === 'number') {
+      entryIndexByPath.set(path, entry.index);
+      const lower = path.toLowerCase();
+      if (!lowerPathMap.has(lower)) lowerPathMap.set(lower, path);
+    }
   }
 
-  const hasPath = (path: string) => entryIndexByPath.has(path);
+  const resolveSingle = (path: string) => {
+    if (!path) return null;
+    if (entryIndexByPath.has(path)) return path;
+    return lowerPathMap.get(path.toLowerCase()) || null;
+  };
+  const hasPath = (path: string) => !!resolveSingle(path);
 
   return {
     kind: 'native',
@@ -233,7 +260,11 @@ export async function createNativeEpubArchive(nativePath: string, options: EpubP
     entryIndexByPath,
     hasPath,
     resolvePath(candidates: string[]) {
-      return candidates.find(hasPath) || null;
+      for (const candidate of candidates) {
+        const hit = resolveSingle(candidate);
+        if (hit) return hit;
+      }
+      return null;
     },
     async readTexts(paths: string[]) {
       return readNativeTexts(archiveId, paths, entryIndexByPath);
@@ -293,7 +324,25 @@ async function readEpubCover(archive: EpubArchive, path: string | null): Promise
   };
 }
 
-function parseEpubXml(parser: DOMParser, xml: string, label: string): Document {
+function elementsByLocalName(root: Document | Element | null | undefined, localName: string): Element[] {
+  if (!root) return [];
+  const target = localName.toLowerCase();
+  if (typeof root.getElementsByTagNameNS === 'function') {
+    const found = Array.from(root.getElementsByTagNameNS('*', localName));
+    if (found.length) return found;
+  }
+  return Array.from(root.getElementsByTagName('*')).filter(el => (el.localName || el.tagName).toLowerCase() === target);
+}
+
+// HTML5 的 text/html 解析器不会闭合非空元素的 XHTML 自闭合写法（如 <a id="p-001"/>、
+// <div class="spacer"/>、<span/>），日轻 EPUB3 / KEPUB 中大量存在此类标签，直接解析会导致后续正文被吞进该标签内。
+const NON_VOID_SELF_CLOSING_RE = /<(a|abbr|address|article|aside|b|blockquote|cite|code|dd|del|details|dfn|div|dl|dt|em|figcaption|figure|font|footer|h[1-6]|header|i|ins|kbd|li|main|mark|nav|ol|p|pre|q|rb|rp|rt|rtc|ruby|s|samp|section|small|span|strike|strong|sub|summary|sup|table|tbody|td|tfoot|th|thead|time|tr|tt|u|ul|var)\b((?:[^>"']|"[^"]*"|'[^']*')*?)\/\s*>/gi;
+
+function expandNonVoidSelfClosingTags(rawHtml: string) {
+  return rawHtml.replace(NON_VOID_SELF_CLOSING_RE, '<$1$2></$1>');
+}
+
+function parseEpubPackage(parser: DOMParser, xml: string, label: string): Document {
   const doc = parser.parseFromString(xml, 'text/xml');
   if (doc.querySelector('parsererror')) throw new Error(`${label}格式无效`);
   return doc;
@@ -305,8 +354,8 @@ async function readEpubPackage(archive: EpubArchive, fallbackTitle: string): Pro
   const [containerXml] = await archive.readTexts(['META-INF/container.xml']);
   if (!containerXml) throw new Error('缺少 META-INF/container.xml');
 
-  const containerDoc = parseEpubXml(parser, containerXml, 'EPUB container');
-  const rootfileEl = containerDoc.querySelector('rootfile');
+  const containerDoc = parseEpubPackage(parser, containerXml, 'EPUB container');
+  const rootfileEl = elementsByLocalName(containerDoc, 'rootfile')[0];
   const declaredOpfPath = rootfileEl?.getAttribute('full-path') || 'content.opf';
   const opfCandidates = [declaredOpfPath];
   try {
@@ -318,7 +367,7 @@ async function readEpubPackage(archive: EpubArchive, fallbackTitle: string): Pro
 
   const [opfText] = await archive.readTexts([opfPath]);
   if (!opfText) throw new Error('无法读取 OPF 配置文件');
-  const opfDoc = parseEpubXml(parser, opfText, 'EPUB OPF');
+  const opfDoc = parseEpubPackage(parser, opfText, 'EPUB OPF');
   const opfDir = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
 
   const titleEl = opfDoc.getElementsByTagNameNS(
@@ -326,11 +375,12 @@ async function readEpubPackage(archive: EpubArchive, fallbackTitle: string): Pro
     'title'
   )[0]
     || opfDoc.getElementsByTagName('dc:title')[0]
-    || opfDoc.querySelector('title');
+    || elementsByLocalName(opfDoc, 'title')[0];
   const parsedTitle = titleEl?.textContent?.trim();
 
   const manifest: EpubPackage['manifest'] = {};
-  opfDoc.querySelectorAll('manifest > item').forEach((item) => {
+  const manifestEl = elementsByLocalName(opfDoc, 'manifest')[0] || opfDoc;
+  elementsByLocalName(manifestEl, 'item').forEach((item) => {
     const itemId = item.getAttribute('id');
     if (!itemId) return;
     manifest[itemId] = {
@@ -342,12 +392,16 @@ async function readEpubPackage(archive: EpubArchive, fallbackTitle: string): Pro
   });
 
   const spine: Array<{ id: string | null; href: string | null; path: string }> = [];
-  opfDoc.querySelectorAll('spine > itemref').forEach((ref) => {
+  const spineEl = elementsByLocalName(opfDoc, 'spine')[0] || opfDoc;
+  elementsByLocalName(spineEl, 'itemref').forEach((ref) => {
     const itemId = ref.getAttribute('idref');
     const item = itemId ? manifest[itemId] : undefined;
     if (!item?.href) return;
-    const fullPath = opfDir + safeDecodePath(item.href.split('#')[0]);
-    const path = archive.resolvePath([fullPath, item.href, item.href.split('#')[0]]);
+    const rawHref = item.href.split('#')[0];
+    const cleanHref = safeDecodePath(rawHref);
+    const resolvedPath = resolveRelativePath(opfPath, cleanHref);
+    const rawResolvedPath = resolveRelativePath(opfPath, rawHref);
+    const path = archive.resolvePath([resolvedPath, rawResolvedPath, opfDir + cleanHref, item.href, rawHref]);
     if (path) spine.push({ id: itemId, href: item.href, path });
   });
 
@@ -362,30 +416,40 @@ async function readEpubPackage(archive: EpubArchive, fallbackTitle: string): Pro
   };
 }
 
-function manifestPath(archive: EpubArchive, opfDir: string, item: { href?: string | null } | null | undefined) {
+function manifestPath(archive: EpubArchive, opfPath: string, item: { href?: string | null } | null | undefined) {
   if (!item?.href) return null;
-  const href = (item.href as string).split('#')[0];
-  return archive.resolvePath([opfDir + safeDecodePath(href), item.href, href]);
+  const rawHref = (item.href as string).split('#')[0];
+  const cleanHref = safeDecodePath(rawHref);
+  return archive.resolvePath([
+    resolveRelativePath(opfPath, cleanHref),
+    resolveRelativePath(opfPath, rawHref),
+    item.href,
+    rawHref
+  ]);
 }
 
 function isImageItem(item: { mediaType?: string } | null | undefined, path = '') {
   return /^image\//i.test(item?.mediaType || '')
-    || /\.(jpe?g|png|webp|gif|avif|bmp|svg)$/i.test(path);
+    || /\.(jpe?g|jfif|png|webp|gif|avif|bmp|svg)$/i.test(path);
 }
 
 function extractPageImages(archive: EpubArchive, parser: DOMParser, rawHtml: string, pagePath: string, options: EpubParseOptions = {}) {
-  const htmlDoc = parser.parseFromString(rawHtml, 'text/html');
+  const htmlDoc = parser.parseFromString(expandNonVoidSelfClosingTags(rawHtml), 'text/html');
   const imgs = htmlDoc.querySelectorAll('img, image');
   const imagePaths: string[] = [];
   const seenInCurrentPage = new Set<string>();
 
   for (const img of imgs) {
+    // 清除 EPUB 原文里伪造的内部属性，只信任由解析器解析出的压缩包路径。
+    if (options.markZipPaths) img.removeAttribute('data-zip-path');
     const srcAttr = img.getAttribute('src') || img.getAttribute('xlink:href') || img.getAttribute('href');
     if (!srcAttr || srcAttr.startsWith('http') || srcAttr.startsWith('data:')) continue;
 
-    const cleanSrc = safeDecodePath(srcAttr.split('#')[0]);
+    const rawSrc = srcAttr.split('#')[0];
+    const cleanSrc = safeDecodePath(rawSrc);
     const resolved = resolveRelativePath(pagePath, cleanSrc);
-    const imagePath = archive.resolvePath([resolved, cleanSrc]);
+    const rawResolved = resolveRelativePath(pagePath, rawSrc);
+    const imagePath = archive.resolvePath([resolved, rawResolved, cleanSrc, rawSrc]);
     if (!imagePath) continue;
 
     if (options.markZipPaths) img.setAttribute('data-zip-path', imagePath);
@@ -422,12 +486,12 @@ async function readOpfCoverPath(archive: EpubArchive, pkg: EpubPackage) {
   ));
   if (coverImage) candidates.push(coverImage);
 
-  const coverMeta = [...pkg.opfDoc.querySelectorAll('meta')]
+  const coverMeta = elementsByLocalName(pkg.opfDoc, 'meta')
     .find(meta => (meta.getAttribute('name') || '').toLowerCase() === 'cover');
   const metaId = coverMeta?.getAttribute('content');
   if (metaId && pkg.manifest[metaId]) candidates.push(pkg.manifest[metaId]);
 
-  const guideCover = [...pkg.opfDoc.querySelectorAll('guide > reference')]
+  const guideCover = elementsByLocalName(pkg.opfDoc, 'reference')
     .find(ref => (ref.getAttribute('type') || '').toLowerCase() === 'cover');
   const guideHref = guideCover?.getAttribute('href');
   if (guideHref) {
@@ -439,7 +503,7 @@ async function readOpfCoverPath(archive: EpubArchive, pkg: EpubPackage) {
   }
 
   for (const candidate of candidates) {
-    const path = candidate.path || manifestPath(archive, pkg.opfDir, candidate);
+    const path = candidate.path || manifestPath(archive, pkg.opfPath, candidate);
     if (!path) continue;
     if (isImageItem(candidate, path)) return path;
 
@@ -458,8 +522,10 @@ function metadataSampleNeedsFullParse({
   chapterCount,
   textChapterCount,
   imageHeavyChapterCount,
-  imageCount
-}: { spineCount: number; sampledCount: number; missingCount: number; chapterCount: number; textChapterCount: number; imageHeavyChapterCount: number; imageCount: number }) {
+  imageCount,
+  totalTextLength,
+  maxChapterTextLength
+}: { spineCount: number; sampledCount: number; missingCount: number; chapterCount: number; textChapterCount: number; imageHeavyChapterCount: number; imageCount: number; totalTextLength: number; maxChapterTextLength: number }) {
   if (chapterCount === 0 || missingCount > 0) return true;
   if (sampledCount < Math.min(METADATA_MIN_SAMPLE, spineCount)) return true;
 
@@ -469,7 +535,9 @@ function metadataSampleNeedsFullParse({
     chapterCount,
     textChapterCount,
     imageHeavyChapterCount,
-    imageCount
+    imageCount,
+    totalTextLength,
+    maxChapterTextLength
   });
 
   // 采样比例贴近判型阈值时，宁可多解析一次，也不要让轻小说只剩彩插。
@@ -477,7 +545,7 @@ function metadataSampleNeedsFullParse({
     return true;
   }
   if (isManga && textRatio >= 0.06 && imageRatio <= 0.55) return true;
-  if (!isManga && textRatio <= 0.22) return true;
+  if (!isManga && textRatio <= 0.22 && totalTextLength < 2000 && maxChapterTextLength < 600) return true;
   return false;
 }
 
@@ -497,6 +565,8 @@ async function parseEpubMetadata(archive: EpubArchive, pkg: EpubPackage, id: str
   let textChapterCount = 0;
   let imageHeavyChapterCount = 0;
   let sampledImageTotal = 0;
+  let totalTextLength = 0;
+  let maxChapterTextLength = 0;
   const sampledImagePaths = new Set<string>();
 
   for (const index of sampleIndices) {
@@ -510,6 +580,8 @@ async function parseEpubMetadata(archive: EpubArchive, pkg: EpubPackage, id: str
     const bodyHtml = page.htmlDoc.body ? page.htmlDoc.body.innerHTML : rawHtml;
     if (bodyHtml.trim().length === 0) continue;
     chapterCount++;
+    totalTextLength += page.plainText.length;
+    if (page.plainText.length > maxChapterTextLength) maxChapterTextLength = page.plainText.length;
     if (page.plainText.length >= TEXT_CHAPTER_MIN_LENGTH) textChapterCount++;
     if (page.imagePaths.length > 0 && page.plainText.length < TEXT_CHAPTER_MIN_LENGTH) {
       imageHeavyChapterCount++;
@@ -525,7 +597,9 @@ async function parseEpubMetadata(archive: EpubArchive, pkg: EpubPackage, id: str
     chapterCount,
     textChapterCount,
     imageHeavyChapterCount,
-    imageCount: sampledImagePaths.size
+    imageCount: sampledImagePaths.size,
+    totalTextLength,
+    maxChapterTextLength
   })) {
     return {
       id,
@@ -539,7 +613,9 @@ async function parseEpubMetadata(archive: EpubArchive, pkg: EpubPackage, id: str
     chapterCount,
     textChapterCount,
     imageHeavyChapterCount,
-    imageCount: sampledImagePaths.size
+    imageCount: sampledImagePaths.size,
+    totalTextLength,
+    maxChapterTextLength
   });
   const manifestImageCount = Object.values(pkg.manifest).filter(item => isImageItem(item)).length;
   const sampledImageRatio = imageHeavyChapterCount > 0
@@ -598,7 +674,7 @@ async function parseEpubFull(archive: EpubArchive, pkg: EpubPackage, id: string)
   const includedPaths = new Set(spine.map(item => item.path));
   const linkedDocuments = new Set(Object.values(pkg.manifest)
     .filter(item => /(?:xhtml|html)/i.test(item.mediaType || ''))
-    .map(item => manifestPath(archive, pkg.opfDir, item))
+    .map(item => manifestPath(archive, pkg.opfPath, item))
     .filter((path): path is string => !!path));
   const rawHtmls = await archive.readTexts(spine.map((item) => item.path));
   const lazyMangaPaths: string[] = [];
@@ -606,6 +682,8 @@ async function parseEpubFull(archive: EpubArchive, pkg: EpubPackage, id: string)
   const chapters: Array<{ title: string; htmlContent: string; sourcePath: string }> = [];
   let imageHeavyCount = 0;
   let textChapterCount = 0;
+  let totalTextLength = 0;
+  let maxChapterTextLength = 0;
 
   let sliceStarted = performance.now();
   for (let index = 0; index < spine.length; index++) {
@@ -642,6 +720,8 @@ async function parseEpubFull(archive: EpubArchive, pkg: EpubPackage, id: string)
         rawHtmls.push(texts[index]);
       });
     }
+    totalTextLength += plainText.length;
+    if (plainText.length > maxChapterTextLength) maxChapterTextLength = plainText.length;
     if (plainText.length >= TEXT_CHAPTER_MIN_LENGTH) textChapterCount++;
     if (foundPathsInPage.length > 0 && plainText.length < TEXT_CHAPTER_MIN_LENGTH) {
       imageHeavyCount++;
@@ -677,7 +757,9 @@ async function parseEpubFull(archive: EpubArchive, pkg: EpubPackage, id: string)
     chapterCount: chapters.length,
     textChapterCount,
     imageHeavyChapterCount: imageHeavyCount,
-    imageCount: lazyMangaPaths.length
+    imageCount: lazyMangaPaths.length,
+    totalTextLength,
+    maxChapterTextLength
   });
 
   if (isMangaEpub && lazyMangaPaths.length > 0) {
@@ -702,18 +784,28 @@ async function parseEpubFull(archive: EpubArchive, pkg: EpubPackage, id: string)
 
   if (chapters.length === 0) throw new Error('未能提取出有效章节内容');
 
-  const { cover, coverBlob, coverNative } = await readEpubCover(archive, lazyMangaPaths[0]);
+  const opfCoverPath = await readOpfCoverPath(archive, pkg);
+  const coverPath = opfCoverPath || lazyMangaPaths[0] || null;
+  let coverFields: EpubCoverFields = { cover: null, coverBlob: null, coverNative: null };
+  if (coverPath) {
+    try {
+      coverFields = await readEpubCover(archive, coverPath);
+    } catch (err) {
+      console.warn('[HOMURA] EPUB 封面读取失败，回退无封面', err);
+      if (lazyMangaPaths[0] && lazyMangaPaths[0] !== coverPath) {
+        coverFields = await readEpubCover(archive, lazyMangaPaths[0]).catch(() => coverFields);
+      }
+    }
+  }
   return {
     id,
     type: 'epub',
     format: 'epub',
-    epubFixedLayout: [...pkg.opfDoc.querySelectorAll('meta, spine > itemref')].some(node =>
+    epubFixedLayout: [...elementsByLocalName(pkg.opfDoc, 'meta'), ...elementsByLocalName(pkg.opfDoc, 'itemref')].some(node =>
       (node.getAttribute('property') === 'rendition:layout' && node.textContent?.trim() === 'pre-paginated')
         || (node.getAttribute('properties') || '').split(/\s+/).includes('rendition:layout-pre-paginated')),
     title: pkg.bookTitle,
-    cover,
-    coverBlob,
-    coverNative,
+    ...coverFields,
     chapters,
     pageCount: chapters.length,
     ...archive.bookFields()
@@ -773,10 +865,69 @@ export async function parseEpubFile(file: Blob & { name?: string }, options: Epu
     throw new Error('超过 4 GiB 的 EPUB 需要原生读取');
   }
 
-  const fallbackFile = typeof options.loadFallbackFile === 'function'
+  const fallbackFile = (typeof options.loadFallbackFile === 'function'
     ? await options.loadFallbackFile()
-    : file;
-  const archive = await createJsZipEpubArchive(fallbackFile as Blob);
+    : file) as Blob;
+
+  // 非原生环境下大体积 EPUB 优先走 Blob.slice 分块中央目录读取，避免 JSZip 整包读入内存导致 OOM。
+  if (fallbackFile
+    && typeof fallbackFile.size === 'number'
+    && fallbackFile.size > 64 * 1024 * 1024
+    && typeof fallbackFile.slice === 'function') {
+    try {
+      const size = fallbackFile.size;
+      const zip = await openRemoteZip({
+        size,
+        async read(start: number, end: number) {
+          const safeStart = Math.max(0, start);
+          const safeEnd = Math.min(size, end);
+          if (safeStart >= safeEnd) return new Uint8Array(0);
+          return new Uint8Array(await fallbackFile.slice(safeStart, safeEnd).arrayBuffer());
+        }
+      });
+      const lowerMap = new Map<string, string>();
+      for (const entry of zip.entries) {
+        if (!entry.dir) {
+          const lower = entry.name.toLowerCase();
+          if (!lowerMap.has(lower)) lowerMap.set(lower, entry.name);
+        }
+      }
+      const resolveSingle = (path: string) => (zip.file(path) ? path : lowerMap.get(path.toLowerCase()) || null);
+      const rangeArchive: EpubArchive = {
+        kind: 'remote',
+        zipContent: zip,
+        hasPath: path => !!resolveSingle(path),
+        resolvePath: paths => {
+          for (const path of paths) {
+            const hit = resolveSingle(path);
+            if (hit) return hit;
+          }
+          return null;
+        },
+        async readTexts(paths) {
+          const texts: (string | null)[] = [];
+          for (const path of paths) {
+            const entry = zip.file(path);
+            texts.push(entry ? await entry.async('text').catch(() => null) : null);
+          }
+          return texts;
+        },
+        readBlobByPath: async path => await zip.file(path)?.async('blob') ?? null,
+        makePageItem: (path, url) => ({ zipEntry: zip.file(path), url }),
+        bookFields: () => ({ zipContent: zip })
+      };
+      return await parseEpubArchive(rangeArchive, {
+        id,
+        fallbackTitle,
+        metadataOnly: options.metadataOnly
+      });
+    } catch (err) {
+      if (fallbackFile.size > 256 * 1024 * 1024) throw err;
+      console.warn('[HOMURA] EPUB 分块读取失败，回退 JSZip', err);
+    }
+  }
+
+  const archive = await createJsZipEpubArchive(fallbackFile);
   return parseEpubArchive(archive, {
     id,
     fallbackTitle,

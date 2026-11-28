@@ -29,9 +29,11 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.charset.Charset
 import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.concurrent.ConcurrentHashMap
@@ -65,7 +67,7 @@ private const val REFERENCE_PREFS = "homura_saf_references"
 private const val REFERENCE_PREFIX = "grant_"
 private const val MAX_REFERENCE_CHUNK_BYTES = 1024 * 1024
 
-private val IMAGE_NAME = Regex(""".*\.(jpg|jpeg|png|webp|gif|avif|bmp)$""", RegexOption.IGNORE_CASE)
+private val IMAGE_NAME = Regex(""".*\.(jpg|jpeg|jfif|png|webp|gif|avif|bmp)$""", RegexOption.IGNORE_CASE)
 
 @InvokeArg
 class OpenOptions {
@@ -149,6 +151,7 @@ private class ArchiveSession(
   val zipFile: ZipFile,
   val entries: List<ZipEntry>,
   val entryIndexByName: Map<String, Int>,
+  val entryIndexByLowerName: Map<String, Int>,
   // 只有 CBZ 的图片条目顺序等于阅读顺序；EPUB 文档的条目索引和页序无关
   val sequentialPages: Boolean
 ) {
@@ -211,7 +214,7 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
     val options = invoke.parseArgs(OpenOptions::class.java)
     runAsync(invoke) {
       val archiveFile = resolveArchiveFile(options.path)
-      val zipFile = ZipFile(archiveFile)
+      val zipFile = openZipFile(archiveFile)
       try {
         val entries = readImageEntries(zipFile)
         if (entries.isEmpty()) throw IllegalStateException("压缩包内未找到图片")
@@ -244,7 +247,7 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
     val options = invoke.parseArgs(OpenOptions::class.java)
     runAsync(invoke) {
       val archiveFile = resolveArchiveFile(options.path)
-      val zipFile = ZipFile(archiveFile)
+      val zipFile = openZipFile(archiveFile)
       try {
         val entries = readAllEntries(zipFile)
         if (entries.isEmpty()) throw IllegalStateException("压缩包内没有可读取的条目")
@@ -318,7 +321,7 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
           if (totalBytes >= MAX_TEXT_TOTAL_BYTES) break
           val path = paths.optString(index, "")
           if (path.isEmpty()) continue
-          val entryIndex = session.entryIndexByName[path] ?: continue
+          val entryIndex = resolveSessionEntryIndex(session, path) ?: continue
           val entry = session.entries[entryIndex]
           if (entry.isDirectory) continue
           if (entry.size > 0 && entry.size > MAX_TEXT_ENTRY_BYTES) continue
@@ -495,7 +498,7 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
         val uris = mutableListOf<String>()
         data?.clipData?.let { clip ->
           for (index in 0 until clip.itemCount) {
-            uris.add(clip.getItemAt(index).uri.toString())
+            clip.getItemAt(index)?.uri?.toString()?.let(uris::add)
           }
         } ?: data?.data?.let { uris.add(it.toString()) }
         val options = invoke.parseArgs(ImportPickerOptions::class.java)
@@ -669,16 +672,20 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
   }
 
   private fun runAsync(invoke: Invoke, task: () -> JSObject?) {
-    executor.execute {
-      try {
-        val result = task()
-        activity.runOnUiThread {
-          if (result == null) invoke.resolve() else invoke.resolve(result)
+    try {
+      executor.execute {
+        try {
+          val result = task()
+          activity.runOnUiThread {
+            if (result == null) invoke.resolve() else invoke.resolve(result)
+          }
+        } catch (error: Throwable) {
+          val message = error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName
+          activity.runOnUiThread { invoke.reject(message) }
         }
-      } catch (error: Throwable) {
-        val message = error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName
-        activity.runOnUiThread { invoke.reject(message) }
       }
+    } catch (_: RejectedExecutionException) {
+      invoke.reject("NATIVE_UNAVAILABLE: 存档插件已停止")
     }
   }
 
@@ -1270,7 +1277,7 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
   private fun isSupportedImportName(name: String): Boolean {
     return name.substringAfterLast('.', "").lowercase() in setOf(
       "epub", "pdf", "mobi", "prc", "azw", "cbz", "zip", "txt", "md",
-      "jpg", "jpeg", "png", "webp", "gif", "avif", "bmp"
+      "jpg", "jpeg", "jfif", "png", "webp", "gif", "avif", "bmp"
     )
   }
 
@@ -1306,6 +1313,58 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
     return file
   }
 
+  private fun openZipFile(archiveFile: File): ZipFile {
+    // 日轻/漫画压缩包常在 Windows 下用 Shift-JIS 或 GB18030 打包文件名，
+    // 默认 UTF-8 解码会在遍历目录时抛出 IllegalArgumentException(MALFORMED)。
+    val charsets = buildList {
+      add(Charsets.UTF_8)
+      for (name in listOf("Shift_JIS", "GB18030", "GBK")) {
+        try {
+          add(Charset.forName(name))
+        } catch (_: Throwable) {
+          // 忽略设备未内置的字符集
+        }
+      }
+      add(Charsets.ISO_8859_1)
+    }
+    var lastError: Throwable? = null
+    for (charset in charsets) {
+      val zipFile = try {
+        ZipFile(archiveFile, charset)
+      } catch (error: IllegalArgumentException) {
+        lastError = error
+        continue
+      }
+      try {
+        val enumeration = zipFile.entries()
+        while (enumeration.hasMoreElements()) {
+          enumeration.nextElement()
+        }
+        return zipFile
+      } catch (error: IllegalArgumentException) {
+        lastError = error
+        try {
+          zipFile.close()
+        } catch (_: Throwable) {}
+      } catch (error: Throwable) {
+        try {
+          zipFile.close()
+        } catch (_: Throwable) {}
+        throw error
+      }
+    }
+    throw lastError ?: IllegalStateException("无法解析压缩包文件名编码")
+  }
+
+  private fun normalizeArchiveLookupPath(path: String): String {
+    return path.replace('\\', '/').trimStart('/').removePrefix("./").lowercase()
+  }
+
+  private fun resolveSessionEntryIndex(session: ArchiveSession, path: String): Int? {
+    return session.entryIndexByName[path]
+      ?: session.entryIndexByLowerName[normalizeArchiveLookupPath(path)]
+  }
+
   private fun createSession(
     archiveId: String,
     zipFile: ZipFile,
@@ -1315,7 +1374,19 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
     val indexByName = entries
       .mapIndexed { index, entry -> entry.name to index }
       .toMap()
-    return ArchiveSession(archiveId, archiveId, zipFile, entries, indexByName, sequentialPages)
+    val indexByLowerName = LinkedHashMap<String, Int>(entries.size)
+    entries.forEachIndexed { index, entry ->
+      indexByLowerName.putIfAbsent(normalizeArchiveLookupPath(entry.name), index)
+    }
+    return ArchiveSession(
+      archiveId,
+      archiveId,
+      zipFile,
+      entries,
+      indexByName,
+      indexByLowerName,
+      sequentialPages
+    )
   }
 
   private fun readAllEntries(zipFile: ZipFile): List<ZipEntry> {
@@ -1465,7 +1536,7 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
   private fun safeExtension(entryName: String): String {
     val extension = entryName.substringAfterLast('.', "img").lowercase()
     return when (extension) {
-      "jpg", "jpeg", "png", "webp", "gif", "avif", "bmp" -> extension
+      "jpg", "jpeg", "jfif", "png", "webp", "gif", "avif", "bmp" -> extension
       else -> "img"
     }
   }
@@ -1672,7 +1743,7 @@ class AndroidArchivePlugin(private val activity: Activity) : Plugin(activity) {
   }
 
   private fun mimeFor(name: String): String = when (name.substringAfterLast('.', "").lowercase()) {
-    "jpg", "jpeg" -> "image/jpeg"
+    "jpg", "jpeg", "jfif" -> "image/jpeg"
     "png" -> "image/png"
     "webp" -> "image/webp"
     "gif" -> "image/gif"

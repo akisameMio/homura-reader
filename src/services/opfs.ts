@@ -10,7 +10,8 @@
 const ROOT_DIR = 'homura-sources';
 
 function safeSegment(name: unknown) {
-  return String(name || 'source').replace(/[\\/:*?"<>|]/g, '_').slice(0, 120) || 'source';
+  const segment = String(name || 'source').replace(/[\u0000-\u001f\u007f\\/:*?"<>|]/g, '_').slice(0, 120);
+  return !segment || segment === '.' || segment === '..' ? 'source' : segment;
 }
 
 function splitPath(path: unknown) {

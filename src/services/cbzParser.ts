@@ -7,6 +7,7 @@
 
 import JSZip from 'jszip';
 import type { Book } from '../types.ts';
+import { openRemoteZip } from './remoteZip.ts';
 import {
   canUseNativeArchive,
   clearNativeArchiveBookCache,
@@ -17,7 +18,9 @@ import {
   shouldFallbackNativeArchive
 } from './nativeArchive.ts';
 
-const IMAGE_ENTRY = /\.(jpg|jpeg|png|webp|gif|avif|bmp)$/i;
+const IMAGE_ENTRY = /\.(jpg|jpeg|jfif|png|webp|gif|avif|bmp)$/i;
+// 非原生环境下超过 64 MiB 的压缩包优先走按需中央目录读取，避免 JSZip 整包载入触发 OOM
+const LARGE_BLOB_ZIP_THRESHOLD_BYTES = 64 * 1024 * 1024;
 
 // macOS 打包残留不是页面，提前剔掉免得白读内存。
 function isJunkArchivePath(path: string) {
@@ -121,6 +124,52 @@ export async function parseCbzFileLazy(file: File | null | undefined, options: C
     ? await options.loadFallbackFile()
     : file;
   if (!fallbackFile) return null;
+
+  // 浏览器或非原生回退打开大体积 CBZ/ZIP 时，先走 Blob.slice 分块中央目录读取，不整包喂给 JSZip。
+  if (typeof fallbackFile.size === 'number'
+    && fallbackFile.size > LARGE_BLOB_ZIP_THRESHOLD_BYTES
+    && typeof fallbackFile.slice === 'function') {
+    try {
+      const size = fallbackFile.size;
+      const zip = await openRemoteZip({
+        size,
+        async read(start: number, end: number) {
+          const safeStart = Math.max(0, start);
+          const safeEnd = Math.min(size, end);
+          if (safeStart >= safeEnd) return new Uint8Array(0);
+          return new Uint8Array(await fallbackFile.slice(safeStart, safeEnd).arrayBuffer());
+        }
+      });
+      const imgEntries = zip.entries
+        .filter(entry => !entry.dir && IMAGE_ENTRY.test(entry.name) && !isJunkArchivePath(entry.name))
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+      if (imgEntries.length === 0) throw new Error('压缩包内未找到图片');
+      const firstBlob = await imgEntries[0].async('blob');
+      const firstUrl = URL.createObjectURL(firstBlob);
+      const pageItems = imgEntries.map((entry, idx) => ({
+        zipEntry: entry,
+        url: idx === 0 ? firstUrl : null
+      }));
+      return {
+        id,
+        type: 'manga',
+        format: 'cbz',
+        title: name.replace(/\.(cbz|zip)$/i, ''),
+        cover: firstUrl,
+        coverBlob: firstBlob,
+        pageItems,
+        pageCount: pageItems.length,
+        zipContent: zip,
+        nativeArchiveStaged: !!options.staged
+      } as unknown as Book;
+    } catch (err) {
+      if (fallbackFile.size > 256 * 1024 * 1024) {
+        console.error('[HOMURA] 大体积压缩包分块读取失败，跳过 JSZip 整包回退', err);
+        return null;
+      }
+      console.warn('[HOMURA] 压缩包分块读取失败，回退 JSZip', err);
+    }
+  }
 
   try {
     const zip = new JSZip();

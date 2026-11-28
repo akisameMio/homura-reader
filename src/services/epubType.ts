@@ -17,13 +17,22 @@ const IMAGE_HEAVY_CHAPTER_RATIO = 0.45;
 // 少量纯图片章节仍可能是画集 / 条漫合订本。
 const MIN_MANGA_IMAGE_COUNT = 6;
 
+// 只要全书累计正文或单章正文达到明确轻小说量级，无论插图页占比多高都绝不按纯图漫画丢弃正文。
+const NOVEL_TOTAL_TEXT_THRESHOLD = 2000;
+const NOVEL_SINGLE_CHAPTER_TEXT_THRESHOLD = 600;
+
 export function shouldReadEpubAsManga({
   chapterCount = 0,
   textChapterCount = 0,
   imageHeavyChapterCount = 0,
-  imageCount = 0
+  imageCount = 0,
+  totalTextLength = 0,
+  maxChapterTextLength = 0
 } = {}) {
   if (chapterCount <= 0 || imageHeavyChapterCount <= 0 || imageCount <= 0) return false;
+  if (maxChapterTextLength >= NOVEL_SINGLE_CHAPTER_TEXT_THRESHOLD || totalTextLength >= NOVEL_TOTAL_TEXT_THRESHOLD) {
+    return false;
+  }
   // 漫画 EPUB 的 spine 几乎全是零文字图片页；轻小说即使彩插很多，正文页仍占多数。
   if (textChapterCount / chapterCount > TEXT_CHAPTER_RATIO_LIMIT) return false;
   return imageHeavyChapterCount >= chapterCount * IMAGE_HEAVY_CHAPTER_RATIO

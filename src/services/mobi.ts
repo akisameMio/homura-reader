@@ -18,6 +18,7 @@ import {
 } from './nativeRuntime.ts';
 import { isSafeImageUrl } from './utils.ts';
 import { sanitizeElement } from './sanitize.ts';
+import type { RangeSource } from './webdavBooks.ts';
 
 const TAG_HEADINGS = 'h1,h2,h3,h4,h5,h6,font,p,div,td,th';
 
@@ -29,6 +30,9 @@ const REC_PLACEHOLDER = /^__homura_rec_(\d+)__$/;
 const MOBI_TEXT_PAGE_MIN_LENGTH = 60;
 const MOBI_TEXT_PAGE_RATIO_LIMIT = 0.15;
 const MOBI_MIN_MANGA_IMAGES = 6;
+// 防止损坏的 MOBI 头声明超大 textLength 触发一次性分配数 GB 导致崩溃
+const MAX_MOBI_TEXT_BYTES = 128 * 1024 * 1024;
+const MAX_MOBI_IMAGE_SCAN_RECORDS = 20_000;
 
 // 大文件继续走 JS，避免 base64 与 IPC 先把内存吃掉；失败时始终有同步兜底。
 export const NATIVE_MOBI_MAX_BYTES = 16 * 1024 * 1024;
@@ -75,11 +79,12 @@ function decompressPalmDoc(src: Uint8Array, limit: number) {
       out[o++] = c;
     } else if (c <= 0xbf) {
       // 两字节回溯：11 位距离 + 3 位长度
+      if (i >= end) break;
       const c2 = src[i++];
       const packed = (c << 8) | c2;
       const distance = (packed >> 3) & 0x07ff;
       const length = (packed & 0x07) + 3;
-      if (distance === 0) continue;
+      if (distance === 0 || distance > o) continue;
       for (let k = 0; k < length && o < limit; k++) {
         out[o] = out[o - distance];
         o++;
@@ -96,9 +101,11 @@ function decompressPalmDoc(src: Uint8Array, limit: number) {
 // ---- PDB 记录表 ----
 
 function readPdbRecords(buf: Uint8Array) {
+  if (buf.length < 78) throw new MobiError('BAD_FILE', 'MOBI 文件头不完整');
   const count = readU16(buf, 76);
   if (count <= 0) throw new MobiError('BAD_FILE', 'MOBI 文件记录表为空');
-  const starts = new Array(count + 1);
+  if (78 + count * 8 > buf.length) throw new MobiError('BAD_FILE', 'MOBI 记录表超出文件范围');
+  const starts = new Array<number>(count + 1);
   for (let i = 0; i < count; i++) starts[i] = readU32(buf, 78 + i * 8);
   starts[count] = buf.length;
   return starts;
@@ -111,6 +118,11 @@ function imageMime(bytes: Uint8Array) {
   if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
   if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return 'image/gif';
   if (bytes[0] === 0x42 && bytes[1] === 0x4d) return 'image/bmp';
+  if (bytes.length >= 12
+    && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+    && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) {
+    return 'image/webp';
+  }
   return null;
 }
 
@@ -221,8 +233,10 @@ function prepareMobiBody(body: HTMLElement) {
     if (!node.isConnected) continue;
     const tag = node.tagName.toLowerCase();
     if (tag === 'img') {
-      const recindex = parseInt(node.getAttribute('recindex') || '', 10);
+      const recAttr = node.getAttribute('recindex') || node.getAttribute('mediarecindex') || '';
+      const recindex = parseInt(recAttr, 10);
       node.removeAttribute('recindex');
+      node.removeAttribute('mediarecindex');
       if (Number.isInteger(recindex) && recindex > 0) {
         node.setAttribute('src', `__homura_rec_${recindex}__`);
       }
@@ -285,9 +299,12 @@ export function parseMobiBuffer(arrayBuffer: ArrayBuffer | Uint8Array, fallbackT
 
   const starts = readPdbRecords(buf);
   const rec0 = starts[0];
+  if (rec0 == null || rec0 + 0x70 > buf.length) {
+    throw new MobiError('BAD_FILE', 'MOBI 文件头超出文件范围');
+  }
 
   const compression = readU16(buf, rec0);
-  const textLength = readU32(buf, rec0 + 4);
+  const textLength = Math.min(readU32(buf, rec0 + 4), MAX_MOBI_TEXT_BYTES);
   const textRecordCount = readU16(buf, rec0 + 8);
   const recordSize = readU16(buf, rec0 + 10) || 4096;
   const encryption = readU16(buf, rec0 + 12);
@@ -309,7 +326,7 @@ export function parseMobiBuffer(arrayBuffer: ArrayBuffer | Uint8Array, fallbackT
   const fullNameOffset = readU32(buf, rec0 + 0x54);
   const fullNameLength = readU32(buf, rec0 + 0x58);
   const exth = readExth(buf, rec0, mobiLength);
-  const headerTitle = fullNameLength > 0 && fullNameOffset > 0
+  const headerTitle = fullNameLength > 0 && fullNameOffset > 0 && rec0 + fullNameOffset + fullNameLength <= buf.length
     ? decodeText(buf.subarray(rec0 + fullNameOffset, rec0 + fullNameOffset + fullNameLength), encoding)
     : '';
 
@@ -318,8 +335,8 @@ export function parseMobiBuffer(arrayBuffer: ArrayBuffer | Uint8Array, fallbackT
   let produced = 0;
   for (let r = 0; r < textRecordCount; r++) {
     const from = starts[r + 1];
-    const to = starts[r + 2] || buf.length;
-    if (from == null || from >= buf.length) break;
+    const to = Math.min(starts[r + 2] ?? buf.length, buf.length);
+    if (from == null || from >= to || from >= buf.length) break;
     const want = Math.min(recordSize, textLength - produced);
     if (want <= 0) break;
     const out = compression === 1
@@ -510,8 +527,168 @@ function buildMobiDataFromNative(container: MobiContainer, file: File & { size: 
   });
 }
 
-// Tauri 环境优先让 Rust 解 PDB / PalmDOC；原生失败或文件过大时仍交给 JS。
+// 按字节区间解析大型 MOBI：只读取 PDB 头、Record 0、文本记录、图片魔数与封面，
+// 不把整本数百 MB 的漫画图片记录一次读入 WebView 内存。
+export async function parseMobiRangeSource(
+  source: RangeSource,
+  fallbackTitle = 'MOBI',
+  blobForSlice?: Blob
+) {
+  const totalSize = source.size;
+  if (!Number.isSafeInteger(totalSize) || totalSize < 90) {
+    throw new MobiError('BAD_FILE', '文件过小，不是有效的 MOBI');
+  }
+  const pdbHeader = await source.read(0, 78);
+  const count = readU16(pdbHeader, 76);
+  if (count <= 0) throw new MobiError('BAD_FILE', 'MOBI 文件记录表为空');
+  const tableEnd = 78 + count * 8;
+  if (tableEnd > totalSize) throw new MobiError('BAD_FILE', 'MOBI 记录表超出文件范围');
+  const tableBytes = await source.read(78, tableEnd);
+  const starts = new Array<number>(count + 1);
+  for (let i = 0; i < count; i++) starts[i] = readU32(tableBytes, i * 8);
+  starts[count] = totalSize;
+
+  const rec0Start = starts[0];
+  const rec0End = Math.min(starts[1] ?? totalSize, totalSize);
+  if (rec0Start == null || rec0End - rec0Start < 0x70) {
+    throw new MobiError('BAD_FILE', 'MOBI 文件头超出文件范围');
+  }
+  const rec0Bytes = await source.read(rec0Start, rec0End);
+
+  const compression = readU16(rec0Bytes, 0);
+  const textLength = Math.min(readU32(rec0Bytes, 4), MAX_MOBI_TEXT_BYTES);
+  const textRecordCount = readU16(rec0Bytes, 8);
+  const recordSize = readU16(rec0Bytes, 10) || 4096;
+  const encryption = readU16(rec0Bytes, 12);
+
+  if (String.fromCharCode(rec0Bytes[16], rec0Bytes[17], rec0Bytes[18], rec0Bytes[19]) !== 'MOBI') {
+    throw new MobiError('BAD_FILE', '不是 MOBI 格式（可能为 AZW3/KF8 或 EPUB）');
+  }
+  if (encryption !== 0) throw new MobiError('DRM', '该 MOBI 带有 DRM 加密，暂不支持打开');
+  if (compression !== 1 && compression !== 2) {
+    throw new MobiError('COMPRESSION', '该 MOBI 使用 Huffman 压缩，暂不支持');
+  }
+
+  const mobiLength = readU32(rec0Bytes, 20);
+  const textEncodingRaw = readU32(rec0Bytes, 28);
+  const encoding = textEncodingRaw === 65001 ? 'utf-8' : 'windows-1252';
+  const firstImage = readU32(rec0Bytes, 0x6c);
+  const fullNameOffset = readU32(rec0Bytes, 0x54);
+  const fullNameLength = readU32(rec0Bytes, 0x58);
+  const exth = readExth(rec0Bytes, 0, mobiLength);
+  const headerTitle = fullNameLength > 0 && fullNameOffset > 0 && fullNameOffset + fullNameLength <= rec0Bytes.length
+    ? decodeText(rec0Bytes.subarray(fullNameOffset, fullNameOffset + fullNameLength), encoding)
+    : '';
+
+  const chunks: Uint8Array[] = [];
+  let produced = 0;
+  for (let r = 0; r < textRecordCount; r++) {
+    const from = starts[r + 1];
+    const to = Math.min(starts[r + 2] ?? totalSize, totalSize);
+    if (from == null || from >= to || from >= totalSize) break;
+    const want = Math.min(recordSize, textLength - produced);
+    if (want <= 0) break;
+    const sliceEnd = compression === 1 ? Math.min(to, from + want) : to;
+    if (sliceEnd - from > MAX_MOBI_TEXT_BYTES) break;
+    const recBytes = await source.read(from, sliceEnd);
+    const out = compression === 1 ? recBytes : decompressPalmDoc(recBytes, want);
+    chunks.push(out);
+    produced += out.length;
+  }
+  if (produced === 0) throw new MobiError('BAD_FILE', 'MOBI 正文为空');
+
+  const rawText = decodeText(mergeChunks(chunks), encoding);
+  if (!rawText) throw new MobiError('BAD_FILE', 'MOBI 正文解码失败');
+
+  const imageRecords: MobiImageRecord[] = [];
+  const imageRecordsByRecordIndex = new Map<number, MobiImageRecord>();
+  const lastImageRecord = Math.min(starts.length - 1, firstImage + MAX_MOBI_IMAGE_SCAN_RECORDS);
+  for (let recordIndex = firstImage; recordIndex < lastImageRecord; recordIndex++) {
+    const start = starts[recordIndex];
+    const end = Math.min(starts[recordIndex + 1] ?? totalSize, totalSize);
+    if (start == null || start >= end || end - start < 4) continue;
+    const magic = await source.read(start, Math.min(start + 12, end));
+    const mime = imageMime(magic);
+    if (!mime) continue;
+    const record: MobiImageRecord = {
+      recindex: recordIndex - firstImage + 1,
+      start,
+      end,
+      mime
+    };
+    imageRecords.push(record);
+    imageRecordsByRecordIndex.set(recordIndex, record);
+  }
+
+  const coverIndex = Number.isInteger(exth.coverOffset) ? firstImage + (exth.coverOffset as number) : firstImage;
+  const coverRecord = imageRecordsByRecordIndex.get(coverIndex) || imageRecordsByRecordIndex.get(firstImage) || null;
+  let coverBlob: Blob | null = null;
+  if (coverRecord) {
+    if (blobForSlice) {
+      coverBlob = blobForSlice.slice(coverRecord.start, coverRecord.end, coverRecord.mime);
+    } else if (coverRecord.end - coverRecord.start <= 64 * 1024 * 1024) {
+      coverBlob = new Blob([await source.read(coverRecord.start, coverRecord.end) as BlobPart], { type: coverRecord.mime });
+    }
+  }
+
+  // 非 Blob 场景下，如果正文内嵌了插图（小说模式），仅按需预读被引用的插图记录。
+  const preloadedNovelImages = new Map<number, Blob>();
+  if (!blobForSlice && imageRecords.length > 0) {
+    const { parts } = splitMobiParts(rawText);
+    const docs = parseMobiDocs(parts);
+    if (!shouldReadMobiAsManga(docs, exth.cdeType || '')) {
+      const byRec = new Map(imageRecords.map(record => [record.recindex, record]));
+      let loadedBytes = 0;
+      const MAX_INLINE_BYTES = 64 * 1024 * 1024;
+      for (const doc of docs) {
+        if (!doc.body) continue;
+        for (const img of doc.body.querySelectorAll('img[recindex]')) {
+          const recindex = parseInt(img.getAttribute('recindex') || '', 10);
+          const record = byRec.get(recindex);
+          if (!record || preloadedNovelImages.has(record.start)) continue;
+          const len = record.end - record.start;
+          if (loadedBytes + len > MAX_INLINE_BYTES) continue;
+          loadedBytes += len;
+          preloadedNovelImages.set(record.start, new Blob([await source.read(record.start, record.end) as BlobPart], { type: record.mime }));
+        }
+      }
+    }
+  }
+
+  const title = (exth.title || '').trim() || headerTitle || fallbackTitle;
+  return buildMobiBookData({
+    title,
+    rawText,
+    compression,
+    encoding,
+    cdeType: exth.cdeType || '',
+    writingMode: exth.writingMode || '',
+    pageProgression: exth.pageProgression || '',
+    imageRecords,
+    coverBlob,
+    pageRangeBase: 0,
+    createImageBlob: (record: MobiImageRecord) => (
+      blobForSlice
+        ? blobForSlice.slice(record.start, record.end, record.mime)
+        : (preloadedNovelImages.get(record.start) ?? null)
+    )
+  });
+}
+
+// Tauri 环境优先让 Rust 解 PDB / PalmDOC；大文件改走分块 Range 读取避免整本吃满内存。
 export async function parseMobiFileData(file: File, fallbackTitle = 'MOBI') {
+  if (typeof file.size === 'number' && file.size > NATIVE_MOBI_MAX_BYTES && typeof file.slice === 'function') {
+    const size = file.size;
+    return parseMobiRangeSource({
+      size,
+      async read(start: number, end: number) {
+        const safeStart = Math.max(0, start);
+        const safeEnd = Math.min(size, end);
+        if (safeStart >= safeEnd) return new Uint8Array(0);
+        return new Uint8Array(await file.slice(safeStart, safeEnd).arrayBuffer());
+      }
+    }, fallbackTitle, file);
+  }
   const bytes = new Uint8Array(await file.arrayBuffer());
   const fallback = () => parseMobiBuffer(bytes, fallbackTitle);
   if (bytes.length === 0 || bytes.length > NATIVE_MOBI_MAX_BYTES || !canUseNativeBridge()) {
@@ -574,13 +751,18 @@ function shouldReadMobiAsManga(docs: Document[], cdeType: string) {
 
   let textPages = 0;
   let imageCount = 0;
+  let totalTextChars = 0;
+  let maxDocTextChars = 0;
   for (const doc of docs) {
     if (!doc.body) continue;
     const text = (doc.body.textContent || '').replace(/\s+/g, '');
+    totalTextChars += text.length;
+    if (text.length > maxDocTextChars) maxDocTextChars = text.length;
     if (text.length >= MOBI_TEXT_PAGE_MIN_LENGTH) textPages++;
-    imageCount += doc.body.querySelectorAll('img[recindex]').length;
+    imageCount += doc.body.querySelectorAll('img[recindex], img[mediarecindex]').length;
   }
   if (imageCount < MOBI_MIN_MANGA_IMAGES) return false;
+  if (maxDocTextChars >= 600 || totalTextChars >= 2000) return false;
   return textPages / docs.length <= MOBI_TEXT_PAGE_RATIO_LIMIT;
 }
 
@@ -588,8 +770,8 @@ function collectMobiPages(docs: Document[]) {
   const pages: Array<{ recindex: number; alt: string }> = [];
   for (const doc of docs) {
     if (!doc.body) continue;
-    for (const img of doc.body.querySelectorAll('img[recindex]')) {
-      const recindex = parseInt(img.getAttribute('recindex') || '', 10);
+    for (const img of doc.body.querySelectorAll('img[recindex], img[mediarecindex]')) {
+      const recindex = parseInt(img.getAttribute('recindex') || img.getAttribute('mediarecindex') || '', 10);
       if (!Number.isInteger(recindex) || recindex <= 0) continue;
       pages.push({
         recindex,

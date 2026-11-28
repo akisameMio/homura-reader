@@ -50,11 +50,20 @@ function truncate(value: string, limit: number) {
   return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
 }
 
+// 运行日志会落盘到 localStorage 且可导出；统一脱敏认证头、URL 凭据与常见密码字段。
+export function redactSensitiveText(value: string): string {
+  return value
+    .replace(/\b(Authorization\s*:\s*)(?:Basic|Bearer)\s+[^\s,'";]+/gi, '$1[REDACTED]')
+    .replace(/(https?:\/\/)([^/\s:@]+:[^/\s@]+)@/gi, '$1[REDACTED]@')
+    .replace(/("(?:password|passwd|secret|token|authorization)"\s*:\s*)"[^"]*"/gi, '$1"[REDACTED]"')
+    .replace(/\b((?:password|passwd|secret|access_token|refresh_token)=)[^\s&;,'"]+/gi, '$1[REDACTED]');
+}
+
 function normalizeEntry(value: unknown): RuntimeLogEntry | null {
   if (!value || typeof value !== 'object') return null;
   const source = value as Record<string, unknown>;
   const level = normalizeLevel(source.level);
-  const message = typeof source.message === 'string' ? source.message.trim() : '';
+  const message = typeof source.message === 'string' ? redactSensitiveText(source.message.trim()) : '';
   const at = Number(source.at);
   if (!level || !message || !Number.isFinite(at) || at <= 0) return null;
   return {
@@ -63,7 +72,7 @@ function normalizeEntry(value: unknown): RuntimeLogEntry | null {
     level,
     message: truncate(message, MAX_MESSAGE_LENGTH),
     source: typeof source.source === 'string' && source.source ? truncate(source.source, 80) : 'APP',
-    detail: typeof source.detail === 'string' && source.detail ? truncate(source.detail, MAX_DETAIL_LENGTH) : undefined
+    detail: typeof source.detail === 'string' && source.detail ? truncate(redactSensitiveText(source.detail), MAX_DETAIL_LENGTH) : undefined
   };
 }
 
@@ -175,7 +184,7 @@ export function logRuntime(
 }
 
 function appendRuntimeLog(level: RuntimeLogLevel, message: string, source: string, detail?: string) {
-  const text = typeof message === 'string' ? message.trim() : '';
+  const text = typeof message === 'string' ? redactSensitiveText(message.trim()) : '';
   if (!text) return;
   entries.push({
     id: `${Date.now().toString(36)}-${(++entrySequence).toString(36)}`,
@@ -183,7 +192,7 @@ function appendRuntimeLog(level: RuntimeLogLevel, message: string, source: strin
     level,
     message: truncate(text, MAX_MESSAGE_LENGTH),
     source: truncate(source.trim() || 'APP', 80),
-    detail: detail ? truncate(detail, MAX_DETAIL_LENGTH) : undefined
+    detail: detail ? truncate(redactSensitiveText(detail), MAX_DETAIL_LENGTH) : undefined
   });
   if (entries.length > RUNTIME_LOG_LIMIT) entries.splice(0, entries.length - RUNTIME_LOG_LIMIT);
   schedulePersist();

@@ -9,8 +9,9 @@ import type { Book } from '../types.ts';
 import { escapeHtml } from './utils.ts';
 import { decodeTxtBytesAsync } from './textEncoding.ts';
 import { splitMarkdownChapters } from './markdown.ts';
-import { parseMobiFileData } from './mobi.ts';
-import { openPdfDocument, createPdfPageItems, renderPdfCoverBlob } from './pdf.ts';
+import { parseMobiFileData, parseMobiRangeSource } from './mobi.ts';
+import type { RangeSource } from './webdavBooks.ts';
+import { openPdfDocument, createPdfPageItems, renderPdfCoverBlob, destroyPdfDocument } from './pdf.ts';
 import { readPdfOutline } from './pdfOutline.ts';
 import { parseEpubFile } from './epubParser.ts';
 import {
@@ -35,7 +36,7 @@ export async function discardParsedBook(book: Book) {
     await removeNativeBookDir(book.id).catch(() => {});
   }
   try {
-    await (book.pdfDoc as { loadingTask?: { destroy(): Promise<void> } } | null | undefined)?.loadingTask?.destroy();
+    await destroyPdfDocument(book.pdfDoc);
   } catch (err) {
     console.warn('[HOMURA] 释放跳过的 PDF 失败', err);
   }
@@ -57,13 +58,15 @@ export async function parseEpubFileLazy(file: File, options: Record<string, unkn
 // ---- PDF：每页按需渲染成位图，直接复用漫画渲染管道 ----
 
 export async function parsePdfFileLazy(file: File) {
+  let pdfDoc: Awaited<ReturnType<typeof openPdfDocument>> | null = null;
+  let coverUrl: string | null = null;
   try {
-    const pdfDoc = await openPdfDocument(file);
+    pdfDoc = await openPdfDocument(file);
     const pageCount = pdfDoc.numPages || 0;
     if (pageCount === 0) throw new Error('PDF 中没有可显示的页面');
 
     const coverBlob = await renderPdfCoverBlob(pdfDoc);
-    const coverUrl = URL.createObjectURL(coverBlob as Blob);
+    coverUrl = URL.createObjectURL(coverBlob as Blob);
     const outline = await readPdfOutline(pdfDoc);
 
     return {
@@ -79,15 +82,37 @@ export async function parsePdfFileLazy(file: File) {
       pageCount: pageCount
     };
   } catch (err) {
+    if (coverUrl) URL.revokeObjectURL(coverUrl);
+    if (pdfDoc) await destroyPdfDocument(pdfDoc).catch(() => {});
     console.error(err);
     return null;
   }
 }
 
+const MAX_TXT_SINGLE_LINE_CHARS = 16_000;
+
+function splitOversizedLine(line: string): string[] {
+  if (line.length <= MAX_TXT_SINGLE_LINE_CHARS) return [line];
+  const parts: string[] = [];
+  let cursor = 0;
+  while (cursor < line.length) {
+    let end = Math.min(cursor + MAX_TXT_SINGLE_LINE_CHARS, line.length);
+    if (end < line.length) {
+      const slice = line.slice(cursor, end);
+      const breakAt = Math.max(slice.lastIndexOf('。'), slice.lastIndexOf('！'), slice.lastIndexOf('？'), slice.lastIndexOf('. '), slice.lastIndexOf(' '));
+      if (breakAt > MAX_TXT_SINGLE_LINE_CHARS * 0.5) end = cursor + breakAt + 1;
+    }
+    const piece = line.slice(cursor, end).trim();
+    if (piece) parts.push(piece);
+    cursor = end;
+  }
+  return parts;
+}
+
 export async function parseTxtFile(txtFile: File) {
   try {
     const rawText = await decodeTxtBytesAsync(await txtFile.arrayBuffer());
-    const lines = rawText.split(/\r\n?|\n/).map((l) => l.trim()).filter(Boolean);
+    const lines = rawText.split(/\r\n?|\n/).map((l) => l.trim()).filter(Boolean).flatMap(splitOversizedLine);
     const title = txtFile.name.replace(/\.[^.]+$/, '');
     const chapters: { title: string; htmlContent: string }[] = [];
     let currentChapTitle = '开始';
@@ -132,31 +157,86 @@ export async function parseTxtFile(txtFile: File) {
 
 // ---- Markdown：按一/二级标题切章，正文交给 marked 转 HTML ----
 
-export function parseMarkdownFile(mdFile: File) {
-  return new Promise<unknown>((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e: ProgressEvent<FileReader>) => {
-      const rawText = String(e.target?.result || '').replace(/\r\n?/g, '\n');
-      const title = mdFile.name.replace(/\.[^.]+$/, '');
-      const chapters = splitMarkdownChapters(rawText, title);
+export async function parseMarkdownFile(mdFile: File) {
+  try {
+    const rawText = (await decodeTxtBytesAsync(await mdFile.arrayBuffer())).replace(/\r\n?/g, '\n');
+    const title = mdFile.name.replace(/\.[^.]+$/, '');
+    const chapters = splitMarkdownChapters(rawText, title);
 
-      resolve({
-        id: 'md_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-        type: 'novel',
-        format: 'markdown',
-        title: title,
-        cover: null,
-        coverBlob: null,
-        chapters: chapters,
-        pageCount: chapters.length
-      });
+    return {
+      id: 'md_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      type: 'novel',
+      format: 'markdown',
+      title: title,
+      cover: null,
+      coverBlob: null,
+      chapters: chapters,
+      pageCount: chapters.length
     };
-    reader.onerror = () => resolve(null);
-    reader.readAsText(mdFile, 'utf-8');
-  });
+  } catch (err) {
+    console.warn('[HOMURA] Markdown 文件读取失败', err);
+    return null;
+  }
 }
 
 // ---- MOBI：PalmDOC 解压 + 正文净化，输出小说管道可用的章节 ----
+
+export async function parseMobiRangeLazy(source: RangeSource, fileName: string) {
+  try {
+    const fallbackTitle = fileName.replace(/\.(mobi|prc|azw)$/i, '');
+    const data = await parseMobiRangeSource(source, fallbackTitle);
+    let coverBlob = data.coverBlob;
+    if (!coverBlob && data.type === 'manga') {
+      const first = data.pages.find(page => page.start != null && page.end != null);
+      if (first && first.start != null && first.end != null) {
+        coverBlob = new Blob([await source.read(first.start, first.end) as BlobPart], { type: first.mime || '' });
+      }
+    }
+    const coverUrl = coverBlob ? URL.createObjectURL(coverBlob) : null;
+
+    if (data.type === 'manga' && data.pages.length > 0) {
+      const pageItems = data.pages.map(page => ({
+        zipEntry: page.start != null && page.end != null
+          ? {
+            async: async () => new Blob(
+              [await source.read(page.start as number, page.end as number) as BlobPart],
+              { type: page.mime || '' }
+            )
+          }
+          : null,
+        alt: page.alt || '',
+        url: null
+      }));
+      return {
+        id: 'mobi_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        type: 'manga',
+        format: 'mobi',
+        title: data.title,
+        cover: coverUrl,
+        coverBlob,
+        pageItems,
+        pageCount: pageItems.length,
+        readingDirection: data.readingDirection,
+        resourceUrls: []
+      };
+    }
+
+    return {
+      id: 'mobi_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      type: 'novel',
+      format: 'mobi',
+      title: data.title,
+      cover: coverUrl,
+      coverBlob,
+      chapters: data.chapters,
+      resourceUrls: data.resourceUrls,
+      pageCount: data.chapters.length
+    };
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
+}
 
 export async function parseMobiFileLazy(file: File) {
   try {

@@ -16,11 +16,17 @@ const RENDER_TARGET_WIDTH = 1600;
 const COVER_TARGET_WIDTH = 900;
 // 超小页面（如单格漫画）不无限放大，2.5 倍足够
 const MAX_UPSCALE = 2.5;
+// 超大/超长页面限制画布边长与总像素，避免触发浏览器 Canvas 上限导致 toBlob 返回 null
+const MAX_CANVAS_EDGE = 4096;
+const MAX_CANVAS_PIXELS = 16 * 1024 * 1024;
+// 超过该体积的本地 File / Blob 改用 Range 分块读取，避免整本读入 ArrayBuffer 触发 OOM
+const LOCAL_RANGE_THRESHOLD_BYTES = 4 * 1024 * 1024;
+const LOCAL_RANGE_CHUNK_SIZE = 256 * 1024;
 // 缓存上限按页数算，约等于 20~50MB 位图，够翻几个来回了
 const MAX_CACHED_PAGES = 24;
 
 /** pdf.js 文档的最小结构 */
-interface PdfDocLike {
+export interface PdfDocLike {
   numPages?: number;
   getPage(pageNumber: number): Promise<{
     getViewport(params: { scale: number }): { width: number; height: number };
@@ -30,6 +36,15 @@ interface PdfDocLike {
   getOutline?(): Promise<unknown[] | null>;
   getDestination?(id: string): Promise<unknown[] | null>;
   getPageIndex?(ref: unknown): Promise<number>;
+  destroy?(): Promise<void>;
+  loadingTask?: { destroy?(): Promise<void> };
+}
+
+/** 支持全量或切片读取的本地文件结构 */
+interface PdfFileLike {
+  size?: number;
+  arrayBuffer(): Promise<ArrayBuffer>;
+  slice?(start?: number, end?: number): Blob;
 }
 
 let pdfjsPromise: Promise<typeof import('pdfjs-dist/legacy/build/pdf.mjs')> | null = null;
@@ -52,47 +67,106 @@ function loadPdfjs() {
 const renderedUrls: { pageItem: PdfPageItem; url: string }[] = [];
 
 function rememberRenderedUrl(pageItem: PdfPageItem, url: string) {
+  // 先清理已被外部回收（releaseDistantPageUrls / releaseBookPageUrls）的陈旧记录，避免误淘汰仍在显示的页
+  for (let i = renderedUrls.length - 1; i >= 0; i--) {
+    const entry = renderedUrls[i];
+    if (entry.pageItem.url !== entry.url || entry.url === url) {
+      renderedUrls.splice(i, 1);
+    }
+  }
   renderedUrls.push({ pageItem, url });
   while (renderedUrls.length > MAX_CACHED_PAGES) {
     const evicted = renderedUrls.shift()!;
-    URL.revokeObjectURL(evicted.url);
-    // pageItem 上的 url 也要清掉，否则下次会拿到已失效的 blob URL
-    if (evicted.pageItem.url === evicted.url) evicted.pageItem.url = '';
+    if (evicted.pageItem.url === evicted.url) {
+      URL.revokeObjectURL(evicted.url);
+      evicted.pageItem.url = '';
+    }
   }
+}
+
+export function clampPdfRenderScale(baseWidth: number, baseHeight: number, targetWidth: number): number {
+  const safeWidth = Number.isFinite(baseWidth) && baseWidth > 0 ? baseWidth : 1;
+  const safeHeight = Number.isFinite(baseHeight) && baseHeight > 0 ? baseHeight : 1;
+  let scale = Math.min(targetWidth / safeWidth, MAX_UPSCALE);
+  if (!Number.isFinite(scale) || scale <= 0) scale = 1;
+  const edgeLimit = Math.min(MAX_CANVAS_EDGE / safeWidth, MAX_CANVAS_EDGE / safeHeight);
+  const pixelLimit = Math.sqrt(MAX_CANVAS_PIXELS / (safeWidth * safeHeight));
+  return Math.max(0.05, Math.min(scale, edgeLimit, pixelLimit));
 }
 
 async function renderPageBlob(pdfDoc: PdfDocLike, pageIndex: number, targetWidth: number): Promise<Blob> {
   const page = await pdfDoc.getPage(pageIndex + 1);
-  const baseViewport = page.getViewport({ scale: 1 });
-  const scale = Math.min(targetWidth / baseViewport.width, MAX_UPSCALE);
-  const viewport = page.getViewport({ scale });
-
   const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.floor(viewport.width));
-  canvas.height = Math.max(1, Math.floor(viewport.height));
-  const ctx = canvas.getContext('2d', { alpha: false })!;
-  // 深色主题下 PDF 也保持纸面白底，与真实版面一致
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  try {
+    const baseViewport = page.getViewport({ scale: 1 });
+    const scale = clampPdfRenderScale(baseViewport.width, baseViewport.height, targetWidth);
+    const viewport = page.getViewport({ scale });
 
-  await page.render({ canvasContext: ctx, viewport }).promise;
-  page.cleanup();
+    canvas.width = Math.max(1, Math.floor(viewport.width));
+    canvas.height = Math.max(1, Math.floor(viewport.height));
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('无法创建页面渲染上下文');
+    // 深色主题下 PDF 也保持纸面白底，与真实版面一致
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
-  if (!blob) throw new Error('页面位图生成失败');
-  return blob;
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+    if (!blob) throw new Error('页面位图生成失败');
+    return blob;
+  } finally {
+    page.cleanup();
+    canvas.width = 0;
+    canvas.height = 0;
+  }
 }
 
 // ---- 对外接口 ----
 
-// 打开 PDF：只做文档装载，页数等信息由调用方读取
-export async function openPdfDocument(file: { arrayBuffer(): Promise<ArrayBuffer> }): Promise<PdfDocLike> {
+export async function destroyPdfDocument(pdfDoc: unknown): Promise<void> {
+  const doc = pdfDoc as PdfDocLike | null | undefined;
+  if (!doc) return;
+  if (typeof doc.loadingTask?.destroy === 'function') {
+    await doc.loadingTask.destroy();
+  } else if (typeof doc.destroy === 'function') {
+    await doc.destroy();
+  }
+}
+
+function attachLoadingTask(doc: PdfDocLike, task: { destroy(): Promise<void> }): PdfDocLike {
+  if (doc && typeof doc === 'object' && !doc.loadingTask) {
+    try {
+      doc.loadingTask = task;
+    } catch {
+      // 某些代理对象不可扩展时，调用方仍可走 doc.destroy()
+    }
+  }
+  return doc;
+}
+
+// 打开 PDF：大文件走 File.slice 按需 Range 读取，避免整本读入 ArrayBuffer 触发内存溢出
+export async function openPdfDocument(file: PdfFileLike): Promise<PdfDocLike> {
   const pdfjs = (await loadPdfjs())!;
+  const size = Number(file.size);
+  if (Number.isSafeInteger(size) && size > LOCAL_RANGE_THRESHOLD_BYTES && typeof file.slice === 'function') {
+    const sliceFn = file.slice.bind(file);
+    const opened = await openRemotePdfDocument({
+      size,
+      async read(start: number, end: number) {
+        const safeStart = Math.max(0, start);
+        const safeEnd = Math.min(size, end);
+        if (safeStart >= safeEnd) return new Uint8Array(0);
+        return new Uint8Array(await sliceFn(safeStart, safeEnd).arrayBuffer());
+      }
+    }, LOCAL_RANGE_CHUNK_SIZE);
+    return attachLoadingTask(opened.document, { destroy: opened.destroy });
+  }
+
   const data = await file.arrayBuffer();
   // CMap / 标准字体 / wasm 解码器由 vite-static-copy 放在 dist/pdfjs 下：
   // 缺了它们，CJK 非嵌入字体和 JPX/JBIG2 扫描页都会渲染成空白
   const assetBase = new URL('pdfjs/', document.baseURI).href;
-  return pdfjs.getDocument({
+  const task = pdfjs.getDocument({
     data,
     // 关掉 eval 渲染路径，降低恶意 PDF 注入脚本的风险
     isEvalSupported: false,
@@ -101,30 +175,45 @@ export async function openPdfDocument(file: { arrayBuffer(): Promise<ArrayBuffer
     standardFontDataUrl: assetBase + 'standard_fonts/',
     wasmUrl: assetBase + 'wasm/',
     iccUrl: assetBase + 'iccs/'
-  } as Parameters<typeof pdfjs.getDocument>[0]).promise as Promise<PdfDocLike>;
+  } as Parameters<typeof pdfjs.getDocument>[0]);
+  try {
+    const doc = (await task.promise) as unknown as PdfDocLike;
+    return attachLoadingTask(doc, task);
+  } catch (error) {
+    await task.destroy().catch(() => {});
+    throw error;
+  }
 }
 
-// Range 传输由 WebDAV 客户端提供；禁用自动取全书和后台连续下载。
-export async function openRemotePdfDocument(source: import('./webdavBooks.ts').RangeSource) {
+// Range 传输由 WebDAV 客户端或本地分块读取器提供；禁用自动取全书和后台连续下载。
+export async function openRemotePdfDocument(source: import('./webdavBooks.ts').RangeSource, chunkSize = 128 * 1024) {
   const pdfjs = await loadPdfjs();
   const assetBase = new URL('pdfjs/', document.baseURI).href;
   let task: ReturnType<typeof pdfjs.getDocument>;
   class RemoteTransport extends pdfjs.PDFDataRangeTransport {
     requestDataRange(begin: number, end: number) {
-      void source.read(begin, end).then(bytes => this.onDataRange(begin, bytes)).catch(() => { void task.destroy(); });
+      const safeStart = Math.max(0, Math.floor(begin));
+      const safeEnd = Math.min(source.size, Math.floor(end));
+      if (safeStart >= safeEnd) {
+        this.onDataRange(safeStart, new Uint8Array(0));
+        return;
+      }
+      void source.read(safeStart, safeEnd).then(bytes => this.onDataRange(safeStart, bytes)).catch(() => {
+        void task.destroy().catch(() => {});
+      });
     }
   }
   const transport = new RemoteTransport(source.size, new Uint8Array(), false);
   task = pdfjs.getDocument({
-    range: transport, rangeChunkSize: 128 * 1024,
+    range: transport, rangeChunkSize: chunkSize,
     disableAutoFetch: true, disableStream: true, isEvalSupported: false,
     cMapUrl: assetBase + 'cmaps/', cMapPacked: true,
     standardFontDataUrl: assetBase + 'standard_fonts/', wasmUrl: assetBase + 'wasm/', iccUrl: assetBase + 'iccs/'
   } as Parameters<typeof pdfjs.getDocument>[0]);
   try {
-    const doc = await task.promise;
+    const doc = attachLoadingTask(await task.promise as unknown as PdfDocLike, task);
     return { document: doc as unknown as PdfDocLike & { numPages: number }, destroy: () => task.destroy() };
-  } catch (error) { await task.destroy(); throw error; }
+  } catch (error) { await task.destroy().catch(() => {}); throw error; }
 }
 
 // 生成漫画管道可用的 pageItems：每项自带 render()，首次显示时才真正渲染

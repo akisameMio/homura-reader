@@ -14,11 +14,13 @@ import {
   canUseNativeStorage,
   getNativeFile,
   nativeFilePath,
+  openNativeStorageRangeSource,
   putNativeFile,
   removeNativeBookDir,
   removeNativeFile
 } from './nativeStorage.ts';
-import { parseEpubFileLazy, parseCbzFileLazy, parseCbzNativeArchive, parseTxtFile, parseMobiFileLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks } from './parsers.ts';
+import { parseEpubFileLazy, parseCbzFileLazy, parseCbzNativeArchive, parseTxtFile, parseMobiFileLazy, parseMobiRangeLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks, isJunkImagePath } from './parsers.ts';
+import { NATIVE_MOBI_MAX_BYTES } from './mobi.ts';
 import {
   createNativeMangaManifest,
   isNativeMangaManifestValid,
@@ -605,6 +607,48 @@ async function resolveFolderFiles(source: StoredSource) {
   return { files, failures };
 }
 
+async function buildLazyStoredFolderBook(bookId: string, source: StoredSource): Promise<{ book: Book | null; failures: Array<{ kind: string; path?: string; error: unknown }> }> {
+  const entries = (source.entries || [])
+    .filter((entry) => !isJunkImagePath(entry.path || entry.name || ''))
+    .slice()
+    .sort((a, b) => basename(a.path || a.name).localeCompare(basename(b.path || b.name), undefined, { numeric: true, sensitivity: 'base' }));
+  if (!entries.length) return { book: null, failures: [] };
+
+  // 先校验首张可读图片以快速发现丢失/权限失效目录，其余图片全部按需懒读，避免千页图集一次撑爆内存。
+  const firstResolved = await resolveStoredFile(entries[0] as StoredSource, basename(entries[0].path || entries[0].name));
+  if (!firstResolved.file) {
+    return {
+      book: null,
+      failures: firstResolved.failures.map(item => ({ ...item, path: typeof entries[0].path === 'string' ? entries[0].path : undefined }))
+    };
+  }
+  const coverBlob = firstResolved.file;
+  const firstCoverUrl = URL.createObjectURL(coverBlob);
+  const pageItems = entries.map((entry, idx) => ({
+    zipEntry: {
+      async: async () => {
+        const res = await resolveStoredFile(entry as StoredSource, basename(entry.path || entry.name));
+        if (!res.file) throw new Error(sourceFailureMessage(entry as StoredSource, res.failures, false));
+        return res.file;
+      }
+    },
+    url: idx === 0 ? firstCoverUrl : null
+  }));
+  return {
+    book: {
+      id: bookId,
+      type: 'manga',
+      format: 'images',
+      title: source.name || '本地漫画图集',
+      cover: firstCoverUrl,
+      coverBlob,
+      pageItems: pageItems as unknown as Book['pageItems'],
+      pageCount: pageItems.length
+    },
+    failures: firstResolved.failures
+  };
+}
+
 function sourceFailureMessage(source: StoredSource, failures: Array<{ kind?: string }>, isFolder: boolean) {
   const kinds = new Set(failures.map((item) => item.kind));
   const hasNative = kinds.has('native') || !!source.nativePath;
@@ -724,17 +768,28 @@ export async function hydrateBook(book: BookLike) {
   if (source.kind === 'folder' && source.entries?.some(entry => entry.nativeReference)) {
     parsed = await buildReferencedImageBook(book.id, source);
   } else if (source.kind === 'folder') {
-    const { files, failures } = await resolveFolderFiles(source);
-    logSourceFailures(book.id, failures);
-    if (files.length === 0) {
-      console.warn('[HOMURA] 原文件夹恢复失败', sourceFailureMessage(source, failures, true));
-      return false;
+    const usesLazyBacking = (source.entries || []).some(entry => !!(entry.nativePath || entry.opfsPath || entry.handle));
+    if (usesLazyBacking) {
+      const { book: lazyBook, failures } = await buildLazyStoredFolderBook(book.id, source);
+      logSourceFailures(book.id, failures);
+      if (!lazyBook) {
+        console.warn('[HOMURA] 原文件夹恢复失败', sourceFailureMessage(source, failures, true));
+        return false;
+      }
+      parsed = lazyBook;
+    } else {
+      const { files, failures } = await resolveFolderFiles(source);
+      logSourceFailures(book.id, failures);
+      if (files.length === 0) {
+        console.warn('[HOMURA] 原文件夹恢复失败', sourceFailureMessage(source, failures, true));
+        return false;
+      }
+      if (failures.length > 0) {
+        console.warn(`[HOMURA] 有 ${failures.length} 张图片未从本地存档恢复`);
+      }
+      const groups = buildImageFolderBooks(files);
+      parsed = groups.length > 0 ? (groups[0].book as unknown as Book) : null;
     }
-    if (failures.length > 0) {
-      console.warn(`[HOMURA] 有 ${failures.length} 张图片未从本地存档恢复`);
-    }
-    const groups = buildImageFolderBooks(files);
-    parsed = groups.length > 0 ? (groups[0].book as unknown as Book) : null;
   } else {
     if (source.nativeReference) {
       const input = await openNativeReferenceSource(source.nativeReference, source);
@@ -816,6 +871,35 @@ export async function hydrateBook(book: BookLike) {
             console.warn('[HOMURA] 原生压缩包恢复失败，回退完整存档读取', err);
           }
         }
+      }
+    }
+
+    // 原生 AppData 中的 PDF 直接按字节区间流式打开，不整本读入 WebView 内存。
+    if (!parsed && source.nativePath && !source.nativeReference && /\.pdf$/i.test(source.name || '') && canUseNativeStorage()) {
+      try {
+        const range = await openNativeStorageRangeSource(source.nativePath, source.size);
+        const hasCover = !!(book.customCoverBlob || book.coverBlob || book.cover);
+        parsed = await parseRangeBook(range, source.name || 'book.pdf', book.id, { metadataOnly: hasCover });
+      } catch (err) {
+        if ((source.size || 0) > 128 * 1024 * 1024) {
+          console.warn('[HOMURA] 大型原生 PDF 分块打开失败，跳过整本回退', book.id, err);
+          return false;
+        }
+        console.warn('[HOMURA] 原生 PDF 分块打开失败，回退完整存档读取', err);
+      }
+    }
+
+    // 原生 AppData 中的大体积 MOBI 直接按字节区间流式解析，避免整本漫画读入 WebView 内存。
+    if (!parsed && source.nativePath && !source.nativeReference && /\.(mobi|prc|azw)$/i.test(source.name || '') && (source.size || 0) > NATIVE_MOBI_MAX_BYTES && canUseNativeStorage()) {
+      try {
+        const range = await openNativeStorageRangeSource(source.nativePath, source.size);
+        parsed = (await parseMobiRangeLazy(range, source.name || 'book.mobi')) as unknown as Book;
+      } catch (err) {
+        if ((source.size || 0) > 128 * 1024 * 1024) {
+          console.warn('[HOMURA] 大型原生 MOBI 分块打开失败，跳过整本回退', book.id, err);
+          return false;
+        }
+        console.warn('[HOMURA] 原生 MOBI 分块打开失败，回退完整存档读取', err);
       }
     }
 

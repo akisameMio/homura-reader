@@ -106,6 +106,10 @@ Before committing, run `npm test` (unit tests), `npm run typecheck`, and `npm ru
 - Dev and code constraints: [`AGENTS.md`](AGENTS.md)
 - Bugs & suggestions: [Issues](https://github.com/Leon-Ning-san/HomuraReader/issues)
 
+## Contributors
+
+Thanks to all contributors involved in developing and maintaining HOMURA, as well as **Google Gemini** for assisting with debugging and bug fixes.
+
 ## Star History
 
 <a href="https://star-history.com/#Leon-Ning-san/HomuraReader&amp;Date">

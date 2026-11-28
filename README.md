@@ -107,6 +107,10 @@ npm run build      # tauri build，先构建前端再打包安装包
 - 开发与代码约束：[`AGENTS.md`](AGENTS.md)
 - Bug 与建议：[Issues](https://github.com/Leon-Ning-san/HomuraReader/issues)
 
+## 贡献者
+
+感谢所有参与开发与维护的贡献者，以及协助进行问题排查与代码修复的 **Google Gemini**。
+
 ## Star 趋势
 
 <a href="https://star-history.com/#Leon-Ning-san/HomuraReader&amp;Date">

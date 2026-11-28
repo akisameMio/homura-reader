@@ -17,6 +17,7 @@ import { useSettingsStore } from './settings.ts';
 import { TRANSITION_OPTIONS, useThemeStore } from './theme.ts';
 import { resetRemoteBookRuntime } from '../services/remoteBookSource.ts';
 import { hydrateBook } from '../services/restore.ts';
+import { destroyPdfDocument } from '../services/pdf.ts';
 import { buildActivePages, buildActivePageSteps, finishPagination, createNovelPaginator, getNovelPaginationKey, ensureBookImagesResolved, releaseBookPageUrls } from '../services/pagination.ts';
 import {
   READER_FONT_OPTIONS,
@@ -557,6 +558,15 @@ export const useReaderStore = defineStore('reader', () => {
     return step.value;
   }
 
+  function releaseLocalPdf(book: Book) {
+    if (book.remote || !book.pdfDoc) return;
+    const pdfDoc = book.pdfDoc;
+    book.pdfDoc = null;
+    book.pageItems = null;
+    book.restored = true;
+    void destroyPdfDocument(pdfDoc).catch(() => {});
+  }
+
   function releaseRemoteBook(book: Book) {
     const dispose = book.remoteDispose;
     if (typeof dispose !== 'function') return;
@@ -659,6 +669,7 @@ export const useReaderStore = defineStore('reader', () => {
       if (previousBook && previousBook !== book) {
         releaseBookPageUrls(previousBook);
         releaseRemoteBook(previousBook);
+        releaseLocalPdf(previousBook);
       }
       requestRender('none');
       if (!book.remote && canStoreManagedNovel(book) && readSmartStorageConfig().enabled && typeof document !== 'undefined') {
@@ -687,6 +698,7 @@ export const useReaderStore = defineStore('reader', () => {
       return false;
     } finally {
       if (book.remote && currentBook.value !== book) releaseRemoteBook(book);
+      if (!book.remote && book.pdfDoc && currentBook.value !== book) releaseLocalPdf(book);
       if (token === openRequestToken) openingBook.value = false;
     }
   }
@@ -734,6 +746,7 @@ export const useReaderStore = defineStore('reader', () => {
     if (closedBook) {
       releaseBookPageUrls(closedBook);
       releaseRemoteBook(closedBook);
+      releaseLocalPdf(closedBook);
     }
     void releaseNativeArchiveSession(closedBook as unknown as { nativeArchiveId?: string | null; nativeArchivePath?: string | null; pageItems?: { nativeArchiveId?: string; nativeArchivePath?: string }[] | null });
     // 进度已通过 progressMap 响应式流回书架卡片，无需手动重绘书架

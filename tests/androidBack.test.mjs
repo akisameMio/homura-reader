@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 
 test('Android 返回监听在书架与阅读器之间保持注册', async () => {
@@ -178,4 +179,134 @@ test('预见式返回只注册一个原生通道，按手势归属转发并保�
     app.unmount();
     unregister();
   }
+});
+
+test('阅读器后挂载注册返回处理器时也会触发原生预见式返回启用', async () => {
+  const commands = [];
+  let nativeHandler = null;
+  let exits = 0;
+  window.__TAURI__ = {
+    app: {
+      onBackButtonPress: async () => ({ unregister: async () => {} }),
+      exit: async () => { exits++; }
+    },
+    core: {
+      Channel: class { constructor(handler) { this.handler = handler; } },
+      async invoke(command, args) {
+        commands.push(command.split('|')[1]);
+        if (command.endsWith('|supported')) return { supported: true };
+        if (command.endsWith('|enable') && args.handler) nativeHandler = args.handler.handler;
+      }
+    }
+  };
+  const { createApp, h, reactive } = await import('vue');
+  const { registerReaderBackHandler, useAndroidBackExit } = await import('../src/composables/useAndroidBackExit.ts');
+  const reader = reactive({ currentBook: { id: 'already-open' } });
+  const readerPhases = [];
+  const app = createApp({
+    setup() {
+      useAndroidBackExit(reader, () => false);
+      return () => h('div');
+    }
+  });
+  app.mount('#app');
+  const tick = () => new Promise(resolve => setImmediate(resolve));
+  let unregister = () => {};
+  try {
+    await tick();
+    assert.deepEqual(commands, ['supported']);
+    unregister = registerReaderBackHandler(() => {}, event => readerPhases.push(event.phase));
+    await tick();
+    assert.deepEqual(commands, ['supported', 'enable']);
+    nativeHandler({ phase: 'invoked' });
+    assert.deepEqual(readerPhases, ['invoked']);
+    assert.equal(exits, 0);
+  } finally {
+    app.unmount();
+    unregister();
+  }
+});
+
+test('启动时 onBackButtonPress 注册失败会在开书时自动重试，阅读侧滑返回不直接退出', async () => {
+  let attempts = 0;
+  let backHandler = null;
+  let exits = 0;
+  let toasts = 0;
+  window.__TAURI__ = {
+    app: {
+      onBackButtonPress: async handler => {
+        attempts++;
+        if (attempts === 1) throw new Error('bridge not ready');
+        backHandler = handler;
+        return { unregister: async () => {} };
+      },
+      exit: async () => { exits++; }
+    },
+    core: { invoke: async command => { if (command === 'plugin:android-toast|show') toasts++; } }
+  };
+  const { createApp, h, nextTick, reactive } = await import('vue');
+  const { useAndroidBackExit } = await import('../src/composables/useAndroidBackExit.ts');
+  const { useReaderBackDismiss } = await import('../src/composables/useReaderBackDismiss.ts');
+  const reader = reactive({
+    currentBook: null,
+    closeReader() { this.currentBook = null; }
+  });
+  const ui = reactive({
+    readerDrawerOpen: false,
+    settingsOpen: false,
+    tocOpen: false,
+    fontMenuOpen: false,
+    closeSettings() { this.settingsOpen = false; this.readerDrawerOpen = false; },
+    closeToc() { this.tocOpen = false; this.readerDrawerOpen = false; },
+    closeFontMenu() { this.fontMenuOpen = false; this.readerDrawerOpen = false; }
+  });
+  const app = createApp({
+    setup() {
+      useAndroidBackExit(reader, () => false);
+      useReaderBackDismiss(reader, ui);
+      return () => h('div');
+    }
+  });
+  app.mount('#app');
+  const tick = () => new Promise(resolve => setImmediate(resolve));
+  try {
+    await tick();
+    assert.equal(attempts, 1);
+    assert.equal(backHandler, null);
+
+    reader.currentBook = { id: 'book-retry' };
+    await tick();
+    assert.equal(attempts, 2);
+    assert.equal(typeof backHandler, 'function');
+
+    backHandler();
+    await nextTick();
+    assert.equal(reader.currentBook, null);
+    assert.equal(exits, 0);
+    assert.equal(toasts, 0);
+  } finally {
+    app.unmount();
+  }
+});
+
+test('Android 原生插件守卫主线程调度、预见式返回优先级与压缩包编码回退', () => {
+  const root = new URL('../src-tauri/plugins/', import.meta.url);
+  const read = path => readFileSync(new URL(path, root), 'utf8');
+
+  const predictivePlugin = read('android-predictive-back/android/src/main/java/com/homura/reader/predictiveback/PredictiveBackPlugin.kt');
+  assert.match(predictivePlugin, /activity\.runOnUiThread/);
+  assert.match(predictivePlugin, /OnBackPressedCallback/);
+  assert.match(predictivePlugin, /override fun onDestroy/);
+
+  const predictiveReg = read('android-predictive-back/android/src/main/java/com/homura/reader/predictiveback/PredictiveBackRegistration.kt');
+  assert.match(predictiveReg, /activity\.onBackInvokedDispatcher\.registerOnBackInvokedCallback/);
+  assert.match(predictiveReg, /PRIORITY_OVERLAY/);
+
+  const volumePlugin = read('android-volume-keys/android/src/main/java/com/homura/reader/volumekeys/VolumeKeysPlugin.kt');
+  assert.match(volumePlugin, /activity\.runOnUiThread[\s\S]*webViewRef\?\.requestFocus\(\)/);
+
+  const archivePlugin = read('android-archive/android/src/main/java/com/homura/reader/archive/AndroidArchivePlugin.kt');
+  assert.match(archivePlugin, /Shift_JIS/);
+  assert.match(archivePlugin, /GB18030/);
+  assert.match(archivePlugin, /jfif/);
 });

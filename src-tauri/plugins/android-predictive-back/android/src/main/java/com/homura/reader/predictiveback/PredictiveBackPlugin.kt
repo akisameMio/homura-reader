@@ -2,6 +2,8 @@ package com.homura.reader.predictiveback
 
 import android.app.Activity
 import android.os.Build
+import android.os.SystemClock
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
@@ -11,6 +13,8 @@ import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 
+private const val NATIVE_FALLBACK_DEDUP_MS = 150L
+
 @InvokeArg
 class EnableOptions {
   var handler: Channel? = null
@@ -18,8 +22,12 @@ class EnableOptions {
 
 @TauriPlugin
 class PredictiveBackPlugin(private val activity: Activity) : Plugin(activity) {
+  @Volatile
   private var channel: Channel? = null
   private var callback: Any? = null
+  private var fallbackBackCallback: OnBackPressedCallback? = null
+  private var enabled: Boolean = false
+  private var lastNativeInvokedAtMs: Long = 0L
 
   @Command
   fun supported(invoke: Invoke) {
@@ -29,31 +37,52 @@ class PredictiveBackPlugin(private val activity: Activity) : Plugin(activity) {
 
   @Command
   fun enable(invoke: Invoke) {
-    try {
-      val options = invoke.parseArgs(EnableOptions::class.java)
-      options.handler?.let { channel = it }
-      checkNotNull(channel) { "Predictive back channel is missing" }
-
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-        registerCallback()
-      }
-      invoke.resolve()
+    val options = try {
+      invoke.parseArgs(EnableOptions::class.java)
     } catch (ex: Exception) {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-        unregisterCallback()
+      invoke.reject(ex.message ?: "Failed to parse predictive back options")
+      return
+    }
+    val nextHandler = options.handler
+    activity.runOnUiThread {
+      try {
+        if (activity.isFinishing || activity.isDestroyed) {
+          invoke.reject("Activity is finishing")
+          return@runOnUiThread
+        }
+        nextHandler?.let { channel = it }
+        checkNotNull(channel) { "Predictive back channel is missing" }
+
+        enabled = true
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+          registerCallback(refresh = true)
+        }
+        attachFallbackCallback()
+        invoke.resolve()
+      } catch (ex: Exception) {
+        enabled = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+          unregisterCallback()
+        }
+        detachFallbackCallback()
+        invoke.reject(ex.message ?: "Failed to enable predictive back")
       }
-      channel = null
-      invoke.reject(ex.message ?: "Failed to enable predictive back")
     }
   }
 
   @Command
   fun disable(invoke: Invoke) {
-    try {
-      unregisterCallback()
-      invoke.resolve()
-    } catch (ex: Exception) {
-      invoke.reject(ex.message ?: "Failed to disable predictive back")
+    activity.runOnUiThread {
+      try {
+        enabled = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+          unregisterCallback()
+        }
+        detachFallbackCallback()
+        invoke.resolve()
+      } catch (ex: Exception) {
+        invoke.reject(ex.message ?: "Failed to disable predictive back")
+      }
     }
   }
 
@@ -63,7 +92,12 @@ class PredictiveBackPlugin(private val activity: Activity) : Plugin(activity) {
       if (!refresh) return
       unregisterCallback()
     }
-    callback = PredictiveBackRegistration.register(activity, ::dispatch)
+    callback = PredictiveBackRegistration.register(activity) { phase, progress, swipeEdge, touchX, touchY, frameTimeMillis ->
+      if (phase == "invoked") {
+        lastNativeInvokedAtMs = SystemClock.uptimeMillis()
+      }
+      dispatch(phase, progress, swipeEdge, touchX, touchY, frameTimeMillis)
+    }
   }
 
   @android.annotation.TargetApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
@@ -73,12 +107,53 @@ class PredictiveBackPlugin(private val activity: Activity) : Plugin(activity) {
     callback = null
   }
 
+  // 部分 Android 14/15/16 ROM 在三键返回或跳过 OnBackAnimationCallback 时会落到
+  // OnBackPressedDispatcher；启用期间在栈顶挂一层兜底，避免漏到 AppPlugin 直接退出应用。
+  private fun attachFallbackCallback() {
+    detachFallbackCallback()
+    val appCompat = activity as? AppCompatActivity ?: return
+    val fallback = object : OnBackPressedCallback(true) {
+      override fun handleOnBackPressed() {
+        if (!enabled) {
+          isEnabled = false
+          appCompat.onBackPressedDispatcher.onBackPressed()
+          return
+        }
+        val now = SystemClock.uptimeMillis()
+        if (now - lastNativeInvokedAtMs < NATIVE_FALLBACK_DEDUP_MS) {
+          return
+        }
+        dispatch("invoked", Float.NaN, -1, Float.NaN, Float.NaN, now)
+      }
+    }
+    appCompat.onBackPressedDispatcher.addCallback(fallback)
+    fallbackBackCallback = fallback
+  }
+
+  private fun detachFallbackCallback() {
+    fallbackBackCallback?.remove()
+    fallbackBackCallback = null
+  }
+
   override fun onResume(activity: AppCompatActivity) {
     super.onResume(activity)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && callback != null) {
-      // AndroidX 会在 onResume 重注册普通返回回调，这里重新置顶才能继续消费预见式返回。
-      registerCallback(refresh = true)
+    if (enabled) {
+      // AndroidX 会在 onStart/onResume 重排返回回调，这里重新置顶继续消费返回手势。
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        registerCallback(refresh = true)
+      }
+      attachFallbackCallback()
     }
+  }
+
+  override fun onDestroy(activity: AppCompatActivity) {
+    enabled = false
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+      unregisterCallback()
+    }
+    detachFallbackCallback()
+    channel = null
+    super.onDestroy(activity)
   }
 
   private fun dispatch(

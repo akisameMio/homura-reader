@@ -7,6 +7,8 @@ import {
   type ManagedNovelSourcePayloadV1
 } from './smartStorage.ts';
 import { readArchiveBlobByPath } from './archiveAccess.ts';
+import { sanitizeEpubHtml } from './sanitize.ts';
+import { escapeHtml } from './utils.ts';
 
 const MAX_EMBEDDED_ASSET_BYTES = 64 * 1024 * 1024;
 
@@ -68,7 +70,9 @@ export function applyManagedNovel(book: Book, value: unknown): ManagedNovelSourc
   book.format = archive.format;
   book.chapters = archive.chapters.map(chapter => ({
     title: chapter.title,
-    htmlContent: chapter.content,
+    htmlContent: chapter.contentKind === 'text'
+      ? `<p>${escapeHtml(chapter.content)}</p>`
+      : (typeof DOMParser !== 'undefined' ? sanitizeEpubHtml(chapter.content) : chapter.content),
     sourcePath: chapter.sourcePath
   }));
   const assets = new Map(archive.assets.map(asset => [asset.path, new Blob([asset.bytes as BlobPart], { type: asset.mediaType })]));

@@ -47,6 +47,7 @@ export function splitMarkdownChapters(source: string, fallbackTitle: string) {
   // 先解析全文，使跨章节引用定义生效；只按顶层标题切分，代码/列表/引用不拆章。
   const tokens = marked.lexer(source);
   const chapters: { title: string; htmlContent: string }[] = [];
+  const headingParser = new DOMParser();
   let buffer: Token[] = [];
   let heading: Tokens.Heading | null = null;
 
@@ -55,7 +56,7 @@ export function splitMarkdownChapters(source: string, fallbackTitle: string) {
     buffer = [];
     if (!html && !heading) return;
     const title = heading
-      ? new DOMParser().parseFromString(marked.parser([heading]), 'text/html').body.textContent?.trim()
+      ? headingParser.parseFromString(marked.parser([heading]), 'text/html').body.textContent?.trim()
       : '开始';
     chapters.push({
       title: title || fallbackTitle,
