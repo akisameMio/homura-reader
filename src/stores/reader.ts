@@ -561,9 +561,10 @@ export const useReaderStore = defineStore('reader', () => {
   function releaseLocalPdf(book: Book) {
     if (book.remote || !book.pdfDoc) return;
     const pdfDoc = book.pdfDoc;
-    book.pdfDoc = null;
-    book.pageItems = null;
-    book.restored = true;
+    const saved = useShelfStore().library.find(item => item.id === book.id);
+    const released = { pdfDoc: null, pageItems: null, restored: true };
+    Object.assign(book, released);
+    if (saved?.pdfDoc === pdfDoc) Object.assign(saved, released);
     void destroyPdfDocument(pdfDoc).catch(() => {});
   }
 
