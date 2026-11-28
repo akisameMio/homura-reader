@@ -381,6 +381,8 @@ function extractPageImages(archive: EpubArchive, parser: DOMParser, rawHtml: str
   const seenInCurrentPage = new Set<string>();
 
   for (const img of imgs) {
+    // 清除 EPUB 原文里伪造的内部属性，只信任由解析器解析出的压缩包路径。
+    if (options.markZipPaths) img.removeAttribute('data-zip-path');
     const srcAttr = img.getAttribute('src') || img.getAttribute('xlink:href') || img.getAttribute('href');
     if (!srcAttr || srcAttr.startsWith('http') || srcAttr.startsWith('data:')) continue;
 

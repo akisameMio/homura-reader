@@ -52,9 +52,29 @@ const SVG_ATTRS = new Set([
   'patterncontentunits', 'patterntransform'
 ]);
 
+const RESERVED_APP_IDS = new Set(['app', 'novelpaginationmeasurer']);
+
+function isReservedAppId(value: string) {
+  const lower = value.trim().toLowerCase();
+  return !lower || RESERVED_APP_IDS.has(lower) || lower.startsWith('homura-');
+}
+
+function isSafeZipPath(value: unknown) {
+  const raw = String(value || '');
+  if (!raw || raw.startsWith('/') || /[\\\u0000-\u001f\u007f]/.test(raw)) return false;
+  const parts = raw.split('/');
+  return parts.every(part => !!part && part !== '.' && part !== '..');
+}
+
 function svgUrlIsSafe(value: unknown) {
-  const matches = String(value || '').match(/url\(\s*(['"]?)(.*?)\1\s*\)/gi) || [];
-  return matches.every(item => /url\(\s*(['"]?)#[^)]+\1\s*\)/i.test(item));
+  const text = String(value || '').replace(/[\u0000-\u001f\u007f]/g, '');
+  if (!/url\s*\(/i.test(text)) return true;
+  // 含 url( 时只允许 #fragment 内部引用，使用 [\s\S] 防止换行绕过，且不允许未闭合的 url(
+  const matches = text.match(/url\s*\(\s*(['"]?)([\s\S]*?)\1\s*\)/gi);
+  if (!matches) return false;
+  const stripped = text.replace(/url\s*\(\s*(['"]?)([\s\S]*?)\1\s*\)/gi, '');
+  if (/url\s*\(/i.test(stripped)) return false;
+  return matches.every(item => /^url\s*\(\s*(['"]?)#[a-zA-Z0-9_.:-]+\1\s*\)$/i.test(item));
 }
 
 function cleanUrlValue(value: unknown) {
@@ -71,30 +91,40 @@ function sanitizeAttributes(el: Element, tagName: string) {
       continue;
     }
 
+    if (name === 'id') {
+      if (isReservedAppId(value)) el.removeAttribute(attr.name);
+      continue;
+    }
+
     if (name === 'data-zip-path') {
-      if (tagName !== 'img' && tagName !== 'image') el.removeAttribute(attr.name);
+      if ((tagName !== 'img' && tagName !== 'image') || !isSafeZipPath(value)) {
+        el.removeAttribute(attr.name);
+      }
       continue;
     }
     if (name.startsWith('aria-')) continue;
 
     if (name === 'href' || name === 'xlink:href') {
+      const cleaned = cleanUrlValue(value);
       const safe = tagName === 'a'
-        ? isSafeLinkUrl(value)
+        ? isSafeLinkUrl(cleaned)
         : tagName === 'use'
-          ? cleanUrlValue(value).startsWith('#')
-          : (tagName === 'image' || tagName === 'img') && isSafeImageUrl(value);
+          ? /^#[a-zA-Z0-9_.:-]+$/.test(cleaned)
+          : (tagName === 'image' || tagName === 'img') && isSafeImageUrl(cleaned);
       if (!safe) el.removeAttribute(attr.name);
-      else attr.value = cleanUrlValue(value);
+      else attr.value = cleaned;
       continue;
     }
 
     if (name === 'src') {
-      if (tagName !== 'img' || !isSafeImageUrl(value)) el.removeAttribute(attr.name);
-      else attr.value = cleanUrlValue(value);
+      const cleaned = cleanUrlValue(value);
+      if (tagName !== 'img' || !isSafeImageUrl(cleaned)) el.removeAttribute(attr.name);
+      else attr.value = cleaned;
       continue;
     }
 
-    if ((name === 'fill' || name === 'stroke' || name === 'clip-path' || name === 'filter' || name === 'mask')
+    if ((name === 'fill' || name === 'stroke' || name === 'clip-path' || name === 'filter' || name === 'mask'
+      || name === 'marker-start' || name === 'marker-mid' || name === 'marker-end')
       && !svgUrlIsSafe(value)) {
       el.removeAttribute(attr.name);
       continue;
@@ -104,6 +134,15 @@ function sanitizeAttributes(el: Element, tagName: string) {
       el.removeAttribute(attr.name);
     }
   }
+}
+
+function isInsideSvg(el: Element) {
+  let parent = el.parentElement;
+  while (parent) {
+    if ((parent.localName || parent.tagName).toLowerCase() === 'svg') return true;
+    parent = parent.parentElement;
+  }
+  return false;
 }
 
 function unwrap(el: Element) {
@@ -118,7 +157,8 @@ export function sanitizeElement(root: Element) {
   if (!root) return;
 
   const elements: Element[] = [];
-  const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+  const showElement = typeof NodeFilter !== 'undefined' ? NodeFilter.SHOW_ELEMENT : 1;
+  const walker = root.ownerDocument.createTreeWalker(root, showElement);
   let node = walker.nextNode();
   while (node) {
     elements.push(node as Element);
@@ -130,6 +170,11 @@ export function sanitizeElement(root: Element) {
     const tagName = (el.localName || el.tagName).toLowerCase();
 
     if (DROP_WITH_CONTENT.has(tagName)) {
+      el.remove();
+      continue;
+    }
+    // HTML 命名空间下的 <title> 属于 RCDATA，容易在二次序列化时产生 mXSS，只允许在 <svg> 内保留。
+    if ((tagName === 'title' || tagName === 'desc') && !isInsideSvg(el)) {
       el.remove();
       continue;
     }

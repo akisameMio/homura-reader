@@ -24,7 +24,9 @@
       "deny": [
         "$APPDATA",
         "$APPDATA/homura-native-references.json",
-        "$APPDATA/.homura-native-references.json.tmp"
+        "$APPDATA/.homura-native-references.json.tmp",
+        "$APPDATA/homura-metadata",
+        "$APPDATA/homura-metadata/**"
       ]
     },
     {

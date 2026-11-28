@@ -20,8 +20,19 @@ export function canUseNativeStorage() {
 }
 
 function safeSegment(name: unknown) {
-  const segment = String(name || 'source').replace(/[\\/:*?"<>|]/g, '_').slice(0, 160);
+  const segment = String(name || 'source').replace(/[\u0000-\u001f\u007f\\/:*?"<>|]/g, '_').slice(0, 160);
   return !segment || segment === '.' || segment === '..' ? 'source' : segment;
+}
+
+export function assertValidNativeSourcePath(path: string) {
+  if (typeof path !== 'string' || !path.startsWith(`${ROOT_DIR}/`) || /[\\\u0000-\u001f\u007f]/.test(path)) {
+    throw new Error('原生存档路径越界或非法');
+  }
+  const segments = path.split('/');
+  if (segments.length < 3 || segments[0] !== ROOT_DIR || segments.some(seg => !seg || seg === '.' || seg === '..')) {
+    throw new Error('原生存档路径越界或非法');
+  }
+  return path;
 }
 
 function dirname(path: string) {
@@ -41,6 +52,7 @@ export function nativeFilePath(bookId: unknown, relativePath: unknown) {
 export async function putNativeFile(path: string, blob: Blob) {
   if (!canUseNativeStorage()) throw new Error('原生文件存档不可用');
   if (!(blob instanceof Blob)) throw new Error('原文件不是 Blob');
+  assertValidNativeSourcePath(path);
 
   await mkdir(dirname(path), { baseDir: BASE_DIR, recursive: true });
   // 用流分块写，避免把整本漫画一次性序列化成巨大的 IPC 字节数组。
@@ -54,6 +66,7 @@ export async function putNativeFile(path: string, blob: Blob) {
 }
 
 export async function getNativeFile(path: string) {
+  assertValidNativeSourcePath(path);
   const bytes = await readFile(path, { baseDir: BASE_DIR });
   return new Blob([bytes]);
 }
@@ -61,6 +74,7 @@ export async function getNativeFile(path: string) {
 // 按字节区间读取原生存档文件（供大型 PDF 等格式按需加载，不把整本文件经 IPC 搬进 WebView）
 export async function openNativeStorageRangeSource(path: string, expectedSize?: number): Promise<RangeSource> {
   if (!canUseNativeStorage()) throw new Error('原生文件存档不可用');
+  assertValidNativeSourcePath(path);
   const info = await stat(path, { baseDir: BASE_DIR });
   const size = Number(info.size);
   if (!Number.isSafeInteger(size) || size < 1) {
@@ -99,6 +113,7 @@ export async function openNativeStorageRangeSource(path: string, expectedSize?: 
 }
 
 export async function removeNativeFile(path: string) {
+  assertValidNativeSourcePath(path);
   await remove(path, { baseDir: BASE_DIR }).catch(() => {});
 }
 
