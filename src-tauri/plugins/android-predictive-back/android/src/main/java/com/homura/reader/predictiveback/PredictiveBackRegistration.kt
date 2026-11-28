@@ -7,6 +7,17 @@ import android.window.BackEvent
 import android.window.OnBackAnimationCallback
 import android.window.OnBackInvokedDispatcher
 
+@android.annotation.TargetApi(36)
+private object BackEventApi36 {
+  fun frameTimeMillis(event: BackEvent): Long {
+    return try {
+      event.frameTimeMillis
+    } catch (_: Throwable) {
+      0L
+    }
+  }
+}
+
 @android.annotation.TargetApi(34)
 object PredictiveBackRegistration {
   fun register(
@@ -23,11 +34,15 @@ object PredictiveBackRegistration {
       }
 
       override fun onBackCancelled() {
-        dispatch("cancelled", Float.NaN, -1, Float.NaN, Float.NaN, SystemClock.uptimeMillis())
+        try {
+          dispatch("cancelled", Float.NaN, -1, Float.NaN, Float.NaN, SystemClock.uptimeMillis())
+        } catch (_: Throwable) {}
       }
 
       override fun onBackInvoked() {
-        dispatch("invoked", Float.NaN, -1, Float.NaN, Float.NaN, SystemClock.uptimeMillis())
+        try {
+          dispatch("invoked", Float.NaN, -1, Float.NaN, Float.NaN, SystemClock.uptimeMillis())
+        } catch (_: Throwable) {}
       }
     }
 
@@ -53,15 +68,19 @@ object PredictiveBackRegistration {
     event: BackEvent,
     dispatch: (String, Float, Int, Float, Float, Long) -> Unit
   ) {
-    // BackEvent 的帧时间从 API 36 才可用，旧版本沿用同一 uptime 时钟。
-    val frameTime = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) event.frameTimeMillis else 0L
-    dispatch(
-      phase,
-      event.progress,
-      event.swipeEdge,
-      event.touchX,
-      event.touchY,
-      if (frameTime > 0) frameTime else SystemClock.uptimeMillis()
-    )
+    try {
+      // BackEvent.frameTimeMillis 仅在 API 36 可用，隔离到独立对象避免 Android 14/15 ART 校验异常。
+      val frameTime = if (Build.VERSION.SDK_INT >= 36) BackEventApi36.frameTimeMillis(event) else 0L
+      dispatch(
+        phase,
+        event.progress,
+        event.swipeEdge,
+        event.touchX,
+        event.touchY,
+        if (frameTime > 0) frameTime else SystemClock.uptimeMillis()
+      )
+    } catch (_: Throwable) {
+      // 部分定制 ROM 在极端边缘手势下可能抛出 BackEvent 读取异常，兜底防止进程闪退。
+    }
   }
 }
