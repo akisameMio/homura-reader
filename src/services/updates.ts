@@ -78,11 +78,22 @@ const GROUP_LABELS: [RegExp, string][] = [
   [/其他|chore|other/i, '其他']
 ];
 
+function stripHtmlTags(value: string) {
+  let result = value;
+  let previous = '';
+  while (result !== previous) {
+    previous = result;
+    result = result.replace(/<[^>]*>/g, '');
+  }
+  return result.replace(/[<>]/g, '');
+}
+
 function cleanInlineMarkdown(value: unknown) {
-  return String(value || '')
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/<[^>]+>/g, '')
+  return stripHtmlTags(
+    String(value || '')
+      .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+  )
     .replace(/[*_~`]/g, '')
     .replace(/\s+/g, ' ')
     .trim();

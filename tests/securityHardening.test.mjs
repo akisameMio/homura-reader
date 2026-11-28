@@ -13,6 +13,7 @@ const { applyManagedNovel } = await import('../src/services/managedBook.ts');
 const { assertValidNativeSourcePath } = await import('../src/services/nativeStorage.ts');
 const { openGitHubUrl, openReadingUrl } = await import('../src/services/external.ts');
 const { redactSensitiveText } = await import('../src/services/runtimeLogs.ts');
+const { parseReleaseNotes } = await import('../src/services/updates.ts');
 
 test('SVG url() 换行绕过与外部 marker 引用会被拦截，内部 #id 引用保留', () => {
   const bypassed = sanitizeEpubHtml('<svg><rect fill="url(\nhttps://evil.example/leak.svg#a)" marker-end="url(https://evil.example/m#b)"/></svg>');
@@ -96,4 +97,11 @@ test('运行日志自动脱敏认证头、URL 凭据与密码字段', () => {
   assert.ok(!cleaned.includes('mypwd'));
   assert.ok(!cleaned.includes('tok123'));
   assert.ok(cleaned.includes('[REDACTED]'));
+});
+
+test('parseReleaseNotes 会彻底清除嵌套构造的 HTML 标签，不残留尖括号', () => {
+  const notes = parseReleaseNotes('## 更新日志\n### 修复\n- 清除 <<script>script>alert(1)<</script>/script> 文本');
+  const item = notes.groups[0]?.items[0] || '';
+  assert.ok(!item.includes('<') && !item.includes('>'), `不应残留尖括号：${item}`);
+  assert.ok(!/<script/i.test(item));
 });
