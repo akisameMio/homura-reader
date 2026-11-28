@@ -15,12 +15,18 @@ class ToastOptions {
 
 @TauriPlugin
 class AndroidToastPlugin(private val activity: Activity) : Plugin(activity) {
+  private var activeToast: Toast? = null
+
   @Command
   fun show(invoke: Invoke) {
     try {
       val options = invoke.parseArgs(ToastOptions::class.java)
       activity.runOnUiThread {
-        Toast.makeText(activity, options.message, Toast.LENGTH_SHORT).show()
+        if (!activity.isFinishing && !activity.isDestroyed) {
+          activeToast?.cancel()
+          activeToast = Toast.makeText(activity.applicationContext, options.message, Toast.LENGTH_SHORT)
+          activeToast?.show()
+        }
       }
       invoke.resolve()
     } catch (ex: Exception) {

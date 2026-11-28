@@ -20,7 +20,9 @@ class EnableOptions {
 
 @TauriPlugin
 class VolumeKeysPlugin(private val activity: Activity) : Plugin(activity) {
+  @Volatile
   private var channel: Channel? = null
+  @Volatile
   private var webViewRef: WebView? = null
 
   private val webViewKeyListener = View.OnKeyListener { _, keyCode, event ->
@@ -40,10 +42,13 @@ class VolumeKeysPlugin(private val activity: Activity) : Plugin(activity) {
 
   // WebView 重建 / 插件销毁时清掉监听，避免旧实例继续吞音量键。
   override fun onDestroy(activity: AppCompatActivity) {
-    webViewRef?.setOnKeyListener(null)
-    activity.window?.decorView?.setOnKeyListener(null)
+    val currentWebView = webViewRef
     webViewRef = null
     channel = null
+    activity.runOnUiThread {
+      currentWebView?.setOnKeyListener(null)
+      activity.window?.decorView?.setOnKeyListener(null)
+    }
     super.onDestroy(activity)
   }
 
@@ -68,9 +73,13 @@ class VolumeKeysPlugin(private val activity: Activity) : Plugin(activity) {
     try {
       channel = invoke.parseArgs(EnableOptions::class.java).handler
       // 音量键只派发给拥有焦点的窗口内视图；冷启动后 WebView 可能还没拿到焦点，
-      // 主动请求焦点，保证打开书后不用先点一下屏幕也能用音量键翻页。
-      webViewRef?.requestFocus()
-      invoke.resolve()
+      // 必须在主线程请求焦点，否则会触发 CalledFromWrongThreadException 导致启用失败。
+      activity.runOnUiThread {
+        if (!activity.isFinishing && !activity.isDestroyed) {
+          webViewRef?.requestFocus()
+        }
+        invoke.resolve()
+      }
     } catch (ex: Exception) {
       channel = null
       invoke.reject(ex.message ?: "Failed to enable volume key paging")

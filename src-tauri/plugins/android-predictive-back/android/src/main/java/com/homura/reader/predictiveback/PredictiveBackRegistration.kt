@@ -31,17 +31,21 @@ object PredictiveBackRegistration {
       }
     }
 
-    activity.window.onBackInvokedDispatcher.registerOnBackInvokedCallback(
-      OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+    activity.onBackInvokedDispatcher.registerOnBackInvokedCallback(
+      OnBackInvokedDispatcher.PRIORITY_OVERLAY,
       callback
     )
     return callback
   }
 
   fun unregister(activity: Activity, callback: Any) {
-    activity.window.onBackInvokedDispatcher.unregisterOnBackInvokedCallback(
-      callback as OnBackAnimationCallback
-    )
+    try {
+      activity.onBackInvokedDispatcher.unregisterOnBackInvokedCallback(
+        callback as OnBackAnimationCallback
+      )
+    } catch (_: Throwable) {
+      // Activity 销毁或重复注销时忽略底层分发器异常
+    }
   }
 
   private fun dispatchEvent(

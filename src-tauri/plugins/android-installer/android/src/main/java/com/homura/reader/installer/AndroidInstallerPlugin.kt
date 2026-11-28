@@ -59,6 +59,10 @@ class AndroidInstallerPlugin(private val activity: Activity) : Plugin(activity) 
 
       activity.runOnUiThread {
         try {
+          if (activity.isFinishing || activity.isDestroyed) {
+            invoke.reject("应用正在关闭，无法启动系统安装器。")
+            return@runOnUiThread
+          }
           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             !activity.packageManager.canRequestPackageInstalls()
           ) {
@@ -92,10 +96,20 @@ class AndroidInstallerPlugin(private val activity: Activity) : Plugin(activity) 
       val settingsIntent = Intent(
         Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
         Uri.parse("package:" + activity.packageName)
-      )
+      ).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
       activity.startActivity(settingsIntent)
-    } catch (_: ActivityNotFoundException) {
-      activity.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS))
+    } catch (_: Exception) {
+      try {
+        activity.startActivity(
+          Intent(Settings.ACTION_SECURITY_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          }
+        )
+      } catch (_: Exception) {
+        // 部分定制 ROM 裁剪了安全设置入口，忽略跳转异常，由前端提示手动授权。
+      }
     }
   }
 }

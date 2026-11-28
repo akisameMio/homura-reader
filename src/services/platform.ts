@@ -18,7 +18,17 @@ const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
 export const isIOS = /iPad|iPhone|iPod/.test(ua)
   || (typeof navigator !== 'undefined' && navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1);
 
-export const isAndroid = /Android/i.test(ua);
+// 部分 Android 平板与 HarmonyOS WebView 可能上报类桌面 Linux UA，
+// 在 Tauri 容器内结合触控点数识别，避免整套 Android 返回拦截与原生存档桥失效。
+export const isAndroid = /Android|HarmonyOS|OpenHarmony/i.test(ua)
+  || (
+    canUseNativeBridge()
+    && !isIOS
+    && !/Macintosh|Windows/i.test(ua)
+    && /Linux/i.test(ua)
+    && typeof navigator !== 'undefined'
+    && (navigator.maxTouchPoints || 0) > 0
+  );
 
 export const isMacOSTauri = /Macintosh/i.test(ua) && !isIOS && canUseNativeBridge();
 
