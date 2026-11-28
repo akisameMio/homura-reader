@@ -14,6 +14,7 @@ import {
   canUseNativeStorage,
   getNativeFile,
   nativeFilePath,
+  openNativeStorageRangeSource,
   putNativeFile,
   removeNativeBookDir,
   removeNativeFile
@@ -816,6 +817,21 @@ export async function hydrateBook(book: BookLike) {
             console.warn('[HOMURA] 原生压缩包恢复失败，回退完整存档读取', err);
           }
         }
+      }
+    }
+
+    // 原生 AppData 中的 PDF 直接按字节区间流式打开，不整本读入 WebView 内存。
+    if (!parsed && source.nativePath && !source.nativeReference && /\.pdf$/i.test(source.name || '') && canUseNativeStorage()) {
+      try {
+        const range = await openNativeStorageRangeSource(source.nativePath, source.size);
+        const hasCover = !!(book.customCoverBlob || book.coverBlob || book.cover);
+        parsed = await parseRangeBook(range, source.name || 'book.pdf', book.id, { metadataOnly: hasCover });
+      } catch (err) {
+        if ((source.size || 0) > 128 * 1024 * 1024) {
+          console.warn('[HOMURA] 大型原生 PDF 分块打开失败，跳过整本回退', book.id, err);
+          return false;
+        }
+        console.warn('[HOMURA] 原生 PDF 分块打开失败，回退完整存档读取', err);
       }
     }
 

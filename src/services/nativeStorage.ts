@@ -6,12 +6,14 @@
    写进应用私有 AppData，只把相对路径存进 IndexedDB。
    ========================================================================== */
 
-import { BaseDirectory, mkdir, readFile, remove, stat, writeFile } from '@tauri-apps/plugin-fs';
+import { BaseDirectory, SeekMode, mkdir, open, readFile, remove, stat, writeFile } from '@tauri-apps/plugin-fs';
 import { canUseNativeBridge } from './nativeRuntime.ts';
 import { clearNativeArchiveBookCache, clearNativeArchiveCache } from './nativeArchive.ts';
+import type { RangeSource } from './webdavBooks.ts';
 
 const ROOT_DIR = 'homura-native-sources';
 const BASE_DIR = BaseDirectory.AppData;
+const RANGE_CHUNK_BYTES = 1024 * 1024;
 
 export function canUseNativeStorage() {
   return canUseNativeBridge();
@@ -54,6 +56,46 @@ export async function putNativeFile(path: string, blob: Blob) {
 export async function getNativeFile(path: string) {
   const bytes = await readFile(path, { baseDir: BASE_DIR });
   return new Blob([bytes]);
+}
+
+// 按字节区间读取原生存档文件（供大型 PDF 等格式按需加载，不把整本文件经 IPC 搬进 WebView）
+export async function openNativeStorageRangeSource(path: string, expectedSize?: number): Promise<RangeSource> {
+  if (!canUseNativeStorage()) throw new Error('原生文件存档不可用');
+  const info = await stat(path, { baseDir: BASE_DIR });
+  const size = Number(info.size);
+  if (!Number.isSafeInteger(size) || size < 1) {
+    throw new Error('原生存档文件大小无效');
+  }
+  if (typeof expectedSize === 'number' && expectedSize > 0 && size !== expectedSize) {
+    throw new Error(`原生存档文件大小不一致：${size} / ${expectedSize}`);
+  }
+  return {
+    size,
+    async read(start: number, end: number) {
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start > end || end > size) {
+        throw new Error('原生存档读取范围无效');
+      }
+      const total = end - start;
+      if (total === 0) return new Uint8Array(0);
+      const output = new Uint8Array(total);
+      const handle = await open(path, { read: true, baseDir: BASE_DIR });
+      try {
+        await handle.seek(start, SeekMode.Start);
+        let written = 0;
+        while (written < total) {
+          const chunkLen = Math.min(RANGE_CHUNK_BYTES, total - written);
+          const buf = new Uint8Array(chunkLen);
+          const n = await handle.read(buf);
+          if (n === null || n <= 0) throw new Error('原生存档读取不完整');
+          output.set(buf.subarray(0, n), written);
+          written += n;
+        }
+        return output;
+      } finally {
+        await handle.close().catch(() => {});
+      }
+    }
+  };
 }
 
 export async function removeNativeFile(path: string) {

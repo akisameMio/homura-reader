@@ -10,7 +10,7 @@ import { escapeHtml } from './utils.ts';
 import { decodeTxtBytesAsync } from './textEncoding.ts';
 import { splitMarkdownChapters } from './markdown.ts';
 import { parseMobiFileData } from './mobi.ts';
-import { openPdfDocument, createPdfPageItems, renderPdfCoverBlob } from './pdf.ts';
+import { openPdfDocument, createPdfPageItems, renderPdfCoverBlob, destroyPdfDocument } from './pdf.ts';
 import { readPdfOutline } from './pdfOutline.ts';
 import { parseEpubFile } from './epubParser.ts';
 import {
@@ -35,7 +35,7 @@ export async function discardParsedBook(book: Book) {
     await removeNativeBookDir(book.id).catch(() => {});
   }
   try {
-    await (book.pdfDoc as { loadingTask?: { destroy(): Promise<void> } } | null | undefined)?.loadingTask?.destroy();
+    await destroyPdfDocument(book.pdfDoc);
   } catch (err) {
     console.warn('[HOMURA] 释放跳过的 PDF 失败', err);
   }
@@ -57,13 +57,15 @@ export async function parseEpubFileLazy(file: File, options: Record<string, unkn
 // ---- PDF：每页按需渲染成位图，直接复用漫画渲染管道 ----
 
 export async function parsePdfFileLazy(file: File) {
+  let pdfDoc: Awaited<ReturnType<typeof openPdfDocument>> | null = null;
+  let coverUrl: string | null = null;
   try {
-    const pdfDoc = await openPdfDocument(file);
+    pdfDoc = await openPdfDocument(file);
     const pageCount = pdfDoc.numPages || 0;
     if (pageCount === 0) throw new Error('PDF 中没有可显示的页面');
 
     const coverBlob = await renderPdfCoverBlob(pdfDoc);
-    const coverUrl = URL.createObjectURL(coverBlob as Blob);
+    coverUrl = URL.createObjectURL(coverBlob as Blob);
     const outline = await readPdfOutline(pdfDoc);
 
     return {
@@ -79,6 +81,8 @@ export async function parsePdfFileLazy(file: File) {
       pageCount: pageCount
     };
   } catch (err) {
+    if (coverUrl) URL.revokeObjectURL(coverUrl);
+    if (pdfDoc) await destroyPdfDocument(pdfDoc).catch(() => {});
     console.error(err);
     return null;
   }

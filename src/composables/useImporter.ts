@@ -24,7 +24,8 @@ import {
   stageNativePathSource
 } from '../services/restore.ts';
 import { canUseNativeArchive, NATIVE_ONLY_ARCHIVE_BYTES, releaseNativeArchiveSession } from '../services/nativeArchive.ts';
-import { removeNativeBookDir } from '../services/nativeStorage.ts';
+import { canUseNativeStorage, openNativeStorageRangeSource, removeNativeBookDir } from '../services/nativeStorage.ts';
+import { destroyPdfDocument } from '../services/pdf.ts';
 import {
   isAndroidContentUri,
   isNativeImportFile,
@@ -823,6 +824,70 @@ export function useImporter() {
     return { book, source: makeFileSource(file) };
   }
 
+  // 原生导入的 PDF 先由原生侧流式落到 AppData，再通过有界 Range 分块解析；
+  // 避免大 PDF 在导入时经 readFile 整本拷进 WebView 内存导致失败或闪退。
+  async function preparePdfTask(task: ImportTask, metrics: ImportMetrics): Promise<Prepared | null> {
+    const file = task.file!;
+    if (!isNativeImportFile(file) || !canUseNativeStorage()) {
+      return prepareParsedTask(task, parsePdfFileLazy, metrics, 'PDF');
+    }
+    const MAX_FALLBACK_PDF_BYTES = 128 * 1024 * 1024;
+    const started = now();
+    const viaAndroidUri = isAndroidContentUri(file.nativePath);
+    const stagedBookId = viaAndroidUri ? makeEpubId() : `pdf_${crypto.randomUUID()}`;
+    let stagedSource: BookSource | null = null;
+    let book: Book | null = null;
+    importProgress.setPhase('read');
+    try {
+      const stageStarted = now();
+      try {
+        stagedSource = await stageNativePathSource(stagedBookId, file);
+      } finally {
+        const elapsed = now() - stageStarted;
+        metrics.nativeStageMs += elapsed;
+        metrics.stageMs += elapsed;
+      }
+
+      importProgress.setPhase('parse');
+      const nativePath = stagedSource.nativePath as string;
+      try {
+        const range = await openNativeStorageRangeSource(nativePath, stagedSource.size);
+        book = await parseRangeBook(range, file.name, stagedBookId, { metadataOnly: false });
+      } catch (rangeErr) {
+        if ((stagedSource.size || 0) > MAX_FALLBACK_PDF_BYTES || !shouldFallbackNativeImport(rangeErr)) {
+          throw rangeErr;
+        }
+        console.warn('[HOMURA] 原生 PDF 分块读取不可用，回退完整文件解析', rangeErr);
+        const readStarted = now();
+        let materialized: ImportFile;
+        try {
+          materialized = await materializeStagedNativeImportFile(file, nativePath);
+        } finally {
+          metrics.readMs += now() - readStarted;
+        }
+        book = (await parsePdfFileLazy(materialized)) as Book | null;
+      }
+    } catch (err: unknown) {
+      if (viaAndroidUri && !stagedSource && shouldFallbackNativeImport(err)) {
+        await removeNativeBookDir(stagedBookId).catch(() => {});
+        (err as { nativeImportFallback?: boolean }).nativeImportFallback = true;
+        throw err;
+      }
+      console.warn('[HOMURA] PDF 解析失败', err);
+      markTaskFailure(task, err);
+    } finally {
+      metrics.parseMs += now() - started;
+    }
+
+    if (!book || !stagedSource) {
+      await removeNativeBookDir(stagedBookId).catch(() => {});
+      return null;
+    }
+    book.id = stagedBookId;
+    book.nativeArchiveStaged = !!stagedSource.preStaged;
+    return { book, source: stagedSource };
+  }
+
   async function prepareImportTask(task: ImportTask, metrics: ImportMetrics): Promise<Prepared | null> {
     let prepared: Prepared | null = null;
     const file = task.file;
@@ -839,7 +904,7 @@ export function useImporter() {
       }
     } else if (task.kind === 'epub') prepared = await prepareEpubTask(task, metrics);
     else if (task.kind === 'archive') prepared = await prepareArchiveTask(task, metrics);
-    else if (task.kind === 'pdf') prepared = await prepareParsedTask(task, parsePdfFileLazy, metrics, 'PDF');
+    else if (task.kind === 'pdf') prepared = await preparePdfTask(task, metrics);
     else if (task.kind === 'mobi') prepared = await prepareParsedTask(task, parseMobiFileLazy, metrics, 'MOBI');
     else if (task.kind === 'markdown') prepared = await prepareParsedTask(task, parseMarkdownFile, metrics, 'Markdown');
     else if (task.kind === 'txt') prepared = await prepareParsedTask(task, parseTxtFile, metrics, 'TXT');
@@ -991,9 +1056,7 @@ export function useImporter() {
       for (const url of new Set((book.resourceUrls as String[] | null | undefined) || [])) {
         if (typeof url === 'string' && url.startsWith('blob:') && url !== book.cover) URL.revokeObjectURL(url);
       }
-      const pdfDoc = book.pdfDoc as { loadingTask?: { destroy?: () => Promise<void> }; destroy?: () => Promise<void> } | null | undefined;
-      if (pdfDoc?.loadingTask?.destroy) await pdfDoc.loadingTask.destroy();
-      else if (pdfDoc?.destroy) await pdfDoc.destroy();
+      await destroyPdfDocument(book.pdfDoc);
     } catch (err) {
       console.warn('[HOMURA] 释放导入后的页面资源失败', book.title, err);
     }
