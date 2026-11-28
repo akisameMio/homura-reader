@@ -2,8 +2,10 @@
   <!-- 桌面：浮动圆角侧栏，可在「图标 + 文字」与折叠窄栏之间切换 -->
   <aside
     v-if="!isCompact"
+    ref="desktopRailRef"
     class="sidenav"
     :class="{ 'is-collapsed': collapsed }"
+    @scroll.passive="hideDesktopTooltip"
   >
     <div class="sidenav-head">
       <button
@@ -13,44 +15,62 @@
         :aria-label="t('HOMURA，返回主页')"
         @click="select('shelf')"
       >
-        <img :src="logoUrl" alt="" draggable="false" />
-        <span class="sidenav-wordmark" aria-hidden="true">HOMURA</span>
+        <span class="sidenav-icon-slot"><img :src="logoUrl" alt="" draggable="false" /></span>
+        <span class="sidenav-label sidenav-wordmark" aria-hidden="true">HOMURA</span>
       </button>
-
-      <MdIconButton
-        class="sidenav-icon-btn"
-        :title="collapsed ? t('展开侧栏') : t('折叠侧栏')"
-        :aria-label="collapsed ? t('展开侧栏') : t('折叠侧栏')"
-        :aria-expanded="!collapsed"
-        @click="toggleSidebar"
-      >
-        <MdIcon :name="collapsed ? 'menu' : 'menu_open'" />
-      </MdIconButton>
     </div>
 
     <nav ref="desktopNavRef" class="sidenav-list" :aria-label="t('主导航')">
       <span
+        v-show="desktopActiveIndex >= 0"
+        ref="desktopIndicatorRef"
         class="sidenav-indicator"
-        :class="{ 'is-ready': desktopReady }"
-        :style="{ transform: `translate3d(0, ${desktopIndicatorY}px, 0)` }"
         aria-hidden="true"
       ></span>
-      <button
+      <MdIconButton
         v-for="item in navItems"
         :key="item.key"
-        type="button"
         class="sidenav-item"
         :class="{ 'is-active': active === item.key }"
-        :title="t(item.label)"
+        :animate-icon="collapsed"
+        :hover-layer="collapsed && active !== item.key"
+        preserve-user-activation
         :aria-label="t(item.label)"
         :aria-current="active === item.key ? 'page' : undefined"
+        @pointermove="onDesktopPointerMove($event, item.label)"
+        @pointerleave="hideDesktopTooltip"
+        @pointerdown="hideDesktopTooltip"
         @click="select(item.key)"
       >
         <MdIcon :name="item.icon" :filled="active === item.key" />
-        <span class="sidenav-label sidenav-label-wide" aria-hidden="true">{{ t(item.label) }}</span>
-        <span class="sidenav-label sidenav-label-compact" aria-hidden="true">{{ t(item.label) }}</span>
-      </button>
+        <template #label>
+          <span class="sidenav-label-clip" aria-hidden="true">
+            <span class="sidenav-label">{{ t(item.label) }}</span>
+          </span>
+        </template>
+      </MdIconButton>
     </nav>
+
+    <MdIconButton
+      class="sidenav-icon-btn"
+      :title="collapsed ? t('展开侧栏') : t('折叠侧栏')"
+      :aria-label="collapsed ? t('展开侧栏') : t('折叠侧栏')"
+      :aria-expanded="!collapsed"
+      :hover-layer="collapsed"
+      :press-scale="0.94"
+      @click="toggleSidebar"
+    >
+      <MdIcon :name="collapsed ? 'menu' : 'menu_open'" />
+    </MdIconButton>
+
+    <Teleport to="body">
+      <span
+        v-if="desktopTooltip"
+        class="sidenav-tooltip"
+        :style="{ left: `${desktopTooltip.left}px`, top: `${desktopTooltip.top}px` }"
+        aria-hidden="true"
+      >{{ t(desktopTooltip.label) }}</span>
+    </Teleport>
   </aside>
 
   <!-- 手机：悬浮胶囊底栏 -->
@@ -85,8 +105,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
+import { computed, ref, shallowRef, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { useViewport } from '../composables/useViewport.ts';
+import { makeAxis, runSpring, snapAxes } from '../services/spring.ts';
 import MdIcon from './MdIcon.vue';
 import MdIconButton from './MdIconButton.vue';
 import { useI18n } from '../composables/useI18n.ts';
@@ -115,16 +136,97 @@ function readCollapsed() {
 
 const collapsed = ref(readCollapsed());
 
-const desktopNavRef = ref<HTMLElement | null>(null);
+const desktopRailRef = shallowRef<HTMLElement | null>(null);
+const desktopNavRef = shallowRef<HTMLElement | null>(null);
+const desktopIndicatorRef = shallowRef<HTMLElement | null>(null);
 const mobileNavRef = ref<HTMLElement | null>(null);
-const desktopReady = ref(false);
 const mobileReady = ref(false);
-const desktopIndicatorY = ref(0);
 const indicatorDragging = ref(false);
 const indicatorPressed = ref(false);
 const mobileIndicatorTransform = ref('translate3d(0, 4px, 0)');
 
 let measureFrame = 0;
+
+const navItems = [
+  { key: 'shelf', label: '书架', icon: 'local_library' },
+  { key: 'recent', label: '最近', icon: 'history' },
+  { key: 'favorite', label: '收藏', icon: 'star' },
+  { key: 'settings', label: '设置', icon: 'settings' }
+];
+
+const desktopActiveIndex = computed(() => navItems.findIndex(item => item.key === props.active));
+const desktopTravel = makeAxis(0, 460, 34 / (2 * Math.sqrt(460)));
+const desktopAxes = [desktopTravel];
+let desktopMotionPreference: MediaQueryList | undefined;
+let stopDesktopSpring: (() => void) | undefined;
+
+function paintDesktopIndicator() {
+  const position = Math.max(0, Math.min(navItems.length - 1, desktopTravel.pos));
+  const indicator = desktopIndicatorRef.value;
+  // 以槽位为单位积分，侧栏变宽或页面滚动时无需测量 DOM。
+  if (indicator) indicator.style.transform = `translateY(calc(${position} * var(--sidenav-row-step)))`;
+}
+
+function finishDesktopSpring() {
+  stopDesktopSpring?.();
+  stopDesktopSpring = undefined;
+  desktopNavRef.value?.classList.remove('is-sliding');
+  snapAxes(desktopAxes);
+  paintDesktopIndicator();
+}
+
+watch([desktopNavRef, desktopActiveIndex], ([nav, index], [previousNav, previousIndex]) => {
+  desktopTravel.target = Math.max(0, index);
+  if (!nav || nav !== previousNav || index < 0 || previousIndex < 0 || desktopMotionPreference?.matches) {
+    finishDesktopSpring();
+    return;
+  }
+  if (stopDesktopSpring) return;
+  nav.classList.add('is-sliding');
+  stopDesktopSpring = runSpring(desktopAxes, paintDesktopIndicator, () => {
+    stopDesktopSpring = undefined;
+    nav.classList.remove('is-sliding');
+  }, { maxStep: 1 / 240, posEpsilon: 0.001, velEpsilon: 0.02 });
+}, { flush: 'post' });
+
+function onDesktopMotionPreferenceChange(event: MediaQueryListEvent) {
+  if (event.matches) finishDesktopSpring();
+}
+
+const desktopTooltip = ref<{ label: string; left: number; top: number } | null>(null);
+let desktopTooltipAnchor: HTMLButtonElement | null = null;
+let desktopTooltipTimer: ReturnType<typeof setTimeout> | undefined;
+
+function hideDesktopTooltip() {
+  clearTimeout(desktopTooltipTimer);
+  desktopTooltipAnchor = null;
+  desktopTooltip.value = null;
+}
+
+function onDesktopPointerMove(event: PointerEvent, label: string) {
+  if (event.pointerType !== 'mouse' || event.buttons !== 0 || !collapsed.value) return;
+  const button = event.currentTarget as HTMLButtonElement;
+  const rail = desktopRailRef.value;
+  if (!rail || button === desktopTooltipAnchor) return;
+  if (rail.getAnimations().some(animation => 'transitionProperty' in animation && animation.transitionProperty === 'width')) return;
+
+  hideDesktopTooltip();
+  desktopTooltipAnchor = button;
+  desktopTooltipTimer = setTimeout(() => {
+    if (!button.matches(':hover')) {
+      hideDesktopTooltip();
+      return;
+    }
+    const { top, height } = button.getBoundingClientRect();
+    desktopTooltip.value = { label, left: rail.getBoundingClientRect().right + 8, top: top + height / 2 };
+  }, 350);
+}
+
+function onDesktopTooltipKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') hideDesktopTooltip();
+}
+
+watch([desktopNavRef, desktopActiveIndex, collapsed], hideDesktopTooltip, { flush: 'sync' });
 
 // ---------------- 手机底栏：Q 弹欠阻尼弹簧引擎 ----------------
 // 半隐式欧拉积分：a = -k·x - c·v，c = 2ζ√k。ζ=1（临界阻尼，无过冲，最快回正）。
@@ -362,17 +464,7 @@ function onMobilePointerUp(e: PointerEvent) {
   setTimeout(() => nav?.classList.remove('is-interacting'), 120);
 }
 
-function measureIndicators() {
-  const desktopActive = desktopNavRef.value?.querySelector<HTMLElement>('.sidenav-item.is-active');
-  if (desktopActive) {
-    desktopIndicatorY.value = desktopActive.offsetTop;
-    if (!desktopReady.value) {
-      requestAnimationFrame(() => {
-        desktopReady.value = true;
-      });
-    }
-  }
-
+function measureMobileIndicator() {
   // 手机：量槽位并让指示器弹簧对准当前激活项
   measureMobileMetrics();
   if (metrics.tabCenters.length) {
@@ -395,7 +487,7 @@ function measureIndicators() {
 
 function scheduleMeasure() {
   cancelAnimationFrame(measureFrame);
-  measureFrame = requestAnimationFrame(measureIndicators);
+  measureFrame = requestAnimationFrame(measureMobileIndicator);
 }
 
 function toggleSidebar() {
@@ -405,28 +497,33 @@ function toggleSidebar() {
   } catch (e) {}
 }
 
-const navItems = [
-  { key: 'shelf', label: '书架', icon: 'local_library' },
-  { key: 'recent', label: '最近', icon: 'history' },
-  { key: 'favorite', label: '收藏', icon: 'star' },
-  { key: 'settings', label: '设置', icon: 'settings' }
-];
-
 function select(key: string) {
   emit('nav', key);
 }
 
-watch(() => props.active, () => nextTick(measureIndicators));
-watch(collapsed, () => nextTick(scheduleMeasure));
+watch(() => props.active, () => nextTick(measureMobileIndicator));
 watch(isCompact, () => nextTick(scheduleMeasure));
 
 onMounted(() => {
-  measureIndicators();
+  measureMobileIndicator();
+  desktopMotionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+  desktopMotionPreference.addEventListener('change', onDesktopMotionPreferenceChange);
   window.addEventListener('resize', scheduleMeasure);
+  window.addEventListener('resize', hideDesktopTooltip);
+  window.addEventListener('scroll', hideDesktopTooltip);
+  window.addEventListener('blur', hideDesktopTooltip);
+  window.addEventListener('keydown', onDesktopTooltipKeydown);
 });
 
 onBeforeUnmount(() => {
+  desktopMotionPreference?.removeEventListener('change', onDesktopMotionPreferenceChange);
+  finishDesktopSpring();
+  hideDesktopTooltip();
   window.removeEventListener('resize', scheduleMeasure);
+  window.removeEventListener('resize', hideDesktopTooltip);
+  window.removeEventListener('scroll', hideDesktopTooltip);
+  window.removeEventListener('blur', hideDesktopTooltip);
+  window.removeEventListener('keydown', onDesktopTooltipKeydown);
   cancelAnimationFrame(measureFrame);
   cancelAnimationFrame(springRaf);
   springRaf = 0;
@@ -441,119 +538,81 @@ onBeforeUnmount(() => {
   /* ---------------- 桌面：浮动侧栏 ---------------- */
   .sidenav {
     --sidenav-row-height: 52px;
-    --sidenav-move: 280ms var(--md-ease-emphasized);
+    --sidenav-row-gap: 4px;
+    --sidenav-row-step: calc(var(--sidenav-row-height) + var(--sidenav-row-gap));
+    --sidenav-padding: 12px;
     position: sticky;
     top: 16px;
     z-index: 30;
-    flex: 0 0 220px;
+    flex: none;
     width: 220px;
     margin: 16px;
     height: calc(100vh - 32px);
     height: calc(100dvh - 32px);
-    padding: 12px;
+    padding: var(--sidenav-padding);
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scroll-padding-block: 12px;
+    overflow: hidden auto;
+    scrollbar-width: none;
+    scroll-padding-block: var(--sidenav-padding);
+    contain: layout style;
     border-radius: 28px;
     background: var(--md-surface-low);
     box-shadow:
       0 0 0 1px color-mix(in oklab, var(--md-outline-variant) 56%, transparent),
       0 14px 34px -20px color-mix(in oklab, var(--md-shadow-color-soft) 55%, transparent);
-    transition:
-      flex-basis var(--sidenav-move),
-      width var(--sidenav-move),
-      padding var(--sidenav-move);
+    transition: width 240ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .sidenav.is-collapsed {
-    flex-basis: 104px;
-    width: 104px;
-    padding: 12px 8px;
+    width: calc(var(--sidenav-row-height) + 2 * var(--sidenav-padding));
   }
 
   .sidenav-head {
-    position: relative;
     flex: none;
-    height: 64px;
-    transition: height var(--sidenav-move);
-  }
-
-  .sidenav.is-collapsed .sidenav-head {
-    height: 116px;
+    height: var(--sidenav-row-height);
+    margin-block-end: 22px;
   }
 
   .sidenav-brand,
-  .sidenav-icon-btn {
-    position: absolute;
-    top: 4px;
-    height: 44px;
+  .sidenav-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: var(--sidenav-row-height);
+    text-align: start;
   }
 
   .sidenav-brand {
-    inset-inline-start: 4px;
-    width: calc(100% - 60px);
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    overflow: hidden;
     border-radius: 16px;
     color: var(--md-on-surface);
-    overflow: clip;
-    transition:
-      inset-inline-start var(--sidenav-move),
-      width var(--sidenav-move),
-      background-color var(--md-duration-short) var(--md-ease-emphasized);
+    transition: background-color var(--md-duration-short) var(--md-ease-emphasized);
+  }
+
+  .sidenav-icon-slot {
+    display: grid;
+    flex: 0 0 var(--sidenav-row-height);
+    height: 100%;
+    place-items: center;
   }
 
   .sidenav-brand img {
-    flex: none;
     width: 44px;
     height: 44px;
-    border-radius: inherit;
+    border-radius: 16px;
     object-fit: cover;
   }
 
-  .sidenav-wordmark {
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    transition: opacity 100ms var(--md-ease-emphasized) 100ms;
-  }
-
   .sidenav-icon-btn {
-    inset-inline-end: 4px;
+    --icon-button-hover-size: 100%;
+    flex: none;
     width: 44px;
+    height: 44px;
+    margin-block-start: auto;
+    margin-inline-start: 4px;
     border-radius: 50%;
     color: var(--md-on-surface-variant);
-    transition:
-      top var(--sidenav-move),
-      inset-inline-end var(--sidenav-move);
-  }
-
-  .sidenav.is-collapsed .sidenav-brand {
-    inset-inline-start: calc(50% - 22px);
-    width: 44px;
-  }
-
-  .sidenav.is-collapsed .sidenav-wordmark {
-    opacity: 0;
-    transition: opacity 80ms var(--md-ease-emphasized);
-  }
-
-  .sidenav.is-collapsed .sidenav-icon-btn {
-    top: 56px;
-    inset-inline-end: calc(50% - 22px);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .sidenav-brand:hover {
-      background: var(--md-surface-container);
-    }
-
-    .sidenav-icon-btn:hover {
-      --icon-button-background: var(--md-surface-container);
-    }
   }
 
   .sidenav-list {
@@ -561,123 +620,139 @@ onBeforeUnmount(() => {
     flex: none;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--sidenav-row-gap);
+    margin-block-end: 22px;
   }
 
   .sidenav-indicator {
     position: absolute;
     top: 0;
     inset-inline: 0;
-    z-index: 0;
     height: var(--sidenav-row-height);
     border-radius: 999px;
     background: var(--md-secondary-container);
-    opacity: 0;
     pointer-events: none;
   }
 
-  .sidenav-indicator.is-ready {
-    opacity: 1;
-    transition:
-      transform 300ms cubic-bezier(0.2, 0, 0, 1),
-      opacity 120ms cubic-bezier(0.2, 0, 0, 1);
-  }
-
   .sidenav-item {
+    --icon-button-hover-center: calc(var(--sidenav-row-height) / 2);
+    --icon-button-hover-size: var(--sidenav-row-height);
     position: relative;
-    z-index: 1;
-    width: 100%;
-    height: var(--sidenav-row-height);
     border-radius: 999px;
     background: transparent;
     font-weight: 600;
     color: var(--md-on-surface);
-    transition:
-      background-color var(--md-duration-short) var(--md-ease-emphasized),
-      color var(--md-duration-short) var(--md-ease-emphasized);
+    transition: color var(--md-duration-short) var(--md-ease-emphasized);
+  }
+
+  .sidenav-item.is-active {
+    color: var(--md-on-secondary-container);
+  }
+
+  .sidenav-item :deep(.md-icon-button-face) {
+    flex: 0 0 var(--sidenav-row-height);
+    width: var(--sidenav-row-height);
   }
 
   .sidenav-item svg {
-    position: absolute;
-    top: calc(50% - 10px);
-    inset-inline-start: 16px;
     width: 20px;
     height: 20px;
-    transition:
-      top var(--sidenav-move),
-      inset-inline-start var(--sidenav-move);
+  }
+
+  .sidenav-list.is-sliding .sidenav-item.is-active svg {
+    animation: sidenav-icon-select 180ms var(--md-ease-emphasized);
+  }
+
+  @keyframes sidenav-icon-select {
+    0% { transform: scale(0.92); }
+    48% { transform: scale(1.06); }
+    100% { transform: scale(1); }
   }
 
   .sidenav-label {
-    position: absolute;
+    flex: none;
+    padding-inline-start: 4px;
+    font-size: 13px;
     line-height: 1.2;
     white-space: nowrap;
+    pointer-events: none;
+    transition: opacity 200ms var(--md-ease-emphasized), transform 200ms var(--md-ease-emphasized);
+  }
+
+  .sidenav-label-clip {
+    min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
+  }
+
+  .sidenav-label-clip .sidenav-label {
+    display: block;
+  }
+
+  .sidenav-label.sidenav-wordmark {
+    font-weight: 600;
+    letter-spacing: 0.08em;
+  }
+
+  .sidenav.is-collapsed .sidenav-label {
+    opacity: 0;
+    transform: translateX(-6px);
+    transition-duration: 110ms;
+  }
+
+  .sidenav-item:focus-visible,
+  .sidenav-brand:focus-visible,
+  .sidenav-icon-btn:focus-visible {
+    outline: 2px solid var(--md-primary);
+    outline-offset: -2px;
+  }
+
+  .sidenav-tooltip {
+    position: fixed;
+    z-index: 30;
+    transform: translateY(-50%);
+    width: max-content;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: color-mix(in oklab, var(--md-on-surface) 90%, var(--md-surface));
+    color: var(--md-surface);
+    font-size: 12px;
+    line-height: 16px;
     pointer-events: none;
   }
 
-  .sidenav-label-wide {
-    top: 50%;
-    inset-inline: 56px 16px;
-    text-align: start;
-    transform: translateY(-50%);
-    font-size: 13px;
-    opacity: 1;
-    transition: opacity 100ms var(--md-ease-emphasized) 40ms;
-  }
-
-  .sidenav-label-compact {
-    top: 32px;
-    inset-inline: 8px;
-    font-size: 11px;
-    opacity: 0;
-    transition: opacity 80ms var(--md-ease-emphasized);
-  }
-
-  .sidenav.is-collapsed .sidenav-label-wide {
-    opacity: 0;
-    transition: opacity 80ms var(--md-ease-emphasized);
-  }
-
-  .sidenav.is-collapsed .sidenav-label-compact {
-    opacity: 1;
-    transition: opacity 100ms var(--md-ease-emphasized) 40ms;
-  }
-
   @media (hover: hover) and (pointer: fine) {
-    .sidenav-item:hover {
+    .sidenav-brand:hover {
+      background: var(--md-surface-container);
+    }
+
+    .sidenav:not(.is-collapsed) .sidenav-icon-btn:hover {
+      --icon-button-background: var(--md-surface-container);
+    }
+
+    .sidenav:not(.is-collapsed) .sidenav-list:not(.is-sliding) .sidenav-item:not(.is-active, :active):hover {
       background: var(--md-surface-container);
     }
   }
 
-  .sidenav-item.is-active {
-    background: transparent;
-    color: var(--md-on-secondary-container);
+  .sidenav-list.is-sliding .sidenav-item::before,
+  .sidenav-item:active::before {
+    display: none;
   }
 
-  .sidenav-brand:active,
-  .sidenav-item:not(.is-active):active {
+  .sidenav-brand:active {
     background: var(--md-surface-high);
-  }
-
-  .sidenav.is-collapsed .sidenav-item svg {
-    top: 8px;
-    inset-inline-start: calc(50% - 10px);
   }
 
   @media (prefers-reduced-motion: reduce) {
     .sidenav,
-    .sidenav-head,
     .sidenav-brand,
-    .sidenav-wordmark,
-    .sidenav-icon-btn,
-    .sidenav-indicator.is-ready,
-    .sidenav-item,
-    .sidenav-item svg,
-    .sidenav-label-wide,
-    .sidenav-label-compact {
+    .sidenav-label,
+    .sidenav-item {
       transition: none;
+    }
+
+    .sidenav-list.is-sliding .sidenav-item.is-active svg {
+      animation: none;
     }
   }
 

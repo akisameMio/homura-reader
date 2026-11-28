@@ -39,6 +39,7 @@
             <ShelfToolTooltip v-if="showFullscreen" :label="fullscreenLabel">
               <MdIconButton
                 preserve-user-activation
+                hover-layer
                 class="library-tool"
                 :aria-label="fullscreenLabel"
                 :aria-pressed="ui.fullscreen"
@@ -52,6 +53,7 @@
             </div>
             <ShelfToolTooltip :label="t('筛选与排序')">
               <MdIconButton
+                hover-layer
                 class="library-tool"
                 :class="{ 'is-tonal': filterOpen || type !== 'all' }"
                 :aria-label="t('筛选与排序')"
@@ -65,6 +67,7 @@
             <ShelfToolTooltip v-if="selectionVisible" :label="t('选择')">
               <MdIconButton
                 ref="selectionButtonRef"
+                hover-layer
                 class="library-tool"
                 :aria-label="t('选择')"
                 aria-controls="library-toolbar-selection"
@@ -79,6 +82,7 @@
               <MdIconButton
                 ref="searchButtonRef"
                 preserve-user-activation
+                hover-layer
                 class="library-tool"
                 :class="{ 'is-tonal': !!query }"
                 :aria-label="t('搜索书名、作者')"
@@ -118,6 +122,7 @@
             <ShelfToolTooltip v-if="query" :label="t('清空搜索')" align-end>
               <MdIconButton
                 preserve-user-activation
+                hover-layer
                 class="library-tool library-search-end"
                 :aria-label="t('清空搜索')"
                 @pointerdown.prevent
@@ -597,9 +602,7 @@ button.library-title-text {
   box-sizing: border-box;
   padding: 4px;
   border-radius: 16px;
-  background-clip: content-box;
   color: var(--md-on-surface);
-  transition: background-color var(--md-duration-short) var(--md-ease-emphasized);
 }
 .library-tool.is-tonal {
   --icon-button-background: var(--md-secondary-container);
@@ -607,11 +610,6 @@ button.library-title-text {
 }
 .library-tool:disabled {
   opacity: 0.45;
-}
-@media (hover: hover) and (pointer: fine) {
-  .library-tool:hover:not(:disabled):not(.is-tonal) {
-    background-color: color-mix(in oklab, var(--md-on-surface) 8%, transparent);
-  }
 }
 .library-pill-track {
   --library-tools-target: 0;
@@ -735,11 +733,6 @@ button.library-title-text {
   .library-toolbar {
     --library-toolbar-inset: 12px;
     padding-inline-start: 16px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .library-tool {
-    transition: none;
   }
 }
 

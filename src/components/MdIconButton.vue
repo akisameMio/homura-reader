@@ -3,6 +3,7 @@
     ref="button"
     type="button"
     class="md-elastic-icon-button md-hit-target"
+    :class="{ 'has-icon-button-hover-layer': hoverLayer }"
     :disabled="disabled"
     @pointerenter="onPointerEnter"
     @pointerleave="onPointerLeave"
@@ -24,7 +25,10 @@ import { makeAxis, prefersReducedMotion, runSpring, snapAxes } from '../services
 
 const props = defineProps({
   disabled: Boolean,
-  preserveUserActivation: Boolean
+  preserveUserActivation: Boolean,
+  hoverLayer: Boolean,
+  animateIcon: { type: Boolean, default: true },
+  pressScale: Number
 });
 const button = shallowRef<HTMLButtonElement | null>(null);
 const face = shallowRef<HTMLElement | null>(null);
@@ -56,7 +60,7 @@ function isDisabled() {
 }
 
 function updateScale() {
-  if (isDisabled() || prefersReducedMotion()) {
+  if (!props.animateIcon || isDisabled() || prefersReducedMotion()) {
     cancelSpring?.();
     cancelSpring = undefined;
     scale.target = REST;
@@ -65,10 +69,10 @@ function updateScale() {
     return;
   }
   const pressing = press?.inside && !press.cancelled;
-  const pressedScale = press?.mouse ? MOUSE_PRESS : TOUCH_PRESS;
+  const pressedScale = props.pressScale ?? (press?.mouse ? MOUSE_PRESS : TOUCH_PRESS);
   scale.target = hovering ? HOVER : REST;
   if (pressing) scale.target = pressedScale;
-  else if (releaseFrame) scale.target = TOUCH_PRESS;
+  else if (releaseFrame) scale.target = pressedScale;
   scale.stiffness = pressing || releaseFrame ? PRESS_STIFFNESS : RELEASE_STIFFNESS;
   if (cancelSpring || scale.pos === scale.target) return;
 
@@ -93,7 +97,7 @@ function onPointerLeave(event: PointerEvent) {
 }
 
 function onPointerDown(event: PointerEvent) {
-  if (!event.isPrimary || event.button !== 0 || press || isDisabled() || !face.value?.getClientRects().length) return;
+  if (!props.animateIcon || !event.isPrimary || event.button !== 0 || press || isDisabled() || !face.value?.getClientRects().length) return;
   const mouse = event.pointerType === 'mouse';
   hovering = mouse;
   press = { id: event.pointerId, mouse, inside: true, cancelled: false };
@@ -125,7 +129,7 @@ function onPointerUp(event: PointerEvent) {
   if (cancelled || !inside || isDisabled()) clickFromPointer = 'cancelled';
   else if (!mouse) {
     clickFromPointer = 'touch';
-    if (scale.pos > TOUCH_FEEDBACK && !prefersReducedMotion()) holdQuickTap();
+    if (props.animateIcon && scale.pos > TOUCH_FEEDBACK && !prefersReducedMotion()) holdQuickTap();
   }
   updateScale();
 }
@@ -186,6 +190,8 @@ watch(() => props.disabled, disabled => {
   updateScale();
 }, { flush: 'sync' });
 
+watch(() => props.animateIcon, updateScale);
+
 onBeforeUnmount(() => {
   clearQuickTap();
   cancelSpring?.();
@@ -195,6 +201,25 @@ onBeforeUnmount(() => {
 <style scoped>
 .md-elastic-icon-button {
   -webkit-tap-highlight-color: transparent;
+}
+
+.has-icon-button-hover-layer::before {
+  --hover-layer-size: var(--icon-button-hover-size, 36px);
+  content: '';
+  position: absolute;
+  inset-block-start: calc(50% - var(--hover-layer-size) / 2);
+  inset-inline-start: calc(var(--icon-button-hover-center, 50%) - var(--hover-layer-size) / 2);
+  width: var(--hover-layer-size);
+  height: var(--hover-layer-size);
+  border-radius: calc(100% / 3);
+  pointer-events: none;
+  transition: background-color var(--md-duration-short) var(--md-ease-emphasized);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .has-icon-button-hover-layer:hover:not(:disabled, .is-tonal)::before {
+    background-color: color-mix(in oklab, var(--md-on-surface) 8%, transparent);
+  }
 }
 
 .md-icon-button-face {
@@ -215,6 +240,10 @@ onBeforeUnmount(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .has-icon-button-hover-layer::before {
+    transition: none;
+  }
+
   .md-icon-button-face {
     transform: none;
   }
