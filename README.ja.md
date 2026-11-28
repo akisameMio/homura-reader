@@ -107,6 +107,10 @@ npm run build      # tauri build、フロントエンドをビルドしてから
 - 開発とコード規約：[`AGENTS.md`](AGENTS.md)
 - バグ報告・提案：[Issues](https://github.com/Leon-Ning-san/HomuraReader/issues)
 
+## コントリビューター
+
+HOMURA の開発・保守に参加いただいたすべてのコントリビューター、およびデバッグや不具合修正に協力した **Google Gemini** に感謝します。
+
 ## Star 推移
 
 <a href="https://star-history.com/#Leon-Ning-san/HomuraReader&amp;Date">
