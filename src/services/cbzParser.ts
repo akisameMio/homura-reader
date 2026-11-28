@@ -18,7 +18,7 @@ import {
   shouldFallbackNativeArchive
 } from './nativeArchive.ts';
 
-const IMAGE_ENTRY = /\.(jpg|jpeg|png|webp|gif|avif|bmp)$/i;
+const IMAGE_ENTRY = /\.(jpg|jpeg|jfif|png|webp|gif|avif|bmp)$/i;
 // 非原生环境下超过 64 MiB 的压缩包优先走按需中央目录读取，避免 JSZip 整包载入触发 OOM
 const LARGE_BLOB_ZIP_THRESHOLD_BYTES = 64 * 1024 * 1024;
 

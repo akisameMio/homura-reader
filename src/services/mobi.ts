@@ -118,6 +118,11 @@ function imageMime(bytes: Uint8Array) {
   if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
   if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return 'image/gif';
   if (bytes[0] === 0x42 && bytes[1] === 0x4d) return 'image/bmp';
+  if (bytes.length >= 12
+    && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+    && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) {
+    return 'image/webp';
+  }
   return null;
 }
 
@@ -228,8 +233,10 @@ function prepareMobiBody(body: HTMLElement) {
     if (!node.isConnected) continue;
     const tag = node.tagName.toLowerCase();
     if (tag === 'img') {
-      const recindex = parseInt(node.getAttribute('recindex') || '', 10);
+      const recAttr = node.getAttribute('recindex') || node.getAttribute('mediarecindex') || '';
+      const recindex = parseInt(recAttr, 10);
       node.removeAttribute('recindex');
+      node.removeAttribute('mediarecindex');
       if (Number.isInteger(recindex) && recindex > 0) {
         node.setAttribute('src', `__homura_rec_${recindex}__`);
       }
@@ -600,7 +607,7 @@ export async function parseMobiRangeSource(
     const start = starts[recordIndex];
     const end = Math.min(starts[recordIndex + 1] ?? totalSize, totalSize);
     if (start == null || start >= end || end - start < 4) continue;
-    const magic = await source.read(start, Math.min(start + 8, end));
+    const magic = await source.read(start, Math.min(start + 12, end));
     const mime = imageMime(magic);
     if (!mime) continue;
     const record: MobiImageRecord = {
@@ -744,13 +751,18 @@ function shouldReadMobiAsManga(docs: Document[], cdeType: string) {
 
   let textPages = 0;
   let imageCount = 0;
+  let totalTextChars = 0;
+  let maxDocTextChars = 0;
   for (const doc of docs) {
     if (!doc.body) continue;
     const text = (doc.body.textContent || '').replace(/\s+/g, '');
+    totalTextChars += text.length;
+    if (text.length > maxDocTextChars) maxDocTextChars = text.length;
     if (text.length >= MOBI_TEXT_PAGE_MIN_LENGTH) textPages++;
-    imageCount += doc.body.querySelectorAll('img[recindex]').length;
+    imageCount += doc.body.querySelectorAll('img[recindex], img[mediarecindex]').length;
   }
   if (imageCount < MOBI_MIN_MANGA_IMAGES) return false;
+  if (maxDocTextChars >= 600 || totalTextChars >= 2000) return false;
   return textPages / docs.length <= MOBI_TEXT_PAGE_RATIO_LIMIT;
 }
 
@@ -758,8 +770,8 @@ function collectMobiPages(docs: Document[]) {
   const pages: Array<{ recindex: number; alt: string }> = [];
   for (const doc of docs) {
     if (!doc.body) continue;
-    for (const img of doc.body.querySelectorAll('img[recindex]')) {
-      const recindex = parseInt(img.getAttribute('recindex') || '', 10);
+    for (const img of doc.body.querySelectorAll('img[recindex], img[mediarecindex]')) {
+      const recindex = parseInt(img.getAttribute('recindex') || img.getAttribute('mediarecindex') || '', 10);
       if (!Number.isInteger(recindex) || recindex <= 0) continue;
       pages.push({
         recindex,

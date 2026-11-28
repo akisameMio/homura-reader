@@ -13,7 +13,7 @@ import { readPdfOutline } from './pdfOutline.ts';
 import { openRemoteZip, type RemoteZip, type RemoteZipEntry } from './remoteZip.ts';
 import type { RangeSource } from './webdavBooks.ts';
 
-const IMAGE_ENTRY = /\.(jpg|jpeg|png|webp|gif|avif|bmp)$/i;
+const IMAGE_ENTRY = /\.(jpg|jpeg|jfif|png|webp|gif|avif|bmp)$/i;
 const MAX_EPUB_TEXT_BYTES = 32 * 1024 * 1024;
 
 function isJunkPath(path: string) {
@@ -29,11 +29,25 @@ function validName(name: string) {
 }
 
 function createRangeEpubArchive(zip: RemoteZip): EpubArchive {
+  const lowerMap = new Map<string, string>();
+  for (const entry of zip.entries) {
+    if (!entry.dir) {
+      const lower = entry.name.toLowerCase();
+      if (!lowerMap.has(lower)) lowerMap.set(lower, entry.name);
+    }
+  }
+  const resolveSingle = (path: string) => (zip.file(path) ? path : lowerMap.get(path.toLowerCase()) || null);
   return {
     kind: 'remote',
     zipContent: zip,
-    hasPath: path => !!zip.file(path),
-    resolvePath: paths => paths.find(path => !!zip.file(path)) || null,
+    hasPath: path => !!resolveSingle(path),
+    resolvePath: paths => {
+      for (const path of paths) {
+        const hit = resolveSingle(path);
+        if (hit) return hit;
+      }
+      return null;
+    },
     readTexts: async paths => {
       let total = 0;
       const texts: Array<string | null> = [];

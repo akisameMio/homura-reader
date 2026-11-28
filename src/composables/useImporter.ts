@@ -249,7 +249,7 @@ function buildImportTasks(files: File[]) {
   addFileTasks(files.filter((f: File) => /\.txt$/i.test(f.name)), 'txt');
 
   // macOS 打包留下的 __MACOSX / ._* 不是真正的页面，提前剔掉免得白读内存。
-  const imgFiles = files.filter((f: ImportFile) => f.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|avif|bmp)$/i.test(f.name))
+  const imgFiles = files.filter((f: ImportFile) => f.type.startsWith('image/') || /\.(jpg|jpeg|jfif|png|webp|gif|avif|bmp)$/i.test(f.name))
     .filter((f: ImportFile) => !isJunkImagePath(f.customRelativePath || f.webkitRelativePath || f.name));
   for (const group of buildImageFolderBooks(imgFiles) as unknown as NonNullable<ImportTask['group']>[]) {
     tasks.push({
