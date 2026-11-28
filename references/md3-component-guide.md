@@ -97,7 +97,7 @@ Error token 已在 `src/assets/styles/tokens.css` 的白昼 / 护眼 / 夜间三
 - **表面模式**（`data-mode`）：`light / warm / dark`；夜间支持纯黑开关（`data-black`）。
 - 组件**必须**通过 `theme.setThemeColor()`、`theme.setSurfaceMode()`、`theme.setPureBlackMode()` 切换，不得自行修改根节点或伪造局部主题。
 - 表面切换的圆形 reveal 动画（`SURFACE_REVEAL_DURATION = 720`）、原生窗口标题栏同步和 `html.surface-switching` 过渡抑制统一在 `src/stores/theme.ts` 维护，组件不得叠加冲突的全局 transition。
-- 外观浮层与设置页必须共用 `ThemeSwatchGrid.vue` 与 `SurfaceModePreview.vue`，不复制色板或模式数组。
+- 应用设置页使用 `ThemeSwatchGrid.vue` 展示主题色，阅读器设置使用 `SurfaceModePreview.vue` 展示阅读纸面。
 
 ### 2.4 字体与字号密度
 
@@ -281,7 +281,7 @@ Error token 已在 `src/assets/styles/tokens.css` 的白昼 / 护眼 / 夜间三
 - 页面使用 `surface-low`，设置卡片（`.settings-card`）使用 `surface` / `on-surface`，圆角 `34px`（窄屏 `28px`），投影用 `--md-shadow-color-soft`，不抬升卡片；书页示意（`.settings-book-stage`）衬底用 `primary-container` 且标记 `aria-hidden="true"`，仅作装饰。
 - 卡片进入二级页统一走 `useSettingsTransition()`：按压缩至 `0.985`，抬手后在根浮层用 `380ms` 展开。卡片和详情分段淡出、淡入，浮层同步插值圆角、表面色和遮罩。桌面容器在前 `60%` 完成底色过渡，详情从 `55%` 开始淡入并等比适配容器宽度；真实详情的不透明顶栏先就绪，再移除浮层。桌面按钮返回用 `255ms` 缓起曲线，剩余位移进入 `2px` 内即可落位。
 - 手机底栏保留挂载并随进度显隐；Android 14+ 返回手势直接驱动进度，松手速度沿用到最长 `265ms` 的收尾弹簧，取消时恢复详情滚动位置和焦点。转场期间 Android 暂停顶栏模糊和副本内动画，屏外分组保留定高占位。
-- 外观二级页复用 `ThemeSwatchGrid` `strip` 模式（承载容器声明 `container: theme-palette / inline-size`：可用宽度 `>=640px` 十列一行，不足时五列两行，不横向滚动；共享面板仍保持默认 `5 × 2`）。
+- 外观二级页使用 `ThemeSwatchGrid` 的 `strip` 模式（承载容器声明 `container: theme-palette / inline-size`：可用宽度 `>=640px` 十列一行，不足时五列两行，不横向滚动）。
 - 列表选择项复用 `SettingsSelectRow`：菜单 Teleport 到根节点并按视口避让，支持方向键、`Home`/`End`、`Escape`、`Tab` 与外部点击关闭，选择后恢复焦点并保留原始值类型（如单双页数字类型）。菜单展开前锁定背景滚动（桌面保留原滚动条并固定背景滚动位置），覆盖停驻与收缩全过程。动效由 `settingsSelectMotion.ts` 的 `0.7×` 物理弹簧驱动（展开 `ζ=0.58 / k=400` 回弹对齐，收起 `ζ=0.85 / k=500` 先下探拉成圆囊再向上合回）；`prefers-reduced-motion` 下直接落位。
 
 ### 3.9 抽屉与 Sheet 入口
@@ -290,7 +290,7 @@ Error token 已在 `src/assets/styles/tokens.css` 的白昼 / 护眼 / 夜间三
 
 | 场景 | 必须使用 | 典型组件 |
 | --- | --- | --- |
-| 页面级 / 全局流程 / 自适应面板 | `MobileBottomSheet.vue`（桌面可用 `desktop-side`） | `AppearanceSheet.vue`、`ImportProgressSheet.vue`、`ShelfDialogSheet.vue`、`DuplicateImportSheet.vue`、`UpdateDialog.vue` |
+| 页面级 / 全局流程 / 自适应面板 | `MobileBottomSheet.vue`（桌面可用 `desktop-side`） | `ImportProgressSheet.vue`、`ShelfDialogSheet.vue`、`DuplicateImportSheet.vue`、`UpdateDialog.vue` |
 | 阅读器内部、与阅读状态互斥的抽屉 | `.md-drawer` + `ReaderDrawerHeader.vue` | `ReaderSettingsDrawer.vue`、`ReaderFontDrawer.vue`、`ReaderTocDrawer.vue` |
 
 通用手机流程直接使用 `MobileBottomSheet.vue`（保持外壳挂载，用 `open=false` 触发退场、禁止 `v-if="open"` 直接卸载；业务 payload 与列表清理延后到 `closed` 事件；`busy` 时如需点击遮罩收起并后台继续，传 `scrim-closeable`）：
@@ -340,8 +340,7 @@ Error token 已在 `src/assets/styles/tokens.css` 的白昼 / 护眼 / 夜间三
 
 - **桌面浮动侧栏**（`SideNav.vue`，`>=900px`）：`sticky top: 16px`、高 `100dvh - 32px`、`28px` 圆角、`surface-low` 底色；展开 `220px` / 折叠 `104px`（偏好存 `localStorage.homura_sidenav_collapsed`，`280ms` 过渡，文案用宽/窄两份交叉淡化不插值 `font-size`）。固定 4 项主导航「书架 / 最近 / 收藏 / 设置」，选中指示器 `.sidenav-indicator` 使用 `secondary-container` + `on-secondary-container`（`300ms` 纵向滑动，带 `:aria-current="active === item.key ? 'page' : undefined"`）；每个导航项与收起按钮必须有 `title` 与 `aria-label`。
 - **手机悬浮胶囊底栏**（`SideNav.vue` 的 `.mobile-nav`，`<900px`）：Teleport 到 `#homura-mobile-nav-root`（`z-40`），左右 `24px`、高 `64px`、圆角 `32px`、最大宽 `560px`、贴 `bottom: env(safe-area-inset-bottom)`；果冻选中指示器 `.mobile-nav-indicator`（`82px × 56px`，圆角 `28px`，`secondary-container`）由物理弹簧驱动点击与横向拖拽切换；主内容区必须挂 `.md-bottom-nav-space`。
-- **书架 / 最近 / 收藏顶栏**（`LibraryHeader.vue`）：滚动时常驻 `z-20`，手机 `88px`（另计顶部安全区）/ 桌面 `104px`。内容从渐隐磨砂层 `.md-topbar-fade` 下方滚过。标题与设置页共用 `.md-topbar-title`，容器宽度不超过 `599px` 时为 `22px`，其余为 `26px`。书库内可点击标题重命名。右侧工具胶囊保留全屏、外观、筛选排序与展开搜索，避免遮住标题或导致横向溢出。
-- **外观面板**（`AppearanceSheet.vue` + `AppearancePanel.vue`）：复用 `MobileBottomSheet`，手机底部弹出（带「完成」按钮）、桌面 `desktop-side` 渲染为右侧 `372px` side sheet；包含「阅读模式」（`SurfaceModePreview`）与「主题色」（`ThemeSwatchGrid` `5×2`），在面板内切换表面时展开遮罩需跟随 `dialog` 顶层。
+- **书架 / 最近 / 收藏顶栏**（`LibraryHeader.vue`）：滚动时常驻 `z-20`，手机 `88px`（另计顶部安全区）/ 桌面 `104px`。内容从渐隐磨砂层 `.md-topbar-fade` 下方滚过。标题与设置页共用 `.md-topbar-title`，容器宽度不超过 `599px` 时为 `22px`，其余为 `26px`。书库内可点击标题重命名。右侧工具胶囊包含多选、筛选排序和搜索，手机另有导入，桌面可选全屏按钮。多选与搜索共用展开动效，多选时胶囊内显示已选数量和批量操作。
 - **设置页布局**（`SettingsView.vue`）：首页顶栏与书架共用渐隐磨砂层 `.md-topbar-fade`。卡片按设置内容区容器宽度排版：`>=1040px` 三列、`600–1039px` 两列、`<600px` 单列；该容器断点仅用于设置卡片排版，不替代全局 `900px` 主断点。
 
 ### 4.3 阅读器组件
@@ -488,7 +487,7 @@ Error token 已在 `src/assets/styles/tokens.css` 的白昼 / 护眼 / 夜间三
 | 抽屉外壳、拖拽、页签、标题 | `src/components/ReaderSettingsDrawer.vue`、`ReaderDrawerHeader.vue`、`ReaderDrawerTabs.vue` |
 | 目录 / 字体抽屉 | `src/components/ReaderTocDrawer.vue`、`src/components/ReaderFontDrawer.vue` |
 | 分段选择 / 开关 / 滑条 | `src/components/MdSegmentedControl.vue`、`MdSwitch.vue`、`MdRange.vue` |
-| 外观面板 / 色板 / 表面预览 | `src/components/AppearanceSheet.vue`、`ThemeSwatchGrid.vue`、`SurfaceModePreview.vue` |
+| 外观设置 / 色板 / 阅读纸面预览 | `src/components/SettingsView.vue`、`ThemeSwatchGrid.vue`、`SurfaceModePreview.vue` |
 | 设置页卡片 / 转场 / 选择菜单 | `src/components/SettingsView.vue`、`SettingsSelectRow.vue`、`src/composables/useSettingsTransition.ts` |
 | 共享样式与 token 入口 | `src/assets/homura.css` + `src/assets/styles/*.css` |
 

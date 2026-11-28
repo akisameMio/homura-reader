@@ -25,7 +25,7 @@
 - 是否属于阅读器、需要跟随阅读器顶栏 / 底栏 / 返回手势：用 `.md-drawer` 模板。
 - 阅读器桌面 `>=900px` 需要变成右侧 side sheet 时，使用 `.md-drawer` 响应式模板。
 - 通用流程在 compact 分支使用 `MobileBottomSheet`，桌面分支按场景提供对话框、菜单或 side sheet。
-- `AppearanceSheet` 这类通用面板统一走共享外壳：手机 bottom sheet、桌面右侧 side sheet；轻量锚定菜单直接用 `.md-menu`。
+- 通用自适应面板统一走共享外壳：手机 bottom sheet、桌面右侧 side sheet；轻量锚定菜单直接用 `.md-menu`。
 
 禁止：
 

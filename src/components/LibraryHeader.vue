@@ -1,12 +1,12 @@
 <template>
-  <header class="library-header-bar md-topbar-fade z-20">
+  <header class="library-header-bar md-topbar-fade z-20" :class="{ 'is-selecting': selecting }">
     <div
       ref="toolbarRef"
       class="library-toolbar"
-      :class="{ 'is-search-open': searchOpen }"
-      :style="{ '--library-pill-button-count': 3 + Number(showFullscreen) + Number(!!$slots.actions) }"
+      :class="{ 'is-pill-expanded': pillExpanded, 'is-search-open': searchOpen }"
+      :style="{ '--library-pill-button-count': 2 + Number(showFullscreen) + Number(!!$slots.actions) + Number(selectionVisible) }"
     >
-      <div class="library-toolbar-title" :inert="searchOpen && isCompact">
+      <div class="library-toolbar-title" :inert="pillExpanded && isCompact">
         <Transition name="md-topbar-title" mode="out-in" appear>
           <button
             v-if="renamable"
@@ -25,68 +25,67 @@
       </div>
 
       <div
-        ref="searchTrackRef"
-        class="library-search-track"
+        ref="pillTrackRef"
+        class="library-pill-track"
         :class="{ 'is-scroll-hidden': scrollHidden }"
         :inert="scrollHidden"
       >
         <div class="library-pill-surface"></div>
         <div class="library-pill-content">
-          <div class="library-pill-buttons" :inert="searchOpen">
-            <MdIconButton
-              v-if="showFullscreen"
-              type="button"
-              preserve-user-activation
-              @click="ui.toggleFullscreen()"
-              class="library-tool"
-              :title="ui.fullscreen ? t('退出全屏 (F)') : t('全屏 (F)')"
-              :aria-label="ui.fullscreen ? t('退出全屏 (F)') : t('全屏 (F)')"
-              :aria-pressed="ui.fullscreen"
-            >
-              <MdIcon :name="ui.fullscreen ? 'fullscreen_exit' : 'fullscreen'" class="w-5 h-5" />
-            </MdIconButton>
-            <MdIconButton
-              type="button"
-              @click="$emit('toggle-appearance')"
-              class="library-tool"
-              :class="{ 'is-tonal': appearanceOpen }"
-              :title="t('外观设置')"
-              :aria-label="t('外观设置')"
-              aria-haspopup="dialog"
-              :aria-expanded="appearanceOpen"
-            >
-              <MdIcon name="palette" class="w-5 h-5" />
-            </MdIconButton>
-
+          <div class="library-pill-buttons" :inert="pillExpanded">
+            <ShelfToolTooltip v-if="showFullscreen" :label="fullscreenLabel">
+              <MdIconButton
+                preserve-user-activation
+                class="library-tool"
+                :aria-label="fullscreenLabel"
+                :aria-pressed="ui.fullscreen"
+                @click="ui.toggleFullscreen()"
+              >
+                <MdIcon :name="ui.fullscreen ? 'fullscreen_exit' : 'fullscreen'" class="w-5 h-5" />
+              </MdIconButton>
+            </ShelfToolTooltip>
             <div v-if="$slots.actions">
               <slot name="actions" />
             </div>
-            <MdIconButton
-              type="button"
-              class="library-tool"
-              :class="{ 'is-tonal': filterOpen || type !== 'all' }"
-              :title="t('筛选与排序')"
-              :aria-label="t('筛选与排序')"
-              :aria-expanded="filterOpen"
-              aria-haspopup="dialog"
-              @click="$emit('update:filterOpen', true)"
-            >
-              <MdIcon name="tune" class="w-5 h-5" />
-            </MdIconButton>
-            <MdIconButton
-              ref="searchButtonRef"
-              type="button"
-              preserve-user-activation
-              class="library-tool library-pill-search"
-              :class="{ 'is-tonal': !!query }"
-              :title="t('搜索书名、作者')"
-              :aria-label="t('搜索书名、作者')"
-              aria-controls="library-toolbar-search"
-              :aria-expanded="searchOpen"
-              @click="openSearch"
-            >
-              <MdIcon name="search" :size="22" />
-            </MdIconButton>
+            <ShelfToolTooltip :label="t('筛选与排序')">
+              <MdIconButton
+                class="library-tool"
+                :class="{ 'is-tonal': filterOpen || type !== 'all' }"
+                :aria-label="t('筛选与排序')"
+                :aria-expanded="filterOpen"
+                aria-haspopup="dialog"
+                @click="$emit('update:filterOpen', true)"
+              >
+                <MdIcon name="tune" class="w-5 h-5" />
+              </MdIconButton>
+            </ShelfToolTooltip>
+            <ShelfToolTooltip v-if="selectionVisible" :label="t('选择')">
+              <MdIconButton
+                ref="selectionButtonRef"
+                class="library-tool"
+                :aria-label="t('选择')"
+                aria-controls="library-toolbar-selection"
+                :aria-expanded="selecting"
+                :disabled="!selectable"
+                @click="emit('start-selection')"
+              >
+                <MdIcon name="check_circle" class="w-5 h-5" />
+              </MdIconButton>
+            </ShelfToolTooltip>
+            <ShelfToolTooltip :label="t('搜索书名、作者')" align-end class="library-pill-search">
+              <MdIconButton
+                ref="searchButtonRef"
+                preserve-user-activation
+                class="library-tool"
+                :class="{ 'is-tonal': !!query }"
+                :aria-label="t('搜索书名、作者')"
+                aria-controls="library-toolbar-search"
+                :aria-expanded="searchOpen"
+                @click="openSearch"
+              >
+                <MdIcon name="search" :size="22" />
+              </MdIconButton>
+            </ShelfToolTooltip>
           </div>
           <div
             ref="searchFieldRef"
@@ -112,19 +111,24 @@
               :placeholder="t('搜索')"
               class="library-search-input"
             />
-            <MdIconButton
-              v-if="query"
-              type="button"
-              preserve-user-activation
-              class="library-tool library-search-end"
-              :title="t('清空搜索')"
-              :aria-label="t('清空搜索')"
-              @pointerdown.prevent
-              @click="clearSearch"
-            >
-              <MdIcon name="close" :size="18" />
-            </MdIconButton>
+            <ShelfToolTooltip v-if="query" :label="t('清空搜索')" align-end>
+              <MdIconButton
+                preserve-user-activation
+                class="library-tool library-search-end"
+                :aria-label="t('清空搜索')"
+                @pointerdown.prevent
+                @click="clearSearch"
+              >
+                <MdIcon name="close" :size="18" />
+              </MdIconButton>
+            </ShelfToolTooltip>
           </div>
+          <div
+            id="library-toolbar-selection"
+            ref="selectionFieldRef"
+            class="library-selection-field"
+            :inert="!selecting"
+          ></div>
         </div>
       </div>
     </div>
@@ -191,6 +195,7 @@ import { shelfFormatFilters } from '../services/shelfSections.ts';
 import { makeAxis, prefersReducedMotion, runSpring, snapAxes } from '../services/spring.ts';
 import MdIcon from './MdIcon.vue';
 import MdIconButton from './MdIconButton.vue';
+import ShelfToolTooltip from './ShelfToolTooltip.vue';
 import MdSegmentedControl from './MdSegmentedControl.vue';
 import MobileBottomSheet from './MobileBottomSheet.vue';
 import { useI18n } from '../composables/useI18n.ts';
@@ -200,50 +205,68 @@ const { t } = useI18n();
 const props = defineProps({
   title: { type: String, default: '书架' },
   scrollRoot: { type: Object as PropType<HTMLElement | null>, default: null },
+  containedScroll: { type: Boolean, default: false },
   importOpen: { type: Boolean, default: false },
-  appearanceOpen: { type: Boolean, default: false },
   filterOpen: { type: Boolean, default: false },
   query: { type: String, default: '' },
   type: { type: String, default: 'all' },
   sort: { type: String, default: 'title' },
-  renamable: { type: Boolean, default: false }
+  renamable: { type: Boolean, default: false },
+  selectionVisible: { type: Boolean, default: false },
+  selectable: { type: Boolean, default: false },
+  selecting: { type: Boolean, default: false }
 });
 
-const emit = defineEmits(['update:query', 'update:type', 'update:sort', 'update:filterOpen', 'toggle-appearance', 'rename']);
+const emit = defineEmits(['update:query', 'update:type', 'update:sort', 'update:filterOpen', 'rename', 'start-selection']);
 
 const settings = useSettingsStore();
 const ui = useUiStore();
 const { isCompact } = useViewport();
 const showFullscreen = computed(() => !isCompact.value && settings.showFullscreenButton);
+const fullscreenLabel = computed(() => ui.fullscreen ? t('退出全屏 (F)') : t('全屏 (F)'));
 
 const searchOpen = ref(false);
+const pillExpanded = computed(() => searchOpen.value || props.selecting);
 const scrollHidden = ref(false);
 const toolbarRef = shallowRef<HTMLElement | null>(null);
-const searchTrackRef = shallowRef<HTMLElement | null>(null);
+const pillTrackRef = shallowRef<HTMLElement | null>(null);
 const searchFieldRef = shallowRef<HTMLElement | null>(null);
 const searchInputRef = shallowRef<HTMLInputElement | null>(null);
 const searchButtonRef = shallowRef<InstanceType<typeof MdIconButton> | null>(null);
+const selectionFieldRef = shallowRef<HTMLElement | null>(null);
+const selectionButtonRef = shallowRef<InstanceType<typeof MdIconButton> | null>(null);
 const scrollSpring = makeAxis(0, 620);
-const searchSpring = makeAxis(0, 740);
-let cancelSearchSpring: (() => void) | null = null;
+const pillSpring = makeAxis(0, 740);
+let cancelPillSpring: (() => void) | null = null;
 let closeSpringDelay: ReturnType<typeof setTimeout> | undefined;
 
-const keepToolsVisible = computed(() => searchOpen.value || props.appearanceOpen || props.filterOpen || props.importOpen);
+defineExpose({ selectionFieldRef });
+
+const keepToolsVisible = computed(() => pillExpanded.value || props.filterOpen || props.importOpen);
 watch(keepToolsVisible, visible => {
   if (visible) scrollHidden.value = false;
 });
 
-watch([() => props.scrollRoot, () => props.title], ([root], _, onCleanup) => {
+watch([() => props.scrollRoot, () => props.containedScroll, () => props.title], ([root, containedScroll], _, onCleanup) => {
   scrollHidden.value = false;
   const column = root?.parentElement;
   if (!root || !column) return;
+  const scroller = containedScroll ? root : (document.scrollingElement ?? document.documentElement);
 
   let wheelDistance = 0;
   let lastWheelTime = -Infinity;
   let touch: { id: number; startX: number; startY: number; turningY: number; vertical: boolean } | null = null;
 
+  function resetIfNoScrollRange() {
+    if (scroller.scrollHeight > scroller.clientHeight + 1) return false;
+    scrollHidden.value = false;
+    wheelDistance = 0;
+    touch = null;
+    return true;
+  }
+
   function updateTools(distance: number) {
-    if (keepToolsVisible.value || searchTrackRef.value?.querySelector(':focus-visible')) {
+    if (keepToolsVisible.value || pillTrackRef.value?.querySelector(':focus-visible')) {
       scrollHidden.value = false;
     } else if (distance >= 12) {
       scrollHidden.value = true;
@@ -254,6 +277,7 @@ watch([() => props.scrollRoot, () => props.title], ([root], _, onCleanup) => {
 
   const onWheel = (event: WheelEvent) => {
     if (event.ctrlKey || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    if (resetIfNoScrollRange()) return;
     const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? column.clientHeight : 1;
     const distance = event.deltaY * unit;
     if (event.timeStamp - lastWheelTime > 150 || wheelDistance * distance < 0) wheelDistance = 0;
@@ -264,6 +288,7 @@ watch([() => props.scrollRoot, () => props.title], ([root], _, onCleanup) => {
   };
 
   function onTouchStart(event: TouchEvent) {
+    if (resetIfNoScrollRange()) return;
     const point = event.touches.length === 1 ? event.touches[0] : null;
     touch = point ? { id: point.identifier, startX: point.clientX, startY: point.clientY, turningY: point.clientY, vertical: false } : null;
   }
@@ -282,6 +307,7 @@ watch([() => props.scrollRoot, () => props.title], ([root], _, onCleanup) => {
       if (!touch || vertical < 8 || vertical <= horizontal * 1.15) return;
       touch.vertical = true;
     }
+    if (resetIfNoScrollRange()) return;
     // 用手指最近的转向点判断反向，长滑时也能立即把胶囊带回来。
     const wasHidden = scrollHidden.value;
     touch.turningY = wasHidden ? Math.min(touch.turningY, point.clientY) : Math.max(touch.turningY, point.clientY);
@@ -298,17 +324,19 @@ watch([() => props.scrollRoot, () => props.title], ([root], _, onCleanup) => {
   root.addEventListener('touchmove', onTouchMove, { passive: true });
   root.addEventListener('touchend', onTouchEnd, { passive: true });
   root.addEventListener('touchcancel', onTouchEnd, { passive: true });
+  window.addEventListener('resize', resetIfNoScrollRange);
   onCleanup(() => {
     column.removeEventListener('wheel', onWheel);
     root.removeEventListener('touchstart', onTouchStart);
     root.removeEventListener('touchmove', onTouchMove);
     root.removeEventListener('touchend', onTouchEnd);
     root.removeEventListener('touchcancel', onTouchEnd);
+    window.removeEventListener('resize', resetIfNoScrollRange);
   });
 }, { immediate: true, flush: 'post' });
 
 watch(scrollHidden, (hidden, _, onCleanup) => {
-  const track = searchTrackRef.value;
+  const track = pillTrackRef.value;
   if (!track) return;
   const property = '--library-tools-spring-progress';
   scrollSpring.target = hidden ? 1 : 0;
@@ -322,21 +350,21 @@ watch(scrollHidden, (hidden, _, onCleanup) => {
   onCleanup(runSpring([scrollSpring], paint, () => track.style.removeProperty(property), { damping: 0.9 }));
 });
 
-watch(searchOpen, open => {
+watch(pillExpanded, open => {
   const toolbar = toolbarRef.value;
   if (!toolbar) return;
-  cancelSearchSpring?.();
-  cancelSearchSpring = null;
+  cancelPillSpring?.();
+  cancelPillSpring = null;
   clearTimeout(closeSpringDelay);
-  searchSpring.target = open ? 1 : 0;
+  pillSpring.target = open ? 1 : 0;
   if (prefersReducedMotion()) {
-    snapAxes([searchSpring]);
-    toolbar.style.removeProperty('--library-search-spring-progress');
+    snapAxes([pillSpring]);
+    toolbar.style.removeProperty('--library-pill-spring-progress');
     return;
   }
 
-  const startProgress = Math.min(1, Math.max(0, searchSpring.pos));
-  const collapseDelay = !open && startProgress >= 0.98 && Math.abs(searchSpring.vel) < 0.04 ? 80 : 0;
+  const startProgress = Math.min(1, Math.max(0, pillSpring.pos));
+  const collapseDelay = !open && startProgress >= 0.98 && Math.abs(pillSpring.vel) < 0.04 ? 80 : 0;
   if (open) {
     toolbar.style.setProperty('--library-field-appear-delay', `${Math.round(125 * (1 - startProgress))}ms`);
   } else {
@@ -345,14 +373,14 @@ watch(searchOpen, open => {
 
   // 反向切换沿用当前弹簧的位移和速度，每帧只更新 DOM 样式。
   const paint = () => {
-    const progress = Math.min(1, Math.max(0, searchSpring.pos));
-    toolbar.style.setProperty('--library-search-spring-progress', String(progress));
+    const progress = Math.min(1, Math.max(0, pillSpring.pos));
+    toolbar.style.setProperty('--library-pill-spring-progress', String(progress));
   };
   paint();
   const animate = () => {
-    cancelSearchSpring = runSpring([searchSpring], paint, () => {
-      cancelSearchSpring = null;
-      toolbar.style.removeProperty('--library-search-spring-progress');
+    cancelPillSpring = runSpring([pillSpring], paint, () => {
+      cancelPillSpring = null;
+      toolbar.style.removeProperty('--library-pill-spring-progress');
     }, { damping: 0.94 });
   };
   // 已展开时先淡出文字。途中反向时马上交给弹簧，保留当帧速度。
@@ -366,10 +394,21 @@ watch(searchOpen, open => {
 watch(searchOpen, (open, _, onCleanup) => {
   if (!open) return;
   function dismissOutside(event: PointerEvent) {
-    if (event.target instanceof Node && !searchTrackRef.value?.contains(event.target)) void closeSearch();
+    if (event.target instanceof Node && !pillTrackRef.value?.contains(event.target)) void closeSearch();
   }
   document.addEventListener('pointerdown', dismissOutside, true);
   onCleanup(() => document.removeEventListener('pointerdown', dismissOutside, true));
+});
+
+watch(() => props.selecting, async selecting => {
+  const restoreFocus = selectionFieldRef.value?.contains(document.activeElement);
+  await nextTick();
+  if (props.selecting !== selecting) return;
+  if (selecting) {
+    selectionFieldRef.value?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true });
+  } else if (restoreFocus) {
+    selectionButtonRef.value?.button?.focus({ preventScroll: true });
+  }
 });
 
 function openSearch() {
@@ -408,7 +447,7 @@ function clearSearch() {
 }
 
 onBeforeUnmount(() => {
-  cancelSearchSpring?.();
+  cancelPillSpring?.();
   clearTimeout(closeSpringDelay);
 });
 
@@ -450,10 +489,10 @@ const sortOptions = [
   --library-toolbar-inset: 28px;
   --library-action-size: 44px;
   --library-pill-rest: calc(var(--library-action-size) * var(--library-pill-button-count) + 8px);
-  --library-search-width: 340px;
-  --library-pill-width: calc(var(--library-pill-rest) + (var(--library-search-width) - var(--library-pill-rest)) * var(--library-search-progress));
-  --library-search-target: 0;
-  --library-search-progress: var(--library-search-target);
+  --library-pill-expanded-width: 340px;
+  --library-pill-width: calc(var(--library-pill-rest) + (var(--library-pill-expanded-width) - var(--library-pill-rest)) * var(--library-pill-progress));
+  --library-pill-target: 0;
+  --library-pill-progress: var(--library-pill-target);
   position: relative;
   display: flex;
   align-items: center;
@@ -462,12 +501,12 @@ const sortOptions = [
   padding-inline-start: var(--library-toolbar-inset);
   padding-inline-end: calc(var(--library-toolbar-inset) + var(--library-pill-width) + 8px);
 }
-.library-toolbar.is-search-open {
-  --library-search-target: 1;
+.library-toolbar.is-pill-expanded {
+  --library-pill-target: 1;
 }
 @media (prefers-reduced-motion: no-preference) {
   .library-toolbar {
-    --library-search-progress: var(--library-search-spring-progress, var(--library-search-target));
+    --library-pill-progress: var(--library-pill-spring-progress, var(--library-pill-target));
   }
 }
 .library-toolbar-title {
@@ -502,27 +541,30 @@ button.library-title-text {
   --icon-button-background: var(--md-secondary-container);
   color: var(--md-on-secondary-container);
 }
+.library-tool:disabled {
+  opacity: 0.45;
+}
 @media (hover: hover) and (pointer: fine) {
   .library-tool:hover:not(:disabled):not(.is-tonal) {
     background-color: color-mix(in oklab, var(--md-on-surface) 8%, transparent);
   }
 }
-.library-search-track {
+.library-pill-track {
   --library-tools-target: 0;
   --library-tools-progress: var(--library-tools-target);
   position: absolute;
   z-index: 1;
   inset-inline-end: var(--library-toolbar-inset);
-  width: var(--library-search-width);
+  width: var(--library-pill-expanded-width);
   height: var(--library-action-size);
   pointer-events: none;
   transform: translateY(calc(-1 * var(--library-topbar-height) * var(--library-tools-progress)));
 }
-.library-search-track.is-scroll-hidden {
+.library-pill-track.is-scroll-hidden {
   --library-tools-target: 1;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .library-search-track {
+  .library-pill-track {
     --library-tools-progress: var(--library-tools-spring-progress, var(--library-tools-target));
   }
 }
@@ -530,15 +572,17 @@ button.library-title-text {
   position: absolute;
   inset-block: 0;
   right: 0;
-  width: calc(var(--library-pill-rest) + (100% - var(--library-pill-rest)) * var(--library-search-progress));
+  width: calc(var(--library-pill-rest) + (100% - var(--library-pill-rest)) * var(--library-pill-progress));
 }
 .library-pill-content {
+  --library-pill-clip-start: calc((100% - var(--library-pill-rest)) * (1 - var(--library-pill-progress)));
   position: absolute;
   inset: 0;
-  clip-path: inset(0 0 0 calc((100% - var(--library-pill-rest)) * (1 - var(--library-search-progress))) round 9999px);
+  clip-path: inset(0 0 -32px var(--library-pill-clip-start) round 22px 22px 0 0);
 }
 .library-pill-buttons,
-.library-search-field {
+.library-search-field,
+.library-selection-field {
   position: absolute;
   inset-block: 0;
   display: flex;
@@ -549,9 +593,14 @@ button.library-title-text {
   width: var(--library-pill-rest);
   padding-inline: 4px;
 }
+.library-pill-buttons > :first-child :deep(.shelf-tool-tooltip-label) {
+  left: 0;
+  transform: none;
+}
 .library-toolbar-title:not([inert]) > button,
 .library-pill-buttons:not([inert]),
-.library-search-field:not([inert]) {
+.library-search-field:not([inert]),
+.library-selection-field:not([inert]) {
   pointer-events: auto;
 }
 .library-pill-buttons > * {
@@ -566,21 +615,25 @@ button.library-title-text {
 .library-pill-buttons .library-pill-search {
   --library-icon-delay: calc(var(--library-pill-return-delay, 214ms) + 40ms);
 }
-.is-search-open .library-pill-buttons > * {
+.is-pill-expanded .library-pill-buttons > * {
   opacity: 0;
   filter: blur(5px);
   transition-delay: 0ms;
   transition-duration: 78ms, 78ms, var(--md-duration-short);
 }
-.library-search-field {
+.library-search-field,
+.library-selection-field {
   inset-inline: 0;
-  gap: 8px;
-  padding-inline-start: 15px;
   opacity: 0;
   filter: blur(5px);
   transition: opacity 80ms var(--md-ease-emphasized), filter 80ms var(--md-ease-emphasized);
 }
-.is-search-open .library-search-field {
+.library-search-field {
+  gap: 8px;
+  padding-inline-start: 15px;
+}
+.is-search-open .library-search-field,
+.is-selecting .library-selection-field {
   opacity: 1;
   filter: blur(0);
   transition-delay: var(--library-field-appear-delay, 125ms);
@@ -618,12 +671,12 @@ button.library-title-text {
   }
   .library-toolbar {
     --library-toolbar-inset: 16px;
-    --library-search-width: calc(100% - var(--library-toolbar-inset) * 2);
+    --library-pill-expanded-width: calc(100% - var(--library-toolbar-inset) * 2);
     gap: 6px;
     padding-inline-end: calc(var(--library-toolbar-inset) + var(--library-pill-rest) + 4px);
   }
   .library-toolbar-title {
-    opacity: calc(1 - var(--library-search-progress));
+    opacity: calc(1 - var(--library-pill-progress));
   }
   .library-search-input {
     font-size: 16px;
@@ -638,7 +691,8 @@ button.library-title-text {
 @media (prefers-reduced-motion: reduce) {
   .library-tool,
   .library-pill-buttons > *,
-  .library-search-field {
+  .library-search-field,
+  .library-selection-field {
     transition: none;
   }
 }

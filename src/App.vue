@@ -22,6 +22,7 @@
       :class="{ 'is-settings': activeNav === 'settings' }"
       :inert="bookDetailOpen"
       data-app-scroll
+      @keydown.esc="onShelfEscape"
     >
       <template v-if="activeNav === 'settings'">
         <SettingsView ref="settingsViewRef" @detail-change="settingsDetailOpen = $event">
@@ -32,13 +33,17 @@
       </template>
       <template v-else>
         <LibraryHeader
+          ref="libraryHeaderRef"
           :title="headerTitle"
           :scroll-root="activeNav === 'shelf' ? libraryScrollRef : null"
+          :contained-scroll="isCompact || containedShelfScroll"
           :import-open="importMenuOpen"
-          :appearance-open="appearanceOpen"
           :renamable="!!activeCollection"
-          @toggle-appearance="appearanceOpen = !appearanceOpen"
+          :selection-visible="!!bookShelfRef"
+          :selectable="bookShelfRef?.canSelect"
+          :selecting="bookShelfRef?.selecting"
           @rename="renameActiveCollection"
+          @start-selection="bookShelfRef?.startSelection()"
           v-model:query="query"
           v-model:type="typeFilter"
           v-model:sort="sortKey"
@@ -64,7 +69,23 @@
           data-app-scroll
         >
           <p v-if="shelf.error || (!reader.currentBook && reader.openError)" role="alert" class="mx-4 min-[900px]:mx-7 mt-3 text-[13px] text-[var(--md-error)]">{{ t(shelf.error || reader.openError) }}</p>
-          <BookShelf v-if="favoritesOnly || shelf.library.length || shelf.collections.length || shelfImportActive" :books="visibleBooks" :favorites-only="favoritesOnly" :sort-key="sortKey" :query="query" :has-filter="!!query.trim() || typeFilter !== 'all'" :home-request="shelfHomeRequest" :importing="shelfImportActive" :pending-import-count="shelfImportActive ? importProgress.pending : 0" @open="openBookWithTransition" @detail="openBookDetail" @manage-storage="manageBookStorage" @browse="query = ''; typeFilter = 'all'" />
+          <BookShelf
+            v-if="favoritesOnly || shelf.library.length || shelf.collections.length || shelfImportActive"
+            ref="bookShelfRef"
+            :books="visibleBooks"
+            :favorites-only="favoritesOnly"
+            :sort-key="sortKey"
+            :query="query"
+            :has-filter="!!query.trim() || typeFilter !== 'all'"
+            :home-request="shelfHomeRequest"
+            :importing="shelfImportActive"
+            :pending-import-count="shelfImportActive ? importProgress.pending : 0"
+            :selection-target="libraryHeaderRef?.selectionFieldRef"
+            @open="openBookWithTransition"
+            @detail="openBookDetail"
+            @manage-storage="manageBookStorage"
+            @browse="query = ''; typeFilter = 'all'"
+          />
           <EmptyShelf v-else @pick-file="openFilePicker" @pick-folder="openFolderPicker" />
         </main>
         <ShelfBackdrop v-if="activeNav === 'shelf'" />
@@ -98,7 +119,6 @@
   <input ref="fileInput" type="file" multiple :accept="fileAccept" class="hidden" @change="onFileChange" />
   <input v-if="canPickFolder && !isAndroid" ref="folderInput" type="file" webkitdirectory directory multiple class="hidden" @change="onFileChange" />
 
-  <AppearanceSheet v-model:open="appearanceOpen" />
   <ImportProgressSheet v-if="isCompact" @retry="retryFailedImport" />
   <DragOverlay :suppressed="readerOpening" />
   <ReaderLoadingPage
@@ -195,7 +215,6 @@ import LibraryImportActions from './components/LibraryImportActions.vue';
 import ImportProgressSheet from './components/ImportProgressSheet.vue';
 import DesktopIsland from './components/DesktopIsland.vue';
 import ImportStatusBar from './components/ImportStatusBar.vue';
-import AppearanceSheet from './components/AppearanceSheet.vue';
 import BookShelf from './components/BookShelf.vue';
 import BookDetailView from './components/BookDetailView.vue';
 import ShelfBackdrop from './components/ShelfBackdrop.vue';
@@ -230,12 +249,13 @@ const { isCompact } = useViewport();
 const measurerRef = ref(null);
 const libraryColumnRef = shallowRef(null);
 const libraryScrollRef = shallowRef(null);
+const libraryHeaderRef = shallowRef(null);
+const bookShelfRef = shallowRef(null);
 const fileInput = ref(null);
 const folderInput = ref(null);
 const importMenuOpen = ref(false);
 const importInPlace = ref(true);
 const importMode = computed(() => importInPlace.value ? 'reference' : 'copy');
-const appearanceOpen = ref(false);
 const shelfFilterOpen = ref(false);
 const activeNav = ref(readSettingsSection(window.history.state) ? 'settings' : 'shelf');
 const containedShelfScroll = computed(() => isMacOSTauri && !isCompact.value && activeNav.value !== 'settings');
@@ -332,7 +352,6 @@ async function manageBookStorage(id) {
 function openBookDetail(id, cover, trigger) {
   if (bookDetailBlocked.value || bookDetailOpen.value || pendingShelfDialog.value) return;
   importMenuOpen.value = false;
-  appearanceOpen.value = false;
   shelfFilterOpen.value = false;
   bookDetailRef.value?.open(id, cover, trigger);
 }
@@ -525,8 +544,8 @@ const nativePredictiveBackSupported = useAndroidBackExit(reader, () => {
     importProgress.toggleExpanded(false);
     return true;
   }
-  if (appearanceOpen.value) {
-    appearanceOpen.value = false;
+  if (bookShelfRef.value?.selecting) {
+    bookShelfRef.value.closeSelection();
     return true;
   }
   if (shelf.activeCollectionId) { shelf.activeCollectionId = activeCollection.value?.parentId ?? null; return true; }
@@ -564,17 +583,12 @@ watch(pendingShelfDialog, request => {
   if (request?.returnToImportMenu) importMenuOpen.value = false;
 });
 watch(() => [settings.smartStorageEnabled, settings.smartStorageBudgetMb], () => scheduleSmartStorage(), { immediate: true });
-watch(shelfFilterOpen, open => {
-  if (open) appearanceOpen.value = false;
-});
 watch(() => importProgress.status, status => {
   if (status !== 'idle') importMenuOpen.value = false;
 });
 
-// 进入阅读器时收起外观浮层，避免它悬在阅读舞台之上
 watch(() => reader.currentBook, book => {
   if (book) {
-    appearanceOpen.value = false;
     shelfFilterOpen.value = false;
     return;
   }
@@ -745,7 +759,6 @@ function onRailNav(key) {
     if (settingsViewRef.value?.leaveDetail(() => onRailNav(key))) return;
   }
   importMenuOpen.value = false;
-  appearanceOpen.value = false;
   shelfFilterOpen.value = false;
   activeNav.value = key;
   if (key === 'settings') {
@@ -772,6 +785,12 @@ function onFullscreenKeydown(e) {
   if (e.target && ['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
   e.preventDefault();
   ui.toggleFullscreen();
+}
+
+function onShelfEscape(event) {
+  if (event.defaultPrevented || event.isComposing || !bookShelfRef.value?.selecting) return;
+  event.preventDefault();
+  bookShelfRef.value.closeSelection();
 }
 
 async function dismissStartupSplash() {

@@ -149,5 +149,5 @@ Bottom sheet 的选型和完整契约见 [bottom-sheet-spec.md](./bottom-sheet-s
 |---|---|
 | `src/assets/homura.css` | 10 套 `html[data-theme]` + 10 套 `html[data-mode="dark"][data-theme]` |
 | `src/stores/theme.js` | `THEME_OPTIONS`（name / title / 三阶预览色）、`SURFACE_CANVAS`（原生窗口画布色）、`MODE_LABELS` |
-| `src/components/ThemeSwatchGrid.vue` | 外观浮层与阅读设置共用的 5×2 主题色板 |
+| `src/components/ThemeSwatchGrid.vue` | 外观设置页的主题色板 |
 | `index.html` | 首帧恢复脚本里的 `canvases` 与 `theme-color` meta 默认值 |

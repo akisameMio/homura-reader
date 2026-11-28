@@ -1,6 +1,8 @@
 <template>
-  <div
-    :class="compact ? 'relative flex items-center' : 'md-fab-pos flex flex-col items-end'"
+  <component
+    :is="compact ? ShelfToolTooltip : 'div'"
+    :label="compact ? buttonTitle : undefined"
+    :class="compact ? undefined : 'md-fab-pos flex flex-col items-end'"
   >
     <component
       :is="compact ? MdIconButton : 'button'"
@@ -12,7 +14,7 @@
         'is-failed': !isIdle && store.hasFailures,
         'is-open': isIdle ? open : store.expanded
       }"
-      :title="buttonTitle"
+      :title="compact ? undefined : buttonTitle"
       :aria-label="buttonLabel"
       :aria-haspopup="isIdle ? 'menu' : 'dialog'"
       :aria-expanded="isIdle ? open : store.expanded"
@@ -48,7 +50,7 @@
         <span v-else class="import-ring-number">{{ compact ? `${store.percent}%` : store.done }}</span>
       </span>
     </component>
-  </div>
+  </component>
 </template>
 
 <script setup lang="ts">
@@ -56,6 +58,7 @@ import { computed } from 'vue';
 import { useImportProgressStore } from '../stores/importProgress.ts';
 import MdIcon from './MdIcon.vue';
 import MdIconButton from './MdIconButton.vue';
+import ShelfToolTooltip from './ShelfToolTooltip.vue';
 import { useI18n } from '../composables/useI18n.ts';
 
 const { t } = useI18n();
