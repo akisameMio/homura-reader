@@ -14,7 +14,8 @@ import { planFolderCollections, planImportFolders, importFolderPath, availableCo
 import { findSameTitleBook, normalizeBookTitle } from '../services/bookTitles.ts';
 import { HomuraStore } from '../services/storage.ts';
 import { formatBytes, isAndroid } from '../services/platform.ts';
-import { parseCbzFileLazy, parseTxtFile, parseMobiFileLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks, discardParsedBook, isJunkImagePath } from '../services/parsers.ts';
+import { parseCbzFileLazy, parseTxtFile, parseMobiFileLazy, parseMobiRangeLazy, parseMarkdownFile, parsePdfFileLazy, buildImageFolderBooks, discardParsedBook, isJunkImagePath } from '../services/parsers.ts';
+import { NATIVE_MOBI_MAX_BYTES } from '../services/mobi.ts';
 import { createNativeMangaManifest, makeEpubId, parseEpubFile } from '../services/epubParser.ts';
 import {
   buildReferencedImageBook,
@@ -888,6 +889,66 @@ export function useImporter() {
     return { book, source: stagedSource };
   }
 
+  // 大体积 MOBI（常见于 MOBI 漫画）在原生暂存后走按区间分块解析，避免整本经 IPC 读入内存。
+  async function prepareMobiTask(task: ImportTask, metrics: ImportMetrics): Promise<Prepared | null> {
+    const file = task.file!;
+    if (!isNativeImportFile(file) || !canUseNativeStorage() || (file.size || 0) <= NATIVE_MOBI_MAX_BYTES) {
+      return prepareParsedTask(task, parseMobiFileLazy, metrics, 'MOBI');
+    }
+    const started = now();
+    const viaAndroidUri = isAndroidContentUri(file.nativePath);
+    const stagedBookId = viaAndroidUri ? makeEpubId() : `mobi_${crypto.randomUUID()}`;
+    let stagedSource: BookSource | null = null;
+    let book: Book | null = null;
+    importProgress.setPhase('read');
+    try {
+      const stageStarted = now();
+      try {
+        stagedSource = await stageNativePathSource(stagedBookId, file);
+      } finally {
+        const elapsed = now() - stageStarted;
+        metrics.nativeStageMs += elapsed;
+        metrics.stageMs += elapsed;
+      }
+      importProgress.setPhase('parse');
+      const nativePath = stagedSource.nativePath as string;
+      try {
+        const range = await openNativeStorageRangeSource(nativePath, stagedSource.size);
+        book = (await parseMobiRangeLazy(range, file.name)) as Book | null;
+      } catch (rangeErr) {
+        if ((stagedSource.size || 0) > 128 * 1024 * 1024 || !shouldFallbackNativeImport(rangeErr)) {
+          throw rangeErr;
+        }
+        console.warn('[HOMURA] 原生 MOBI 分块读取不可用，回退完整文件解析', rangeErr);
+        const readStarted = now();
+        let materialized: ImportFile;
+        try {
+          materialized = await materializeStagedNativeImportFile(file, nativePath);
+        } finally {
+          metrics.readMs += now() - readStarted;
+        }
+        book = (await parseMobiFileLazy(materialized)) as Book | null;
+      }
+    } catch (err: unknown) {
+      if (viaAndroidUri && !stagedSource && shouldFallbackNativeImport(err)) {
+        await removeNativeBookDir(stagedBookId).catch(() => {});
+        (err as { nativeImportFallback?: boolean }).nativeImportFallback = true;
+        throw err;
+      }
+      console.warn('[HOMURA] MOBI 解析失败', err);
+      markTaskFailure(task, err);
+    } finally {
+      metrics.parseMs += now() - started;
+    }
+    if (!book || !stagedSource) {
+      await removeNativeBookDir(stagedBookId).catch(() => {});
+      return null;
+    }
+    book.id = stagedBookId;
+    book.nativeArchiveStaged = !!stagedSource.preStaged;
+    return { book, source: stagedSource };
+  }
+
   async function prepareImportTask(task: ImportTask, metrics: ImportMetrics): Promise<Prepared | null> {
     let prepared: Prepared | null = null;
     const file = task.file;
@@ -905,7 +966,7 @@ export function useImporter() {
     } else if (task.kind === 'epub') prepared = await prepareEpubTask(task, metrics);
     else if (task.kind === 'archive') prepared = await prepareArchiveTask(task, metrics);
     else if (task.kind === 'pdf') prepared = await preparePdfTask(task, metrics);
-    else if (task.kind === 'mobi') prepared = await prepareParsedTask(task, parseMobiFileLazy, metrics, 'MOBI');
+    else if (task.kind === 'mobi') prepared = await prepareMobiTask(task, metrics);
     else if (task.kind === 'markdown') prepared = await prepareParsedTask(task, parseMarkdownFile, metrics, 'Markdown');
     else if (task.kind === 'txt') prepared = await prepareParsedTask(task, parseTxtFile, metrics, 'TXT');
     else if (task.kind === 'images') {
@@ -938,53 +999,74 @@ export function useImporter() {
         }
       } else if (group.files.some((file: ImportFile) => isNativeImportFile(file))) {
         const readStarted = now();
+        let stagedAny = false;
         try {
-          const files = new Array(group.files.length);
-          const nativeEntries = new Array(group.files.length);
+          const entries = new Array<BookSource>(group.files.length);
+          const usedStageNames = new Set<string>();
+          let coverBlob: Blob | null = null;
           for (let index = 0; index < group.files.length; index++) {
             const file = group.files[index];
-            if (isAndroidContentUri(file.nativePath)) {
+            const safeBase = file.name.toLowerCase();
+            if (isNativeImportFile(file) && canUseNativeStorage() && !usedStageNames.has(safeBase)) {
               let staged;
               try {
                 staged = await stageNativePathSource(group.book.id, file);
               } catch (err: unknown) {
-                if (shouldFallbackNativeImport(err)) (err as { nativeImportFallback?: boolean }).nativeImportFallback = true;
+                if (isAndroidContentUri(file.nativePath) && shouldFallbackNativeImport(err)) {
+                  (err as { nativeImportFallback?: boolean }).nativeImportFallback = true;
+                }
                 throw err;
               }
-              files[index] = await materializeStagedNativeImportFile(file, staged.nativePath);
-              nativeEntries[index] = {
+              stagedAny = true;
+              usedStageNames.add(safeBase);
+              entries[index] = {
                 path: file.customRelativePath || file.name,
                 size: staged.size,
                 lastModified: staged.lastModified,
                 nativePath: staged.nativePath
               };
+              // 仅首张图按需读入内存用于生成封面缩略图，避免整本数百张原图同时吃满 WebView 内存。
+              if (!coverBlob) {
+                coverBlob = await materializeStagedNativeImportFile(file, staged.nativePath).catch(() => null);
+              }
             } else {
-              files[index] = await materializeNativeImportFile(file);
+              const materialized = isNativeImportFile(file) ? await materializeNativeImportFile(file) : file;
+              entries[index] = {
+                path: materialized.customRelativePath || materialized.name,
+                size: materialized.size,
+                lastModified: materialized.lastModified,
+                blob: materialized
+              };
+              if (!coverBlob) coverBlob = materialized;
             }
           }
-          const rebuilt = buildImageFolderBooks(files)[0];
-          if (!rebuilt) throw new Error(t('图片目录为空'));
-          rebuilt.book.id = group.book.id;
-          (rebuilt.book as Book).nativeArchiveStaged = nativeEntries.some(Boolean);
-          group = rebuilt as unknown as NonNullable<ImportTask['group']>;
-          if (nativeEntries.some(Boolean)) {
-            prepared = {
-              book: group.book,
-              source: {
-                kind: 'folder',
-                name: group.folderName,
-                entries: nativeEntries.map((entry, index) => entry || {
-                  path: files[index].customRelativePath || files[index].name,
-                  size: files[index].size,
-                  lastModified: files[index].lastModified,
-                  blob: files[index]
-                })
-              }
-            };
-          }
+          if (!entries.length) throw new Error(t('图片目录为空'));
+          const coverUrl = coverBlob ? URL.createObjectURL(coverBlob) : null;
+          const book: Book = {
+            id: group.book.id,
+            type: 'manga',
+            format: 'images',
+            title: group.folderName,
+            cover: coverUrl,
+            coverBlob,
+            pageItems: entries.map((entry, idx) => ({
+              file: entry.blob as Blob | undefined,
+              url: idx === 0 ? coverUrl : null
+            })) as unknown as Book['pageItems'],
+            pageCount: entries.length,
+            nativeArchiveStaged: stagedAny
+          };
+          prepared = {
+            book,
+            source: {
+              kind: 'folder',
+              name: group.folderName,
+              entries
+            }
+          };
         } catch (err: unknown) {
           console.warn('[HOMURA] 读取原生图片目录失败', err);
-          if (group?.files?.some((file: ImportFile) => isAndroidContentUri(file.nativePath))) {
+          if (stagedAny || group?.files?.some((file: ImportFile) => isAndroidContentUri(file.nativePath))) {
             await removeNativeBookDir(group.book.id).catch(() => {});
           }
           if ((err as { nativeImportFallback?: boolean })?.nativeImportFallback) throw err;

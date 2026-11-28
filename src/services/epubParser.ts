@@ -7,6 +7,7 @@
 
 import JSZip from 'jszip';
 import type { Book } from '../types.ts';
+import { openRemoteZip } from './remoteZip.ts';
 import { sanitizeEpubHtml } from './sanitize.ts';
 import { shouldReadEpubAsManga, TEXT_CHAPTER_MIN_LENGTH } from './epubType.ts';
 import {
@@ -767,10 +768,55 @@ export async function parseEpubFile(file: Blob & { name?: string }, options: Epu
     throw new Error('超过 4 GiB 的 EPUB 需要原生读取');
   }
 
-  const fallbackFile = typeof options.loadFallbackFile === 'function'
+  const fallbackFile = (typeof options.loadFallbackFile === 'function'
     ? await options.loadFallbackFile()
-    : file;
-  const archive = await createJsZipEpubArchive(fallbackFile as Blob);
+    : file) as Blob;
+
+  // 非原生环境下大体积 EPUB 优先走 Blob.slice 分块中央目录读取，避免 JSZip 整包读入内存导致 OOM。
+  if (fallbackFile
+    && typeof fallbackFile.size === 'number'
+    && fallbackFile.size > 64 * 1024 * 1024
+    && typeof fallbackFile.slice === 'function') {
+    try {
+      const size = fallbackFile.size;
+      const zip = await openRemoteZip({
+        size,
+        async read(start: number, end: number) {
+          const safeStart = Math.max(0, start);
+          const safeEnd = Math.min(size, end);
+          if (safeStart >= safeEnd) return new Uint8Array(0);
+          return new Uint8Array(await fallbackFile.slice(safeStart, safeEnd).arrayBuffer());
+        }
+      });
+      const rangeArchive: EpubArchive = {
+        kind: 'remote',
+        zipContent: zip,
+        hasPath: path => !!zip.file(path),
+        resolvePath: paths => paths.find(path => !!zip.file(path)) || null,
+        async readTexts(paths) {
+          const texts: (string | null)[] = [];
+          for (const path of paths) {
+            const entry = zip.file(path);
+            texts.push(entry ? await entry.async('text').catch(() => null) : null);
+          }
+          return texts;
+        },
+        readBlobByPath: async path => await zip.file(path)?.async('blob') ?? null,
+        makePageItem: (path, url) => ({ zipEntry: zip.file(path), url }),
+        bookFields: () => ({ zipContent: zip })
+      };
+      return await parseEpubArchive(rangeArchive, {
+        id,
+        fallbackTitle,
+        metadataOnly: options.metadataOnly
+      });
+    } catch (err) {
+      if (fallbackFile.size > 256 * 1024 * 1024) throw err;
+      console.warn('[HOMURA] EPUB 分块读取失败，回退 JSZip', err);
+    }
+  }
+
+  const archive = await createJsZipEpubArchive(fallbackFile);
   return parseEpubArchive(archive, {
     id,
     fallbackTitle,
