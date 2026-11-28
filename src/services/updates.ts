@@ -515,13 +515,14 @@ function decodeEntities(value: string) {
 function atomHtmlToMarkdown(rawContent: string) {
   // Atom <content type="html"> 把 HTML 实体编码了一层；先还原成 HTML 标签再转换成等价 Markdown 行。
   const html = decodeEntities(rawContent).replace(/\r\n?/g, '\n');
-  const markdown = html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi, (_m, level: string, inner: string) => `\n${'#'.repeat(Number(level))} ${inner}\n`)
-    .replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, (_m, inner: string) => `\n- ${inner}\n`)
-    .replace(/<p\b[^>]*>([\s\S]*?)<\/p>/gi, (_m, inner: string) => `\n${inner}\n`)
-    .replace(/<[^>]+>/g, '');
-  return decodeEntities(markdown);
+  const markdown = stripHtmlTags(
+    html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi, (_m, level: string, inner: string) => `\n${'#'.repeat(Number(level))} ${inner}\n`)
+      .replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, (_m, inner: string) => `\n- ${inner}\n`)
+      .replace(/<p\b[^>]*>([\s\S]*?)<\/p>/gi, (_m, inner: string) => `\n${inner}\n`)
+  );
+  return stripHtmlTags(decodeEntities(markdown));
 }
 
 function readXmlTag(block: string, tagName: string) {
